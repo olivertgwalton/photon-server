@@ -189,6 +189,8 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 		owner = "e.id"
 	}
 	var widths []int
+	// Genres and studios are ordered by their letters, accents and case aside, as a reader reads
+	// them, whatever collation the database was made with.
 	err = s.pool.QueryRow(ctx, `
 		WITH titles AS MATERIALIZED (
 			SELECT items.id, `+row+`.genres, `+row+`.studios, items.year, `+row+`.certificate FROM `+from+`
@@ -206,10 +208,10 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 					AND c.video_range IS NOT DISTINCT FROM k.video_range AND c.width IS NOT DISTINCT FROM k.width)
 		)
 		SELECT
-			(SELECT array_agg(DISTINCT g ORDER BY g) FROM titles, jsonb_array_elements_text(titles.genres) g),
+			(SELECT array_agg(g ORDER BY lower(unaccent(g)), g) FROM (SELECT DISTINCT jsonb_array_elements_text(genres) g FROM titles) d),
 			(SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM titles WHERE year IS NOT NULL),
 			(SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM titles WHERE certificate IS NOT NULL),
-			(SELECT array_agg(DISTINCT st ORDER BY st) FROM titles, jsonb_array_elements_text(titles.studios) st),
+			(SELECT array_agg(st ORDER BY lower(unaccent(st)), st) FROM (SELECT DISTINCT jsonb_array_elements_text(studios) st FROM titles) d),
 			(SELECT array_agg(DISTINCT video_range) FROM copies WHERE video_range IS NOT NULL),
 			(SELECT array_agg(DISTINCT width) FROM copies WHERE width IS NOT NULL),
 			(SELECT array_agg(s.site) FROM unnest(CAST(@sites AS text[])) s (site)
