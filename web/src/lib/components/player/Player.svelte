@@ -95,14 +95,14 @@ const version = $derived(
 // The choices start as the address asked, else as the server chose them for
 // this profile, and are the reader's from then on.
 const startVersion = untrack(() => version);
-let audio = $state(
-	untrack(() => askedAudio ?? startVersion?.default_audio_stream ?? undefined),
+let audio = $derived(
+	askedAudio ?? startVersion?.default_audio_stream ?? undefined,
 );
-let subtitleKey = $state(
-	untrack(() => startVersion && startingSubtitle(startVersion, askedSubtitle)),
+let subtitleKey = $derived(
+	startVersion && startingSubtitle(startVersion, askedSubtitle),
 );
 let lastSubtitle = $state<string>();
-let quality = $state(untrack(() => prefs.max_bitrate_kbps));
+let quality = $derived(prefs.max_bitrate_kbps);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
 let trackSrc = $state<string>();
