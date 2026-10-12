@@ -38,6 +38,7 @@ type catalogue interface {
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
+	PlayOrder(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
@@ -454,6 +455,20 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, cardOf(card))
 }
 
+// playable answers the films and episodes a title stands for, in the order they play, for a client
+// to shuffle a show, season or collection.
+func (a *API) playable(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	cards, err := a.svc.Catalogue.PlayOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if a.answered(w, r, err) {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+}
+
 // paging reads a page's offset and limit, as walls page.
 func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (offset, limit int, ok bool) {
 	if offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
@@ -497,6 +512,11 @@ func (a *API) catalogueRoutes() []route {
 			pattern: "GET /api/v1/titles/{id}/next", access: signedIn,
 			summary: "The episode to play next: after an episode, or where the profile is in a show or season",
 			status:  http.StatusOK, reply: cardJSON{}, handle: a.next,
+		},
+		{
+			pattern: "GET /api/v1/titles/{id}/playable", access: signedIn,
+			summary: "The films and episodes a title stands for, in the order they play",
+			status:  http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.playable,
 		},
 		{
 			pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, summary: "The titles most like one",

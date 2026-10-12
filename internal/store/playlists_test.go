@@ -96,6 +96,14 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 			t.Errorf("the kid's %s: %v, want ErrNotFound", name, err)
 		}
 	}
+	// Shuffled, a show plays its episodes.
+	cards, err := s.PlayOrder(ctx, oliver.ID, show)
+	if err != nil || len(cards) != 3 || *cards[0].EpisodeNumber != 1 || *cards[2].EpisodeNumber != 3 {
+		t.Errorf("the show's playable = %+v, %v; want its three episodes in order", cards, err)
+	}
+	if _, err := s.PlayOrder(ctx, oliver.ID, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("playable of a title not there: %v, want ErrNotFound", err)
+	}
 	if err := s.AddToPlaylist(ctx, oliver.ID, list, []uuid.UUID{uuid.NewV7()}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("adding a title there is not: %v, want ErrNotFound", err)
 	}
