@@ -368,13 +368,24 @@ type episodeShow struct {
 	certificate string
 }
 
-// showsOf answers the show each episode among rows is of.
+// showsOf answers the show each episode or season among rows is of.
 func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]episodeShow, error) {
 	out := map[uuid.UUID]episodeShow{}
+	// An episode's show is its season's parent; a season's is its own.
+	seasonOf := func(r *model.Item) *uuid.UUID {
+		switch r.Kind {
+		case domain.ItemEpisode:
+			return r.ParentID
+		case domain.ItemSeason:
+			return &r.ID
+		case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra:
+		}
+		return nil
+	}
 	var seasons []uuid.UUID
 	for _, r := range rows {
-		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
-			seasons = append(seasons, *r.ParentID)
+		if season := seasonOf(r); season != nil {
+			seasons = append(seasons, *season)
 		}
 	}
 	if len(seasons) == 0 {
@@ -392,9 +403,16 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 		bySeason[p.Season] = episodeShow{&TitleRef{ID: p.ID, Title: p.Title}, &TitleRef{ID: p.Season, Title: p.SeasonTitle}, deref(p.Certificate)}
 	}
 	for _, r := range rows {
-		if r.Kind == domain.ItemEpisode && r.ParentID != nil {
-			out[r.ID] = bySeason[*r.ParentID]
+		season := seasonOf(r)
+		if season == nil {
+			continue
 		}
+		show := bySeason[*season]
+		// A season names its show, not itself.
+		if r.Kind == domain.ItemSeason {
+			show.season = nil
+		}
+		out[r.ID] = show
 	}
 	return out, nil
 }
