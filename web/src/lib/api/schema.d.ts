@@ -7524,7 +7524,7 @@ export interface components {
         /** @enum {string} */
         Discovery: "broadcast" | "off";
         /** @enum {string} */
-        DolbyVisionHandling: "keep" | "strip";
+        DolbyVisionHandling: "keep" | "strip" | "convert";
         Download: {
             /** Format: date-time */
             created_at: string;
