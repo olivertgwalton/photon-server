@@ -31,7 +31,12 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 		// the fragment cut drops as before the segment.
 		a = append(a, "-noaccurate_seek")
 	}
-	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts")
+	if start > 0 {
+		// Only past the start, as Jellyfin's: ffmpeg moves a seek in a stream with B-frames 3/23 s
+		// earlier, AVI refuses one before its start, and the refusal drops the first keyframe's GOP.
+		a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64))
+	}
+	a = append(a, "-copyts")
 	a = append(a, in.Args()...)
 	a = append(a, streamArgs(hw, video, audio, layer)...)
 	// The MP4 muxer writes a file's chapters as a text track, which Apple's players refuse a
