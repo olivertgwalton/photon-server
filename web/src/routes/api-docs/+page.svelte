@@ -1,13 +1,22 @@
 <script lang="ts">
-import { SwaggerUIBundle } from "swagger-ui-dist";
-import "swagger-ui-dist/swagger-ui.css";
+import { createApiReference } from "@scalar/api-reference";
+import "@scalar/api-reference/style.css";
 
-// Swagger UI draws itself light, whatever the app's theme.
+// Scalar's default fonts, telemetry and AI agent are on its own hosts, which the app's CSP refuses.
 const draw = (node: HTMLElement) => {
-	SwaggerUIBundle({ domNode: node, url: "/api/v1/openapi.json" });
+	const reference = createApiReference(node, {
+		url: "/api/v1/openapi.json",
+		forceDarkModeState: "dark",
+		hideDarkModeToggle: true,
+		withDefaultFonts: false,
+		telemetry: false,
+		agent: { disabled: true },
+		showDeveloperTools: "never",
+	});
+	return () => reference.destroy();
 };
 </script>
 
 <svelte:head><title>API · Photon</title></svelte:head>
 
-<div class="min-h-svh bg-white" {@attach draw}></div>
+<div class="min-h-svh" {@attach draw}></div>
