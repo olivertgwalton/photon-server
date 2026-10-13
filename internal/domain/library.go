@@ -6,15 +6,18 @@ import (
 	"golang.org/x/text/language"
 )
 
+// LibraryKind is what a library holds: films, shows, or both, as Jellyfin's and Emby's mixed
+// libraries hold them, each folder of one being a show's or else films'.
 type LibraryKind string
 
 const (
 	LibraryMovies LibraryKind = "movies"
 	LibraryShows  LibraryKind = "shows"
+	LibraryMixed  LibraryKind = "mixed"
 )
 
 func LibraryKinds() []LibraryKind {
-	return []LibraryKind{LibraryMovies, LibraryShows}
+	return []LibraryKind{LibraryMovies, LibraryShows, LibraryMixed}
 }
 
 // LibraryMedia is where a library's media is: files under a folder, or, of a remote library,

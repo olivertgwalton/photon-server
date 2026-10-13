@@ -153,36 +153,38 @@ func episodeAired(dir string) string {
 
 // wallQuery is the WHERE, over wallRows, of a library's films or shows a profile may see, or of its
 // episodes, as a filter narrows them, and the values they take; ErrNotFound for no such library.
-// A library's collections are listed beside its wall, not on it. A library holds one kind of title, and naming
-// it lets the wall's sort indexes read a page in order.
+// A library's collections are listed beside its wall, not on it. Each kind of item a library's wall
+// lists is its own arm, which lets the wall's sort indexes read a page in order.
 func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter) (string, pgx.NamedArgs, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, kind FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
 	if err != nil {
 		return "", nil, err
 	}
 	args := pgx.NamedArgs{"libs": libs, "profile": profile}
+	// A wall that names no kind pages titles.
+	wall = cmp.Or(wall, domain.WallTitles)
 	_, row, seen := wallRows(wall)
 	filter := f.where(args, row)
 	// Each library's titles are what its kind makes them.
 	var arms []string
 	var id uuid.UUID
 	var kind domain.LibraryKind
-	if _, err := pgx.ForEachRow(rows, []any{&id, &kind}, func() error {
-		n := strconv.Itoa(len(arms))
-		args["lib"+n], args["kind"+n] = id, kind.ItemKinds()[0]
-		if wall == domain.WallEpisodes {
-			args["kind"+n] = domain.ItemEpisode
+	found, err := pgx.ForEachRow(rows, []any{&id, &kind}, func() error {
+		for _, item := range wall.Of(kind) {
+			n := strconv.Itoa(len(arms))
+			args["lib"+n], args["kind"+n] = id, item
+			arms = append(arms, `(items.library_id = @lib`+n+` AND items.kind = @kind`+n+`)`)
 		}
-		arms = append(arms, `(items.library_id = @lib`+n+` AND items.kind = @kind`+n+`)`)
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return "", nil, err
 	}
-	if len(arms) != len(libs) {
+	if int(found.RowsAffected()) != len(libs) {
 		return "", nil, ErrNotFound
 	}
 	return `WHERE items.library_id = ANY(@libs)
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + strings.Join(arms, " OR ") + `))` + filter, args, nil
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + cmp.Or(strings.Join(arms, " OR "), "false") + `))` + filter, args, nil
 }
 
 // wallRows are the items a wall pages, as from; the row of them whose letter, genres, studios and

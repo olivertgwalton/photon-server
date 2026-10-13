@@ -311,7 +311,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 }
 
 // wallKindParameter is what a wall pages, as Plex's type and Jellyfin's IncludeItemTypes ask for.
-var wallKindParameter = param{"kind", domain.WallTitles, "What to page: titles, or a show library's episodes across its shows."}
+var wallKindParameter = param{"kind", domain.WallTitles, "What to page: titles, films or shows alone, or a library's episodes across its shows."}
 
 // wallFilterParameters are what a wall, and its letters, are narrowed by: each list repeated or
 // comma-separated, any of its values.

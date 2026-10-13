@@ -147,7 +147,7 @@ func (s *Scanner) list(ctx context.Context, lib domain.Library, progress func(do
 			return Report{}, err
 		}
 	}
-	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.ItemKinds()[0], listed)
+	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.Titles(), listed)
 	if err != nil {
 		return Report{}, err
 	}

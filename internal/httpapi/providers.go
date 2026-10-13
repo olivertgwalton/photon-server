@@ -135,7 +135,7 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 // where it describes them, or for the titles' metadata alone where it only rates them.
 func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []domain.ItemKind {
 	out := []domain.ItemKind{}
-	for _, kind := range append(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds()...) {
+	for _, kind := range domain.LibraryMixed.ItemKinds() {
 		if _, plugin := info.ID.Plugin(); !plugin {
 			if slices.Contains(domain.Fetchable(f, kind), info.ID) {
 				out = append(out, kind)

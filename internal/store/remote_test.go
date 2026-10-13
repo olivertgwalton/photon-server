@@ -21,7 +21,7 @@ func TestARemoteShowsEpisodesAreThoseAired(t *testing.T) {
 		t.Fatal(err)
 	}
 	listed := domain.Listed{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0306414"}, Title: "The Wire"}
-	if _, err := s.SaveListed(ctx, lib.ID, domain.ItemShow, []domain.Listed{listed}); err != nil {
+	if _, err := s.SaveListed(ctx, lib.ID, []domain.ItemKind{domain.ItemShow}, []domain.Listed{listed}); err != nil {
 		t.Fatal(err)
 	}
 	show := oneItem(t, s, "kind = 'show'")
@@ -79,7 +79,7 @@ func TestARemoteTitlesPicturesAreItsProviders(t *testing.T) {
 		t.Fatal(err)
 	}
 	listed := domain.Listed{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Title: "Heat"}
-	if _, err := s.SaveListed(ctx, lib.ID, domain.ItemMovie, []domain.Listed{listed}); err != nil {
+	if _, err := s.SaveListed(ctx, lib.ID, []domain.ItemKind{domain.ItemMovie}, []domain.Listed{listed}); err != nil {
 		t.Fatal(err)
 	}
 	film := oneItem(t, s, "kind = 'movie'")

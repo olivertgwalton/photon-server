@@ -31,11 +31,11 @@ func (r HomeRow) LibraryKinds() []LibraryKind {
 	case RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites:
 		return nil
 	case RowRecentFilms:
-		return []LibraryKind{LibraryMovies}
+		return []LibraryKind{LibraryMovies, LibraryMixed}
 	case RowRecentShows:
-		return []LibraryKind{LibraryShows}
+		return []LibraryKind{LibraryShows, LibraryMixed}
 	case RowRecentlyReleased, RowTopRatedUnwatched:
-		return []LibraryKind{LibraryMovies, LibraryShows}
+		return LibraryKinds()
 	}
 	return nil
 }

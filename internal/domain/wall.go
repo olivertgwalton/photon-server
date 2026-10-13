@@ -1,5 +1,7 @@
 package domain
 
+import "slices"
+
 // WallSort is an order a library's titles can be paged in.
 type WallSort string
 
@@ -20,17 +22,37 @@ func WallSorts() []WallSort {
 	return []WallSort{SortTitle, SortAdded, SortReleased, SortRating, SortRuntime, SortPlayed}
 }
 
-// WallKind is what a wall pages: a library's titles, or a show library's episodes across its shows,
-// as Plex's episode type and Jellyfin's Episodes tab list them.
+// WallKind is what a wall pages: a library's titles, its films or its shows alone, as Jellyfin's
+// includeItemTypes narrows a mixed library, or its episodes across its shows, as Plex's episode
+// type and Jellyfin's Episodes tab list them.
 type WallKind string
 
 const (
 	WallTitles   WallKind = "titles"
+	WallFilms    WallKind = "films"
+	WallShows    WallKind = "shows"
 	WallEpisodes WallKind = "episodes"
 )
 
 func WallKinds() []WallKind {
-	return []WallKind{WallTitles, WallEpisodes}
+	return []WallKind{WallTitles, WallFilms, WallShows, WallEpisodes}
+}
+
+// Of is the kinds of item a wall of a library of kind lists.
+func (w WallKind) Of(lib LibraryKind) []ItemKind {
+	held := lib.ItemKinds()
+	var asked []ItemKind
+	switch w {
+	case WallTitles:
+		return lib.Titles()
+	case WallFilms:
+		asked = []ItemKind{ItemMovie}
+	case WallShows:
+		asked = []ItemKind{ItemShow}
+	case WallEpisodes:
+		asked = []ItemKind{ItemEpisode}
+	}
+	return slices.DeleteFunc(asked, func(k ItemKind) bool { return !slices.Contains(held, k) })
 }
 
 // Mark is what a profile has made of a title, which a wall may be narrowed to.

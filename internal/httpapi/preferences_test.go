@@ -78,7 +78,7 @@ func TestAProfileKeepsHowItPlays(t *testing.T) {
 		t.Errorf("the home arranged: %s", body)
 	}
 	// A client draws a library's row once for each library of the kinds it is made for.
-	if _, body = call(http.MethodPatch, `{"home": [{"row": "recently_released", "visibility": "shown"}]}`); !strings.Contains(body, `{"row":"recently_released","visibility":"shown","library_kinds":["movies","shows"]}`) {
+	if _, body = call(http.MethodPatch, `{"home": [{"row": "recently_released", "visibility": "shown"}]}`); !strings.Contains(body, `{"row":"recently_released","visibility":"shown","library_kinds":["movies","shows","mixed"]}`) {
 		t.Errorf("a library's row does not say the libraries it is made for: %s", body)
 	}
 
