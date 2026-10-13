@@ -74,6 +74,7 @@ func (f *fakeSignIns) Accounts(context.Context, uuid.UUID) ([]domain.SignInAccou
 func (f *fakeSignIns) Unlink(context.Context, uuid.UUID, string) error { return store.ErrLastWayIn }
 
 func signInAPI(t *testing.T) (*API, *fakeSignIns, *fakeEvents) {
+	t.Helper()
 	a := newAPI(nil)
 	f := &fakeSignIns{provider: domain.SignInProvider{
 		Slug: "pocket-id", Name: "Pocket ID", Issuer: "https://id.example.com", ClientID: "photon", ClientSecret: "secret",

@@ -27,6 +27,7 @@ import (
 // filmsPlugin is a plugin that knows Jaws, rates it with the key an admin set for it, and keeps
 // the keys it was sent.
 func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func() []string) {
+	t.Helper()
 	var mu sync.Mutex
 	var keys []string
 	answer := func(w http.ResponseWriter, v any) {

@@ -146,6 +146,7 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 
 // pictures is a picture cache of the test's own.
 func pictures(t *testing.T) *artwork.Cache {
+	t.Helper()
 	blobs, err := blob.OpenDir(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
