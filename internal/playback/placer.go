@@ -74,7 +74,7 @@ func NeedOf(video domain.VideoPlan) Need {
 	if e == nil {
 		return Need{}
 	}
-	return Need{HEVC: e.Codec == "hevc", Libass: video.Burns()}
+	return Need{HEVC: e.Codec == domain.VideoHEVC, Libass: video.Burns()}
 }
 
 // EncodingOf is what a node encodes, for deciding a playback it would encode.
