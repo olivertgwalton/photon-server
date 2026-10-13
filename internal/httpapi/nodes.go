@@ -31,7 +31,7 @@ type nodeJSON struct {
 	ID           uuid.UUID               `json:"id"`
 	Name         string                  `json:"name,omitzero"`
 	Availability domain.NodeAvailability `json:"availability"`
-	Address      string                  `json:"address"`
+	Address      uri                     `json:"address"`
 	LastSeen     time.Time               `json:"last_seen"`
 	Encoder      nodeEncoderJSON         `json:"encoder"`
 	Transcodes   int                     `json:"transcodes"`
@@ -63,7 +63,7 @@ type nodeEncodingJSON struct {
 
 func showNode(n domain.Node) nodeJSON {
 	return nodeJSON{
-		ID: n.ID, Name: n.Name, Availability: n.Availability, Address: n.Address, LastSeen: n.Seen.UTC(),
+		ID: n.ID, Name: n.Name, Availability: n.Availability, Address: uri(n.Address), LastSeen: n.Seen.UTC(),
 		Encoder:    nodeEncoderJSON{n.Encoder.Acceleration, n.Encoder.Device, n.Encoder.HEVC, n.Encoder.Libass},
 		Transcodes: n.Transcodes, Conversions: n.Conversions, Limit: n.Limit, LimitSource: n.LimitSource,
 		Streams: n.Streams, EgressKbps: n.EgressKbps,
@@ -96,10 +96,10 @@ type knownNodeJSON struct {
 	EgressLimit  int                     `json:"egress_limit_mbps"`
 	Availability domain.NodeAvailability `json:"availability"`
 	Note         string                  `json:"note,omitzero"`
-	Address      string                  `json:"address"`
+	Address      uri                     `json:"address"`
 	Group        string                  `json:"group"`
-	PublicURL    string                  `json:"public_url"`
-	LocalURL     string                  `json:"local_url"`
+	PublicURL    uri                     `json:"public_url"`
+	LocalURL     uri                     `json:"local_url"`
 	Encoding     nodeEncodingJSON        `json:"encoding"`
 	Online       *nodeJSON               `json:"online,omitempty"`
 }
@@ -117,10 +117,10 @@ type nodeChangeJSON struct {
 	Limit        *int                    `json:"transcode_limit,omitzero"`
 	Availability domain.NodeAvailability `json:"availability,omitzero"`
 	Note         string                  `json:"note,omitzero"`
-	Address      *string                 `json:"address,omitzero"`
+	Address      *uri                    `json:"address,omitzero"`
 	Group        *string                 `json:"group,omitzero"`
-	PublicURL    *string                 `json:"public_url,omitzero"`
-	LocalURL     *string                 `json:"local_url,omitzero"`
+	PublicURL    *uri                    `json:"public_url,omitzero"`
+	LocalURL     *uri                    `json:"local_url,omitzero"`
 	Encoding     *nodeEncodingJSON       `json:"encoding,omitzero"`
 	StreamLimit  *int                    `json:"stream_limit,omitzero"`
 	EgressLimit  *int                    `json:"egress_limit_mbps,omitzero"`
@@ -143,8 +143,8 @@ func nodeAddress(s string) (address string, ok bool) {
 func showKnownNode(n domain.NodeRecord, online map[uuid.UUID]domain.Node) knownNodeJSON {
 	out := knownNodeJSON{
 		ID: n.ID, Name: n.Name, FirstSeen: n.FirstSeen.UTC(), LastSeen: n.LastSeen.UTC(), Role: n.Role, LimitSource: n.LimitSource, Limit: n.Limit,
-		StreamLimit: n.StreamLimit, EgressLimit: n.EgressLimitMbps, Availability: n.Availability, Note: n.Note, Address: n.Address, Group: n.Group, PublicURL: n.PublicURL,
-		LocalURL: n.LocalURL, Encoding: nodeEncodingJSON{n.Encoding.Source, n.Encoding.Acceleration, n.Encoding.Device},
+		StreamLimit: n.StreamLimit, EgressLimit: n.EgressLimitMbps, Availability: n.Availability, Note: n.Note, Address: uri(n.Address), Group: n.Group, PublicURL: uri(n.PublicURL),
+		LocalURL: uri(n.LocalURL), Encoding: nodeEncodingJSON{n.Encoding.Source, n.Encoding.Acceleration, n.Encoding.Device},
 	}
 	if advert, ok := online[n.ID]; ok {
 		shown := showNode(advert)
@@ -279,19 +279,19 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 		set.Availability, set.Note = domain.NodeActive, ""
 	}
 	if req.Address != nil {
-		if set.Address, ok = nodeAddress(*req.Address); !ok {
+		if set.Address, ok = nodeAddress(string(*req.Address)); !ok {
 			writeProblem(w, a.logger, codeInvalidBody, "address is an http or https address with a host and port alone, such as http://10.0.0.5:8640")
 			return
 		}
 	}
 	if req.PublicURL != nil {
-		if set.PublicURL, ok = nodeAddress(*req.PublicURL); !ok {
+		if set.PublicURL, ok = nodeAddress(string(*req.PublicURL)); !ok {
 			writeProblem(w, a.logger, codeInvalidBody, "public_url is an http or https address with a host and port alone, such as https://gpu.example.com")
 			return
 		}
 	}
 	if req.LocalURL != nil {
-		if set.LocalURL, ok = nodeAddress(*req.LocalURL); !ok {
+		if set.LocalURL, ok = nodeAddress(string(*req.LocalURL)); !ok {
 			writeProblem(w, a.logger, codeInvalidBody, "local_url is an http or https address with a host and port alone, such as http://192.168.1.5:8640")
 			return
 		}

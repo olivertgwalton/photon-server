@@ -40,14 +40,14 @@ type storageJSON struct {
 // pictures, sounds and previews from the bucket, at public_endpoint where they reach the store at
 // another address than endpoint.
 type bucketJSON struct {
-	Endpoint       string          `json:"endpoint,omitzero"`
+	Endpoint       uri             `json:"endpoint,omitzero"`
 	Name           string          `json:"name"`
 	Folder         string          `json:"folder,omitzero"`
 	Region         string          `json:"region,omitzero"`
 	AccessKey      string          `json:"access_key,omitzero"`
 	SecretKey      string          `json:"secret_key,omitzero"`
 	Delivery       domain.Delivery `json:"delivery,omitzero"`
-	PublicEndpoint string          `json:"public_endpoint,omitzero"`
+	PublicEndpoint uri             `json:"public_endpoint,omitzero"`
 }
 
 // storageStatusJSON is where things are kept, saying whether a secret key is kept and never what,
@@ -89,14 +89,14 @@ func showMove(m domain.StorageMove) *storageMoveJSON {
 // is a link to a picture there, for a browser to find whether it reaches the bucket: once the page
 // may draw from it.
 type bucketStatusJSON struct {
-	Endpoint       string          `json:"endpoint,omitzero"`
+	Endpoint       uri             `json:"endpoint,omitzero"`
 	Name           string          `json:"name"`
 	Folder         string          `json:"folder,omitzero"`
 	Region         string          `json:"region,omitzero"`
 	AccessKey      string          `json:"access_key,omitzero"`
 	SecretKeySet   bool            `json:"secret_key_set"`
 	Delivery       domain.Delivery `json:"delivery"`
-	PublicEndpoint string          `json:"public_endpoint,omitzero"`
+	PublicEndpoint uri             `json:"public_endpoint,omitzero"`
 	Probe          string          `json:"probe,omitzero"`
 }
 
@@ -106,9 +106,9 @@ func showStorage(s domain.Storage) storageStatusJSON {
 	case domain.StorageBucket:
 		b := s.Bucket
 		out.Bucket = &bucketStatusJSON{
-			Endpoint: b.Endpoint, Name: b.Name, Folder: b.Folder, Region: b.Region,
+			Endpoint: uri(b.Endpoint), Name: b.Name, Folder: b.Folder, Region: b.Region,
 			AccessKey: b.AccessKey, SecretKeySet: b.SecretKey != "", Delivery: b.Delivery,
-			PublicEndpoint: b.PublicEndpoint,
+			PublicEndpoint: uri(b.PublicEndpoint),
 		}
 	case domain.StorageDisk:
 	}
@@ -148,9 +148,9 @@ func (a *API) storageOf(w http.ResponseWriter, req storageJSON, now domain.Stora
 	case domain.StorageBucket:
 	}
 	b := domain.Bucket{
-		Endpoint: req.Bucket.Endpoint, Name: req.Bucket.Name, Folder: req.Bucket.Folder, Region: req.Bucket.Region,
+		Endpoint: string(req.Bucket.Endpoint), Name: req.Bucket.Name, Folder: req.Bucket.Folder, Region: req.Bucket.Region,
 		AccessKey: req.Bucket.AccessKey, SecretKey: req.Bucket.SecretKey,
-		Delivery: cmp.Or(req.Bucket.Delivery, domain.DeliverProxy), PublicEndpoint: req.Bucket.PublicEndpoint,
+		Delivery: cmp.Or(req.Bucket.Delivery, domain.DeliverProxy), PublicEndpoint: string(req.Bucket.PublicEndpoint),
 	}
 	if b.SecretKey == "" && b.AccessKey != "" && b.AccessKey == now.Bucket.AccessKey {
 		b.SecretKey = now.Bucket.SecretKey
