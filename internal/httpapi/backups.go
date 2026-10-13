@@ -115,11 +115,11 @@ const restoringPage = `<!doctype html>
 `
 
 // Restoring answers every request while a restore is under way and the node waits to start: not
-// ready, as /readyz says to a balancer and the API to a client, and a page a browser shows.
+// ready, as /health says to a balancer and the API to a client, and a page a browser shows.
 func Restoring(logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "5")
-		if r.URL.Path == "/readyz" || strings.HasPrefix(r.URL.Path, "/api/") {
+		if r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/api/") {
 			writeProblem(w, logger, codeNotReady, "the server is restoring its database")
 			return
 		}

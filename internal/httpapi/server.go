@@ -193,7 +193,7 @@ func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{Name: set.Name, MetadataLanguage: domain.LanguageTag(lang), CertificationCountry: domain.CountryCode(country)})
 }
 
-func (a *API) readyz(w http.ResponseWriter, r *http.Request) {
+func (a *API) health(w http.ResponseWriter, r *http.Request) {
 	if err := a.svc.Ready(r.Context()); err != nil {
 		// A node draining is not ready by design, asked as often as a balancer likes.
 		if !errors.Is(err, domain.ErrStopping) {
@@ -212,8 +212,8 @@ func (a *API) serverRoutes() []route {
 			status: http.StatusOK, reply: domain.Info{}, handle: a.server,
 		},
 		{
-			pattern: "GET /readyz", access: public, summary: "Say whether Postgres and Valkey are reachable",
-			status: http.StatusNoContent, handle: a.readyz,
+			pattern: "GET /health", access: public, summary: "Say whether Postgres and Valkey are reachable",
+			status: http.StatusNoContent, handle: a.health,
 		},
 		{
 			pattern: "PUT /api/v1/admin/server", access: admin,

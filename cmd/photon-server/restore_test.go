@@ -35,7 +35,7 @@ func TestANodeStartingDuringARestoreWaitsSayingItIsNotReady(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- answerRestoring(t.Context(), l, underway, slog.New(slog.DiscardHandler)) }()
 	base := "http://" + l.Addr().String()
-	for path, want := range map[string]string{"/readyz": "not_ready", "/api/v1/server": "restoring its database", "/": "Restoring…"} {
+	for path, want := range map[string]string{"/health": "not_ready", "/api/v1/server": "restoring its database", "/": "Restoring…"} {
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, base+path, nil)
 		if err != nil {
 			t.Fatal(err)

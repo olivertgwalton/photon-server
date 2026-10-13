@@ -134,7 +134,7 @@ func TestAMissingFileIsNotThePage(t *testing.T) {
 
 func TestTheAPIsPathsStayTheAPIs(t *testing.T) {
 	a := webAPI(t)
-	for _, path := range []string{"/api/v1/nothing", "/api", "/readyz"} {
+	for _, path := range []string{"/api/v1/nothing", "/api", "/health"} {
 		rec := get(a, path)
 		if rec.Header().Get("Content-Type") == "text/html; charset=utf-8" {
 			t.Errorf("%s answered the web app", path)
