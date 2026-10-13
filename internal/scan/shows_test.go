@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/olivertgwalton/photon-server/internal/library"
 )
 
 func TestSeriesAndSeasonOfAFolder(t *testing.T) {
@@ -22,14 +24,41 @@ func TestSeriesAndSeasonOfAFolder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.rel, func(t *testing.T) {
-			series, season := seriesOf(tt.rel)
+			series := firstFolder(tt.rel)
 			got := -1
-			if season != nil {
+			if season := seasonOf(series, tt.rel); season != nil {
 				got = *season
 			}
-			if series != tt.series || got != tt.season || holdsEpisodes(tt.rel) != tt.episodes {
+			if series != tt.series || got != tt.season || holdsEpisodes(series, tt.rel) != tt.episodes {
 				t.Errorf("%q: series %q, season %d, holds episodes %v; want %q, %d, %v",
-					tt.rel, series, got, holdsEpisodes(tt.rel), tt.series, tt.season, tt.episodes)
+					tt.rel, series, got, holdsEpisodes(series, tt.rel), tt.series, tt.season, tt.episodes)
+			}
+		})
+	}
+}
+
+func TestAMixedLibrarysShowIsAFolderThatSaysSo(t *testing.T) {
+	tests := []struct {
+		name   string
+		folder library.Folder
+		isShow bool
+	}{
+		{"a season folder", library.Folder{Path: "TV/The Wire (2002)", Folders: []string{"Season 1", "Extras"}}, true},
+		{"a season folder named with its show", library.Folder{Path: "Seinfeld", Folders: []string{"Seinfeld Season 2"}}, true},
+		{"a tvshow.nfo", library.Folder{Path: "Lost", Files: []library.File{{Name: "tvshow.nfo"}}}, true},
+		{"episodes", library.Folder{Path: "Fleabag", Files: []library.File{{Name: "Fleabag S01E01.mkv"}, {Name: "Fleabag 1x02.mkv"}}}, true},
+		{"episodes beside extras", library.Folder{Path: "Fleabag", Folders: []string{"Extras", "S2"}, Files: []library.File{{Name: "Fleabag S01E01.mkv"}, {Name: "Fleabag S01E02.mkv"}}}, true},
+		{"episodes beside shows", library.Folder{Path: "TV", Folders: []string{"The Wire (2002)", "Lost"}, Files: []library.File{{Name: "Fleabag S01E01.mkv"}, {Name: "Fleabag S01E02.mkv"}}}, false},
+		{"one episode", library.Folder{Path: "Fleabag", Files: []library.File{{Name: "Fleabag S01E01.mkv"}}}, false},
+		{"numbered films", library.Folder{Path: "Saw", Files: []library.File{{Name: "Saw 2.mkv"}, {Name: "Saw 3.mkv"}}}, false},
+		{"a bare number", library.Folder{Path: "1917 (2019)", Folders: []string{"1"}}, false},
+		{"a film", library.Folder{Path: "Heat (1995)", Files: []library.File{{Name: "Heat (1995).mkv"}}}, false},
+		{"the root", library.Folder{Path: ".", Files: []library.File{{Name: "tvshow.nfo"}}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isShow(tt.folder); got != tt.isShow {
+				t.Errorf("isShow(%+v) = %v, want %v", tt.folder, got, tt.isShow)
 			}
 		})
 	}
