@@ -123,7 +123,9 @@ func (p WallPage) orderBy(args pgx.NamedArgs) (join, order string) {
 	case domain.SortRuntime:
 		key, nulls = "(SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL)", " NULLS LAST"
 	case domain.SortPlayed:
-		key, nulls = "(SELECT max(w.last_played_at) FROM watch_state w WHERE w.profile_id = @profile AND w.item_id IN ("+episodesOf+"))", " NULLS LAST"
+		// A show's is its episodes' latest, as the counts kept of them say.
+		key, nulls = `coalesce((SELECT w.last_played_at FROM watch_state w WHERE w.profile_id = @profile AND w.item_id = items.id),
+			(SELECT c.last_played_at FROM watched_counts c WHERE c.profile_id = @profile AND c.group_id = items.id))`, " NULLS LAST"
 		// An episode is its own one watch, joined rather than asked after for each so the sort reads
 		// in parallel: three times quicker over half a million.
 		if p.Kind == domain.WallEpisodes {
