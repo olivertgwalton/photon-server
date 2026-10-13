@@ -190,10 +190,10 @@ type ratingRefJSON struct {
 // chapterRefJSON is a chapter on the copy's whole timeline, across its parts. Image is the address
 // of its picture, for those that have one.
 type chapterRefJSON struct {
-	StartMS int64  `json:"start_ms"`
-	EndMS   int64  `json:"end_ms"`
-	Title   string `json:"title,omitzero"`
-	Image   string `json:"image,omitzero"`
+	StartMS int64        `json:"start_ms"`
+	EndMS   int64        `json:"end_ms"`
+	Title   string       `json:"title,omitzero"`
+	Image   uriReference `json:"image,omitzero"`
 }
 
 type seasonCardJSON struct {
@@ -229,7 +229,7 @@ type extraCardJSON struct {
 	Kind       domain.ExtraKind `json:"extra_kind"`
 	Title      string           `json:"title"`
 	DurationMS int64            `json:"duration_ms,omitzero"`
-	Image      string           `json:"image,omitzero"`
+	Image      uriReference     `json:"image,omitzero"`
 }
 
 type collectionCardJSON struct {
@@ -302,7 +302,9 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 				DurationMS: e.DurationMS, Thumb: e.Thumb, State: titleStateJSON(e.State), Blurhashes: e.Blurhashes,
 			}
 		}),
-		Extras:     each(p.Extras, func(e store.ExtraCard) extraCardJSON { return extraCardJSON(e) }),
+		Extras: each(p.Extras, func(e store.ExtraCard) extraCardJSON {
+			return extraCardJSON{ID: e.ID, Kind: e.Kind, Title: e.Title, DurationMS: e.DurationMS, Image: uriReference(e.Image)}
+		}),
 		Videos:     each(p.Videos, func(v store.VideoLink) videoLinkJSON { return videoLinkJSON(v) }),
 		State:      titleStateJSON(p.State),
 		Artwork:    p.Artwork,
@@ -323,7 +325,7 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 			}
 		}),
 		Chapters: each(v.Chapters, func(c store.ChapterRef) chapterRefJSON {
-			return chapterRefJSON{StartMS: c.StartMS, EndMS: c.EndMS, Title: c.Title, Image: c.Image}
+			return chapterRefJSON{StartMS: c.StartMS, EndMS: c.EndMS, Title: c.Title, Image: uriReference(c.Image)}
 		}),
 		Markers: each(v.Markers, func(m store.MarkerRef) markerRefJSON { return markerRefJSON(m) }),
 		Files: each(v.Files, func(f store.PartRef) partRefJSON {

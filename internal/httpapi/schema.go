@@ -240,11 +240,20 @@ func (t schemaType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.name)
 }
 
+// uri is an absolute address; uriReference is one that may instead be a path on the server that
+// answered, as a signed address is where a node has no public URL.
+type (
+	uri          string
+	uriReference string
+)
+
 // formats are the types that write themselves as a string.
 var formats = map[reflect.Type]jsonSchema{
-	reflect.TypeFor[time.Time]():   {Type: schemaType{name: "string"}, Format: "date-time"},
-	reflect.TypeFor[uuid.UUID]():   {Type: schemaType{name: "string"}, Format: "uuid"},
-	reflect.TypeFor[domain.Date](): {Type: schemaType{name: "string"}, Format: "date"},
+	reflect.TypeFor[uri]():          {Type: schemaType{name: "string"}, Format: "uri"},
+	reflect.TypeFor[uriReference](): {Type: schemaType{name: "string"}, Format: "uri-reference"},
+	reflect.TypeFor[time.Time]():    {Type: schemaType{name: "string"}, Format: "date-time"},
+	reflect.TypeFor[uuid.UUID]():    {Type: schemaType{name: "string"}, Format: "uuid"},
+	reflect.TypeFor[domain.Date]():  {Type: schemaType{name: "string"}, Format: "date"},
 }
 
 // renamed are types whose names say too little beside the API's own.

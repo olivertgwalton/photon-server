@@ -28,7 +28,7 @@ type credentialsJSON struct {
 
 type startImportJSON struct {
 	Source      domain.ImportSource `json:"source"`
-	URL         string              `json:"url"`
+	URL         uri                 `json:"url"`
 	Credentials credentialsJSON     `json:"credentials"`
 	Profile     uuid.UUID           `json:"profile_id"`
 }
@@ -41,7 +41,7 @@ type missedJSON struct {
 type importJSON struct {
 	ID         uuid.UUID           `json:"id"`
 	Source     domain.ImportSource `json:"source"`
-	URL        string              `json:"url"`
+	URL        uri                 `json:"url"`
 	Profile    uuid.UUID           `json:"profile_id"`
 	Status     domain.ImportStatus `json:"status"`
 	Error      string              `json:"error,omitzero"`
@@ -60,7 +60,7 @@ func importOf(h domain.HistoryImport) importJSON {
 		misses[i] = missedJSON(m)
 	}
 	return importJSON{
-		ID: h.ID, Source: h.Source, URL: h.URL, Profile: h.Profile, Status: h.Status, Error: h.Error,
+		ID: h.ID, Source: h.Source, URL: uri(h.URL), Profile: h.Profile, Status: h.Status, Error: h.Error,
 		Matched: h.Matched, Imported: h.Imported, Skipped: h.Skipped, Unmatched: h.Unmatched, Misses: misses,
 		CreatedAt: h.CreatedAt.UTC(), FinishedAt: h.FinishedAt,
 	}
@@ -78,7 +78,7 @@ func (a *API) startImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := historyimport.Credentials(req.Credentials)
-	id, err := a.svc.Importer.Start(r.Context(), req.Source, req.URL, req.Profile, c)
+	id, err := a.svc.Importer.Start(r.Context(), req.Source, string(req.URL), req.Profile, c)
 	if a.answered(w, r, err) {
 		return
 	}
