@@ -166,12 +166,20 @@ test("a wall follows the server as it finds titles", async ({ page }) => {
 	await expect(page.getByRole("link", { name: /Aardvark/ })).toBeVisible();
 });
 
-test("the bar says what the server is doing: a scan as it goes, the tasks running and a backlog counting down", async ({
+test("the bar says what the server is doing: who is watching, a scan as it goes, the tasks running and a backlog counting down", async ({
 	page,
 }) => {
 	await logIn(page, "/libraries/l-films");
 	await page.getByRole("button", { name: /^Activity/ }).click();
 	const menu = page.getByRole("dialog", { name: "Activity" });
+	const streams = menu.getByRole("list", { name: "Streams" });
+	await expect(streams).toContainText("Quiet Hours");
+	await expect(streams).toContainText("Kids · Living Room");
+	await expect(
+		streams.getByRole("progressbar", {
+			name: "How far Kids is through Quiet Hours",
+		}),
+	).toBeVisible();
 	const scan = menu.getByRole("status");
 	await expect(scan).toContainText("Scanning Films");
 	await expect(scan).toContainText(/Reading folders: \d+ of 40/);
