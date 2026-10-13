@@ -90,7 +90,8 @@ const episode = (id: string, n: number, title: string, s = 1) =>
 		season_number: s,
 		episode_number: n,
 	});
-const episodes = [episode("t-ep", 1, "Pilot"), episode("t-ep2", 2, "Second")];
+const pilot = episode("t-ep", 1, "Pilot");
+const episodes = [pilot, episode("t-ep2", 2, "Second")];
 // A second season, of one episode, to pick from an episode's page.
 const later = episode("t-ep3", 1, "Return", 2);
 const collection = base("c-set", "collection", "Quiet Collection", {
@@ -1269,16 +1270,17 @@ const server_ = Bun.serve<Socket>({
 		const title = url.pathname.match(
 			/^\/api\/v1\/titles\/([^/]+)(\/play|\/next)?$/,
 		);
-		if (title?.[1] && titles[title[1]]) {
-			const [, id, action] = title;
+		const [, titleID, action] = title ?? [];
+		const found = titleID === undefined ? undefined : titles[titleID];
+		if (titleID && found) {
 			if (!action && request.method === "GET") {
-				const at = stopped.get(id);
+				const at = stopped.get(titleID);
 				// The server chooses the sound in the reader's language, as it does
 				// where they ask for it over the file's default.
 				const prefs = preferences.get(token as string) ?? defaults;
 				const page = {
-					...titles[id],
-					versions: titles[id].versions?.map((v) => ({
+					...found,
+					versions: found.versions?.map((v) => ({
 						...v,
 						default_audio_stream:
 							prefs.audio_track === "language"
@@ -1294,10 +1296,11 @@ const server_ = Bun.serve<Socket>({
 				);
 			}
 			if (action === "/play" && request.method === "POST") {
-				return play(id, (await request.json()) as Schemas["Play"]);
+				return play(titleID, (await request.json()) as Schemas["Play"]);
 			}
-			if (action === "/next" && id === "p-ep") {
-				const { versions: _, ...card } = titles["p-ep2"];
+			const next = titles["p-ep2"];
+			if (action === "/next" && titleID === "p-ep" && next) {
+				const { versions: _, ...card } = next;
 				return Response.json(card satisfies Schemas["Card"]);
 			}
 			if (action === "/next") return problem(404, "not_found", "Not Found");
@@ -1652,7 +1655,7 @@ const server_ = Bun.serve<Socket>({
 		const answered = (await admin(request, url, me)) ?? adminTitles(route);
 		if (answered) return answered;
 		const parts = url.pathname.split("/").slice(3);
-		const [kind, id, sub, entry, leaf] = parts;
+		const [kind, id = "", sub, entry, leaf] = parts;
 		const path = `${request.method} ${kind}/${sub ?? ""}`;
 		if (request.method === "GET" && kind === "profile" && id === "rows") {
 			const row = homeRows().find((r) => r.kind === sub && !r.library);
@@ -1684,7 +1687,7 @@ const server_ = Bun.serve<Socket>({
 			case "GET libraries/letters": {
 				const counts = new Map<string, number>();
 				for (const f of wallOf(id, url)) {
-					const l = (f.show?.title ?? f.title)[0].toUpperCase();
+					const l = (f.show?.title ?? f.title).charAt(0).toUpperCase();
 					counts.set(l, (counts.get(l) ?? 0) + 1);
 				}
 				return Response.json({
@@ -1739,7 +1742,7 @@ const server_ = Bun.serve<Socket>({
 				// second season is not started.
 				return id === "t-s2"
 					? problem(404, "not_found", "Not Found")
-					: Response.json(card(episodes[0]));
+					: Response.json(card(pilot));
 			case "PUT titles/watched":
 			case "DELETE titles/watched":
 			case "PUT titles/favourite":
@@ -1782,11 +1785,11 @@ const server_ = Bun.serve<Socket>({
 				const at = list.items.findIndex((_, i) => `e-${i}` === entry);
 				if (request.method === "DELETE") list.items.splice(at, 1);
 				if (request.method === "PUT" && leaf === "position") {
-					const [moved] = list.items.splice(at, 1);
+					const moved = list.items.splice(at, 1);
 					list.items.splice(
 						((await json(request)) as Schemas["Move"]).position,
 						0,
-						moved,
+						...moved,
 					);
 				}
 				if (request.method !== "GET") return none();

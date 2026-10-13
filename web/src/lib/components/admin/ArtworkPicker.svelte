@@ -17,7 +17,9 @@ type Kind = Schemas["ArtworkKind"];
 // refresh until it is given back.
 let { title }: { title: Schemas["TitlePage"] } = $props();
 
-const kinds: { kind: Kind; label: string; shape: string; width: number }[] = [
+type Choice = { kind: Kind; label: string; shape: string; width: number };
+
+const kinds: [Choice, ...Choice[]] = [
 	{ kind: "poster", label: "Poster", shape: "aspect-2/3", width: 240 },
 	{ kind: "backdrop", label: "Backdrop", shape: "aspect-video", width: 480 },
 	{ kind: "thumb", label: "Still", shape: "aspect-video", width: 480 },

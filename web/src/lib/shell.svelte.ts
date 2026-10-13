@@ -114,7 +114,8 @@ export class Shell {
 		}
 		this.onDisk = (data.versions ?? []).filter((v) => !v.missing_since);
 		Object.assign(this.versions, { id, title, use });
-		if (this.onDisk.length === 1) this.pickVersion(this.onDisk[0]);
+		const [only, ...more] = this.onDisk;
+		if (only && !more.length) this.pickVersion(only);
 		else this.versions.open = true;
 	};
 

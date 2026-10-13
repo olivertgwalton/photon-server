@@ -87,7 +87,7 @@ export function byKind(
 // A list with the item at from moved to to, the rest keeping their order.
 export function moved<T>(list: T[], from: number, to: number): T[] {
 	const out = [...list];
-	const [item] = out.splice(from, 1);
-	out.splice(Math.max(0, Math.min(to, out.length)), 0, item);
+	const item = out.splice(from, 1);
+	out.splice(Math.max(0, Math.min(to, out.length)), 0, ...item);
 	return out;
 }

@@ -27,40 +27,42 @@ const signPow = (v: number, e: number) => Math.sign(v) * Math.abs(v) ** e;
 // The RGBA pixels of a hash drawn width by height, as the reference decoder
 // draws them.
 export function decodeBlurhash(hash: string, width: number, height: number) {
-	const size = base83(hash[0]);
+	const size = base83(hash.charAt(0));
 	const cx = (size % 9) + 1;
 	const cy = Math.floor(size / 9) + 1;
-	const max = (base83(hash[1]) + 1) / 166;
-	const colours: number[][] = [];
+	const max = (base83(hash.charAt(1)) + 1) / 166;
+	const ac = (q: number) => signPow((q - 9) / 9, 2) * max;
+	const colours: [number, number, number][] = [];
 	for (let i = 0; i < cx * cy; i++) {
 		if (i === 0) {
 			const v = base83(hash.slice(2, 6));
-			colours.push([v >> 16, (v >> 8) & 255, v & 255].map(toLinear));
+			colours.push([
+				toLinear(v >> 16),
+				toLinear((v >> 8) & 255),
+				toLinear(v & 255),
+			]);
 		} else {
 			const v = base83(hash.slice(4 + i * 2, 6 + i * 2));
-			colours.push(
-				[Math.floor(v / 361), Math.floor(v / 19) % 19, v % 19].map(
-					(q) => signPow((q - 9) / 9, 2) * max,
-				),
-			);
+			colours.push([
+				ac(Math.floor(v / 361)),
+				ac(Math.floor(v / 19) % 19),
+				ac(v % 19),
+			]);
 		}
 	}
 	const pixels = new Uint8ClampedArray(width * height * 4);
 	for (let y = 0; y < height; y++) {
 		for (let x = 0; x < width; x++) {
-			const rgb = [0, 0, 0];
-			for (let j = 0; j < cy; j++) {
-				for (let i = 0; i < cx; i++) {
-					const basis =
-						Math.cos((Math.PI * x * i) / width) *
-						Math.cos((Math.PI * y * j) / height);
-					const c = colours[i + j * cx];
-					for (let k = 0; k < 3; k++) rgb[k] += c[k] * basis;
-				}
-			}
-			const at = 4 * (x + y * width);
-			for (let k = 0; k < 3; k++) pixels[at + k] = toSRGB(rgb[k]);
-			pixels[at + 3] = 255;
+			let [r, g, b] = [0, 0, 0];
+			colours.forEach(([cr, cg, cb], n) => {
+				const basis =
+					Math.cos((Math.PI * x * (n % cx)) / width) *
+					Math.cos((Math.PI * y * Math.floor(n / cx)) / height);
+				r += cr * basis;
+				g += cg * basis;
+				b += cb * basis;
+			});
+			pixels.set([toSRGB(r), toSRGB(g), toSRGB(b), 255], 4 * (x + y * width));
 		}
 	}
 	return pixels;
@@ -73,8 +75,9 @@ export function decodeBlurhash(hash: string, width: number, height: number) {
 export function isDark(hash: string | undefined): boolean {
 	if (!hash || hash.length < 6) return false;
 	const v = base83(hash.slice(2, 6));
-	const [r, g, b] = [v >> 16, (v >> 8) & 255, v & 255].map((c) => c / 255);
-	return 0.2126 * r + 0.7152 * g + 0.0722 * b < darkLuma;
+	const luma =
+		0.2126 * (v >> 16) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255);
+	return luma / 255 < darkLuma;
 }
 
 const darkLuma = 0.3;

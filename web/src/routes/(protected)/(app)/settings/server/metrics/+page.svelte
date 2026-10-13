@@ -54,7 +54,7 @@ $effect(() => {
 	return () => clearInterval(timer);
 });
 
-const latest = $derived(answers[answers.length - 1].metrics);
+const latest = $derived(answers.at(-1)?.metrics ?? data.metrics);
 const previous = $derived(answers.at(-2)?.metrics);
 const lines = $derived(series(answers.map((a) => a.metrics)));
 const answered = $derived(latest.nodes.filter((n) => n.metrics));

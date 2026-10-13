@@ -24,7 +24,9 @@ type Found = components["schemas"]["FoundSubtitles"];
 // browser's.
 async function startLanguage(): Promise<string> {
 	const { data } = await client().GET("/api/v1/profile/preferences");
-	return data?.subtitle_language || navigator.language.split("-")[0];
+	return (
+		data?.subtitle_language || new Intl.Locale(navigator.language).language
+	);
 }
 
 const options = (lang: string) =>

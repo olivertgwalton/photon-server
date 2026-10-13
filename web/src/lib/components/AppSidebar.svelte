@@ -16,7 +16,7 @@ import { setLibraryOrder, visitPage } from "#lib/actions.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 import { libraryIcons } from "#lib/libraries.js";
-import { rowPages } from "#lib/rows.js";
+import { moved, rowPages } from "#lib/rows.js";
 import { page } from "$app/state";
 import LibraryMenu from "./LibraryMenu.svelte";
 import Mark from "./Mark.svelte";
@@ -88,8 +88,11 @@ function nudge(event: KeyboardEvent, index: number) {
 	if (!by || to < 0 || to >= listed.length) return;
 	event.preventDefault();
 	// From the order drawn, which a move not yet kept has changed.
-	const ids = listed.map((l) => l.id);
-	[ids[index], ids[to]] = [ids[to], ids[index]];
+	const ids = moved(
+		listed.map((l) => l.id),
+		index,
+		to,
+	);
 	draft = ids;
 	setLibraryOrder(ids).then(() => {
 		if (draft === ids) draft = undefined;

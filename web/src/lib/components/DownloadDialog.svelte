@@ -26,7 +26,9 @@ let {
 } = $props();
 
 // The most the picture may be. Original is any size at all.
-const qualities = [
+type Quality = { name: string; detail: string; kbps: number; width?: number };
+
+const qualities: [Quality, ...Quality[]] = [
 	{ name: "Original", detail: "The file as it is", kbps: 1_000_000 },
 	{ name: "1080p", detail: "20 Mbps", kbps: 20_000, width: 1920 },
 	{ name: "1080p", detail: "8 Mbps", kbps: 8000, width: 1920 },
@@ -46,7 +48,8 @@ const fileChoices = $derived([
 
 async function request(event: SubmitEvent) {
 	const form = fields(event);
-	const { kbps, width } = qualities[Number(form.get("quality"))];
+	const { kbps, width } =
+		qualities[Number(form.get("quality"))] ?? qualities[0];
 	const file = form.get("file") ?? "all";
 	const parts =
 		files.length > 1
@@ -69,9 +72,7 @@ async function request(event: SubmitEvent) {
 		parts.length > 1
 			? `${parts.length} downloads requested, one a file. They're in Downloads.`
 			: "Download requested. It's in Downloads.";
-	if (
-		await act(Promise.resolve(asked.find((a) => a.error) ?? asked[0]), said)
-	) {
+	if (await act(Promise.resolve(asked.find((a) => a.error) ?? {}), said)) {
 		open = false;
 	}
 }

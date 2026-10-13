@@ -35,7 +35,7 @@ test("a performer who also directed leads with the part, and stays a performer",
 		{ id: "clint", kind: "director" },
 		{ id: "clint", kind: "actor", role: "Frankie", photo: "p" },
 	]);
-	expect(f.said).toBe("Frankie, Director");
-	expect(f.kinds).toEqual(["director", "actor"]);
-	expect(f.all.find((c) => c.photo)?.photo).toBe("p");
+	expect(f?.said).toBe("Frankie, Director");
+	expect(f?.kinds).toEqual(["director", "actor"]);
+	expect(f?.all.find((c) => c.photo)?.photo).toBe("p");
 });

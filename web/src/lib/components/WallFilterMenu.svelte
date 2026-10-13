@@ -55,7 +55,9 @@ const groups = $derived(
 );
 
 const thresholds = [50, 60, 70, 80, 90];
-const site = $derived<Site>(query.rating_site ?? facets.rating_sites[0]);
+const site = $derived<Site | undefined>(
+	query.rating_site ?? facets.rating_sites[0],
+);
 const count = $derived(filterCount(query));
 
 function chosen(name: ListFilter, value: string | number): boolean {
@@ -105,7 +107,7 @@ function chosen(name: ListFilter, value: string | number): boolean {
 				</DropdownMenu.SubContent>
 			</DropdownMenu.Sub>
 		{/each}
-		{#if facets.rating_sites.length}
+		{#if facets.rating_sites.length && site}
 			<DropdownMenu.Sub>
 				<DropdownMenu.SubTrigger>Minimum rating</DropdownMenu.SubTrigger>
 				<DropdownMenu.SubContent class="w-56">

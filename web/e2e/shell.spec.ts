@@ -42,7 +42,7 @@ test("rows scroll sideways inside the page, which never does", async ({
 	for (const [path, row] of [
 		["/", "Recently Added in Films"],
 		["/titles/t-film", "More like this"],
-	]) {
+	] as const) {
 		await page.goto(path);
 		await expect(page.getByRole("heading", { name: row })).toBeVisible();
 		const { scrolled, viewport } = await page.evaluate(() => ({

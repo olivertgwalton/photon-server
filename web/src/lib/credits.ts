@@ -17,7 +17,7 @@ const performs = (kind: Kind) => acting.includes(kind);
 
 type Folded<T> = {
 	// Every credit folded in, in the order given.
-	all: T[];
+	all: [T, ...T[]];
 	kinds: Kind[];
 	// The parts played, then the jobs done: "Host, Director".
 	said: string;
@@ -33,7 +33,9 @@ export function fold<T>(
 	kind: (c: T) => Kind,
 	role: (c: T) => string | undefined,
 ): Folded<T>[] {
-	const out = [...Map.groupBy(credits, key).values()].map((all) => {
+	// Map.groupBy makes no empty group.
+	const groups = [...Map.groupBy(credits, key).values()] as [T, ...T[]][];
+	const out = groups.map((all) => {
 		const said = (performed: boolean) =>
 			all
 				.filter((c) => performs(kind(c)) === performed)

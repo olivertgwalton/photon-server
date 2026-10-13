@@ -5,7 +5,7 @@ const widths = {
 	still: [320, 480, 640, 960],
 	// A page's backdrop, from a phone to a television.
 	backdrop: [960, 1280, 1920, 2560],
-};
+} as const;
 
 export type Shape = "poster" | "still";
 export type ArtworkShape = keyof typeof widths;

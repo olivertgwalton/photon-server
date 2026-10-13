@@ -55,15 +55,18 @@ function save(next: Section[], message: string) {
 }
 
 function move(from: number, to: number) {
-	if (to < 0 || to >= home.length || to === from) return;
-	const name = words.rows[home[from].row];
+	const section = home[from];
+	if (!section || to < 0 || to >= home.length || to === from) return;
+	const name = words.rows[section.row];
 	save(moved(home, from, to), `${name} moved to ${to + 1} of ${home.length}.`);
 }
 
 function show(i: number, shown: boolean) {
-	const name = words.rows[home[i].row];
+	const section = home[i];
+	if (!section) return;
+	const name = words.rows[section.row];
 	save(
-		home.with(i, { ...home[i], visibility: shown ? "shown" : "hidden" }),
+		home.with(i, { ...section, visibility: shown ? "shown" : "hidden" }),
 		`${name} ${shown ? "shown" : "hidden"}.`,
 	);
 }
@@ -77,7 +80,8 @@ type Way = "up" | "down";
 let focus = $state.raw<{ row: Section["row"]; way: Way }>();
 
 function step(i: number, by: number) {
-	const row = home[i].row;
+	const row = home[i]?.row;
+	if (!row) return;
 	const to = i + by;
 	move(i, to);
 	if (by < 0) focus = { row, way: to === 0 ? "down" : "up" };

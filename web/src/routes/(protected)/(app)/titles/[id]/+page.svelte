@@ -129,6 +129,7 @@ const seasonCards = $derived(
 // "2 of 8 episodes" once the reader has started a season.
 function seasonCaption(i: number) {
 	const s = seasonCards[i];
+	if (!s) return undefined;
 	const seen = s.episodes - (s.state?.unwatched ?? s.episodes);
 	return seen
 		? `${seen} of ${count(s.episodes, "episode")}`
@@ -569,12 +570,17 @@ const poster = $derived(art("poster"));
 			cards={episodes}
 			shape="still"
 			current={t.id}
-			caption={(i: number) =>
-				episodeLabel(
-					picked?.number ?? t.season_number,
-					episodes[i].episode_number,
-					episodes[i].episode_end,
-				)}
+			caption={(i: number) => {
+				const e = episodes[i];
+				return (
+					e &&
+					episodeLabel(
+						picked?.number ?? t.season_number,
+						e.episode_number,
+						e.episode_end,
+					)
+				);
+			}}
 		>
 			{#snippet heading()}
 				{#if data.seasons && data.seasons.length > 1}

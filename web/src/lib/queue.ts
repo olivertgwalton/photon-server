@@ -18,10 +18,8 @@ export function queued(at: number): Card | undefined {
 }
 
 export function shuffled<T>(items: T[]): T[] {
-	const out = [...items];
-	for (let i = out.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		[out[i], out[j]] = [out[j], out[i]];
-	}
-	return out;
+	return items
+		.map((item) => ({ item, key: Math.random() }))
+		.toSorted((a, b) => a.key - b.key)
+		.map(({ item }) => item);
 }

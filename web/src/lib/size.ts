@@ -6,9 +6,9 @@ export function onResize<T extends Element>(
 	resized: (element: T, box: DOMRectReadOnly) => void,
 ): Attachment<T> {
 	return (element) => {
-		const watch = new ResizeObserver(([entry]) =>
-			resized(element, entry.contentRect),
-		);
+		const watch = new ResizeObserver((entries) => {
+			for (const entry of entries) resized(element, entry.contentRect);
+		});
 		watch.observe(element);
 		return () => watch.disconnect();
 	};

@@ -595,9 +595,9 @@ onMount(() => {
 		onpause={() => reporter?.paused()}
 		onseeked={() => reporter?.seeked()}
 		onended={() => {
-			const parts = playback?.parts ?? [];
-			if (part < parts.length - 1) {
-				load(part + 1, parts[part + 1].offset_ms / 1000);
+			const following = playback?.parts?.[part + 1];
+			if (following) {
+				load(part + 1, following.offset_ms / 1000);
 				void video?.play();
 			} else if (next && !upNextHidden && prefs.next_episode === "play")
 				playNext();
