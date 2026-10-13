@@ -110,7 +110,7 @@ func (a *API) hlsRoutes() []route {
 			pattern: "GET /api/v1/hls/{playback}/{exp}/{sig}/{file}", access: signedPath,
 			summary: "A remux's playlist, initialisation, segment or subtitle segment, at the address play answered",
 			path: []param{
-				{"exp", "", "When the address lapses, as the server signed it."},
+				{"exp", int64(0), "When the address lapses, as the server signed it."},
 				{"sig", "", "The server's signature of the playback and exp."},
 				{"file", "", "main.m3u8, and what it names."},
 			},

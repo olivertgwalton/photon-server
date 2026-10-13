@@ -4055,7 +4055,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4182,7 +4182,7 @@ export interface paths {
                 path: {
                     playback: string;
                     /** @description When the address lapses, as the server signed it. */
-                    exp: string;
+                    exp: number;
                     /** @description The server's signature of the playback and exp. */
                     sig: string;
                     /** @description main.m3u8, and what it names. */
@@ -4553,7 +4553,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4599,7 +4599,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4643,7 +4643,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4732,7 +4732,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4776,7 +4776,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -4941,7 +4941,7 @@ export interface paths {
             parameters: {
                 query?: {
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -6299,7 +6299,7 @@ export interface paths {
                     /** @description webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is. */
                     format?: components["schemas"]["SubtitleFormat"];
                     /** @description When the address lapses, as the server signed it. */
-                    exp?: string;
+                    exp?: number;
                     /** @description The server's signature of the path and exp. */
                     sig?: string;
                 };
@@ -7470,10 +7470,12 @@ export interface components {
         DeviceListing: {
             client: string;
             device: string;
+            /** Format: uuid */
             id: string;
             /** Format: date-time */
             last_seen_at: string;
             profile: string;
+            /** Format: uuid */
             profile_id: string;
             /** Format: date-time */
             signed_in_at: string;
@@ -7540,6 +7542,7 @@ export interface components {
             locked?: components["schemas"]["Field"][];
             original_title?: string;
             overview?: string;
+            /** Format: date */
             release_date?: string;
             sort_title?: string;
             studios?: string[];

@@ -255,3 +255,46 @@ func TestTheOfflineDescriptionIsTheServedOne(t *testing.T) {
 		t.Error("Describe differs from GET /api/v1/openapi.json")
 	}
 }
+
+// A field or parameter that has a type is described by it, so a client's generated code holds a
+// date, an id or a number rather than any string.
+func TestTypedValuesAreDescribedByTheirType(t *testing.T) {
+	type typed struct {
+		Type   json.RawMessage `json:"type"`
+		Format string          `json:"format"`
+	}
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name   string `json:"name"`
+				Schema typed  `json:"schema"`
+			} `json:"parameters"`
+		} `json:"paths"`
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]typed `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(fetchDescription(t, newAPI(nil)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ schema, field, format string }{
+		{"Edit", "release_date", "date"},
+		{"DeviceListing", "id", "uuid"},
+		{"DeviceListing", "profile_id", "uuid"},
+	} {
+		if got := doc.Components.Schemas[c.schema].Properties[c.field].Format; got != c.format {
+			t.Errorf("%s.%s format = %q, want %q", c.schema, c.field, got, c.format)
+		}
+	}
+	for path, ops := range doc.Paths {
+		for method, op := range ops {
+			for _, p := range op.Parameters {
+				if p.Name == "exp" && string(p.Schema.Type) != `"integer"` {
+					t.Errorf("%s %s exp is %s, want integer", method, path, p.Schema.Type)
+				}
+			}
+		}
+	}
+}

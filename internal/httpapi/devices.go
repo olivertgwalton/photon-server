@@ -3,15 +3,16 @@ package httpapi
 import (
 	"net/http"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 type deviceListingJSON struct {
-	ID         string    `json:"id"`
+	ID         uuid.UUID `json:"id"`
 	Device     string    `json:"device"`
 	Client     string    `json:"client"`
-	ProfileID  string    `json:"profile_id"`
+	ProfileID  uuid.UUID `json:"profile_id"`
 	Profile    string    `json:"profile"`
 	SignedInAt time.Time `json:"signed_in_at"`
 	LastSeenAt time.Time `json:"last_seen_at"`
@@ -28,7 +29,7 @@ func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 	out := make([]deviceListingJSON, len(list))
 	for i, d := range list {
 		out[i] = deviceListingJSON{
-			ID: d.ID.String(), Device: d.DeviceName, Client: d.Client, ProfileID: d.ProfileID.String(), Profile: d.Profile,
+			ID: d.ID, Device: d.DeviceName, Client: d.Client, ProfileID: d.ProfileID, Profile: d.Profile,
 			SignedInAt: d.CreatedAt, LastSeenAt: d.LastSeenAt, ThisDevice: d.ID == session.ID,
 		}
 	}
