@@ -35,7 +35,7 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 				a.unauthenticated(w)
 				return
 			}
-			if err := crossOrigin.Check(r); err != nil {
+			if err := crossOrigin.Check(asWrite(r)); err != nil {
 				writeProblem(w, a.logger, codeForbidden, "a write from another site")
 				return
 			}
@@ -52,6 +52,17 @@ func (a *API) requireSession(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), session)))
 	})
+}
+
+// asWrite is r as crossOrigin checks a write. A WebSocket's handshake is a GET, which it lets pass,
+// yet the socket carries the cookie, and the page that opened it reads what it is told.
+func asWrite(r *http.Request) *http.Request {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return r
+	}
+	w := r.Clone(r.Context())
+	w.Method = http.MethodPost
+	return w
 }
 
 func (a *API) unauthenticated(w http.ResponseWriter) {

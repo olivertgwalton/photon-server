@@ -272,7 +272,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 			h = a.requireLocalNetwork(h)
 		}
 		switch r.reply.(type) {
-		case asFile, asStream:
+		case asFile, asSocket:
 		default:
 			h = a.revalidate(h)
 		}

@@ -35,6 +35,8 @@ type described struct {
 		Responses  map[string]struct {
 			Ref     string                     `json:"$ref"`
 			Content map[string]json.RawMessage `json:"content"`
+			// Messages are a socket's, by feed and event.
+			Messages map[string]map[string]json.RawMessage `json:"x-messages"`
 		} `json:"responses"`
 	} `json:"paths"`
 }
@@ -91,7 +93,7 @@ func TestTheDescriptionHasEveryRoute(t *testing.T) {
 		}
 		success, ok := op.Responses[strconv.Itoa(r.status)]
 		answersNothing := r.status == http.StatusNoContent || r.status == http.StatusAccepted
-		if !ok || len(success.Content) == 0 && !answersNothing {
+		if !ok || len(success.Content) == 0 && len(success.Messages) == 0 && !answersNothing {
 			t.Errorf("%s does not describe what it answers", r.pattern)
 		}
 		if op.Responses["default"].Ref != "#/components/responses/Problem" {
