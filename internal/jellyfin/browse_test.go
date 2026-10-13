@@ -316,3 +316,72 @@ func uuidOf(t *testing.T, v any) uuid.UUID {
 	}
 	return id
 }
+
+// A mixed library is a folder of films and shows to an app, as Jellyfin's is: it has no
+// collection type, and asking it for films or for shows answers those alone.
+func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
+	ctx := t.Context()
+	db := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(ctx, db, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	lib, err := st.AddLibrary(ctx, "Everything", domain.LibraryMixed, "/srv/all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copies := func(rel string) []store.Copy {
+		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	}
+	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []store.Film{{Title: "Heat", Folder: "Heat", Copies: copies("Heat/Heat.mkv")}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Copies: copies("Wire/S01E01.mkv")}
+	if _, err := st.SaveShowFolder(ctx, lib.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, []store.Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Auth: profiles{"pst_ada": admin}, Catalogue: st, Playlists: st, Preferences: st,
+	})
+	get := func(target string, v any) {
+		t.Helper()
+		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Infuse-Direct", Token="pst_ada"`, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), v); err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+	}
+	var views struct{ Items []map[string]any }
+	get("/UserViews", &views)
+	if len(views.Items) != 1 || views.Items[0]["CollectionType"] != nil {
+		t.Errorf("views: %v, want the library with no collection type", views.Items)
+	}
+	var folders []struct{ CollectionType string }
+	get("/Library/VirtualFolders", &folders)
+	if len(folders) != 1 || folders[0].CollectionType != "mixed" {
+		t.Errorf("virtual folders: %+v, want the library's type mixed", folders)
+	}
+	for types, want := range map[string][]string{"": {"Heat", "The Wire"}, "Movie": {"Heat"}, "Series": {"The Wire"}, "Movie,Series": {"Heat", "The Wire"}} {
+		var page struct{ Items []struct{ Name string } }
+		get("/Items?recursive=true&sortBy=SortName&parentId="+guid(lib.ID)+"&includeItemTypes="+types, &page)
+		var got []string
+		for _, it := range page.Items {
+			got = append(got, it.Name)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("includeItemTypes=%s: %v, want %v", types, got, want)
+		}
+	}
+}

@@ -116,12 +116,8 @@ var itemKinds = map[domain.ItemKind]string{
 	domain.ItemEpisode: "Episode", domain.ItemCollection: "BoxSet", domain.ItemExtra: "Video",
 }
 
-// libraryKind is the kind of title a library holds, as Jellyfin's apps ask for it.
-func libraryKind(l *store.SeenLibrary) string {
-	return itemKinds[l.Kind.ItemKinds()[0]]
-}
-
-// collectionTypes are Jellyfin's CollectionType for each kind of library.
+// collectionTypes are Jellyfin's CollectionType for each kind of library. A mixed library has none,
+// as Jellyfin's has none, and its apps browse it as folders.
 var collectionTypes = map[domain.LibraryKind]string{domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows"}
 
 // Shapes of the pictures Jellyfin's apps lay cards out by.
@@ -379,7 +375,7 @@ func first(ids []uuid.UUID) uuid.UUID {
 func (a *API) library(l *store.SeenLibrary) item {
 	it := item{
 		Name: l.Name, SortName: l.Name, ServerID: a.id, ID: guid(l.ID), Type: "CollectionFolder", IsFolder: true,
-		CollectionType: cmp.Or(collectionTypes[l.Kind], "unknown"), DisplayPreferencesID: guid(l.ID),
+		CollectionType: collectionTypes[l.Kind], DisplayPreferencesID: guid(l.ID),
 		LocationType: "FileSystem", MediaType: "Unknown",
 	}
 	it.pictures(uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, nil)

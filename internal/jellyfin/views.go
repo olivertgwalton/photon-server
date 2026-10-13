@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"net/http"
 	"uuid"
@@ -96,7 +97,8 @@ func (a *API) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]folder, len(libs))
 	for n, l := range libs {
-		out[n] = folder{Name: l.Name, Locations: []string{}, CollectionType: a.library(l).CollectionType, ItemID: guid(l.ID)}
+		// Jellyfin's library options name the type a mixed library's item has none of.
+		out[n] = folder{Name: l.Name, Locations: []string{}, CollectionType: cmp.Or(collectionTypes[l.Kind], "mixed"), ItemID: guid(l.ID)}
 	}
 	a.writeJSON(w, out)
 }
