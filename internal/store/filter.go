@@ -133,9 +133,12 @@ func (f WallFilter) where(args pgx.NamedArgs, row string) string {
 // markSQL is the condition a mark sets on a title, for the profile given as @profile. A
 // show is watched when every episode is, as Jellyfin and Plex count it.
 func markSQL(m domain.Mark) string {
-	unwatched := `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
-		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-		WHERE w.watched_at IS NULL)`
+	// A show's episodes are counted from what is kept of them, not looked up one by one.
+	unwatched := `CASE WHEN items.kind = 'show' THEN EXISTS (SELECT 1 FROM episode_counts c
+			LEFT JOIN watched_counts w ON w.group_id = c.group_id AND w.profile_id = @profile
+			WHERE c.group_id = items.id AND c.episodes > coalesce(w.watched, 0))
+		ELSE items.kind IN ('movie', 'episode') AND NOT EXISTS (SELECT 1 FROM watch_state w
+			WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NOT NULL) END`
 	switch m {
 	case domain.MarkWatched:
 		return "NOT " + unwatched
