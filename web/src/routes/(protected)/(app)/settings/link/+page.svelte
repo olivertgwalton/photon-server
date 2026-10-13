@@ -23,6 +23,14 @@ async function link(event: SubmitEvent) {
 	message = error ? problemMessage(error) : undefined;
 	linked = device;
 }
+
+// A letter code reads XXXX-XXXX, as the television shows it; Jellyfin's six digits have no dash.
+function formatCode(typed: string) {
+	const code = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
+	return /[A-Z]/.test(code) && code.length > 4
+		? `${code.slice(0, 4)}-${code.slice(4, 8)}`
+		: code;
+}
 </script>
 
 <PageHeader
@@ -45,7 +53,10 @@ async function link(event: SubmitEvent) {
 						spellcheck="false"
 						placeholder="XXXX-XXXX"
 						class="font-mono text-lg tracking-[0.2em] uppercase"
-						value={page.url.searchParams.get("code") ?? ""}
+						value={formatCode(page.url.searchParams.get("code") ?? "")}
+						oninput={(event) => {
+							event.currentTarget.value = formatCode(event.currentTarget.value);
+						}}
 					/>
 					<Field.Description>
 						It may take the device a few seconds to notice.
