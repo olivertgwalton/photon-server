@@ -249,11 +249,13 @@ type (
 
 // formats are the types that write themselves as a string.
 var formats = map[reflect.Type]jsonSchema{
-	reflect.TypeFor[uri]():          {Type: schemaType{name: "string"}, Format: "uri"},
-	reflect.TypeFor[uriReference](): {Type: schemaType{name: "string"}, Format: "uri-reference"},
-	reflect.TypeFor[time.Time]():    {Type: schemaType{name: "string"}, Format: "date-time"},
-	reflect.TypeFor[uuid.UUID]():    {Type: schemaType{name: "string"}, Format: "uuid"},
-	reflect.TypeFor[domain.Date]():  {Type: schemaType{name: "string"}, Format: "date"},
+	reflect.TypeFor[domain.LanguageTag](): {Type: schemaType{name: "string"}, Pattern: `^([A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*)?$`},
+	reflect.TypeFor[domain.CountryCode](): {Type: schemaType{name: "string"}, Pattern: `^([A-Z]{2})?$`},
+	reflect.TypeFor[uri]():                {Type: schemaType{name: "string"}, Format: "uri"},
+	reflect.TypeFor[uriReference]():       {Type: schemaType{name: "string"}, Format: "uri-reference"},
+	reflect.TypeFor[time.Time]():          {Type: schemaType{name: "string"}, Format: "date-time"},
+	reflect.TypeFor[uuid.UUID]():          {Type: schemaType{name: "string"}, Format: "uuid"},
+	reflect.TypeFor[domain.Date]():        {Type: schemaType{name: "string"}, Format: "date"},
 }
 
 // renamed are types whose names say too little beside the API's own.

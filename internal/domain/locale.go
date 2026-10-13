@@ -14,6 +14,13 @@ type Locale struct {
 	Artwork ArtworkLanguage
 }
 
+// LanguageTag is a BCP 47 tag, such as en or en-GB, and CountryCode an ISO 3166-1 alpha-2 code,
+// such as GB; each may be empty where the field says what that means.
+type (
+	LanguageTag string
+	CountryCode string
+)
+
 // ArtworkLanguage is which of a title's pictures a library takes first, as Plex's "Prefer artwork
 // based on library language": those in its language, then English, then wordless; or the most
 // liked of any language.

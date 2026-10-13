@@ -154,7 +154,7 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 func streamOf(t domain.Stream, w words.Words) mediaStream {
 	m := mediaStream{
 		DisplayTitle: w.Stream(t),
-		Codec:        t.Codec, Language: iso639(domain.TagOf(t.Language)), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
+		Codec:        t.Codec, Language: iso639(string(domain.TagOf(t.Language))), Title: t.Title, IsDefault: t.Default, IsForced: t.Forced,
 		IsHearingImpaired: t.HearingImpaired, Type: streamTypes[t.Kind], Index: t.Index, Profile: t.Profile,
 		Level: t.Level, BitRate: t.BitrateKbps * 1000,
 	}

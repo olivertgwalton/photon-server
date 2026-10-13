@@ -255,8 +255,8 @@ type titleLocaleJSON struct {
 	// MetadataLanguage is the language a film's or show's metadata is asked in, an IETF tag such
 	// as en-GB, and CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code
 	// such as GB; "" is its library's.
-	MetadataLanguage     string `json:"metadata_language"`
-	CertificationCountry string `json:"certification_country"`
+	MetadataLanguage     domain.LanguageTag `json:"metadata_language"`
+	CertificationCountry domain.CountryCode `json:"certification_country"`
 	// TitleLanguage is which title it gives, localized or original; absent is its library's.
 	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
 }
@@ -272,8 +272,8 @@ func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	lang, refusal := metadataLanguage(req.MetadataLanguage)
-	country, countryRefusal := certificationCountry(req.CertificationCountry)
+	lang, refusal := metadataLanguage(string(req.MetadataLanguage))
+	country, countryRefusal := certificationCountry(string(req.CertificationCountry))
 	if refusal = cmp.Or(refusal, countryRefusal); refusal != "" {
 		writeProblem(w, a.logger, codeInvalidBody, refusal)
 		return

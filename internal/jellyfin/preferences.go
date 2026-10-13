@@ -51,7 +51,7 @@ var subtitleModes = map[domain.SubtitleMode]string{
 }
 
 func configurationOf(p domain.Preferences, libs []*store.SeenLibrary) configuration {
-	audio, subtitles := iso639(domain.TagOf(p.AudioLanguage)), iso639(domain.TagOf(p.SubtitleLanguage))
+	audio, subtitles := iso639(string(domain.TagOf(p.AudioLanguage))), iso639(string(domain.TagOf(p.SubtitleLanguage)))
 	c := configuration{
 		AudioLanguagePreference: &audio, PlayDefaultAudioTrack: p.AudioTrack == domain.AudioDefault,
 		SubtitleLanguagePreference: &subtitles, SubtitleMode: subtitleModes[p.SubtitleMode],
