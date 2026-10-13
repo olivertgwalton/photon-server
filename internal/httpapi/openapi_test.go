@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -198,6 +199,32 @@ func TestASchemaHasTheFieldsEncodingJSONWrites(t *testing.T) {
 	}
 	if diff := cmp.Diff([]string{"kind", "other"}, schema.Required); diff != "" {
 		t.Errorf("required (-want +got):\n%s", diff)
+	}
+}
+
+// An address is described as one, so a client's generated code and the API reference know a link
+// from any other string.
+func TestAddressesAreDescribedAsURIs(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					Type   json.RawMessage `json:"type"`
+					Format string          `json:"format"`
+				} `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(fetchDescription(t, newAPI(nil)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	address := regexp.MustCompile(`^(url|.+_url|.+_uri(_complete)?|.*endpoint|issuer)$`)
+	for name, schema := range doc.Components.Schemas {
+		for field, p := range schema.Properties {
+			if address.MatchString(field) && string(p.Type) == `"string"` && p.Format != "uri" && p.Format != "uri-reference" {
+				t.Errorf("%s.%s is a string of no format, want uri or uri-reference", name, field)
+			}
+		}
 	}
 }
 

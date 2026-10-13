@@ -89,7 +89,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	// The film is 8 Mbps H.264 1080p or smaller.
 	code, d := ask(`{` + film + part + `, "max_bitrate_kbps": 10000}`)
 	if code != http.StatusOK || d.Method != domain.PlayDirect || d.State != domain.DownloadReady ||
-		!strings.HasPrefix(d.URL, "/api/v1/parts/"+partOne.String()+"/stream?") {
+		!strings.HasPrefix(string(d.URL), "/api/v1/parts/"+partOne.String()+"/stream?") {
 		t.Errorf("within the quality, asked before: %d %+v; want 200 and the part's own file, ready", code, d)
 	}
 	code, d = ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "max_width": 1280}`)

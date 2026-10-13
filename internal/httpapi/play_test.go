@@ -350,21 +350,21 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		t.Errorf("subtitle kinds = %v, want %v", kinds, want)
 	}
 	stream := browser.Subtitles[0]
-	if rec := do(httptest.NewRequest(http.MethodGet, stream.URL, nil)); rec.Code != http.StatusOK ||
+	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.URL), nil)); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), "Style: Sign,Shop Sans,24") || !strings.Contains(rec.Body.String(), `{\pos(160,40)}Bakery`) ||
 		rec.Header().Get("Content-Type") != "text/x-ssa; charset=utf-8" {
 		t.Errorf("the ASS stream: %d %q %q, want it as it was authored", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
 	var fonts fontsJSON
-	if rec := do(httptest.NewRequest(http.MethodGet, stream.Fonts, nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
+	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.Fonts), nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
 		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "2.ttf" {
 		t.Fatalf("fonts: %d %+v, want the one the file carries", rec.Code, fonts)
 	}
-	if rec := do(httptest.NewRequest(http.MethodGet, fonts.Fonts[0].URL, nil)); rec.Code != http.StatusOK || rec.Body.String() != "a font" ||
+	if rec := do(httptest.NewRequest(http.MethodGet, string(fonts.Fonts[0].URL), nil)); rec.Code != http.StatusOK || rec.Body.String() != "a font" ||
 		rec.Header().Get("Content-Type") != "font/ttf" {
 		t.Errorf("the font: %d %q %q, want it as the file carries it", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
-	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(fonts.Fonts[0].URL, "2.ttf", "3.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
+	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(string(fonts.Fonts[0].URL), "2.ttf", "3.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a font the list did not sign: %d, want 401", rec.Code)
 	}
 

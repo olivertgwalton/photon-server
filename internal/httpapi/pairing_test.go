@@ -40,7 +40,7 @@ func TestAPairingSaysWhereToEnterItsCode(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", tc.name, rec.Code, rec.Body)
 		}
-		if got.VerificationURI != tc.want || got.VerificationURIComplete != tc.want+"?code=BCDF-GHJK" {
+		if string(got.VerificationURI) != tc.want || string(got.VerificationURIComplete) != tc.want+"?code=BCDF-GHJK" {
 			t.Errorf("%s: %q and %q, want %q with the code", tc.name, got.VerificationURI, got.VerificationURIComplete, tc.want)
 		}
 	}

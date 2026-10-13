@@ -30,8 +30,8 @@ type fontsJSON struct {
 
 // fontJSON is a font a file carries, at an address signed as long as the list's own.
 type fontJSON struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name string       `json:"name"`
+	URL  uriReference `json:"url"`
 }
 
 // partSubtitles is a part's file, opened as the scanner recorded it, and its streams, for reading
@@ -113,7 +113,7 @@ func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
 		at := r.URL.Path + "/" + e.Name()
 		expires, sig := a.svc.Signer.Token(at, time.Unix(exp, 0))
 		u := url.URL{Path: at, RawQuery: url.Values{"exp": {expires}, "sig": {sig}}.Encode()}
-		answer.Fonts = append(answer.Fonts, fontJSON{Name: e.Name(), URL: u.String()})
+		answer.Fonts = append(answer.Fonts, fontJSON{Name: e.Name(), URL: uriReference(u.String())})
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
 }

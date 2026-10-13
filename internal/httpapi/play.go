@@ -66,10 +66,10 @@ type parts interface {
 }
 
 type partJSON struct {
-	ID         uuid.UUID `json:"id"`
-	URL        string    `json:"url"`
-	OffsetMS   int64     `json:"offset_ms"`
-	DurationMS int64     `json:"duration_ms"`
+	ID         uuid.UUID    `json:"id"`
+	URL        uriReference `json:"url"`
+	OffsetMS   int64        `json:"offset_ms"`
+	DurationMS int64        `json:"duration_ms"`
 }
 
 // subtitleJSON is a subtitle the client draws beside the video, timed on the copy's timeline: a
@@ -85,8 +85,8 @@ type subtitleJSON struct {
 	Default         bool         `json:"default,omitzero"`
 	Forced          bool         `json:"forced,omitzero"`
 	HearingImpaired bool         `json:"hearing_impaired,omitzero"`
-	URL             string       `json:"url"`
-	Fonts           string       `json:"fonts,omitzero"`
+	URL             uriReference `json:"url"`
+	Fonts           uriReference `json:"fonts,omitzero"`
 }
 
 type videoJSON struct {
@@ -153,7 +153,7 @@ type playbackJSON struct {
 	Reasons    []domain.TranscodeReason `json:"reasons,omitzero"`
 	Parts      []partJSON               `json:"parts,omitzero"`
 	Subtitles  []subtitleJSON           `json:"subtitles,omitzero"`
-	Playlist   string                   `json:"playlist,omitzero"`
+	Playlist   uriReference             `json:"playlist,omitzero"`
 	ExpiresAt  time.Time                `json:"expires_at"`
 }
 
@@ -308,11 +308,11 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 	if d.Method != domain.PlayDirect {
 		subject := hlsSubject(session.ID)
 		exp, sig := a.svc.Signer.Token(subject, until)
-		answer.Playlist = origin + subject + "/" + exp + "/" + sig + "/main.m3u8"
+		answer.Playlist = uriReference(origin + subject + "/" + exp + "/" + sig + "/main.m3u8")
 	} else {
 		for _, part := range c.Parts {
 			answer.Parts = append(answer.Parts, partJSON{
-				ID: part.ID, URL: origin + a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until),
+				ID: part.ID, URL: uriReference(origin + a.svc.Signer.Sign("/api/v1/playbacks/"+session.ID.String()+"/parts/"+part.ID.String()+"/stream", until)),
 				OffsetMS: part.OffsetMS, DurationMS: part.DurationMS,
 			})
 		}
@@ -338,8 +338,8 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 		out = append(out, subtitleJSON{
 			Stream: &s.Index, Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.TagOf(s.Language), Title: s.Title, Default: s.Default,
 			Forced: s.Forced, HearingImpaired: s.HearingImpaired,
-			URL:   a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until),
-			Fonts: a.svc.Signer.Sign(part+"/fonts", until),
+			URL:   uriReference(a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until)),
+			Fonts: uriReference(a.svc.Signer.Sign(part+"/fonts", until)),
 		})
 	}
 	for _, f := range c.Subtitles {
@@ -348,7 +348,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 		}
 		out = append(out, subtitleJSON{
 			ID: f.ID, Codec: f.Codec, Kind: subtitleKindOf(f.Codec), Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
-			HearingImpaired: f.HearingImpaired, URL: a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until),
+			HearingImpaired: f.HearingImpaired, URL: uriReference(a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until)),
 		})
 	}
 	return out

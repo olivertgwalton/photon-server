@@ -22,13 +22,13 @@ type webhooks interface {
 
 type webhookJSON struct {
 	ID        uuid.UUID          `json:"id"`
-	URL       string             `json:"url"`
+	URL       uri                `json:"url"`
 	Events    []domain.EventKind `json:"events"`
 	CreatedAt time.Time          `json:"created_at"`
 }
 
 type addWebhookJSON struct {
-	URL    string             `json:"url"`
+	URL    uri                `json:"url"`
 	Events []domain.EventKind `json:"events"`
 }
 
@@ -38,7 +38,7 @@ type addedWebhookJSON struct {
 }
 
 func webhookOf(w store.Webhook) webhookJSON {
-	return webhookJSON{ID: w.ID, URL: w.URL, Events: nonNil(w.Events), CreatedAt: w.CreatedAt.UTC()}
+	return webhookJSON{ID: w.ID, URL: uri(w.URL), Events: nonNil(w.Events), CreatedAt: w.CreatedAt.UTC()}
 }
 
 // adminWebhooks lists the webhooks, never their secrets.
@@ -62,7 +62,7 @@ func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if u, err := url.Parse(req.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if u, err := url.Parse(string(req.URL)); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		writeProblem(w, a.logger, codeInvalidBody, "url is an http or https address")
 		return
 	}
@@ -78,7 +78,7 @@ func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := rand.Text()
-	hook, err := a.svc.Webhooks.AddWebhook(r.Context(), req.URL, req.Events, secret)
+	hook, err := a.svc.Webhooks.AddWebhook(r.Context(), string(req.URL), req.Events, secret)
 	if err != nil {
 		a.internal(w, r, err)
 		return

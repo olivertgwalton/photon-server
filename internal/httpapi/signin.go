@@ -51,14 +51,14 @@ type signInProviderJSON struct {
 type adminSignInProviderJSON struct {
 	Slug            string              `json:"slug"`
 	Name            string              `json:"name"`
-	Issuer          string              `json:"issuer"`
+	Issuer          uri                 `json:"issuer"`
 	ClientID        string              `json:"client_id"`
 	ClientSecretSet bool                `json:"client_secret_set"`
 	Provisioning    domain.Provisioning `json:"provisioning"`
 	Group           string              `json:"group,omitzero"`
 	Recheck         domain.Recheck      `json:"recheck"`
 	Access          accessJSON          `json:"access"`
-	CallbackURL     string              `json:"callback_url,omitzero"`
+	CallbackURL     uri                 `json:"callback_url,omitzero"`
 }
 
 // signInProviderChangeJSON registers the server on a provider. The client secret is kept as it is
@@ -72,7 +72,7 @@ type adminSignInProviderJSON struct {
 // signs in.
 type signInProviderChangeJSON struct {
 	Name         string              `json:"name"`
-	Issuer       string              `json:"issuer"`
+	Issuer       uri                 `json:"issuer"`
 	ClientID     string              `json:"client_id"`
 	ClientSecret string              `json:"client_secret,omitzero"`
 	Provisioning domain.Provisioning `json:"provisioning"`
@@ -84,21 +84,21 @@ type signInProviderChangeJSON struct {
 // signInStartJSON is a browser leaving to sign in, naming its session as a password's sign-in does,
 // and the path on this server it comes back to; the home page when left out.
 type signInStartJSON struct {
-	Device string `json:"device"`
-	Client string `json:"client"`
-	To     string `json:"to,omitzero"`
+	Device string       `json:"device"`
+	Client string       `json:"client"`
+	To     uriReference `json:"to,omitzero"`
 }
 
 // linkStartJSON is a profile leaving to link its account, and the path it comes back to.
 type linkStartJSON struct {
-	To string `json:"to,omitzero"`
+	To uriReference `json:"to,omitzero"`
 }
 
 // signInRedirectJSON is where to send the browser: the provider's sign-in page. It comes back to
 // the path it asked for, or, refused, to the login page with refused saying why (expired, denied,
 // failed, not_linked, not_in_group or linked_elsewhere; a link refused comes back to its path).
 type signInRedirectJSON struct {
-	URL string `json:"url"`
+	URL uri `json:"url"`
 }
 
 // profileSignInProviderJSON is a provider and the account the profile linked there, if any.
@@ -138,7 +138,7 @@ func (a *API) signInProviders(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProviderJSON {
 	out := adminSignInProviderJSON{
-		Slug: p.Slug, Name: p.Name, Issuer: p.Issuer, ClientID: p.ClientID, ClientSecretSet: p.ClientSecret != "",
+		Slug: p.Slug, Name: p.Name, Issuer: uri(p.Issuer), ClientID: p.ClientID, ClientSecretSet: p.ClientSecret != "",
 		Provisioning: p.Provisioning, Group: p.Group, Recheck: p.Recheck,
 		Access: accessJSON{MaxAge: p.MaxAge, Unrated: cmp.Or(p.Unrated, domain.UnratedAllow), Libraries: p.Libraries},
 	}
@@ -146,7 +146,7 @@ func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProvider
 		out.Access.Libraries = []uuid.UUID{}
 	}
 	if cb := a.svc.SignIns.Callback(p.Slug); cb != nil {
-		out.CallbackURL = cb.String()
+		out.CallbackURL = uri(cb.String())
 	}
 	return out
 }
@@ -175,7 +175,7 @@ func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	name, nameOK := domain.ProfileName(req.Name)
 	p := domain.SignInProvider{
-		Slug: slug, Name: name, Issuer: strings.TrimSpace(req.Issuer), ClientID: strings.TrimSpace(req.ClientID),
+		Slug: slug, Name: name, Issuer: strings.TrimSpace(string(req.Issuer)), ClientID: strings.TrimSpace(req.ClientID),
 		ClientSecret: req.ClientSecret, Provisioning: req.Provisioning, Group: strings.TrimSpace(req.Group),
 		Recheck: cmp.Or(req.Recheck, domain.RecheckHourly),
 		MaxAge:  req.Access.MaxAge, Unrated: cmp.Or(req.Access.Unrated, domain.UnratedAllow), Libraries: req.Access.Libraries,
@@ -274,7 +274,7 @@ func (a *API) leave(w http.ResponseWriter, r *http.Request, f kv.SignInFlow) {
 		Name: flowCookie, Value: state, Path: a.svc.SignIns.Callback(slug).Path,
 		MaxAge: int(sso.FlowTTL.Seconds()), HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.svc.Reach.HTTPS(r),
 	})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, signInRedirectJSON{URL: provider})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, signInRedirectJSON{URL: uri(provider)})
 }
 
 func (a *API) startSignIn(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +289,7 @@ func (a *API) startSignIn(w http.ResponseWriter, r *http.Request) {
 	if !a.allowed(w, r, auth.SignInsPerAddress, a.addrKey(r, "signin")) {
 		return
 	}
-	a.leave(w, r, kv.SignInFlow{Device: req.Device, Client: req.Client, To: req.To})
+	a.leave(w, r, kv.SignInFlow{Device: req.Device, Client: req.Client, To: string(req.To)})
 }
 
 func (a *API) startLink(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +297,7 @@ func (a *API) startLink(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	a.leave(w, r, kv.SignInFlow{Linking: auth.SessionOf(r.Context()).Profile.ID, To: req.To})
+	a.leave(w, r, kv.SignInFlow{Linking: auth.SessionOf(r.Context()).Profile.ID, To: string(req.To)})
 }
 
 // signInCallback is where a provider sends the browser back. It answers the browser, not a client:

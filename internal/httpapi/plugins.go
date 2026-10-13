@@ -29,7 +29,7 @@ type pluginJSON struct {
 	Protocol domain.PluginProtocol `json:"protocol"`
 	// URL is where it answers: of a Stremio addon, its host alone, as the rest of its address is
 	// its configuration.
-	URL  string `json:"url"`
+	URL  uri    `json:"url"`
 	Name string `json:"name"`
 	// Version is the version of photon's protocol it speaks; none for a Stremio addon.
 	Version      int                 `json:"version,omitzero"`
@@ -40,7 +40,7 @@ type pluginJSON struct {
 type addPluginJSON struct {
 	// URL is where the plugin answers: photon's protocol's manifest is GET {url}/manifest; a
 	// Stremio addon's URL is that of its manifest.json, as Stremio installs it.
-	URL string `json:"url"`
+	URL uri `json:"url"`
 	// Protocol is what it speaks, photon unless said.
 	Protocol domain.PluginProtocol `json:"protocol,omitzero"`
 	// ID names a Stremio addon, where its own would be another's: two installs of one addon,
@@ -50,7 +50,7 @@ type addPluginJSON struct {
 
 func pluginOf(r plugin.Registered) pluginJSON {
 	return pluginJSON{
-		ID: r.ID, Provider: domain.PluginSource(r.ID), Protocol: r.Protocol, URL: r.URL, Name: r.Name, Version: r.Version,
+		ID: r.ID, Provider: domain.PluginSource(r.ID), Protocol: r.Protocol, URL: uri(r.URL), Name: r.Name, Version: r.Version,
 		Kinds: r.Kinds, Capabilities: r.Capabilities,
 	}
 }
@@ -75,7 +75,7 @@ func (a *API) addPlugin(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	p, err := a.svc.Plugins.Register(r.Context(), req.URL, cmp.Or(req.Protocol, domain.PluginPhoton), req.ID)
+	p, err := a.svc.Plugins.Register(r.Context(), string(req.URL), cmp.Or(req.Protocol, domain.PluginPhoton), req.ID)
 	if a.answeredPlugin(w, r, err) {
 		return
 	}
@@ -117,7 +117,7 @@ type pluginPageJSON struct {
 
 type visitJSON struct {
 	// URL is where the browser opens the page, with the visit's code in its fragment.
-	URL string `json:"url"`
+	URL uri `json:"url"`
 }
 
 type claimJSON struct {
@@ -151,7 +151,7 @@ func (a *API) visitPage(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, visitJSON{URL: at})
+	writeJSON(w, a.logger, "application/json", http.StatusCreated, visitJSON{URL: uri(at)})
 }
 
 // claimVisit answers a plugin who visits its page, by the code the visit gave it, once.

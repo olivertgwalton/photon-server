@@ -44,7 +44,7 @@ type networkJSON struct {
 	RemoteMaxBitrateKbps int `json:"remote_max_bitrate_kbps"`
 	// PublicURL is where readers reach the web app from outside, as a television's pairing link
 	// names it and secure connections send plain requests to; empty is the address each came to.
-	PublicURL string `json:"public_url"`
+	PublicURL uri `json:"public_url"`
 	// TrustedProxies are the proxies, prefixes or addresses, whose X-Forwarded-For names the
 	// client, as Jellyfin's known proxies; none trusts no one.
 	TrustedProxies []string `json:"trusted_proxies"`
@@ -56,7 +56,7 @@ func showNetwork(n domain.Network) networkJSON {
 	return networkJSON{
 		SecureConnections: n.Secure, Certificate: n.Certificate, Key: n.Key,
 		Jellyfin: n.Jellyfin, JellyfinPort: n.JellyfinPort, RemoteMaxBitrateKbps: n.RemoteMaxBitrateKbps,
-		LocalNetworks: each(n.LocalNetworks, netip.Prefix.String), PublicURL: n.PublicURL,
+		LocalNetworks: each(n.LocalNetworks, netip.Prefix.String), PublicURL: uri(n.PublicURL),
 		TrustedProxies: each(n.TrustedProxies, netip.Prefix.String), Discovery: n.Discovery,
 	}
 }
@@ -98,7 +98,7 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "trusted_proxies: "+err.Error())
 		return
 	}
-	public, err := parsePublicURL(req.PublicURL)
+	public, err := parsePublicURL(string(req.PublicURL))
 	if err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return

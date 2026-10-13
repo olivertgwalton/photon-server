@@ -107,7 +107,7 @@ type candidateJSON struct {
 	OriginalTitle string `json:"original_title,omitzero"`
 	Year          int    `json:"year,omitzero"`
 	Overview      string `json:"overview,omitzero"`
-	Poster        string `json:"poster,omitzero"`
+	Poster        uri    `json:"poster,omitzero"`
 }
 
 // candidates lists what a provider has by a name, the title's own unless another is asked for, for
@@ -150,7 +150,7 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]candidateJSON, len(offered))
 	for i, c := range offered {
-		out[i] = candidateJSON{ID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Overview: c.Overview, Poster: c.Poster}
+		out[i] = candidateJSON{ID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Overview: c.Overview, Poster: uri(c.Poster)}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[candidateJSON]{Items: out})
 }

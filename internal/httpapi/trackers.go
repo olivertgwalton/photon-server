@@ -42,8 +42,8 @@ type trackerClientChangeJSON struct {
 // server asks the tracker after it, and the profile's events say when it is linked or expires.
 type trackerCodeJSON struct {
 	UserCode                string `json:"user_code"`
-	VerificationURI         string `json:"verification_uri"`
-	VerificationURIComplete string `json:"verification_uri_complete"`
+	VerificationURI         uri    `json:"verification_uri"`
+	VerificationURIComplete uri    `json:"verification_uri_complete"`
 	ExpiresInMS             int64  `json:"expires_in_ms"`
 }
 
@@ -59,7 +59,7 @@ type profileTrackerJSON struct {
 
 func trackerCodeOf(l kv.TrackerLink) trackerCodeJSON {
 	return trackerCodeJSON{
-		UserCode: l.UserCode, VerificationURI: l.VerificationURI, VerificationURIComplete: l.VerificationURIComplete,
+		UserCode: l.UserCode, VerificationURI: uri(l.VerificationURI), VerificationURIComplete: uri(l.VerificationURIComplete),
 		ExpiresInMS: max(time.Until(l.Expires), 0).Milliseconds(),
 	}
 }

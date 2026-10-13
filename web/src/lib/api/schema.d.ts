@@ -7053,6 +7053,7 @@ export interface components {
         AddPlugin: {
             id?: string;
             protocol?: components["schemas"]["PluginProtocol"];
+            /** Format: uri */
             url: string;
         };
         AddProfile: {
@@ -7062,6 +7063,7 @@ export interface components {
         };
         AddWebhook: {
             events: components["schemas"]["EventKind"][];
+            /** Format: uri */
             url: string;
         };
         AddedWebhook: {
@@ -7071,6 +7073,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             secret: string;
+            /** Format: uri */
             url: string;
         };
         AdminLibrary: {
@@ -7131,10 +7134,12 @@ export interface components {
         };
         AdminSignInProvider: {
             access: components["schemas"]["Access"];
+            /** Format: uri */
             callback_url?: string;
             client_id: string;
             client_secret_set: boolean;
             group?: string;
+            /** Format: uri */
             issuer: string;
             name: string;
             provisioning: components["schemas"]["Provisioning"];
@@ -7210,9 +7215,11 @@ export interface components {
         Bucket: {
             access_key?: string;
             delivery?: components["schemas"]["Delivery"];
+            /** Format: uri */
             endpoint?: string;
             folder?: string;
             name: string;
+            /** Format: uri */
             public_endpoint?: string;
             region?: string;
             secret_key?: string;
@@ -7220,10 +7227,12 @@ export interface components {
         BucketStatus: {
             access_key?: string;
             delivery: components["schemas"]["Delivery"];
+            /** Format: uri */
             endpoint?: string;
             folder?: string;
             name: string;
             probe?: string;
+            /** Format: uri */
             public_endpoint?: string;
             region?: string;
             secret_key_set: boolean;
@@ -7261,6 +7270,7 @@ export interface components {
             id: string;
             original_title?: string;
             overview?: string;
+            /** Format: uri */
             poster?: string;
             title: string;
             year?: number;
@@ -7322,6 +7332,7 @@ export interface components {
         ChapterRef: {
             /** Format: int64 */
             end_ms: number;
+            /** Format: uri-reference */
             image?: string;
             /** Format: int64 */
             start_ms: number;
@@ -7509,6 +7520,7 @@ export interface components {
             title: string;
             /** Format: uuid */
             title_id: string;
+            /** Format: uri-reference */
             url?: string;
             /** Format: date-time */
             url_expires_at?: string;
@@ -7649,6 +7661,7 @@ export interface components {
             extra_kind: components["schemas"]["ExtraKind"];
             /** Format: uuid */
             id: string;
+            /** Format: uri-reference */
             image?: string;
             title: string;
         };
@@ -7703,6 +7716,7 @@ export interface components {
         };
         Font: {
             name: string;
+            /** Format: uri-reference */
             url: string;
         };
         Fonts: {
@@ -7778,6 +7792,7 @@ export interface components {
             source: components["schemas"]["ImportSource"];
             status: components["schemas"]["ImportStatus"];
             unmatched: number;
+            /** Format: uri */
             url: string;
         };
         ImportList: {
@@ -7853,6 +7868,7 @@ export interface components {
             metadata?: components["schemas"]["RankedSource"][];
         };
         KnownNode: {
+            /** Format: uri */
             address: string;
             availability: components["schemas"]["NodeAvailability"];
             egress_limit_mbps: number;
@@ -7864,10 +7880,12 @@ export interface components {
             id: string;
             /** Format: date-time */
             last_seen: string;
+            /** Format: uri */
             local_url: string;
             name: string;
             note?: string;
             online?: components["schemas"]["Node"] | null;
+            /** Format: uri */
             public_url: string;
             role: components["schemas"]["NodeRole"];
             stream_limit: number;
@@ -7933,6 +7951,7 @@ export interface components {
         /** @enum {string} */
         LimitSource: "automatic" | "set";
         LinkStart: {
+            /** Format: uri-reference */
             to?: string;
         };
         ListRef: {
@@ -8044,6 +8063,7 @@ export interface components {
             jellyfin_port: number;
             key?: string;
             local_networks: string[];
+            /** Format: uri */
             public_url: string;
             remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
@@ -8057,6 +8077,7 @@ export interface components {
             jellyfin_port: number;
             key?: string;
             local_networks: string[];
+            /** Format: uri */
             public_url: string;
             remote_max_bitrate_kbps: number;
             secure_connections: components["schemas"]["SecureConnections"];
@@ -8068,6 +8089,7 @@ export interface components {
         /** @enum {string} */
         NextEpisode: "play" | "offer";
         Node: {
+            /** Format: uri */
             address: string;
             availability: components["schemas"]["NodeAvailability"];
             conversions: number;
@@ -8086,13 +8108,16 @@ export interface components {
         /** @enum {string} */
         NodeAvailability: "active" | "draining";
         NodeChange: {
+            /** Format: uri */
             address?: string | null;
             availability?: components["schemas"]["NodeAvailability"];
             egress_limit_mbps?: number | null;
             encoding?: components["schemas"]["NodeEncoding"] | null;
             group?: string | null;
+            /** Format: uri */
             local_url?: string | null;
             note?: string;
+            /** Format: uri */
             public_url?: string | null;
             role?: components["schemas"]["NodeRole"];
             stream_limit?: number | null;
@@ -8192,7 +8217,9 @@ export interface components {
             /** Format: int64 */
             poll_interval_ms: number;
             user_code: string;
+            /** Format: uri */
             verification_uri: string;
+            /** Format: uri */
             verification_uri_complete: string;
         };
         Part: {
@@ -8202,6 +8229,7 @@ export interface components {
             id: string;
             /** Format: int64 */
             offset_ms: number;
+            /** Format: uri-reference */
             url: string;
         };
         /** @enum {string} */
@@ -8300,6 +8328,7 @@ export interface components {
             parts?: components["schemas"]["Part"][];
             /** Format: uuid */
             playback_id: string;
+            /** Format: uri-reference */
             playlist?: string;
             reasons?: components["schemas"]["TranscodeReason"][];
             subtitles?: components["schemas"]["Subtitle"][];
@@ -8413,6 +8442,7 @@ export interface components {
             name: string;
             protocol: components["schemas"]["PluginProtocol"];
             provider: components["schemas"]["FieldSource"];
+            /** Format: uri */
             url: string;
             version?: number;
         };
@@ -8734,6 +8764,7 @@ export interface components {
             client_id: string;
             client_secret?: string;
             group?: string;
+            /** Format: uri */
             issuer: string;
             name: string;
             provisioning: components["schemas"]["Provisioning"];
@@ -8743,11 +8774,13 @@ export interface components {
             items: components["schemas"]["SignInProvider"][];
         };
         SignInRedirect: {
+            /** Format: uri */
             url: string;
         };
         SignInStart: {
             client: string;
             device: string;
+            /** Format: uri-reference */
             to?: string;
         };
         SmartRule: {
@@ -8773,6 +8806,7 @@ export interface components {
             /** Format: uuid */
             profile_id: string;
             source: components["schemas"]["ImportSource"];
+            /** Format: uri */
             url: string;
         };
         Storage: {
@@ -8823,6 +8857,7 @@ export interface components {
         Subtitle: {
             codec: string;
             default?: boolean;
+            /** Format: uri-reference */
             fonts?: string;
             forced?: boolean;
             hearing_impaired?: boolean;
@@ -8832,6 +8867,7 @@ export interface components {
             language?: string;
             stream?: number | null;
             title?: string;
+            /** Format: uri-reference */
             url: string;
         };
         /** @enum {string} */
@@ -8996,7 +9032,9 @@ export interface components {
             /** Format: int64 */
             expires_in_ms: number;
             user_code: string;
+            /** Format: uri */
             verification_uri: string;
+            /** Format: uri */
             verification_uri_complete: string;
         };
         /** @enum {string} */
@@ -9083,6 +9121,7 @@ export interface components {
             ranges?: components["schemas"]["Range"][];
         };
         Visit: {
+            /** Format: uri */
             url: string;
         };
         Visitor: {
@@ -9202,6 +9241,7 @@ export interface components {
             events: components["schemas"]["EventKind"][];
             /** Format: uuid */
             id: string;
+            /** Format: uri */
             url: string;
         };
         WebhookList: {

@@ -86,9 +86,9 @@ type downloadJSON struct {
 	SizeBytes  int64                `json:"size_bytes,omitzero"`
 	Error      string               `json:"error,omitzero"`
 	// URL is where a ready download is fetched, signed until URLExpiresAt.
-	URL          string    `json:"url,omitzero"`
-	URLExpiresAt time.Time `json:"url_expires_at,omitzero"`
-	CreatedAt    time.Time `json:"created_at"`
+	URL          uriReference `json:"url,omitzero"`
+	URLExpiresAt time.Time    `json:"url_expires_at,omitzero"`
+	CreatedAt    time.Time    `json:"created_at"`
 }
 
 func (a *API) downloadJSON(d store.Download) downloadJSON {
@@ -104,7 +104,7 @@ func (a *API) downloadJSON(d store.Download) downloadJSON {
 	}
 	if d.State == domain.DownloadReady {
 		until := time.Now().Add(streamFor)
-		out.URL, out.URLExpiresAt = a.svc.Signer.Sign(path, until), until.UTC().Truncate(time.Second)
+		out.URL, out.URLExpiresAt = uriReference(a.svc.Signer.Sign(path, until)), until.UTC().Truncate(time.Second)
 	}
 	return out
 }
