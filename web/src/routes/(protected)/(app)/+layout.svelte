@@ -1,4 +1,5 @@
 <script lang="ts">
+import GaugeIcon from "@lucide/svelte/icons/gauge";
 import SearchIcon from "@lucide/svelte/icons/search";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
@@ -71,6 +72,13 @@ $effect(() => connectLive(admin ? stream : undefined));
 					).default}
 					<ActivityMenu libraries={data.libraries} />
 				</svelte:boundary>
+				<a
+					href="/settings/server"
+					class="hover:bg-raise text-ink grid size-9 place-items-center rounded-full outline-none"
+					aria-label="Server dashboard"
+				>
+					<GaugeIcon class="size-5" />
+				</a>
 			{/if}
 			<ProfileMenu profile={data.me} />
 		</header>
