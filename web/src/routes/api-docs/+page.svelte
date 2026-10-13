@@ -6,8 +6,6 @@ import "@scalar/api-reference/style.css";
 const draw = (node: HTMLElement) => {
 	const reference = createApiReference(node, {
 		url: "/api/v1/openapi.json",
-		forceDarkModeState: "dark",
-		hideDarkModeToggle: true,
 		withDefaultFonts: false,
 		telemetry: false,
 		agent: { disabled: true },
