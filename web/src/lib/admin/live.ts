@@ -2,7 +2,6 @@ import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
 type Event = Schemas["Event"];
-export type EventKind = Schemas["EventKind"];
 export type NowPlaying = Schemas["NowPlaying"];
 type Snapshot = Schemas["Snapshot"];
 

@@ -400,66 +400,54 @@ const deadJobs: Schemas["DeadJob"][] = [
 	},
 ];
 
-// The event stream: what is going on, then a scan finding more folders and the
-// previews' backlog counting down.
-function events() {
-	const encoder = new TextEncoder();
-	let timer: ReturnType<typeof setInterval> | undefined;
-	const body = new ReadableStream({
-		start(controller) {
-			const send = (name: string, data: unknown) =>
-				controller.enqueue(
-					encoder.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`),
-				);
-			send("snapshot", {
-				tasks: [
-					{
-						key: "scan_libraries",
-						started_at: new Date(Date.now() - 60_000).toISOString(),
-					},
-				],
-				jobs: [{ id: 90, kind: "previews", subject: "part-1", attempt: 1 }],
-				backlogs: [{ kind: "previews", left: 8_022, done: 585 }],
-				scans: [
-					{
-						library_id: "l-films",
-						phase: "reading",
-						done: 3,
-						known: 10,
-						folder: "Heat (1995)",
-					},
-				],
-				playbacks: [playing],
-			} satisfies Schemas["Snapshot"]);
-			let done = 3;
-			let previews = 585;
-			timer = setInterval(() => {
-				done = Math.min(done + 5, 40);
-				previews += 1;
-				send("scan.progress", {
-					kind: "scan.progress",
-					at: new Date().toISOString(),
-					library_id: "l-films",
-					details: { phase: "reading", done, known: 40, folder: "Heat (1995)" },
-				} satisfies Schemas["Event"]);
-				send("jobs.progress", {
-					kind: "jobs.progress",
-					at: new Date().toISOString(),
-					details: {
-						job_kind: "previews",
-						left: 8_607 - previews,
-						done: previews,
-					},
-				} satisfies Schemas["Event"]);
-			}, 400);
-		},
-		cancel() {
-			clearInterval(timer);
-		},
-	});
-	return new Response(body, {
-		headers: { "content-type": "text/event-stream" },
-	});
+// The server's feed on the events socket: what is going on, then a scan
+// finding more folders and the previews' backlog counting down, until the
+// returned function is called.
+export function serverFeed(
+	send: (event: string, data: unknown) => void,
+): () => void {
+	send("snapshot", {
+		tasks: [
+			{
+				key: "scan_libraries",
+				started_at: new Date(Date.now() - 60_000).toISOString(),
+			},
+		],
+		jobs: [{ id: 90, kind: "previews", subject: "part-1", attempt: 1 }],
+		backlogs: [{ kind: "previews", left: 8_022, done: 585 }],
+		scans: [
+			{
+				library_id: "l-films",
+				phase: "reading",
+				done: 3,
+				known: 10,
+				folder: "Heat (1995)",
+			},
+		],
+		playbacks: [playing],
+	} satisfies Schemas["Snapshot"]);
+	let done = 3;
+	let previews = 585;
+	const timer = setInterval(() => {
+		done = Math.min(done + 5, 40);
+		previews += 1;
+		send("scan.progress", {
+			kind: "scan.progress",
+			at: new Date().toISOString(),
+			library_id: "l-films",
+			details: { phase: "reading", done, known: 40, folder: "Heat (1995)" },
+		} satisfies Schemas["Event"]);
+		send("jobs.progress", {
+			kind: "jobs.progress",
+			at: new Date().toISOString(),
+			details: {
+				job_kind: "previews",
+				left: 8_607 - previews,
+				done: previews,
+			},
+		} satisfies Schemas["Event"]);
+	}, 400);
+	return () => clearInterval(timer);
 }
 
 export async function admin(
@@ -571,8 +559,6 @@ export async function admin(
 			server = { ...server, ...set };
 			return json(set);
 		}
-		case "GET /api/v1/admin/events":
-			return events();
 		case "GET /api/v1/admin/playbacks":
 			return json({
 				items: [playing],

@@ -26,5 +26,5 @@ export default defineConfig({
 			{ find: /^tailwind-variants$/, replacement: "tailwind-variants/lite" },
 		],
 	},
-	server: { proxy: { "/api": api, "/readyz": api } },
+	server: { proxy: { "/api": { target: api, ws: true }, "/readyz": api } },
 });

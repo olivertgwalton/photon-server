@@ -1,16 +1,17 @@
 import { invalidate, refreshAll } from "$app/navigation";
-import { affected, type Change, changeKinds } from "./changes.js";
+import type { LiveStream } from "./admin/stream.svelte.js";
+import type { components } from "./api/schema.js";
+import { adminAffected, affected, type Change } from "./changes.js";
 import { restoring } from "./restoring.svelte.js";
 
 // A scan sends a burst of changes; the pages reload once for the burst.
 const settle = 1000;
 
-// A refused or dropped stream is not retried by the browser once it has
-// closed, so it is opened again after this long.
+// A dropped socket is opened again after this long.
 const retryAfter = 5_000;
 
-// Reloads what a stream's events make stale, once the burst has settled.
-export function invalidateLater() {
+// Reloads what the socket's events make stale, once the burst has settled.
+function invalidateLater() {
 	const stale = new Set<string>();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	return {
@@ -31,55 +32,70 @@ export function invalidateLater() {
 	};
 }
 
-type Listeners = Record<string, (event: MessageEvent<string>) => void>;
+type Feed = components["schemas"]["Feed"];
 
-// Opens a stream with these listeners and keeps it open until the returned
-// function is called. `dropped` is told of every error, closing or not.
-export function openStream(
-	url: string,
-	listeners: Listeners,
-	dropped?: () => void,
+// One message of the server's events socket: an event of a feed, or the
+// feed's first, which says what is going on now.
+type Message = { feed: Feed; event: string; data: unknown };
+
+// Opens the server's events socket and keeps it open, opening it again
+// whenever it drops, until the returned function is called. `dropped` is told
+// each time it drops.
+function openSocket(
+	feed: Feed,
+	heard: (message: Message) => void,
+	dropped: () => void,
 ): () => void {
-	let source: EventSource | undefined;
+	const url = new URL(`/api/v1/events?feed=${feed}`, location.href);
+	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+	let socket: WebSocket | undefined;
 	let retry: ReturnType<typeof setTimeout> | undefined;
+	let closed = false;
 	const connect = () => {
-		source = new EventSource(url);
-		for (const [name, listener] of Object.entries(listeners)) {
-			source.addEventListener(name, listener);
-		}
-		source.onerror = () => {
-			dropped?.();
-			if (source?.readyState === EventSource.CLOSED) {
-				retry = setTimeout(connect, retryAfter);
-			}
+		socket = new WebSocket(url);
+		socket.onmessage = (e: MessageEvent<string>) => heard(JSON.parse(e.data));
+		socket.onclose = () => {
+			if (closed) return;
+			dropped();
+			retry = setTimeout(connect, retryAfter);
 		};
 	};
 	connect();
 	return () => {
+		closed = true;
 		clearTimeout(retry);
-		source?.close();
+		socket?.close();
 	};
 }
 
-// Listens until the returned function is called. The feed keeps nothing to
-// resend, so after a reconnect every page loads again.
-export function connectLive(): () => void {
+// Listens until the returned function is called: to what changes of what the
+// profile sees, and, given an admin's LiveStream, to what the server is doing.
+// Nothing is kept to resend, so after a reconnect every page loads again.
+export function connectLive(server?: LiveStream): () => void {
 	let reconnected = false;
 	const later = invalidateLater();
-	const take = (event: MessageEvent<string>) => {
-		const change = { ...JSON.parse(event.data), kind: event.type } as Change;
-		later.add(affected(change));
-	};
-	const close = openStream("/api/v1/events", {
-		hello: () => {
-			if (reconnected) refreshAll();
-			reconnected = true;
+	const close = openSocket(
+		server ? "server" : "profile",
+		({ feed, event, data }) => {
+			if (feed === "server") {
+				server?.hear(event, data);
+				later.add(adminAffected(event));
+				return;
+			}
+			switch (event) {
+				case "hello":
+					if (reconnected) refreshAll();
+					reconnected = true;
+					break;
+				case "restore.started":
+					restoring.on = true;
+					break;
+				default:
+					later.add(affected({ ...(data as Change), kind: event }));
+			}
 		},
-		...Object.fromEntries(changeKinds.map((kind) => [kind, take])),
-		"restore.started": () => {
-			restoring.on = true;
-		},
-	});
+		() => server?.drop(),
+	);
 	return () => {
 		later.stop();
 		close();
