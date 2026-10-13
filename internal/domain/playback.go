@@ -278,12 +278,21 @@ type AudioPlan struct {
 
 // AudioEncode is audio encoded again: the codec, its channels and its bitrate.
 type AudioEncode struct {
-	Codec       string
+	Codec       AudioCodec
 	Channels    int
 	BitrateKbps int
 	// Boost multiplies its volume, as it is mixed down to stereo; 0 leaves it.
 	Boost float64
 }
+
+// AudioCodec is a codec the server encodes audio to.
+type AudioCodec string
+
+const (
+	AudioAAC  AudioCodec = "aac"
+	AudioEAC3 AudioCodec = "eac3"
+	AudioAC3  AudioCodec = "ac3"
+)
 
 // Acceleration is the device the server encodes video on.
 type Acceleration string

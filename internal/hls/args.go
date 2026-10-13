@@ -102,7 +102,7 @@ func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan, la
 			if e.Boost > 0 {
 				a = append(a, "-af", "volume="+strconv.FormatFloat(e.Boost, 'f', -1, 64))
 			}
-			a = append(a, "-c:a", e.Codec, "-ac", strconv.Itoa(e.Channels), "-b:a", strconv.Itoa(e.BitrateKbps)+"k")
+			a = append(a, "-c:a", string(e.Codec), "-ac", strconv.Itoa(e.Channels), "-b:a", strconv.Itoa(e.BitrateKbps)+"k")
 		} else {
 			a = append(a, "-c:a", "copy")
 		}

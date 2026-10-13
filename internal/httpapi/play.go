@@ -301,7 +301,7 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 	if au := d.Audio; au != nil {
 		answer.Audio = &audioJSON{Stream: au.Stream, Decision: decisionCopy}
 		if e := au.Encode; e != nil {
-			answer.Audio.Decision, answer.Audio.Codec = decisionTranscode, e.Codec
+			answer.Audio.Decision, answer.Audio.Codec = decisionTranscode, string(e.Codec)
 			answer.Audio.Channels, answer.Audio.BitrateKbps = e.Channels, e.BitrateKbps
 		}
 	}

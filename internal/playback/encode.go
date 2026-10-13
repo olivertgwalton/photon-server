@@ -15,7 +15,7 @@ const downmixBoost = 2
 
 // encoders are the audio codecs the server encodes to, with the most channels FFmpeg's encoder
 // writes.
-var encoders = map[string]int{"aac": 8, "eac3": 6, "ac3": 6}
+var encoders = map[domain.AudioCodec]int{domain.AudioAAC: 8, domain.AudioEAC3: 6, domain.AudioAC3: 6}
 
 // hlsAudio chooses how audio goes in HLS sent by method: copied, as nil, where the client takes it,
 // HLS carries it and it fits its share of the client's limit, else encoded; false where the client
@@ -47,7 +47,8 @@ func (p Profile) hlsAudio(sound domain.Stream, reasons []domain.TranscodeReason,
 // keeping as many of its channels as both allow, at Jellyfin's bitrates.
 func (p Profile) audioEncode(s domain.Stream) (domain.AudioEncode, bool) {
 	for _, a := range p.Audio {
-		most, ok := encoders[a.Codec]
+		codec := domain.AudioCodec(a.Codec)
+		most, ok := encoders[codec]
 		if !ok {
 			continue
 		}
@@ -69,7 +70,7 @@ func (p Profile) audioEncode(s domain.Stream) (domain.AudioEncode, bool) {
 		if channels >= 6 {
 			kbps = 640
 		}
-		enc := domain.AudioEncode{Codec: a.Codec, Channels: channels, BitrateKbps: kbps}
+		enc := domain.AudioEncode{Codec: codec, Channels: channels, BitrateKbps: kbps}
 		if channels == 2 && s.Channels > 2 {
 			enc.Boost = downmixBoost
 		}

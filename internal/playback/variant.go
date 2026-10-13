@@ -82,7 +82,7 @@ func videoCodec(s domain.Stream, v domain.VideoPlan) string {
 
 func audioCodec(streams []domain.Stream, a domain.AudioPlan) string {
 	if e := a.Encode; e != nil {
-		return audioCodecs[e.Codec]
+		return audioCodecs[string(e.Codec)]
 	}
 	for _, s := range streams {
 		if s.Index != a.Stream {

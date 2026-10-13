@@ -48,7 +48,7 @@ func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.Play
 			BitrateKbps: src.BitrateKbps,
 		}
 		if e := au.Encode; e != nil {
-			card.Audio.Encode = &domain.PlaybackEncode{Codec: e.Codec, Channels: e.Channels, BitrateKbps: e.BitrateKbps}
+			card.Audio.Encode = &domain.PlaybackEncode{Codec: string(e.Codec), Channels: e.Channels, BitrateKbps: e.BitrateKbps}
 		}
 	}
 	burned := d.Video != nil && d.Video.Burns()
