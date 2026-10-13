@@ -93,6 +93,53 @@ func TestAClientsMessagesAreReadWholeAndItsPingsAnswered(t *testing.T) {
 	}
 }
 
+// A quiet client that answers the server's pings is not taken to be gone.
+func TestAQuietClientAnsweringPingsIsKept(t *testing.T) {
+	const quiet = 300 * time.Millisecond
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r)
+		if err != nil {
+			return
+		}
+		read := make(chan error, 1)
+		go func() {
+			_, err := c.Read(quiet)
+			read <- err
+		}()
+		said := "kept"
+		for range 5 {
+			if c.Ping() != nil {
+				return
+			}
+			select {
+			case err := <-read:
+				said = err.Error()
+			case <-time.After(quiet / 3):
+				continue
+			}
+			break
+		}
+		if c.Write([]byte(said)) != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+	c := dial(t, srv)
+	for {
+		head, payload := next(t, c)
+		if head == websockettest.Fin|websockettest.OpPing {
+			if err := c.Send(websockettest.Fin|websockettest.OpPong, payload); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if string(payload) != "kept" {
+			t.Errorf("the server said %q, want kept", payload)
+		}
+		return
+	}
+}
+
 // A client that sends too much, or breaks the protocol, is told why and closed.
 func TestAClientBreakingTheProtocolIsClosed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(echo))

@@ -20,7 +20,7 @@ export const keys = {
 	},
 } as const;
 
-// One frame of the server's change feed (GET /api/v1/events), shaped as the
+// One event of the profile's feed on the server's events socket, shaped as the
 // activity log's events are.
 export type Change = {
 	kind: string;
@@ -33,15 +33,6 @@ export type Change = {
 		folder?: string;
 	};
 };
-
-export const changeKinds = [
-	"library.changed",
-	"library.scanned",
-	"title.updated",
-	"userdata.changed",
-	"scan.progress",
-	"tracker.changed",
-] as const;
 
 // The data a change makes stale.
 export function affected(change: Change): `photon:${string}`[] {

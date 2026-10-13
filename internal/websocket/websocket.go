@@ -219,6 +219,12 @@ func (c *Conn) Write(text []byte) error {
 	return c.write(opText, text)
 }
 
+// Ping asks the client to answer, which Read counts as hearing from it, so a quiet client that
+// answers is kept, and a proxy that closes an idle connection sees this one in use.
+func (c *Conn) Ping() error {
+	return c.write(opPing, nil)
+}
+
 // Close tells the client why, where it is still there, and closes the connection.
 func (c *Conn) Close(s Status) error {
 	return errors.Join(c.write(opClose, binary.BigEndian.AppendUint16(nil, uint16(s))), c.conn.Close())

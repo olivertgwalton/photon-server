@@ -1,13 +1,12 @@
 <script lang="ts">
 import SearchIcon from "@lucide/svelte/icons/search";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
-import { adminAffected } from "#lib/changes.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import RestoringScreen from "#lib/components/RestoringScreen.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
-import { connectLive, invalidateLater } from "#lib/live.svelte.js";
+import { connectLive } from "#lib/live.svelte.js";
 import { Shell, setShell } from "#lib/shell.svelte.js";
 import { page } from "$app/state";
 
@@ -15,21 +14,12 @@ let { data, children } = $props();
 // The menu and dialogs drawn below, opened from any page in the shell.
 const shell = setShell(new Shell());
 
-// The server's changes, for as long as the shell is open.
-$effect(() => connectLive());
-
-// What the server is doing, for an admin: the activity menu and the dashboard
-// read the one stream, and the pages it tells of changes reload.
+// The server's changes, for as long as the shell is open, and for an admin
+// what the server is doing besides, which the activity menu and the dashboard
+// read; the pages either tells of changes reload.
 const stream = setLiveStream(new LiveStream());
-$effect(() => {
-	if (data.me.role !== "admin") return;
-	const later = invalidateLater();
-	const close = stream.open((name) => later.add(adminAffected(name)));
-	return () => {
-		later.stop();
-		close();
-	};
-});
+const admin = $derived(data.me.role === "admin");
+$effect(() => connectLive(admin ? stream : undefined));
 </script>
 
 <!-- Each lazily loaded component has a boundary of its own, so loading one

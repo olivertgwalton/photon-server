@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/websocket/websockettest"
 )
 
 // fakeEvents keeps what is raised, streams nothing, and tests the webhooks it is told of.
@@ -100,7 +100,7 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 		body          string
 	}{
 		{memberToken, "/api/v1/admin/activity", http.StatusForbidden, ""},
-		{memberToken, "/api/v1/admin/events", http.StatusForbidden, ""},
+		{memberToken, "/api/v1/events?feed=server", http.StatusForbidden, ""},
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"kind":"auth.signed_in"`},
 		// An admin reads what happened as a sentence the server words.
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"text":"Oliver signed in on Living room (Photon)"`},
@@ -162,8 +162,8 @@ func (f streamingEvents) Subscribe() (<-chan domain.Event, func()) {
 	return f.events, func() { close(f.gone) }
 }
 
-// A client that stops reading but keeps its connection does not hold its stream for good.
-func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
+// A client that stops reading but keeps its connection does not hold its socket for good.
+func TestASocketNobodyReadsIsGivenUp(t *testing.T) {
 	t.Parallel()
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
@@ -177,18 +177,25 @@ func TestAStreamNobodyReadsIsGivenUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := fmt.Fprintf(conn, "GET /api/v1/admin/events HTTP/1.1\r\nHost: photon\r\nAuthorization: Bearer %s\r\n\r\n", goodToken); err != nil {
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/events?feed=server", http.NoBody)
+	if err != nil {
 		t.Fatal(err)
 	}
-	big := domain.Event{Kind: domain.EventScanProgress, Details: domain.ScanProgressDetails{Folder: strings.Repeat("x", 64<<10)}}
-	deadline := time.After(3 * sendWithin)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	c, res, err := websockettest.Open(conn, req)
+	if c == nil {
+		t.Fatalf("handshake: %v %v", res, err)
+	}
+	res.Body.Close()
+	big := domain.Event{Kind: domain.EventTaskFailed, Details: domain.TaskDetails{Task: domain.TaskScanLibraries, Error: strings.Repeat("x", 64<<10)}}
+	deadline := time.After(time.Minute)
 	for {
 		select {
 		case told.events <- big:
 		case <-told.gone:
 			return
 		case <-deadline:
-			t.Fatal("the stream is still held by a client that stopped reading")
+			t.Fatal("the socket is still held by a client that stopped reading")
 		}
 	}
 }

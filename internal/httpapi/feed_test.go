@@ -3,7 +3,6 @@
 package httpapi
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -108,33 +107,20 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	t.Cleanup(srv.Close)
 	open := func(token string) <-chan told {
 		t.Helper()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/events", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { res.Body.Close() })
-		if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "text/event-stream" {
-			t.Fatalf("%s: %d %q", token, res.StatusCode, res.Header.Get("Content-Type"))
-		}
 		out := make(chan told, 64)
 		go func() {
 			defer close(out)
-			for e := range stream(bufio.NewReader(res.Body)) {
+			for m := range listen(t, srv.URL+"/api/v1/events", token) {
 				var got told
-				if err := json.Unmarshal([]byte(e.data), &got); err != nil {
+				if err := json.Unmarshal(m.data, &got); err != nil {
 					return
 				}
-				got.name = e.name
+				got.name = m.name
 				out <- got
 			}
 		}()
 		if first := <-out; first.name != "hello" {
-			t.Fatalf("%s's stream began with %q, want hello", token, first.name)
+			t.Fatalf("%s's socket began with %q, want hello", token, first.name)
 		}
 		return out
 	}

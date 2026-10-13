@@ -1,18 +1,18 @@
 package httpapi
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/websocket/websockettest"
 )
 
 func asked(target, encoding string) *httptest.ResponseRecorder {
@@ -54,50 +54,35 @@ func TestASmallJSONAnswerIsLeftAlone(t *testing.T) {
 	}
 }
 
-func TestAnEventStreamIsNeverCompressed(t *testing.T) {
+// A browser asks for gzip with its socket's handshake, as with every request, and has its socket.
+func TestTheEventsSocketIsOpenedToAClientAskingForGzip(t *testing.T) {
 	t.Parallel()
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
 	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
 	t.Cleanup(srv.Close)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/admin/events", nil)
-	if err != nil {
-		t.Fatal(err)
+	c, res, err := websockettest.Dial(t.Context(), srv.URL+"/api/v1/events?feed=server", http.Header{
+		"Authorization": {"Bearer " + goodToken}, "Accept-Encoding": {"gzip"},
+	})
+	if err != nil || c == nil {
+		t.Fatalf("handshake: %v %v", res, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+goodToken)
-	req.Header.Set("Accept-Encoding", "gzip")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { res.Body.Close() })
-	if res.Header.Get("Content-Encoding") != "" {
-		t.Fatalf("Content-Encoding %q, want none", res.Header.Get("Content-Encoding"))
-	}
-	lines := make(chan string, 64)
+	res.Body.Close()
+	t.Cleanup(func() { c.Close() })
 	go func() {
-		for s := bufio.NewScanner(res.Body); s.Scan(); {
-			lines <- s.Text()
-		}
-		close(lines)
+		told.events <- domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: domain.TaskScanLibraries}}
 	}()
-	sent := false
-	deadline := time.After(5 * time.Second)
 	for {
-		select {
-		case line, ok := <-lines:
-			if !ok {
-				t.Fatal("the stream ended")
-			}
-			if line == "event: "+string(domain.EventScanProgress) {
-				return
-			}
-			if !sent && strings.HasPrefix(line, "data:") {
-				sent = true
-				told.events <- domain.Event{Kind: domain.EventScanProgress}
-			}
-		case <-deadline:
-			t.Fatal("the event did not arrive")
+		_, payload, err := c.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m socketMessage
+		if err := json.Unmarshal(payload, &m); err != nil {
+			t.Fatalf("%q: %v", payload, err)
+		}
+		if m.Feed == feedServer && m.Event == string(domain.EventTaskStarted) {
+			return
 		}
 	}
 }

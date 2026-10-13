@@ -397,6 +397,29 @@ func TestTheCookieIsRefusedForAnotherSitesWrites(t *testing.T) {
 	}
 }
 
+// A page on another site cannot open the events socket with the browser's cookie and read what it
+// tells, though its handshake is a GET.
+func TestTheCookieIsRefusedForAnotherSitesSocket(t *testing.T) {
+	for origin, refused := range map[string]bool{
+		"http://photon.test":      false,
+		"https://evil.example":    true,
+		"http://photon.test:3000": true,
+	} {
+		req := httptest.NewRequest(http.MethodGet, "http://photon.test/api/v1/events", nil)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+		req.AddCookie(&http.Cookie{Name: "photon_session", Value: goodToken})
+		rec := httptest.NewRecorder()
+		newAPI(nil).ServeHTTP(rec, req)
+		if (rec.Code == http.StatusForbidden) != refused {
+			t.Errorf("from %s: status %d, want refused %v", origin, rec.Code, refused)
+		}
+	}
+}
+
 // An enum's value outside its list is refused as the body is read, wherever in the body it sits and
 // whether or not the handler looks at it.
 func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {

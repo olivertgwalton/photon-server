@@ -415,46 +415,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events
-         * @description Admin only.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/event-stream": string;
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/folders": {
         parameters: {
             query?: never;
@@ -4134,24 +4094,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, as Server-Sent Events */
+        /** Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description profile tells what the profile sees; server tells an admin what happens on any node besides. */
+                    feed?: components["schemas"]["Feed"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Switching Protocols */
+                101: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content: {
-                        "text/event-stream": string;
-                    };
+                    content?: never;
                 };
                 default: components["responses"]["Problem"];
             };
@@ -7703,6 +7664,8 @@ export interface components {
             studios: string[];
             years: number[];
         };
+        /** @enum {string} */
+        Feed: "profile" | "server";
         FetchSubtitle: {
             downloads?: number;
             for_release?: boolean;

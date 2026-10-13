@@ -2,11 +2,16 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"net/http"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/websocket"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 // audience says what of the libraries and titles a profile may be told of.
@@ -16,51 +21,189 @@ type audience interface {
 	SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error)
 }
 
+// feed is what the events socket tells: every client what changes of what its profile sees, and
+// an admin who asks what happens on any node besides.
+type feed string
+
+const (
+	feedProfile feed = "profile"
+	feedServer  feed = "server"
+)
+
+func feeds() []feed { return []feed{feedProfile, feedServer} }
+
+const (
+	// pingEvery is how often the events socket is pinged, so a proxy that closes an idle
+	// connection, after a minute in nginx's default, leaves it open.
+	pingEvery = 15 * time.Second
+	// lostAfter is how long a client may answer no ping before its socket is closed.
+	lostAfter = 4 * pingEvery
+)
+
+// socketMessage is one message on the events socket: an event of a feed, named by its kind, or the
+// feed's first, which says what is going on now.
+type socketMessage struct {
+	Feed  feed   `json:"feed"`
+	Event string `json:"event"`
+	Data  any    `json:"data"`
+}
+
 type helloJSON struct {
 	Scans []scanJSON `json:"scans"`
 }
 
-// feedStream is what events sends: hello, then the events a profile is told, named by their kinds.
-func feedStream() asStream {
-	out := asStream{"hello": helloJSON{}}
+// eventsSocket is what events sends: on each feed its first message, then the events it tells,
+// named by their kinds.
+func eventsSocket() asSocket {
+	profile := map[string]any{"hello": helloJSON{}}
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
 		domain.EventLibraryScanned, domain.EventPlaybackStopped, domain.EventRestoreStarted, domain.EventTrackerChanged,
 	} {
-		out[string(k)] = eventJSON{}
+		profile[string(k)] = eventJSON{}
 	}
-	return out
+	server := map[string]any{"snapshot": snapshotJSON{}}
+	for _, k := range domain.EventKinds() {
+		server[string(k)] = eventJSON{}
+	}
+	return asSocket{feedProfile: profile, feedServer: server}
 }
 
-// events streams what changes of what the profile sees, from every node, as Server-Sent Events,
-// so a client's pages stay right without asking again: as Jellyfin's LibraryChanged and
-// UserDataChanged, and Plex's notifications; its own playbacks stopping, so a player closes; and
-// what came of a code it was entering on a tracker.
-// First a hello with the scans going on. Nothing is kept to resend, so a client that reconnects
-// asks again for what it shows.
+// events keeps a WebSocket open that tells what happens on every node, as Plex's, Emby's and
+// Jellyfin's clients each keep one: on the profile feed, what changes of what the profile sees, so
+// a client's pages stay right without asking again, as Jellyfin's LibraryChanged and
+// UserDataChanged; its own playbacks stopping, so a player closes; and what came of a code it was
+// entering on a tracker. An admin who asks is told on the server feed what happens on any node,
+// as Plex's activity panel is. One socket carries both, so a browser on HTTP/1.1, which opens few
+// connections to a server, keeps the rest for its pages.
+// Each feed begins with what is going on now: the profile's with a hello naming the scans going
+// on, the server's with a snapshot, so a dashboard needs no second request. Nothing is kept to
+// resend, so a client that reconnects asks again for what it shows.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
-	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
+	ctx, session := r.Context(), auth.SessionOf(r.Context())
+	profile := session.Profile.ID
+	want, ok := queryEnum(a, w, r, "feed", feedProfile, feeds())
+	if !ok {
+		return
+	}
+	if want == feedServer && session.Profile.Role != domain.RoleAdmin {
+		writeProblem(w, a.logger, codeForbidden, "only an admin may")
+		return
+	}
 	events, stop := a.svc.Events.Subscribe()
 	defer stop()
-	scans, err := a.svc.Events.Scans(ctx)
+	// Subscribed first, so nothing between what is going on and the socket is missed; what arrives
+	// twice is a state the client already shows.
+	first := []socketMessage{}
+	hello, err := a.hello(ctx, profile)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	hello := helloJSON{Scans: []scanJSON{}}
-	for _, s := range scans {
-		ok, err := a.svc.Audience.HasLibrary(ctx, profile, s.Library)
+	first = append(first, socketMessage{feedProfile, "hello", hello})
+	var tell func(domain.Event) eventJSON
+	if want == feedServer {
+		now, err := a.snapshot(ctx)
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
-		if ok {
-			hello.Scans = append(hello.Scans, scanJSON{LibraryID: s.Library, Phase: s.Phase, Done: s.Done, Known: s.Known})
+		names, err := a.eventNames(ctx)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		said := words.Negotiate(w, r)
+		first = append(first, socketMessage{feedServer, "snapshot", now})
+		tell = func(e domain.Event) eventJSON {
+			out := eventOf(e)
+			out.Text = said.Event(e, names)
+			return out
 		}
 	}
-	a.streamEvents(w, r, events, "hello", hello, func(e domain.Event) (eventJSON, bool, error) {
-		return a.toldTo(ctx, profile, e)
-	})
+	c, err := websocket.Accept(w, r)
+	if err != nil {
+		a.logger.DebugContext(ctx, "events socket not opened", slog.Any("err", err))
+		return
+	}
+	defer func() {
+		if err := c.Close(websocket.StatusGoingAway); err != nil {
+			a.logger.DebugContext(ctx, "events socket not closed cleanly", slog.Any("err", err))
+		}
+	}()
+	// The client says nothing but its answers to pings, which Read takes; it is gone once it has
+	// answered none for lostAfter.
+	gone := make(chan struct{})
+	go func() {
+		defer close(gone)
+		for {
+			if _, err := c.Read(lostAfter); err != nil {
+				return
+			}
+		}
+	}()
+	for _, m := range first {
+		if !a.sendMessage(ctx, c, m) {
+			return
+		}
+	}
+	ping := time.NewTicker(pingEvery)
+	defer ping.Stop()
+	for {
+		select {
+		case <-gone:
+			return
+		case <-ping.C:
+			if c.Ping() != nil {
+				return
+			}
+		case e, open := <-events:
+			if !open {
+				return
+			}
+			told, send, err := a.toldTo(ctx, profile, e)
+			if err != nil {
+				// The client reconnects and asks again for what it shows.
+				a.logger.WarnContext(ctx, "events socket ended", slog.Any("err", err))
+				return
+			}
+			if send && !a.sendMessage(ctx, c, socketMessage{feedProfile, string(e.Kind), told}) {
+				return
+			}
+			if tell != nil && !a.sendMessage(ctx, c, socketMessage{feedServer, string(e.Kind), tell(e)}) {
+				return
+			}
+		}
+	}
+}
+
+// hello is what the profile feed begins with: the scans going on in the libraries the profile sees.
+func (a *API) hello(ctx context.Context, profile uuid.UUID) (helloJSON, error) {
+	out := helloJSON{Scans: []scanJSON{}}
+	scans, err := a.svc.Events.Scans(ctx)
+	if err != nil {
+		return out, err
+	}
+	for _, s := range scans {
+		ok, err := a.svc.Audience.HasLibrary(ctx, profile, s.Library)
+		if err != nil {
+			return out, err
+		}
+		if ok {
+			out.Scans = append(out.Scans, scanJSON{LibraryID: s.Library, Phase: s.Phase, Done: s.Done, Known: s.Known})
+		}
+	}
+	return out, nil
+}
+
+// sendMessage writes a message on the events socket, answering whether the client is still there.
+func (a *API) sendMessage(ctx context.Context, c *websocket.Conn, m socketMessage) bool {
+	body, err := json.Marshal(m)
+	if err != nil {
+		a.logger.ErrorContext(ctx, "events message not encoded", slog.Any("err", err))
+		return false
+	}
+	return c.Write(body) == nil
 }
 
 // toldTo answers an event as a profile is told it, and whether it is: its own state's changes,
@@ -137,8 +280,9 @@ func (a *API) feedRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/events", access: signedIn,
-			summary: "Stream what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, as Server-Sent Events",
-			status:  http.StatusOK, reply: feedStream(), handle: a.events,
+			summary: "Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data",
+			query:   []param{{"feed", feedProfile, "profile tells what the profile sees; server tells an admin what happens on any node besides."}},
+			status:  http.StatusSwitchingProtocols, reply: eventsSocket(), handle: a.events,
 		},
 	}
 }

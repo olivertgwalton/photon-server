@@ -30,8 +30,9 @@ type optionalBody struct{ of any }
 // asFile is a body or reply that is a file, by the types it may be.
 type asFile []string
 
-// asStream is a reply of Server-Sent Events, by each event's name and the JSON its data carries.
-type asStream map[string]any
+// asSocket is a reply of a WebSocket, by each feed its messages are on, then each message's event
+// and the JSON its data carries.
+type asSocket map[feed]map[string]any
 
 var (
 	pageParams = []param{
@@ -112,11 +113,11 @@ type (
 		Ref         string               `json:"$ref,omitempty"`
 		Content     map[string]mediaType `json:"content,omitempty"`
 		Description string               `json:"description,omitempty"`
+		// Messages are a socket's, by feed and then event, as the JSON each one's data carries.
+		Messages map[feed]map[string]jsonSchema `json:"x-messages,omitempty"`
 	}
 	mediaType struct {
 		Schema *jsonSchema `json:"schema,omitempty"`
-		// Events are a stream's events, by name, as the JSON each one's data carries.
-		Events map[string]jsonSchema `json:"x-events,omitempty"`
 	}
 )
 
@@ -213,6 +214,15 @@ func operation(s *schemas, r route, path string) (apiOperation, error) {
 	}
 	op.RequestBody = describeBody(s, r.body)
 	success := apiResponse{Description: http.StatusText(r.status), Content: describeReply(s, r.reply)}
+	if socket, ok := r.reply.(asSocket); ok {
+		success.Messages = map[feed]map[string]jsonSchema{}
+		for f, events := range socket {
+			success.Messages[f] = map[string]jsonSchema{}
+			for name, data := range events {
+				success.Messages[f][name] = s.of(reflect.TypeOf(data))
+			}
+		}
+	}
 	op.Responses = map[string]apiResponse{
 		strconv.Itoa(r.status): success,
 		"default":              {Ref: "#/components/responses/Problem"},
@@ -259,7 +269,8 @@ func describeBody(s *schemas, of any) *requestBody {
 	}
 }
 
-// describeReply is what a route answers on success: nothing, a file, a stream of events, or JSON.
+// describeReply is what a route answers on success: nothing, a file, or JSON. A socket's messages
+// are its response's own.
 func describeReply(s *schemas, reply any) map[string]mediaType {
 	switch reply := reply.(type) {
 	case nil:
@@ -270,14 +281,8 @@ func describeReply(s *schemas, reply any) map[string]mediaType {
 			c[t] = mediaType{}
 		}
 		return c
-	case asStream:
-		events := map[string]jsonSchema{}
-		for name, data := range reply {
-			events[name] = s.of(reflect.TypeOf(data))
-		}
-		return map[string]mediaType{"text/event-stream": {
-			Schema: &jsonSchema{Type: schemaType{name: "string"}}, Events: events,
-		}}
+	case asSocket:
+		return nil
 	default:
 		schema := s.of(reflect.TypeOf(reply))
 		return map[string]mediaType{"application/json": {Schema: &schema}}

@@ -2,10 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"time"
 	"uuid"
@@ -13,14 +9,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
-
-// heartbeatEvery is how often a quiet event stream sends a comment, so proxies that close idle
-// connections, after a minute in nginx's default, leave it open.
-const heartbeatEvery = 15 * time.Second
-
-// sendWithin is how long one event may take to reach a client before its stream is given up, so a
-// client that stops reading but keeps its connection does not hold the stream for good.
-const sendWithin = 10 * time.Second
 
 type activityLog interface {
 	Activity(ctx context.Context, kind domain.EventKind, offset, limit int) ([]domain.Event, int64, error)
@@ -87,98 +75,6 @@ func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
 		out[i].Text = said.Event(e, names)
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[eventJSON]{out, offset, total})
-}
-
-// adminEvents streams what happens on every node as Server-Sent Events, as Plex's notification
-// stream does: first a snapshot of what is going on now, so a dashboard needs no second request,
-// then each event as it happens, named by its kind.
-func (a *API) adminEvents(w http.ResponseWriter, r *http.Request) {
-	events, stop := a.svc.Events.Subscribe()
-	defer stop()
-	// Subscribed first, so nothing between the snapshot and the stream is missed; what arrives
-	// twice is a state the dashboard already shows.
-	now, err := a.snapshot(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	names, err := a.eventNames(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	said := words.Negotiate(w, r)
-	a.streamEvents(w, r, events, "snapshot", now, func(e domain.Event) (eventJSON, bool, error) {
-		out := eventOf(e)
-		out.Text = said.Event(e, names)
-		return out, true, nil
-	})
-}
-
-// streamEvents sends first, named name, then what tell makes of each event it says to send, named
-// by its kind, with a comment when quiet, until the client goes or the events end.
-func (a *API) streamEvents(w http.ResponseWriter, r *http.Request, events <-chan domain.Event, name string, first any, tell func(domain.Event) (eventJSON, bool, error)) {
-	rc := http.NewResponseController(w)
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-store")
-	// nginx buffers a response unless told not to.
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	if a.sendEvent(w, rc, name, first) != nil {
-		return
-	}
-	heartbeat := time.NewTicker(heartbeatEvery)
-	defer heartbeat.Stop()
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case e, open := <-events:
-			if !open {
-				return
-			}
-			told, send, err := tell(e)
-			if err != nil {
-				// The client reconnects and asks again for what it shows.
-				a.logger.WarnContext(r.Context(), "event stream ended", slog.Any("err", err))
-				return
-			}
-			if send && a.sendEvent(w, rc, string(e.Kind), told) != nil {
-				return
-			}
-		case <-heartbeat.C:
-			if sendText(w, rc, ": heartbeat\n\n") != nil {
-				return
-			}
-		}
-	}
-}
-
-func (a *API) sendEvent(w http.ResponseWriter, rc *http.ResponseController, name string, v any) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return sendText(w, rc, fmt.Sprintf("event: %s\ndata: %s\n\n", name, data))
-}
-
-func sendText(w http.ResponseWriter, rc *http.ResponseController, text string) error {
-	if err := rc.SetWriteDeadline(time.Now().Add(sendWithin)); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, text); err != nil {
-		return err
-	}
-	return rc.Flush()
-}
-
-// eventStream is what adminEvents sends: the snapshot, then events named by their kinds.
-func eventStream() asStream {
-	out := asStream{"snapshot": snapshotJSON{}}
-	for _, k := range domain.EventKinds() {
-		out[string(k)] = eventJSON{}
-	}
-	return out
 }
 
 type snapshotJSON struct {
@@ -269,11 +165,6 @@ func (a *API) activityRoutes() []route {
 			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
 			query:  append([]param{{"kind", domain.EventKind(""), "Only entries of this kind, one the log keeps."}}, pageParams...),
 			status: http.StatusOK, reply: pageJSON[eventJSON]{}, handle: a.adminActivity,
-		},
-		{
-			pattern: "GET /api/v1/admin/events", access: admin,
-			summary: "Stream a snapshot of what is going on, then each event as it happens, as Server-Sent Events",
-			status:  http.StatusOK, reply: eventStream(), handle: a.adminEvents,
 		},
 	}
 }

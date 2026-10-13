@@ -2,8 +2,10 @@
 // and the API on one origin, the answers a real server gave, typed by the same
 // schema the app is, so a change to the API that the app would feel fails
 // `bun run check` here too.
+
+import type { ServerWebSocket } from "bun";
 import type { components } from "../src/lib/api/schema.d.ts";
-import { admin, adminTitles } from "./mock-admin.ts";
+import { admin, adminTitles, serverFeed } from "./mock-admin.ts";
 
 type Schemas = components["schemas"];
 
@@ -401,12 +403,18 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 let playlists: (Schemas["Playlist"] & { items: string[] })[] = [];
 const downloads: Schemas["Download"][] = [];
 
-// The change feed's open streams, and a way for a test to speak on them.
-const feeds = new Set<ReadableStreamDefaultController<string>>();
+// The events socket's open connections, and a way for a test to speak on the
+// profile's feed of each.
+type Socket = { feed: Schemas["Feed"]; stop?: () => void };
+const sockets = new Set<ServerWebSocket<Socket>>();
+const say = (
+	ws: ServerWebSocket<Socket>,
+	feed: Schemas["Feed"],
+	event: string,
+	data: unknown,
+) => ws.send(JSON.stringify({ feed, event, data }));
 const tell = (event: string, data: object) => {
-	for (const feed of feeds) {
-		feed.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-	}
+	for (const ws of sockets) say(ws, "profile", event, data);
 };
 
 // Trakt is set up and Simkl and MDBList are not; a code asked for is entered once a test
@@ -1118,9 +1126,25 @@ async function app(url: URL) {
 	return new Response(Bun.file("build/index.html"));
 }
 
-const server_ = Bun.serve({
+const server_ = Bun.serve<Socket>({
 	port: Number(process.env.PORT ?? 4173),
-	async fetch(request) {
+	websocket: {
+		open(ws) {
+			sockets.add(ws);
+			say(ws, "profile", "hello", { scans: [] });
+			if (ws.data.feed === "server") {
+				ws.data.stop = serverFeed((event, data) =>
+					say(ws, "server", event, data),
+				);
+			}
+		},
+		message() {},
+		close(ws) {
+			sockets.delete(ws);
+			ws.data.stop?.();
+		},
+	},
+	async fetch(request, bun) {
 		const url = new URL(request.url);
 		if (!/^\/(api|mock)\//.test(url.pathname)) return app(url);
 		const route = `${request.method} ${url.pathname}`;
@@ -1135,7 +1159,7 @@ const server_ = Bun.serve({
 		if (route === "GET /api/v1/setup") return Response.json({ state: "done" });
 		// Not the API: how a test knows a page is listening, and makes the server
 		// announce a change.
-		if (route === "GET /mock/listening") return Response.json(feeds.size);
+		if (route === "GET /mock/listening") return Response.json(sockets.size);
 		if (route === "POST /mock/emit") {
 			const { event, data, add } = (await request.json()) as {
 				event: string;
@@ -1441,22 +1465,13 @@ const server_ = Bun.serve({
 				return new Response(null, { status: 204 });
 			}
 			case "GET /api/v1/events": {
-				let mine: ReadableStreamDefaultController<string>;
-				const body = new ReadableStream<string>({
-					start(controller) {
-						mine = controller;
-						feeds.add(controller);
-						controller.enqueue(
-							`event: hello\ndata: ${JSON.stringify({ scans: [] })}\n\n`,
-						);
-					},
-					cancel() {
-						feeds.delete(mine);
-					},
-				});
-				return new Response(body, {
-					headers: { "content-type": "text/event-stream" },
-				});
+				const feed = (url.searchParams.get("feed") ??
+					"profile") as Schemas["Feed"];
+				if (feed === "server" && me.role !== "admin") {
+					return problem(403, "forbidden", "Forbidden");
+				}
+				if (bun.upgrade(request, { data: { feed } })) return undefined;
+				return problem(400, "invalid_parameter", "Not a WebSocket");
 			}
 			case "GET /api/v1/playlists":
 				return Response.json({
