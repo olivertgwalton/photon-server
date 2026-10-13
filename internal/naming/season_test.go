@@ -44,6 +44,31 @@ func TestParseSeason(t *testing.T) {
 	}
 }
 
+func TestSaysSeason(t *testing.T) {
+	tests := []struct {
+		folder, series string
+		want           bool
+	}{
+		{folder: "Season 1", want: true},
+		{folder: "3.Staffel", want: true},
+		{folder: "Temporada 4", want: true},
+		{folder: "Seinfeld Season 2", series: "Seinfeld", want: true},
+		{folder: "S01"},
+		{folder: "2"},
+		{folder: "Specials"},
+		{folder: "s06e05"},
+		{folder: "Season of the Witch (1972)"},
+		{folder: "Heat (1995)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.folder, func(t *testing.T) {
+			if got := SaysSeason(tt.folder, tt.series); got != tt.want {
+				t.Errorf("SaysSeason(%q, %q) = %v; want %v", tt.folder, tt.series, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSeriesName(t *testing.T) {
 	tests := []struct {
 		folder string
