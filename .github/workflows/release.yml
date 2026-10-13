@@ -196,7 +196,7 @@ jobs:
           hdiutil attach "$DMG" -mountpoint /Volumes/Photon -nobrowse
           /Volumes/Photon/Photon.app/Contents/MacOS/Photon &
           for _ in $(seq 60); do
-            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ] && break
+            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/health)" = 204 ] && break
             sleep 2
           done
           cat ~/Library/Logs/Photon/*.log
@@ -269,7 +269,7 @@ jobs:
           sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" "$XDG_RUNTIME_DIR"
           flatpak run io.github.olivertgwalton.Photon &
           for _ in $(seq 60); do
-            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/readyz)" = 204 ] && break
+            [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/health)" = 204 ] && break
             sleep 2
           done
           cat ~/.var/app/io.github.olivertgwalton.Photon/data/photon/logs/*.log

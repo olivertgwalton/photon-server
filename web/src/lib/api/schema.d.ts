@@ -6985,7 +6985,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/readyz": {
+    "/health": {
         parameters: {
             query?: never;
             header?: never;

@@ -79,7 +79,7 @@ const candidatePosters = "https://image.tmdb.org https://artworks.thetvdb.com"
 
 // ownedByAPI is whether a path is the API's, answered by it even when it has no such route.
 func ownedByAPI(p string) bool {
-	return p == "/api" || strings.HasPrefix(p, "/api/") || p == "/readyz"
+	return p == "/api" || strings.HasPrefix(p, "/api/") || p == "/health"
 }
 
 // serveWeb answers a file of the build as it is, and any other path without an extension with the

@@ -120,7 +120,7 @@ func TestRefusals(t *testing.T) {
 	}
 }
 
-func TestReadyz(t *testing.T) {
+func TestHealth(t *testing.T) {
 	tests := []struct {
 		name      string
 		readiness error
@@ -134,7 +134,7 @@ func TestReadyz(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			newAPI(tt.readiness).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+			newAPI(tt.readiness).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 			if rec.Code != tt.want {
 				t.Errorf("status = %d, want %d", rec.Code, tt.want)
 			}
@@ -172,8 +172,8 @@ func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
 		want                int
 		location            string
 	}{
-		{"https://photon.example.com", "192.168.86.20:5000", "", http.StatusTemporaryRedirect, "https://photon.example.com/readyz"},
-		{"https://photon.example.com/base", "192.168.86.20:5000", "https", http.StatusTemporaryRedirect, "https://photon.example.com/base/readyz"},
+		{"https://photon.example.com", "192.168.86.20:5000", "", http.StatusTemporaryRedirect, "https://photon.example.com/health"},
+		{"https://photon.example.com/base", "192.168.86.20:5000", "https", http.StatusTemporaryRedirect, "https://photon.example.com/base/health"},
 		{"", "192.168.86.20:5000", "", http.StatusForbidden, ""},
 		{"http://mini.local:8640", "192.168.86.20:5000", "", http.StatusForbidden, ""},
 		{"", "127.0.0.1:5000", "", http.StatusNoContent, ""},
@@ -183,7 +183,7 @@ func TestRequiredSecureConnectionsSendPlainRequestsToHTTPS(t *testing.T) {
 			Ready: func(context.Context) error { return nil }, Secure: servingAs(domain.SecureRequired),
 			Reach: reaching(t, domain.Network{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.168.86.81/32")}, PublicURL: tc.public}),
 		})
-		r := httptest.NewRequest(http.MethodGet, "http://evil.example/readyz", nil)
+		r := httptest.NewRequest(http.MethodGet, "http://evil.example/health", nil)
 		r.RemoteAddr = tc.peer
 		if tc.proto != "" {
 			r.Header.Set("X-Forwarded-Proto", tc.proto)

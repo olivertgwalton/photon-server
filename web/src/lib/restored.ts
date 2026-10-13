@@ -6,9 +6,9 @@ const upFor = 30_000;
 
 export type Ready = () => Promise<boolean>;
 
-const readyz: Ready = async () => {
+const health: Ready = async () => {
 	try {
-		return (await fetch("/readyz", { cache: "no-store" })).ok;
+		return (await fetch("/health", { cache: "no-store" })).ok;
 	} catch {
 		return false;
 	}
@@ -17,7 +17,7 @@ const readyz: Ready = async () => {
 // Resolves once a node answers ready after the restore: seen down then up, or
 // up for upFor, which a restore quicker than the polls leaves.
 export async function backAfterRestore(
-	ready: Ready = readyz,
+	ready: Ready = health,
 	wait = (ms: number) => new Promise((r) => setTimeout(r, ms)),
 	now = () => Date.now(),
 ): Promise<void> {
