@@ -24,6 +24,12 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
+	} else {
+		// Copied video starts at the keyframe before start, and audio encoded beside it must too.
+		// Trimmed to start, it has nothing yet at the next keyframe, and the MP4 muxer, holding
+		// its first fragment until every track has a sample (delay_moov), puts that keyframe in
+		// the fragment cut drops as before the segment.
+		a = append(a, "-noaccurate_seek")
 	}
 	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts")
 	a = append(a, in.Args()...)
