@@ -15,4 +15,5 @@ ff $IN $X -movflags +frag_keyframe fragmented.mp4
 ff $IN -c:v libvpx-vp9 -deadline realtime -g 30 -cpu-used 8 vp9.webm
 ff $IN $X -f matroska - > no-cues.mkv
 ff $IN $X transport.ts
-for f in *.mkv *.webm *.mp4 *.mov *.ts; do echo "== $f"; ffprobe -v error -select_streams v:0 -show_entries packet=pts_time,flags -of csv=p=0 $f | grep K | cut -d, -f1 | sort -n | tr '\n' ' '; echo; done
+ff $IN $X b-frames.avi
+for f in *.mkv *.webm *.mp4 *.mov *.ts *.avi; do echo "== $f"; ffprobe -v error -fflags +genpts -select_streams v:0 -show_entries packet=pts_time,flags -of csv=p=0 $f | grep K | cut -d, -f1 | sort -n | tr '\n' ' '; echo; done
