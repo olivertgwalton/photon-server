@@ -144,23 +144,17 @@ func (w *walker) visit(ctx context.Context, v visit) ([]visit, error) {
 			return nil, w.each(ctx, Folder{Path: v.dir}, err)
 		}
 	}
-	full := v.above[len(v.above)-1]
-	entries, err := os.ReadDir(full)
+	folder, v, ok, err := list(v)
+	if !ok {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, w.each(ctx, Folder{Path: v.dir}, err)
+		return nil, w.each(ctx, folder, err)
 	}
-	if slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return e.Name() == ".ignore" }) {
-		if content, err := os.ReadFile(filepath.Join(full, ".ignore")); err == nil {
-			var ok bool
-			if v.ign, ok = parseIgnore(v.dir, string(content)); !ok {
-				return nil, nil
-			}
-		}
-	}
-	folder := read(full, v, entries)
 	if err := w.each(ctx, folder, nil); err != nil {
 		return nil, err
 	}
+	full := v.above[len(v.above)-1]
 	below := make([]visit, 0, len(folder.Folders))
 	for _, sub := range slices.Backward(folder.Folders) {
 		below = append(below, visit{
@@ -168,6 +162,39 @@ func (w *walker) visit(ctx context.Context, v visit) ([]visit, error) {
 		})
 	}
 	return below, nil
+}
+
+// Read reads one folder of the library at root as Walk would, and none under it. One a .ignore
+// hides holds nothing.
+func Read(root, dir string) (Folder, error) {
+	v, ok, err := (&walker{root: root}).climb(dir)
+	if !ok || err != nil {
+		return Folder{Path: dir}, err
+	}
+	folder, _, ok, err := list(v)
+	if !ok {
+		return Folder{Path: dir}, nil
+	}
+	return folder, err
+}
+
+// list reads the folder of v, answering it with the visit its own .ignore makes of it, and false
+// for one an empty .ignore hides.
+func list(v visit) (Folder, visit, bool, error) {
+	full := v.above[len(v.above)-1]
+	entries, err := os.ReadDir(full)
+	if err != nil {
+		return Folder{Path: v.dir}, v, true, err
+	}
+	if slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return e.Name() == ".ignore" }) {
+		if content, err := os.ReadFile(filepath.Join(full, ".ignore")); err == nil {
+			var ok bool
+			if v.ign, ok = parseIgnore(v.dir, string(content)); !ok {
+				return Folder{}, v, false, nil
+			}
+		}
+	}
+	return read(full, v, entries), v, true, nil
 }
 
 // climb answers the visit of dir, a folder asked for: the folders above it are not read, but what
