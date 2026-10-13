@@ -199,6 +199,21 @@ test("scrubbing shows the chapter and the thumbnail under the pointer", async ({
 	expect((await sheet).ok()).toBe(true);
 });
 
+test("without trickplay, scrubbing shows the chapter's picture", async ({
+	page,
+}) => {
+	await logIn(page, "/play/p-anime?t=0");
+	const seek = page.getByRole("slider", { name: "Seek" });
+	const box = await seek.boundingBox();
+	if (!box) throw new Error("no seek bar");
+	const picture = page.waitForResponse(
+		"**/api/v1/parts/part-1/chapters/1/image?*",
+	);
+	await page.mouse.move(box.x + box.width * 0.75, box.y + box.height / 2);
+	await expect(page.getByText("The Rest")).toBeVisible();
+	expect((await picture).ok()).toBe(true);
+});
+
 test("the player follows how the profile plays", async ({ page }) => {
 	await logIn(page, "/");
 	const set = await page.request.patch("/api/v1/profile/preferences", {

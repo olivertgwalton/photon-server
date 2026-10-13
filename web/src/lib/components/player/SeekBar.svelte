@@ -6,7 +6,8 @@ import { thumbnail } from "#lib/player/trickplay.js";
 type Schemas = components["schemas"];
 
 // The timeline: what has played and arrived, the chapters as ticks, and a
-// thumbnail of wherever the pointer or a drag is. Seconds throughout, on the
+// thumbnail of wherever the pointer or a drag is, or its chapter's picture
+// when the copy has no trickplay sheets. Seconds throughout, on the
 // copy's whole timeline.
 let {
 	position,
@@ -84,6 +85,13 @@ function under(event: PointerEvent): number | undefined {
 					class="ring-line-strong rounded-md bg-black ring-1"
 					style={thumbStyle}
 				></div>
+			{:else if chapter?.image}
+				<img
+					src={chapter.image}
+					alt=""
+					class="ring-line-strong rounded-md bg-black ring-1"
+					style:width="{previewWidth}px"
+				>
 			{/if}
 			{#if chapter?.title}
 				<span class="text-ink max-w-48 truncate text-xs font-semibold">

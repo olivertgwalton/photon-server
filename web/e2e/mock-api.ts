@@ -907,7 +907,8 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 		episode_number: 2,
 		versions: [version("v-ep2")],
 	},
-	// Signs in ASS inside the file, and a font of its own.
+	// Signs in ASS inside the file, and a font of its own; chapter pictures
+	// but no trickplay sheets.
 	"p-anime": {
 		id: "p-anime",
 		library_id: "l-films",
@@ -929,6 +930,11 @@ const titles: Record<string, Schemas["TitlePage"]> = {
 					},
 				],
 				subtitles: [],
+				chapters: version("v-anime").chapters?.map((c, i) => ({
+					...c,
+					image: `/api/v1/parts/part-1/chapters/${i}/image?exp=1&sig=s`,
+				})),
+				trickplay: [],
 			},
 		],
 	},
@@ -1349,6 +1355,7 @@ const server_ = Bun.serve<Socket>({
 			case "GET /api/v1/parts/part-1/fonts/2.woff2":
 				return new Response(Bun.file("node_modules/jassub/dist/default.woff2"));
 			case "GET /api/v1/parts/part-1/trickplay/0":
+			case "GET /api/v1/parts/part-1/chapters/1/image":
 				return fixture("sheet.jpg");
 			case "GET /api/v1/profile":
 				return Response.json(me);
