@@ -737,77 +737,88 @@ func TestMPEGTSSegmentsAreExactlyWhatThePlaylistSays(t *testing.T) {
 
 // A film remuxed by a real ffmpeg into MPEG-TS: every segment is read by ffprobe alone, starting
 // on a keyframe where the plan starts it, and the segments one after another play the whole film.
+// An AVI's packets carry no PTS, and its first picture is shown a frame after the first decoded.
 func TestMPEGTSSegmentsEachPlayAlone(t *testing.T) {
-	ffmpeg, ffprobe := tool(t, "ffmpeg", "PHOTON_FFMPEG"), tool(t, "ffprobe", "PHOTON_FFPROBE")
-	src := filepath.Join(t.TempDir(), "film.mkv")
-	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
-		"-t", "20", "-c:v", "libx264", "-preset", "ultrafast", "-bf", "2", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
-		"-c:a", "flac", src)
-	if out, err := made.CombinedOutput(); err != nil {
-		t.Fatalf("making the film: %v: %s", err, out)
-	}
-	dir := t.TempDir()
-	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var keyframes []time.Duration
-	for k := range 10 {
-		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
-	}
-	playback := uuid.NewV7()
-	if err := r.Open(t.Context(), playback, Copy{Segments: domain.SegmentsMPEGTS, Parts: []Source{{
-		Open: opening(src), Part: Part{Duration: 20 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"},
-		Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
-	}}}); err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close(playback)
-	whole := filepath.Join(t.TempDir(), "whole.ts")
-	for n, start := range []time.Duration{0, 6 * time.Second, 12 * time.Second, 18 * time.Second} {
-		f, err := r.Segment(t.Context(), playback, n)
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, err := io.ReadAll(f)
-		_ = f.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		alone := filepath.Join(t.TempDir(), segmentName(domain.SegmentsMPEGTS, n))
-		if err := os.WriteFile(alone, b, 0o600); err != nil {
-			t.Fatal(err)
-		}
-		all, err := os.OpenFile(whole, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-		if err == nil {
-			_, err = all.Write(b)
-			err = cmp.Or(err, all.Close())
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		probe := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-select_streams", "v", "-read_intervals", "%+#1",
-			"-show_entries", "packet=pts_time,flags:stream=codec_name", "-of", "csv=p=0", alone)
-		out, err := probe.Output()
-		if err != nil {
-			t.Fatalf("segment %d alone: %v", n, err)
-		}
-		want := fmt.Sprintf("%.6f,K", (start + clockOffset).Seconds())
-		if got := string(out); !strings.HasPrefix(got, want) || !strings.Contains(got, "h264") {
-			t.Errorf("segment %d alone begins %q, want H.264 from a keyframe at %s", n, got, want)
-		}
-	}
-	probe := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-show_entries", "format=duration:stream=codec_name", "-of", "csv=p=0", whole)
-	out, err := probe.Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := strings.Fields(string(out))
-	seconds, err := strconv.ParseFloat(got[len(got)-1], 64)
-	if err != nil || math.Abs(seconds-20) > 0.1 || !slices.Contains(got, "h264") || !slices.Contains(got, "aac") {
-		t.Errorf("the segments one after another: %q, want twenty seconds of H.264 and AAC", got)
+	for _, film := range []struct {
+		name, audio string
+		first       time.Duration
+	}{
+		{"film.mkv", "flac", 0},
+		{"film.avi", "pcm_s16le", time.Second / 24},
+	} {
+		t.Run(film.name, func(t *testing.T) {
+			ffmpeg, ffprobe := tool(t, "ffmpeg", "PHOTON_FFMPEG"), tool(t, "ffprobe", "PHOTON_FFPROBE")
+			src := filepath.Join(t.TempDir(), film.name)
+			made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+				"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+				"-t", "20", "-c:v", "libx264", "-preset", "ultrafast", "-bf", "2", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
+				"-c:a", film.audio, src)
+			if out, err := made.CombinedOutput(); err != nil {
+				t.Fatalf("making the film: %v: %s", err, out)
+			}
+			dir := t.TempDir()
+			r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var keyframes []time.Duration
+			for k := range 10 {
+				keyframes = append(keyframes, film.first+time.Duration(2*k)*time.Second)
+			}
+			playback := uuid.NewV7()
+			if err := r.Open(t.Context(), playback, Copy{Segments: domain.SegmentsMPEGTS, Parts: []Source{{
+				Open: opening(src), Part: Part{Duration: 20 * time.Second, Keyframes: keyframes},
+				Video: domain.VideoPlan{Codec: "h264"},
+				Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
+			}}}); err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close(playback)
+			whole := filepath.Join(t.TempDir(), "whole.ts")
+			for n, start := range []time.Duration{0, 6 * time.Second, 12 * time.Second, 18 * time.Second} {
+				f, err := r.Segment(t.Context(), playback, n)
+				if err != nil {
+					t.Fatal(err)
+				}
+				b, err := io.ReadAll(f)
+				_ = f.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+				alone := filepath.Join(t.TempDir(), segmentName(domain.SegmentsMPEGTS, n))
+				if err := os.WriteFile(alone, b, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				all, err := os.OpenFile(whole, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+				if err == nil {
+					_, err = all.Write(b)
+					err = cmp.Or(err, all.Close())
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				probe := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-select_streams", "v", "-read_intervals", "%+#1",
+					"-show_entries", "packet=pts_time,flags:stream=codec_name", "-of", "csv=p=0", alone)
+				out, err := probe.Output()
+				if err != nil {
+					t.Fatalf("segment %d alone: %v", n, err)
+				}
+				want := fmt.Sprintf("%.6f,K", (film.first + start + clockOffset).Seconds())
+				if got := string(out); !strings.HasPrefix(got, want) || !strings.Contains(got, "h264") {
+					t.Errorf("segment %d alone begins %q, want H.264 from a keyframe at %s", n, got, want)
+				}
+			}
+			probe := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-show_entries", "format=duration:stream=codec_name", "-of", "csv=p=0", whole)
+			out, err := probe.Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Fields(string(out))
+			seconds, err := strconv.ParseFloat(got[len(got)-1], 64)
+			if err != nil || math.Abs(seconds-20) > 0.1 || !slices.Contains(got, "h264") || !slices.Contains(got, "aac") {
+				t.Errorf("the segments one after another: %q, want twenty seconds of H.264 and AAC", got)
+			}
+		})
 	}
 }
 
