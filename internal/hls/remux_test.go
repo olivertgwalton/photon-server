@@ -872,3 +872,46 @@ func TestATranscodeIsRefusedWhereTheCacheIsShortOfSpace(t *testing.T) {
 		t.Errorf("a transcode with 3 GiB free: %v, want it opened", err)
 	}
 }
+
+// A run started mid-film, where a player resumes or seeks, copying video and encoding audio,
+// begins its first segment on that segment's own keyframe, rather than leaving a hole a player
+// has to jump.
+func TestASegmentSeekedToBeginsOnItsKeyframe(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	src := filepath.Join(t.TempDir(), "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=160x90:rate=24", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+		"-t", "30", "-c:v", "libx264", "-preset", "ultrafast", "-bf", "2", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
+		"-c:a", "flac", src)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 15 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: opening(src), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"},
+		Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
+	}}, Start: 12 * time.Second}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	segment, err := r.Segment(t.Context(), playback, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	init, err := r.Init(t.Context(), playback, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := shownIn(t, init, segment), []time.Duration{12 * time.Second, 14 * time.Second, 16 * time.Second}; !slices.Equal(got, want) {
+		t.Errorf("segment 2, started at, has fragments shown at %v, want %v", got, want)
+	}
+}
