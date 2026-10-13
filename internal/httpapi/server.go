@@ -90,10 +90,10 @@ type serverJSON struct {
 	Folders        foldersJSON        `json:"folders"`
 	// MetadataLanguage and CertificationCountry are what its metadata is asked in, as
 	// serverSettingsJSON says.
-	MetadataLanguage     string      `json:"metadata_language"`
-	CertificationCountry string      `json:"certification_country,omitzero"`
-	Postgres             backendJSON `json:"postgres"`
-	Valkey               backendJSON `json:"valkey"`
+	MetadataLanguage     domain.LanguageTag `json:"metadata_language"`
+	CertificationCountry domain.CountryCode `json:"certification_country,omitzero"`
+	Postgres             backendJSON        `json:"postgres"`
+	Valkey               backendJSON        `json:"valkey"`
 }
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
@@ -110,7 +110,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		Chromaprint: s.Tools.Chromaprint, Libass: s.Tools.Libass, Encoder: encoderJSON{hw.Accel, hw.Device, hw.HEVC},
 		Transcodes: active, TranscodeLimit: limit, Listen: s.Listen,
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
-		MetadataLanguage: a.svc.Identity.Locale().Language, CertificationCountry: a.svc.Identity.Locale().Country,
+		MetadataLanguage: domain.LanguageTag(a.svc.Identity.Locale().Language), CertificationCountry: domain.CountryCode(a.svc.Identity.Locale().Country),
 	}
 	self := a.svc.Placer.Self()
 	out.Role, out.LimitSource = self.Role, self.LimitSource
@@ -157,9 +157,9 @@ type serverSettings interface {
 // its metadata is asked in where a library or title says none: an IETF language tag, and the
 // country certificates are fetched in. An empty name is each node's host's.
 type serverSettingsJSON struct {
-	Name                 string `json:"name"`
-	MetadataLanguage     string `json:"metadata_language"`
-	CertificationCountry string `json:"certification_country,omitzero"`
+	Name                 string             `json:"name"`
+	MetadataLanguage     domain.LanguageTag `json:"metadata_language"`
+	CertificationCountry domain.CountryCode `json:"certification_country,omitzero"`
 }
 
 // maxServerName is the longest name a server is given, in characters, as a profile's is.
@@ -176,11 +176,11 @@ func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "name is up to "+strconv.Itoa(maxServerName)+" characters, and no control characters")
 		return
 	}
-	lang, refusal := metadataLanguage(req.MetadataLanguage)
+	lang, refusal := metadataLanguage(string(req.MetadataLanguage))
 	if req.MetadataLanguage == "" {
 		refusal = "metadata_language is required: an IETF language tag, such as en-GB"
 	}
-	country, refusal2 := certificationCountry(req.CertificationCountry)
+	country, refusal2 := certificationCountry(string(req.CertificationCountry))
 	if refusal = cmp.Or(refusal, refusal2); refusal != "" {
 		writeProblem(w, a.logger, codeInvalidBody, refusal)
 		return
@@ -190,7 +190,7 @@ func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventServerChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{Name: set.Name, MetadataLanguage: lang, CertificationCountry: country})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{Name: set.Name, MetadataLanguage: domain.LanguageTag(lang), CertificationCountry: domain.CountryCode(country)})
 }
 
 func (a *API) readyz(w http.ResponseWriter, r *http.Request) {

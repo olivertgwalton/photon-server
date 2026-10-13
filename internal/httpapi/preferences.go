@@ -25,9 +25,9 @@ type preferences interface {
 // them; the rest are each player's to follow.
 type preferencesJSON struct {
 	// AudioLanguage and SubtitleLanguage are BCP 47 tags; empty is any.
-	AudioLanguage     string               `json:"audio_language"`
+	AudioLanguage     domain.LanguageTag   `json:"audio_language"`
 	AudioTrack        domain.AudioTrack    `json:"audio_track"`
-	SubtitleLanguage  string               `json:"subtitle_language"`
+	SubtitleLanguage  domain.LanguageTag   `json:"subtitle_language"`
 	SubtitleMode      domain.SubtitleMode  `json:"subtitle_mode"`
 	RememberAudio     domain.TrackMemory   `json:"remember_audio"`
 	RememberSubtitles domain.TrackMemory   `json:"remember_subtitles"`
@@ -45,9 +45,9 @@ type preferencesJSON struct {
 
 // preferencesChangeJSON is the preferences to change; one left out stays as it is.
 type preferencesChangeJSON struct {
-	AudioLanguage     *string              `json:"audio_language,omitzero"`
+	AudioLanguage     *domain.LanguageTag  `json:"audio_language,omitzero"`
 	AudioTrack        domain.AudioTrack    `json:"audio_track,omitzero"`
-	SubtitleLanguage  *string              `json:"subtitle_language,omitzero"`
+	SubtitleLanguage  *domain.LanguageTag  `json:"subtitle_language,omitzero"`
 	SubtitleMode      domain.SubtitleMode  `json:"subtitle_mode,omitzero"`
 	RememberAudio     domain.TrackMemory   `json:"remember_audio,omitzero"`
 	RememberSubtitles domain.TrackMemory   `json:"remember_subtitles,omitzero"`
@@ -113,7 +113,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	for _, l := range []struct {
 		set  *string
 		into *language.Tag
-	}{{req.AudioLanguage, &p.AudioLanguage}, {req.SubtitleLanguage, &p.SubtitleLanguage}} {
+	}{{(*string)(req.AudioLanguage), &p.AudioLanguage}, {(*string)(req.SubtitleLanguage), &p.SubtitleLanguage}} {
 		if l.set == nil {
 			continue
 		}

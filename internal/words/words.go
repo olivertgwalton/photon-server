@@ -90,10 +90,10 @@ func (w Words) Stream(s domain.Stream) string {
 		return named(Resolution(s.Width), picture)
 	case domain.StreamAudio:
 		marks := mark(s.Commentary, commentary)
-		return w.track(s.Title, domain.TagOf(s.Language), marks, codecName(s.Codec), channels(s.Channels, s.ChannelLayout))
+		return w.track(s.Title, string(domain.TagOf(s.Language)), marks, codecName(s.Codec), channels(s.Channels, s.ChannelLayout))
 	case domain.StreamSubtitle:
 		marks := append(mark(s.HearingImpaired, sdh), mark(s.Forced, forced)...)
-		return w.track(s.Title, domain.TagOf(s.Language), marks, codecName(s.Codec))
+		return w.track(s.Title, string(domain.TagOf(s.Language)), marks, codecName(s.Codec))
 	}
 	return s.Title
 }

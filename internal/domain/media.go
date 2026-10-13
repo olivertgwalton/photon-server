@@ -168,9 +168,9 @@ type Chapter struct {
 }
 
 // TagOf is a language's BCP 47 tag, or nothing for none.
-func TagOf(l language.Tag) string {
+func TagOf(l language.Tag) LanguageTag {
 	if l == language.Und {
 		return ""
 	}
-	return l.String()
+	return LanguageTag(l.String())
 }

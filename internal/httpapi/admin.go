@@ -112,8 +112,8 @@ type adminLibraryJSON struct {
 	Deletion     domain.MediaDeletion   `json:"deletion"`
 	// MetadataLanguage and CertificationCountry are what its metadata is asked in, absent for the
 	// server's own.
-	MetadataLanguage     string `json:"metadata_language,omitzero"`
-	CertificationCountry string `json:"certification_country,omitzero"`
+	MetadataLanguage     domain.LanguageTag `json:"metadata_language,omitzero"`
+	CertificationCountry domain.CountryCode `json:"certification_country,omitzero"`
 	// ArtworkLanguage is which of its titles' pictures it takes first: localized, those in its
 	// language, then English, then wordless; or any, the most liked.
 	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language"`
@@ -123,7 +123,7 @@ type adminLibraryJSON struct {
 	// SubtitleLanguages are the languages it fetches subtitles in for copies with none in them,
 	// as BCP 47 tags; none is no fetching. SubtitleMatch is which it takes: release, one made for
 	// the copy's very file; or any, the best found.
-	SubtitleLanguages []string             `json:"subtitle_languages"`
+	SubtitleLanguages []domain.LanguageTag `json:"subtitle_languages"`
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match"`
 }
 
@@ -147,12 +147,9 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		Sources:      []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
-		MetadataLanguage: l.Locale.Language, CertificationCountry: l.Locale.Country, ArtworkLanguage: l.Locale.Artwork,
-		TitleLanguage: l.Titles, SubtitleLanguages: make([]string, len(l.SubtitleLanguages)),
+		MetadataLanguage: domain.LanguageTag(l.Locale.Language), CertificationCountry: domain.CountryCode(l.Locale.Country), ArtworkLanguage: l.Locale.Artwork,
+		TitleLanguage: l.Titles, SubtitleLanguages: nonNil(each(l.SubtitleLanguages, domain.TagOf)),
 		SubtitleMatch: l.SubtitleMatch,
-	}
-	for i, t := range l.SubtitleLanguages {
-		j.SubtitleLanguages[i] = t.String()
 	}
 	if l.ListSource != "" {
 		j.List = &store.ListRef{Source: l.ListSource, ID: l.ListID}
@@ -337,15 +334,15 @@ type libraryChangeJSON struct {
 	// MetadataLanguage is the language its metadata is asked in, an IETF tag such as en-GB, and
 	// CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code such as GB;
 	// "" is the server's own. Changing either describes its titles again.
-	MetadataLanguage     *string `json:"metadata_language,omitzero"`
-	CertificationCountry *string `json:"certification_country,omitzero"`
+	MetadataLanguage     *domain.LanguageTag `json:"metadata_language,omitzero"`
+	CertificationCountry *domain.CountryCode `json:"certification_country,omitzero"`
 	// ArtworkLanguage is which of its titles' pictures it takes first; changing it describes them
 	// again.
 	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language,omitzero"`
 	// TitleLanguage is which title it gives its films and shows; changing it describes them again.
 	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
 	// SubtitleLanguages replace the languages it fetches subtitles in; [] is none.
-	SubtitleLanguages []string             `json:"subtitle_languages,omitzero"`
+	SubtitleLanguages []domain.LanguageTag `json:"subtitle_languages,omitzero"`
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match,omitzero"`
 }
 
@@ -379,7 +376,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	if req.SubtitleLanguages != nil {
 		change.SubtitleLanguages = make([]language.Tag, 0, len(req.SubtitleLanguages))
 		for _, s := range req.SubtitleLanguages {
-			t, err := language.Parse(s)
+			t, err := language.Parse(string(s))
 			if err != nil || t == language.Und {
 				writeProblem(w, a.logger, codeInvalidBody, "subtitle_languages are BCP 47 tags, such as fr or pt-BR")
 				return
@@ -396,7 +393,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	for _, field := range []struct {
 		value *string
 		check func(string) (string, string)
-	}{{req.MetadataLanguage, metadataLanguage}, {req.CertificationCountry, certificationCountry}} {
+	}{{(*string)(req.MetadataLanguage), metadataLanguage}, {(*string)(req.CertificationCountry), certificationCountry}} {
 		if field.value == nil {
 			continue
 		}
@@ -407,7 +404,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		}
 		*field.value = canonical
 	}
-	change.MetadataLanguage, change.CertificationCountry = req.MetadataLanguage, req.CertificationCountry
+	change.MetadataLanguage, change.CertificationCountry = (*string)(req.MetadataLanguage), (*string)(req.CertificationCountry)
 	change.ArtworkLanguage, change.TitleLanguage = req.ArtworkLanguage, req.TitleLanguage
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
 		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
@@ -505,10 +502,10 @@ func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
 
 type localesJSON struct {
 	// Languages a library may ask its metadata in, IETF tags: those TMDB has translations in.
-	Languages []string `json:"languages"`
+	Languages []domain.LanguageTag `json:"languages"`
 	// Countries a library may take its certificates from, ISO 3166-1 alpha-2 codes: those whose
 	// certificates the server can read for parental controls.
-	Countries []string `json:"countries"`
+	Countries []domain.CountryCode `json:"countries"`
 }
 
 // locales lists what a library may ask its metadata in, as Jellyfin's Localization cultures and
@@ -519,7 +516,7 @@ func (a *API) locales(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, localesJSON{Languages: domain.MetadataLanguages(), Countries: countries})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, localesJSON{Languages: each(domain.MetadataLanguages(), func(s string) domain.LanguageTag { return domain.LanguageTag(s) }), Countries: each(countries, func(s string) domain.CountryCode { return domain.CountryCode(s) })})
 }
 
 // metadataLanguage is a metadata language as sent, written as its standard writes it, or why it is
