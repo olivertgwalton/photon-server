@@ -30,6 +30,7 @@ type described struct {
 	OpenAPI string `json:"openapi"`
 	Paths   map[string]map[string]struct {
 		Summary    string               `json:"summary"`
+		Tags       []string             `json:"tags"`
 		Parameters []describedParameter `json:"parameters"`
 		Responses  map[string]struct {
 			Ref     string                     `json:"$ref"`
@@ -69,6 +70,9 @@ func TestTheDescriptionHasEveryRoute(t *testing.T) {
 		if !ok {
 			t.Errorf("%s is not described", r.pattern)
 			continue
+		}
+		if len(op.Tags) != 1 || !strings.HasPrefix(strings.TrimPrefix(path, "/api/v1"), "/"+op.Tags[0]) {
+			t.Errorf("%s is grouped under %q, not its resource", r.pattern, op.Tags)
 		}
 		has := func(name, in string) bool {
 			return slices.ContainsFunc(op.Parameters, func(p describedParameter) bool {

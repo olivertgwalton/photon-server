@@ -94,6 +94,7 @@ type (
 		// Security is the schemes any one of which admits a request; none is a public route.
 		Security []map[string][]string `json:"security"`
 		Summary  string                `json:"summary"`
+		Tags     []string              `json:"tags"`
 		Access   access                `json:"x-access"`
 	}
 	apiParameter struct {
@@ -182,7 +183,7 @@ func operation(s *schemas, r route, path string) (apiOperation, error) {
 	if (r.reply == nil) != (r.status == http.StatusNoContent || r.status == http.StatusAccepted) {
 		return apiOperation{}, fmt.Errorf("%s answers %d with reply %T", r.pattern, r.status, r.reply)
 	}
-	op := apiOperation{Summary: r.summary, Access: r.access, Security: []map[string][]string{}}
+	op := apiOperation{Summary: r.summary, Tags: []string{resourceTag(path)}, Access: r.access, Security: []map[string][]string{}}
 	for _, m := range wildcard.FindAllStringSubmatch(path, -1) {
 		p := param{m[1], uuid.UUID{}, ""}
 		if i := slices.IndexFunc(r.path, func(p param) bool { return p.name == m[1] }); i >= 0 {
@@ -227,6 +228,15 @@ func operation(s *schemas, r route, path string) (apiOperation, error) {
 		}
 	}
 	return op, nil
+}
+
+// resourceTag groups an operation with the others on its resource, an admin's apart from a client's.
+func resourceTag(path string) string {
+	segments := strings.Split(strings.TrimPrefix(path, "/api/v1"), "/")[1:]
+	if segments[0] == "admin" && len(segments) > 1 {
+		return "admin/" + segments[1]
+	}
+	return segments[0]
 }
 
 // describeBody is what a route takes: none, a file, or JSON a client must send or may leave out.
