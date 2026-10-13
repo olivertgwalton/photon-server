@@ -8,6 +8,8 @@ function videoURL(site: string, key: string): string | undefined {
 			return `https://www.youtube.com/watch?v=${encodeURIComponent(key)}`;
 		case "vimeo":
 			return `https://vimeo.com/${encodeURIComponent(key)}`;
+		default:
+			return undefined;
 	}
 }
 
