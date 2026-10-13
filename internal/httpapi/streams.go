@@ -101,7 +101,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	open := func() (media.Input, error) { return a.openSubtitleFile(ctx, id) }
-	vtt, err := a.svc.HLS.WebVTT(ctx, open, domain.TagOf(sub.Language))
+	vtt, err := a.svc.HLS.WebVTT(ctx, open, string(domain.TagOf(sub.Language)))
 	if a.answered(w, r, err) {
 		return
 	}

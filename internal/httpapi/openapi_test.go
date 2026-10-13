@@ -272,6 +272,37 @@ func TestEveryProblemCodeIsListed(t *testing.T) {
 	}
 }
 
+// A language or a country is described by the standard it is written in, so a client knows to
+// send en-GB and GB rather than English and Britain.
+func TestLanguagesAndCountriesAreDescribedByTheirStandard(t *testing.T) {
+	type typed struct {
+		Type    json.RawMessage `json:"type"`
+		Pattern string          `json:"pattern"`
+		Items   *typed          `json:"items"`
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]typed `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(fetchDescription(t, newAPI(nil)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	coded := regexp.MustCompile(`^(.*_)?(language|languages|country|countries)$`)
+	for name, schema := range doc.Components.Schemas {
+		for field, p := range schema.Properties {
+			if p.Items != nil {
+				p = *p.Items
+			}
+			if coded.MatchString(field) && string(p.Type) == `"string"` && p.Pattern == "" {
+				t.Errorf("%s.%s is a string of no pattern, want a BCP 47 tag or an ISO 3166-1 code", name, field)
+			}
+		}
+	}
+}
+
 // The description a client generates its types from offline is the one the server serves.
 func TestTheOfflineDescriptionIsTheServedOne(t *testing.T) {
 	offline, err := Describe(domain.Info{Version: "v0.1.0"})

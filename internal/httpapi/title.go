@@ -63,8 +63,8 @@ type titlePageJSON struct {
 	EpisodeOrder domain.EpisodeOrder `json:"episode_order,omitzero"`
 	// MetadataLanguage, CertificationCountry and TitleLanguage are a film's or show's own, over its
 	// library's; absent where it takes its library's.
-	MetadataLanguage     string               `json:"metadata_language,omitzero"`
-	CertificationCountry string               `json:"certification_country,omitzero"`
+	MetadataLanguage     domain.LanguageTag   `json:"metadata_language,omitzero"`
+	CertificationCountry domain.CountryCode   `json:"certification_country,omitzero"`
 	TitleLanguage        domain.TitleLanguage `json:"title_language,omitzero"`
 	// QualifiedCertificate is Certificate with the country whose system rates it, where that is not
 	// the server's (GB:PG), as parental controls read it and an edit takes it.
@@ -142,22 +142,22 @@ type partTrickplayJSON struct {
 type streamPageJSON struct {
 	Index int `json:"index"`
 	// DisplayTitle names the track as a menu lists it, in the reader's language.
-	DisplayTitle    string            `json:"display_title"`
-	Kind            domain.StreamKind `json:"kind"`
-	Codec           string            `json:"codec"`
-	Profile         string            `json:"profile,omitzero"`
-	Language        string            `json:"language,omitzero"`
-	Title           string            `json:"title,omitzero"`
-	Default         bool              `json:"default,omitzero"`
-	Forced          bool              `json:"forced,omitzero"`
-	HearingImpaired bool              `json:"hearing_impaired,omitzero"`
-	Commentary      bool              `json:"commentary,omitzero"`
-	Width           int               `json:"width,omitzero"`
-	Height          int               `json:"height,omitzero"`
-	FrameRate       float64           `json:"frame_rate,omitzero"`
-	BitDepth        int16             `json:"bit_depth,omitzero"`
-	Level           int               `json:"level,omitzero"`
-	Range           domain.Range      `json:"range,omitzero"`
+	DisplayTitle    string             `json:"display_title"`
+	Kind            domain.StreamKind  `json:"kind"`
+	Codec           string             `json:"codec"`
+	Profile         string             `json:"profile,omitzero"`
+	Language        domain.LanguageTag `json:"language,omitzero"`
+	Title           string             `json:"title,omitzero"`
+	Default         bool               `json:"default,omitzero"`
+	Forced          bool               `json:"forced,omitzero"`
+	HearingImpaired bool               `json:"hearing_impaired,omitzero"`
+	Commentary      bool               `json:"commentary,omitzero"`
+	Width           int                `json:"width,omitzero"`
+	Height          int                `json:"height,omitzero"`
+	FrameRate       float64            `json:"frame_rate,omitzero"`
+	BitDepth        int16              `json:"bit_depth,omitzero"`
+	Level           int                `json:"level,omitzero"`
+	Range           domain.Range       `json:"range,omitzero"`
 	// Resolution is a video's, as a wall's filter files it.
 	Resolution domain.Resolution `json:"resolution,omitzero"`
 	// SubtitleKind is a subtitle's.
@@ -170,15 +170,15 @@ type streamPageJSON struct {
 }
 
 type subtitleRefJSON struct {
-	ID              uuid.UUID    `json:"id"`
-	DisplayTitle    string       `json:"display_title"`
-	Codec           string       `json:"codec"`
-	Kind            subtitleKind `json:"kind"`
-	Language        string       `json:"language,omitzero"`
-	Title           string       `json:"title,omitzero"`
-	Default         bool         `json:"default,omitzero"`
-	Forced          bool         `json:"forced,omitzero"`
-	HearingImpaired bool         `json:"hearing_impaired,omitzero"`
+	ID              uuid.UUID          `json:"id"`
+	DisplayTitle    string             `json:"display_title"`
+	Codec           string             `json:"codec"`
+	Kind            subtitleKind       `json:"kind"`
+	Language        domain.LanguageTag `json:"language,omitzero"`
+	Title           string             `json:"title,omitzero"`
+	Default         bool               `json:"default,omitzero"`
+	Forced          bool               `json:"forced,omitzero"`
+	HearingImpaired bool               `json:"hearing_impaired,omitzero"`
 }
 
 type ratingRefJSON struct {
@@ -242,13 +242,13 @@ type collectionCardJSON struct {
 // videoLinkJSON is a provider's link to a video hosted elsewhere, with its site's still of it
 // where the site publishes one, served at /api/v1/artwork/{thumb}.
 type videoLinkJSON struct {
-	Kind      domain.ExtraKind `json:"extra_kind"`
-	Site      string           `json:"site"`
-	Key       string           `json:"key"`
-	Name      string           `json:"name"`
-	Language  string           `json:"language,omitzero"`
-	Published *time.Time       `json:"published_at,omitzero"`
-	Thumb     uuid.UUID        `json:"thumb,omitzero"`
+	Kind      domain.ExtraKind   `json:"extra_kind"`
+	Site      string             `json:"site"`
+	Key       string             `json:"key"`
+	Name      string             `json:"name"`
+	Language  domain.LanguageTag `json:"language,omitzero"`
+	Published *time.Time         `json:"published_at,omitzero"`
+	Thumb     uuid.UUID          `json:"thumb,omitzero"`
 }
 
 type markerRefJSON struct {
@@ -286,7 +286,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
 		Origin:      p.Origin, Rule: p.Rule, List: p.List, LibraryIDs: p.Libraries, EpisodeOrder: p.EpisodeOrder,
-		MetadataLanguage: p.Locale.Language, CertificationCountry: p.Locale.Country, TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
+		MetadataLanguage: domain.LanguageTag(p.Locale.Language), CertificationCountry: domain.CountryCode(p.Locale.Country), TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
@@ -305,7 +305,11 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Extras: each(p.Extras, func(e store.ExtraCard) extraCardJSON {
 			return extraCardJSON{ID: e.ID, Kind: e.Kind, Title: e.Title, DurationMS: e.DurationMS, Image: uriReference(e.Image)}
 		}),
-		Videos:     each(p.Videos, func(v store.VideoLink) videoLinkJSON { return videoLinkJSON(v) }),
+		Videos: each(p.Videos, func(v store.VideoLink) videoLinkJSON {
+			return videoLinkJSON{
+				Kind: v.Kind, Site: v.Site, Key: v.Key, Name: v.Name, Language: domain.LanguageTag(v.Language), Published: v.Published, Thumb: v.Thumb,
+			}
+		}),
 		State:      titleStateJSON(p.State),
 		Artwork:    p.Artwork,
 		Blurhashes: p.Blurhashes,
@@ -320,7 +324,7 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 		Streams: each(v.Streams, func(s domain.Stream) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{
-				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: s.Language, Title: s.Title,
+				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.LanguageTag(s.Language), Title: s.Title,
 				Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired,
 			}
 		}),

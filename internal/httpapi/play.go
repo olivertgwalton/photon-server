@@ -76,17 +76,17 @@ type partJSON struct {
 // file beside the copy, by its id, or a styled stream of it read out as it is, by its index, with
 // the address of the fonts the file carries for it.
 type subtitleJSON struct {
-	ID              uuid.UUID    `json:"id,omitzero"`
-	Stream          *int         `json:"stream,omitzero"`
-	Codec           string       `json:"codec"`
-	Kind            subtitleKind `json:"kind"`
-	Language        string       `json:"language,omitzero"`
-	Title           string       `json:"title,omitzero"`
-	Default         bool         `json:"default,omitzero"`
-	Forced          bool         `json:"forced,omitzero"`
-	HearingImpaired bool         `json:"hearing_impaired,omitzero"`
-	URL             uriReference `json:"url"`
-	Fonts           uriReference `json:"fonts,omitzero"`
+	ID              uuid.UUID          `json:"id,omitzero"`
+	Stream          *int               `json:"stream,omitzero"`
+	Codec           string             `json:"codec"`
+	Kind            subtitleKind       `json:"kind"`
+	Language        domain.LanguageTag `json:"language,omitzero"`
+	Title           string             `json:"title,omitzero"`
+	Default         bool               `json:"default,omitzero"`
+	Forced          bool               `json:"forced,omitzero"`
+	HearingImpaired bool               `json:"hearing_impaired,omitzero"`
+	URL             uriReference       `json:"url"`
+	Fonts           uriReference       `json:"fonts,omitzero"`
 }
 
 type videoJSON struct {

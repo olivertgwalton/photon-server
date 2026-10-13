@@ -18,7 +18,7 @@ var (
 type artworkCandidateJSON struct {
 	ID       uuid.UUID          `json:"id"`
 	Source   domain.FieldSource `json:"source"`
-	Language string             `json:"language,omitzero"`
+	Language domain.LanguageTag `json:"language,omitzero"`
 	Width    int                `json:"width,omitzero"`
 	Height   int                `json:"height,omitzero"`
 	Chosen   bool               `json:"chosen"`
@@ -42,7 +42,7 @@ func (a *API) artworkCandidates(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]artworkCandidateJSON, len(offered))
 	for i, c := range offered {
-		out[i] = artworkCandidateJSON{ID: c.ID, Source: c.Source, Language: c.Language, Width: c.Width, Height: c.Height, Chosen: c.Chosen}
+		out[i] = artworkCandidateJSON{ID: c.ID, Source: c.Source, Language: domain.LanguageTag(c.Language), Width: c.Width, Height: c.Height, Chosen: c.Chosen}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[artworkCandidateJSON]{Items: out})
 }

@@ -168,7 +168,7 @@ type PlaybackVideo struct {
 type PlaybackAudio struct {
 	Stream      int             `json:"stream"`
 	Codec       string          `json:"codec"`
-	Language    string          `json:"language,omitzero"`
+	Language    LanguageTag     `json:"language,omitzero"`
 	Channels    int             `json:"channels,omitzero"`
 	BitrateKbps int             `json:"bitrate_kbps,omitzero"`
 	Encode      *PlaybackEncode `json:"encode,omitzero"`
@@ -189,11 +189,11 @@ type PlaybackEncode struct {
 // PlaybackSubtitle is the subtitle shown, a stream of the file or a file beside it, and whether it
 // is drawn into the video rather than by the player.
 type PlaybackSubtitle struct {
-	Stream   *int       `json:"stream,omitzero"`
-	File     *uuid.UUID `json:"file,omitzero"`
-	Codec    string     `json:"codec"`
-	Language string     `json:"language,omitzero"`
-	Burned   bool       `json:"burned,omitzero"`
+	Stream   *int        `json:"stream,omitzero"`
+	File     *uuid.UUID  `json:"file,omitzero"`
+	Codec    string      `json:"codec"`
+	Language LanguageTag `json:"language,omitzero"`
+	Burned   bool        `json:"burned,omitzero"`
 }
 
 // VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby
