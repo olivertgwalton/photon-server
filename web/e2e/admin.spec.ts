@@ -194,7 +194,7 @@ test("a library is added from a folder found by browsing the server", async ({
 	// A shows library ranks its sources for shows, seasons and episodes, under its settings a
 	// new library leaves to their defaults.
 	await page.getByRole("button", { name: "Holds" }).click();
-	await page.getByRole("option", { name: "Shows" }).click();
+	await page.getByRole("option", { name: "Shows", exact: true }).click();
 	await page.getByText("More settings").click();
 	for (const items of ["Shows", "Seasons", "Episodes"]) {
 		await expect(
@@ -211,7 +211,7 @@ test("a library is added from a folder found by browsing the server", async ({
 	).not.toBeChecked();
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Holds" }).click();
-	await page.getByRole("option", { name: "Films" }).click();
+	await page.getByRole("option", { name: "Films", exact: true }).click();
 	await page.getByRole("button", { name: "Add and scan" }).click();
 	await expect(page).toHaveURL("/settings/server/libraries");
 
@@ -354,7 +354,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 	await page.mouse.move(shows.x + 10, shows.y + shows.height, { steps: 5 });
 	await page.mouse.up();
 	expect((await asked).postDataJSON()).toEqual({
-		library_ids: ["l-shows", "l-films"],
+		library_ids: ["l-shows", "l-films", "l-mixed"],
 	});
 	await expect(names).toHaveText(["Shows", "Films"]);
 
@@ -363,7 +363,7 @@ test("a member puts the libraries in their own order, and may do no more", async
 	await grip.focus();
 	await page.keyboard.press("ArrowUp");
 	expect((await back).postDataJSON()).toEqual({
-		library_ids: ["l-films", "l-shows"],
+		library_ids: ["l-films", "l-shows", "l-mixed"],
 	});
 	await expect(names).toHaveText(["Films", "Shows"]);
 	await page.keyboard.press("ArrowDown");

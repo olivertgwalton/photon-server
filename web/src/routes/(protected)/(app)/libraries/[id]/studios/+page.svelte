@@ -3,7 +3,11 @@ import { wallSearch } from "#lib/wall.js";
 
 let { data } = $props();
 
-const name = $derived(data.library.kind === "shows" ? "Networks" : "Studios");
+const name = $derived(
+	{ movies: "Studios", shows: "Networks", mixed: "Studios and networks" }[
+		data.library.kind
+	],
+);
 </script>
 
 <svelte:head><title>{name} · {data.library.name} · Photon</title></svelte:head>

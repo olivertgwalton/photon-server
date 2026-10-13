@@ -45,7 +45,29 @@ const blanks = Array.from({ length: 24 }, (_, n) => n);
 
 const id = $derived(data.library.id);
 const episodes = $derived(data.query.kind === "episodes");
-const facets = $derived(data.episodeFacets ?? data.facets);
+const facets = $derived(data.kindFacets ?? data.facets);
+// What a library's wall may page besides all its titles, as Plex's type picker
+// and Jellyfin's tabs offer it.
+const kinds = $derived(
+	(
+		{
+			movies: [],
+			shows: [
+				["titles", "Shows"],
+				["episodes", "Episodes"],
+			],
+			mixed: [
+				["titles", "All"],
+				["films", "Films"],
+				["shows", "Shows"],
+				["episodes", "Episodes"],
+			],
+		} satisfies Record<
+			components["schemas"]["LibraryKind"],
+			[components["schemas"]["WallKind"], string][]
+		>
+	)[data.library.kind],
+);
 const narrowed = $derived(filterCount(data.query) > 0);
 // What an admin may keep of this wall as a smart collection.
 const rule = $derived(
@@ -109,22 +131,26 @@ function jump(letters: Letter[], letter: string) {
 
 <h2 class="sr-only">Titles</h2>
 <div class="flex flex-wrap items-center gap-2">
-	{#if data.library.kind === "shows"}
+	{#if kinds.length}
 		<ToggleGroup.Root
 			type="single"
 			variant="outline"
 			size="sm"
-			value={episodes ? "episodes" : "titles"}
+			value={data.query.kind ?? "titles"}
 			onValueChange={(kind) =>
 				kind &&
 				show({
 					...data.query,
-					kind: kind === "episodes" ? "episodes" : undefined,
+					kind:
+						kind === "titles"
+							? undefined
+							: (kind as components["schemas"]["WallKind"]),
 				})}
 			aria-label="Show"
 		>
-			<ToggleGroup.Item value="titles">Shows</ToggleGroup.Item>
-			<ToggleGroup.Item value="episodes">Episodes</ToggleGroup.Item>
+			{#each kinds as [value, label] (value)}
+				<ToggleGroup.Item {value}>{label}</ToggleGroup.Item>
+			{/each}
 		</ToggleGroup.Root>
 	{/if}
 	<p class="text-ink-3 mr-auto text-sm" aria-live="polite">

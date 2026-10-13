@@ -4346,7 +4346,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    /** @description What to page: titles, films or shows alone, or a library's episodes across its shows. */
                     kind?: components["schemas"]["WallKind"];
                 };
                 header?: never;
@@ -4388,7 +4388,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    /** @description What to page: titles, films or shows alone, or a library's episodes across its shows. */
                     kind?: components["schemas"]["WallKind"];
                     /** @description A letter, or # for anything before A. */
                     starts_with?: string;
@@ -4489,7 +4489,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description What to page: titles, or a show library's episodes across its shows. */
+                    /** @description What to page: titles, films or shows alone, or a library's episodes across its shows. */
                     kind?: components["schemas"]["WallKind"];
                     /** @description The order, title by default; of episodes, by show. */
                     sort?: components["schemas"]["WallSort"];
@@ -7950,7 +7950,7 @@ export interface components {
             root: string;
         };
         /** @enum {string} */
-        LibraryKind: "movies" | "shows";
+        LibraryKind: "movies" | "shows" | "mixed";
         LibraryKindOptions: {
             fetchable: components["schemas"]["Fetchable"][];
             kind: components["schemas"]["LibraryKind"];
@@ -9226,7 +9226,7 @@ export interface components {
             years?: number[];
         };
         /** @enum {string} */
-        WallKind: "titles" | "episodes";
+        WallKind: "titles" | "films" | "shows" | "episodes";
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
         Watched: {

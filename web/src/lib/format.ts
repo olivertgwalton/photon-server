@@ -22,12 +22,20 @@ export function holding(
 	kind: Schemas["LibraryKind"],
 	c: Schemas["Counts"],
 ): string {
-	if (kind === "movies") return count(c.movies, "film");
-	return [
+	const films = count(c.movies, "film");
+	const shows = [
 		count(c.shows, "show"),
 		count(c.seasons, "season"),
 		count(c.episodes, "episode"),
-	].join(" · ");
+	];
+	switch (kind) {
+		case "movies":
+			return films;
+		case "shows":
+			return shows.join(" · ");
+		case "mixed":
+			return [films, ...shows].join(" · ");
+	}
 }
 
 // "1:04:09", "4:09": a position on a title's timeline.

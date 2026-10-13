@@ -1,11 +1,9 @@
 <script lang="ts">
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
-import FilmIcon from "@lucide/svelte/icons/film";
 import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import Trash2Icon from "@lucide/svelte/icons/trash-2";
-import TvIcon from "@lucide/svelte/icons/tv";
 import { scanLibrary } from "#lib/actions.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import LibraryCheck from "#lib/components/admin/LibraryCheck.svelte";
@@ -14,6 +12,7 @@ import IconButton from "#lib/components/IconButton.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { holding } from "#lib/format.js";
+import { libraryIcons } from "#lib/libraries.js";
 import { getShell } from "#lib/shell.svelte.js";
 import { page } from "$app/state";
 
@@ -36,21 +35,15 @@ const live = liveStream();
 	<ul class="grid gap-3">
 		{#each data.libraries as library (library.id)}
 			{@const scan = live.state.scans.find((s) => s.library_id === library.id)}
+			{@const KindIcon = libraryIcons[library.kind]}
 			<li
 				class="bg-raise grid gap-3 rounded-xl p-4 sm:grid-cols-[1fr_auto] sm:items-center"
 			>
 				<div class="flex min-w-0 items-start gap-3">
-					{#if library.kind === "movies"}
-						<FilmIcon
-							class="text-ink-3 mt-0.5 size-5 shrink-0"
-							aria-label="Films"
-						/>
-					{:else}
-						<TvIcon
-							class="text-ink-3 mt-0.5 size-5 shrink-0"
-							aria-label="Shows"
-						/>
-					{/if}
+					<KindIcon
+						class="text-ink-3 mt-0.5 size-5 shrink-0"
+						aria-label={data.words.library_kinds[library.kind]}
+					/>
 					<div class="grid min-w-0 flex-1 gap-1">
 						<h2 class="heading">
 							<a

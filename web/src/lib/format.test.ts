@@ -76,4 +76,7 @@ test("a library says what it holds as its kind counts it", () => {
 	};
 	expect(holding("movies", c)).toBe("1,204 films");
 	expect(holding("shows", c)).toBe("1 show · 4 seasons · 40 episodes");
+	expect(holding("mixed", c)).toBe(
+		"1,204 films · 1 show · 4 seasons · 40 episodes",
+	);
 });
