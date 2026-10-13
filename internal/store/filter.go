@@ -58,15 +58,14 @@ const versionOf = `SELECT 1 FROM (
 		UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id WHERE s.parent_id = items.id
 	) t JOIN versions v ON v.item_id = t.id WHERE v.missing_since IS NULL`
 
-// episodesOf are a show's episodes, two levels down, and a film or an episode itself.
-const episodesOf = `SELECT items.id WHERE items.kind IN ('movie', 'episode')
-	UNION ALL SELECT e.id FROM items s JOIN items e ON e.parent_id = s.id
-		WHERE s.parent_id = items.id AND e.kind = 'episode'`
-
-// begun is whether the profile given as @profile has watched or started a film, or an episode of a show.
-const begun = `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
-	JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-	WHERE w.watched_at IS NOT NULL OR w.position_ms > 0)`
+// begun is whether the profile given as @profile has watched or started a film, or an episode of a
+// show. The titles it has begun are read from its own watch states once, rather than each of a
+// show's episodes looked up in them. A film has no show, and that NULL kept would leave NOT begun
+// true of nothing.
+const begun = `items.id IN (SELECT t.id FROM watch_state w JOIN items e ON e.id = w.item_id
+	LEFT JOIN items season ON season.id = e.parent_id, LATERAL (VALUES (e.id), (season.parent_id)) t (id)
+	WHERE w.profile_id = @profile AND e.kind IN ('movie', 'episode') AND (w.watched_at IS NOT NULL OR w.position_ms > 0)
+		AND t.id IS NOT NULL)`
 
 // where is the conditions, each led by AND, that narrow a statement over items to what the filter
 // lets through, for the profile args holds as @profile; it adds the values they take to args. A
@@ -133,9 +132,12 @@ func (f WallFilter) where(args pgx.NamedArgs, row string) string {
 // markSQL is the condition a mark sets on a title, for the profile given as @profile. A
 // show is watched when every episode is, as Jellyfin and Plex count it.
 func markSQL(m domain.Mark) string {
-	unwatched := `EXISTS (SELECT 1 FROM (` + episodesOf + `) e
-		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-		WHERE w.watched_at IS NULL)`
+	// A show's episodes are counted from what is kept of them, not looked up one by one.
+	unwatched := `CASE WHEN items.kind = 'show' THEN EXISTS (SELECT 1 FROM episode_counts c
+			LEFT JOIN watched_counts w ON w.group_id = c.group_id AND w.profile_id = @profile
+			WHERE c.group_id = items.id AND c.episodes > coalesce(w.watched, 0))
+		ELSE items.kind IN ('movie', 'episode') AND NOT EXISTS (SELECT 1 FROM watch_state w
+			WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NOT NULL) END`
 	switch m {
 	case domain.MarkWatched:
 		return "NOT " + unwatched
