@@ -9133,37 +9133,84 @@ export interface components {
         };
         Vocabulary: {
             accelerations: {
-                [key: string]: string;
+                amf: string;
+                nvenc: string;
+                qsv: string;
+                software: string;
+                vaapi: string;
+                videotoolbox: string;
             };
             calendar_filters: {
-                [key: string]: string;
+                all: string;
+                favourites: string;
+                mine: string;
+                watchlist: string;
             };
             download_states: {
-                [key: string]: string;
+                converting: string;
+                failed: string;
+                queued: string;
+                ready: string;
             };
             extras: {
-                [key: string]: string;
+                behind_the_scenes: string;
+                blooper: string;
+                clip: string;
+                deleted_scene: string;
+                featurette: string;
+                interview: string;
+                other: string;
+                scene: string;
+                short: string;
+                teaser: string;
+                theme_video: string;
+                trailer: string;
             };
             hookable: {
                 [key: string]: string;
             };
             import_misses: {
-                [key: string]: string;
+                no_ids: string;
+                not_found: string;
+                undated: string;
             };
             import_sources: {
-                [key: string]: string;
+                emby: string;
+                jellyfin: string;
+                plex: string;
             };
             job_states: {
-                [key: string]: string;
+                dead: string;
+                queued: string;
+                rerun: string;
+                running: string;
             };
             jobs: {
-                [key: string]: string;
+                convert: string;
+                deliver_webhook: string;
+                identify: string;
+                import_history: string;
+                keyframe_walk: string;
+                keyframes: string;
+                markers: string;
+                previews: string;
+                probe: string;
+                scan_library: string;
+                segments: string;
+                theme: string;
             };
             kinds: {
-                [key: string]: string;
+                collection: string;
+                episode: string;
+                extra: string;
+                movie: string;
+                season: string;
+                show: string;
             };
             library_kinds: {
-                [key: string]: string;
+                mixed: string;
+                movies: string;
+                shows: string;
             };
             library_rows: {
                 [key: string]: string;
@@ -9172,49 +9219,112 @@ export interface components {
                 [key: string]: string;
             };
             markers: {
-                [key: string]: string;
+                credits: string;
+                intro: string;
+                preview: string;
+                recap: string;
             };
             marks: {
-                [key: string]: string;
+                favourite: string;
+                in_progress: string;
+                unwatched: string;
+                watched: string;
+                watchlist: string;
             };
             milestones: {
-                [key: string]: string;
+                season_finale: string;
+                season_premiere: string;
+                series_premiere: string;
             };
             node_roles: {
-                [key: string]: components["schemas"]["Described"];
+                all: components["schemas"]["Described"];
+                serve: components["schemas"]["Described"];
+                transcode: components["schemas"]["Described"];
             };
             play_methods: {
-                [key: string]: string;
+                direct: string;
+                remux: string;
+                transcode: string;
             };
             ranges: {
-                [key: string]: string;
+                dv: string;
+                hdr10: string;
+                hdr10plus: string;
+                hlg: string;
+                sdr: string;
             };
             rating_sites: {
-                [key: string]: string;
+                imdb: string;
+                rotten_tomatoes: string;
+                rotten_tomatoes_audience: string;
+                tmdb: string;
             };
             reasons: {
-                [key: string]: components["schemas"]["Described"];
+                audio_channels_not_supported: components["schemas"]["Described"];
+                audio_codec_not_supported: components["schemas"]["Described"];
+                bitrate_exceeds_limit: components["schemas"]["Described"];
+                container_not_supported: components["schemas"]["Described"];
+                parts_not_supported: components["schemas"]["Described"];
+                subtitle_codec_not_supported: components["schemas"]["Described"];
+                video_bit_depth_not_supported: components["schemas"]["Described"];
+                video_codec_not_supported: components["schemas"]["Described"];
+                video_level_not_supported: components["schemas"]["Described"];
+                video_profile_not_supported: components["schemas"]["Described"];
+                video_range_not_supported: components["schemas"]["Described"];
+                video_resolution_not_supported: components["schemas"]["Described"];
             };
             resolutions: {
-                [key: string]: string;
+                "1080p": string;
+                "4k": string;
+                "720p": string;
+                sd: string;
             };
             roles: {
-                [key: string]: string;
+                admin: string;
+                manager: string;
+                user: string;
             };
             rows: {
-                [key: string]: string;
+                continue_watching: string;
+                favourites: string;
+                next_up: string;
+                recently_added_films: string;
+                recently_added_shows: string;
+                recently_released: string;
+                top_rated_unwatched: string;
+                watchlist: string;
             };
             sorts: {
-                [key: string]: components["schemas"]["Sort"];
+                added: components["schemas"]["Sort"];
+                played: components["schemas"]["Sort"];
+                rating: components["schemas"]["Sort"];
+                released: components["schemas"]["Sort"];
+                runtime: components["schemas"]["Sort"];
+                title: components["schemas"]["Sort"];
             };
             stream_kinds: {
-                [key: string]: string;
+                audio: string;
+                subtitle: string;
+                video: string;
             };
             tasks: {
-                [key: string]: components["schemas"]["Described"];
+                backfill_previews: components["schemas"]["Described"];
+                backup_database: components["schemas"]["Described"];
+                detect_markers: components["schemas"]["Described"];
+                fetch_subtitles: components["schemas"]["Described"];
+                prune_activity: components["schemas"]["Described"];
+                refresh_collections: components["schemas"]["Described"];
+                refresh_metadata: components["schemas"]["Described"];
+                scan_libraries: components["schemas"]["Described"];
+                sweep_artwork: components["schemas"]["Described"];
+                sweep_downloads: components["schemas"]["Described"];
+                sweep_jobs: components["schemas"]["Described"];
+                sync_lists: components["schemas"]["Described"];
             };
             trackers: {
-                [key: string]: string;
+                mdblist: string;
+                simkl: string;
+                trakt: string;
             };
         };
         WallFilter: {

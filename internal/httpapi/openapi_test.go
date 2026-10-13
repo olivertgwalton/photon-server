@@ -356,3 +356,37 @@ func TestTypedValuesAreDescribedByTheirType(t *testing.T) {
 		}
 	}
 }
+
+// A client indexes the vocabulary by any value of an enum without checking, so each map the
+// description says has every key does.
+func TestTheVocabularyHasEveryKeyItIsDescribedWith(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					Required []string `json:"required"`
+				} `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	a := newAPI(nil)
+	if err := json.Unmarshal(fetchDescription(t, a), &doc); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	a.vocabulary(rec, httptest.NewRequest(http.MethodGet, "/api/v1/vocabulary", nil))
+	var served map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &served); err != nil {
+		t.Fatal(err)
+	}
+	for field, p := range doc.Components.Schemas["Vocabulary"].Properties {
+		if field != "library_rows" && field != "logged" && field != "hookable" && len(p.Required) == 0 {
+			t.Errorf("%s is described with no keys it always has", field)
+		}
+		for _, k := range p.Required {
+			if _, ok := served[field][k]; !ok {
+				t.Errorf("%s has no %q", field, k)
+			}
+		}
+	}
+}

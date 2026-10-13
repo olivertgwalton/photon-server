@@ -268,6 +268,7 @@ var renamed = map[reflect.Type]string{
 var (
 	marshaler     = reflect.TypeFor[json.Marshaler]()
 	textMarshaler = reflect.TypeFor[encoding.TextMarshaler]()
+	ownPkg        = reflect.TypeFor[schemas]().PkgPath()
 )
 
 // schemas builds JSON Schemas of types as encoding/json writes them, each named type once, by
@@ -317,6 +318,19 @@ func (s *schemas) of(t reflect.Type) jsonSchema {
 		return jsonSchema{Type: schemaType{name: "array"}, Items: &items}
 	case reflect.Map:
 		values := s.of(t.Elem())
+		// Reflection knows an instance of a generic type only by its name.
+		if t.PkgPath() == ownPkg && strings.HasPrefix(t.Name(), "everyKey[") {
+			keys, ok := enums[t.Key()]
+			if !ok {
+				s.fail(fmt.Errorf("%v has no values in enums", t.Key()))
+				return jsonSchema{}
+			}
+			properties := make(map[string]jsonSchema, len(keys))
+			for _, k := range keys {
+				properties[k] = values
+			}
+			return jsonSchema{Type: schemaType{name: "object"}, Properties: properties, Required: keys}
+		}
 		m := jsonSchema{Type: schemaType{name: "object"}, AdditionalProperties: &values}
 		if t.Key().PkgPath() != "" {
 			keys := s.of(t.Key())

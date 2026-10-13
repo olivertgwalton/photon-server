@@ -526,6 +526,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		previews: "Make previews",
 		probe: "Read media info",
 		scan_library: "Scan a library",
+		segments: "Ask plugins for intros and credits",
 		theme: "Fetch a theme tune",
 	},
 	rows: {
@@ -620,6 +621,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		},
 	},
 	accelerations: {
+		amf: "AMF",
 		nvenc: "NVENC",
 		qsv: "Quick Sync",
 		software: "Software",

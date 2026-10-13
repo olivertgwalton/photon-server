@@ -26,38 +26,31 @@ let {
 } = $props();
 const words = vocabulary();
 
-// A certificate is filtered by with its country (GB:PG) and shown as a viewer reads it.
-const certificates = $derived(
-	new Map(facets.certificates.map((c) => [c.value, c.name])),
-);
-
-// Each list a library has values for, as the server named them.
+// Each list a library has values for, each value beside what the server calls it.
 const groups = $derived(
 	(
 		[
-			["Status", "mark", facets.marks, (v) => words.marks[v]],
-			["Genre", "genre", facets.genres],
-			["Year", "year", facets.years],
+			["Status", "mark", facets.marks.map((v) => [v, words.marks[v]])],
+			["Genre", "genre", facets.genres.map((v) => [v, v])],
+			["Year", "year", facets.years.map((v) => [v, String(v)])],
+			// A certificate is filtered by with its country (GB:PG) and shown as a viewer reads it.
 			[
 				"Certificate",
 				"certificate",
-				[...certificates.keys()],
-				(v) => certificates.get(String(v)) ?? String(v),
+				facets.certificates.map((c) => [c.value, c.name]),
 			],
-			["Studio", "studio", facets.studios],
+			["Studio", "studio", facets.studios.map((v) => [v, v])],
 			[
 				"Resolution",
 				"resolution",
-				facets.resolutions,
-				(v) => words.resolutions[v],
+				facets.resolutions.map((v) => [v, words.resolutions[v]]),
 			],
-			["Dynamic range", "range", facets.ranges, (v) => words.ranges[v]],
-		] as [
-			string,
-			ListFilter,
-			(string | number)[],
-			((v: string | number) => string)?,
-		][]
+			[
+				"Dynamic range",
+				"range",
+				facets.ranges.map((v) => [v, words.ranges[v]]),
+			],
+		] as [string, ListFilter, [string | number, string][]][]
 	).filter(([, , values]) => values.length),
 );
 
@@ -90,7 +83,7 @@ function chosen(name: ListFilter, value: string | number): boolean {
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="start" class="w-56">
-		{#each groups as [title, name, values, label] (name)}
+		{#each groups as [title, name, values] (name)}
 			<DropdownMenu.Sub>
 				<DropdownMenu.SubTrigger>
 					{title}
@@ -101,12 +94,12 @@ function chosen(name: ListFilter, value: string | number): boolean {
 					{/if}
 				</DropdownMenu.SubTrigger>
 				<DropdownMenu.SubContent class="max-h-80 w-56 overflow-y-auto">
-					{#each values as value (value)}
+					{#each values as [value, said] (value)}
 						<DropdownMenu.CheckboxItem
 							checked={chosen(name, value)}
 							onCheckedChange={() => onchange(toggled(query, name, value))}
 						>
-							{label ? label(value) : value}
+							{said}
 						</DropdownMenu.CheckboxItem>
 					{/each}
 				</DropdownMenu.SubContent>

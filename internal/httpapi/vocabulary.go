@@ -13,40 +13,43 @@ import (
 // vocabularyJSON is what the API's values are called, in the reader's language: one fetch a client
 // keeps, rather than a name on every object, for the values it shows and the ones it offers.
 type vocabularyJSON struct {
-	Tasks map[domain.TaskKey]describedJSON `json:"tasks"`
-	Jobs  map[domain.JobKind]string        `json:"jobs"`
+	Tasks everyKey[domain.TaskKey, describedJSON] `json:"tasks"`
+	Jobs  everyKey[domain.JobKind, string]        `json:"jobs"`
 	// Rows are the kinds of home row, as each one's own page heads it.
-	Rows map[domain.HomeRow]string `json:"rows"`
+	Rows everyKey[domain.HomeRow, string] `json:"rows"`
 	// LibraryRows are how a row of one library's titles is headed, {library} its name.
-	LibraryRows   map[domain.HomeRow]string                `json:"library_rows"`
-	Roles         map[domain.Role]string                   `json:"roles"`
-	Markers       map[domain.MarkerKind]string             `json:"markers"`
-	Extras        map[domain.ExtraKind]string              `json:"extras"`
-	Reasons       map[domain.TranscodeReason]describedJSON `json:"reasons"`
-	Accelerations map[domain.Acceleration]string           `json:"accelerations"`
-	NodeRoles     map[domain.NodeRole]describedJSON        `json:"node_roles"`
-	ImportSources map[domain.ImportSource]string           `json:"import_sources"`
-	ImportMisses  map[domain.ImportMiss]string             `json:"import_misses"`
-	Trackers      map[domain.Tracker]string                `json:"trackers"`
-	PlayMethods   map[domain.PlayMethod]string             `json:"play_methods"`
-	RatingSites   map[domain.RatingSite]string             `json:"rating_sites"`
-	Ranges        map[domain.Range]string                  `json:"ranges"`
-	Resolutions   map[domain.Resolution]string             `json:"resolutions"`
+	LibraryRows   map[domain.HomeRow]string                       `json:"library_rows"`
+	Roles         everyKey[domain.Role, string]                   `json:"roles"`
+	Markers       everyKey[domain.MarkerKind, string]             `json:"markers"`
+	Extras        everyKey[domain.ExtraKind, string]              `json:"extras"`
+	Reasons       everyKey[domain.TranscodeReason, describedJSON] `json:"reasons"`
+	Accelerations everyKey[domain.Acceleration, string]           `json:"accelerations"`
+	NodeRoles     everyKey[domain.NodeRole, describedJSON]        `json:"node_roles"`
+	ImportSources everyKey[domain.ImportSource, string]           `json:"import_sources"`
+	ImportMisses  everyKey[domain.ImportMiss, string]             `json:"import_misses"`
+	Trackers      everyKey[domain.Tracker, string]                `json:"trackers"`
+	PlayMethods   everyKey[domain.PlayMethod, string]             `json:"play_methods"`
+	RatingSites   everyKey[domain.RatingSite, string]             `json:"rating_sites"`
+	Ranges        everyKey[domain.Range, string]                  `json:"ranges"`
+	Resolutions   everyKey[domain.Resolution, string]             `json:"resolutions"`
 	// Kinds are the kinds of item, as a list of mixed titles heads each kind's: "Films".
-	Kinds           map[domain.ItemKind]string       `json:"kinds"`
-	LibraryKinds    map[domain.LibraryKind]string    `json:"library_kinds"`
-	StreamKinds     map[domain.StreamKind]string     `json:"stream_kinds"`
-	Marks           map[domain.Mark]string           `json:"marks"`
-	Milestones      map[domain.Milestone]string      `json:"milestones"`
-	CalendarFilters map[domain.CalendarFilter]string `json:"calendar_filters"`
-	Sorts           map[domain.WallSort]sortJSON     `json:"sorts"`
-	JobStates       map[domain.JobState]string       `json:"job_states"`
-	DownloadStates  map[domain.DownloadState]string  `json:"download_states"`
+	Kinds           everyKey[domain.ItemKind, string]       `json:"kinds"`
+	LibraryKinds    everyKey[domain.LibraryKind, string]    `json:"library_kinds"`
+	StreamKinds     everyKey[domain.StreamKind, string]     `json:"stream_kinds"`
+	Marks           everyKey[domain.Mark, string]           `json:"marks"`
+	Milestones      everyKey[domain.Milestone, string]      `json:"milestones"`
+	CalendarFilters everyKey[domain.CalendarFilter, string] `json:"calendar_filters"`
+	Sorts           everyKey[domain.WallSort, sortJSON]     `json:"sorts"`
+	JobStates       everyKey[domain.JobState, string]       `json:"job_states"`
+	DownloadStates  everyKey[domain.DownloadState, string]  `json:"download_states"`
 	// Logged are the kinds of event the activity log keeps, as its filter names them.
 	Logged map[domain.EventKind]string `json:"logged"`
 	// Hookable are the kinds of event a webhook may ask for, each as what it is told of.
 	Hookable map[domain.EventKind]string `json:"hookable"`
 }
+
+// everyKey holds a value for every value of its key's enum, so a client may index it by any of them.
+type everyKey[K ~string, V any] map[K]V
 
 type describedJSON struct {
 	Name        string `json:"name"`
