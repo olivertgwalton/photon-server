@@ -70,7 +70,7 @@ function stop() {
 }
 </script>
 
-<article class="bg-raise grid overflow-hidden rounded-xl">
+<article class="bg-raise grid grid-cols-1 overflow-hidden rounded-xl">
 	<div class="bg-ground relative aspect-video">
 		{#if picture}
 			<Artwork
