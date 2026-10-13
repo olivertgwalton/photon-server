@@ -12,7 +12,7 @@ let {
 	icon: Icon,
 	tone = "plain",
 	...rest
-}: ButtonProps & {
+}: Omit<ButtonProps, "hidden"> & {
 	label: string;
 	// Said to a screen reader after the label, to tell one row's button from the next.
 	hidden?: string;
