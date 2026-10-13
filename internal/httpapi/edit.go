@@ -44,7 +44,7 @@ type editJSON struct {
 	Overview      string         `json:"overview,omitzero"`
 	Tagline       string         `json:"tagline,omitzero"`
 	Certificate   string         `json:"certificate,omitzero"`
-	ReleaseDate   string         `json:"release_date,omitzero"`
+	ReleaseDate   domain.Date    `json:"release_date,omitzero"`
 	Year          int            `json:"year,omitzero"`
 	Genres        []string       `json:"genres,omitzero"`
 	Studios       []string       `json:"studios,omitzero"`
@@ -64,15 +64,7 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 	m := domain.Metadata{
 		Title: req.Title, SortTitle: req.SortTitle, OriginalTitle: req.OriginalTitle, Overview: req.Overview,
 		Tagline: req.Tagline, Certificate: req.Certificate, Year: req.Year, Genres: req.Genres, Studios: req.Studios,
-		Locked: req.Locked,
-	}
-	if req.ReleaseDate != "" {
-		d, err := time.Parse(time.DateOnly, req.ReleaseDate)
-		if err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "release_date is a date, 2006-01-02")
-			return
-		}
-		m.ReleaseDate = d
+		ReleaseDate: time.Time(req.ReleaseDate), Locked: req.Locked,
 	}
 	if a.answered(w, r, a.svc.Editing.EditMetadata(r.Context(), id, m)) {
 		return

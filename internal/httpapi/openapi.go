@@ -41,7 +41,7 @@ var (
 	}
 	// signatureParams are a signed address's: GET it as the server gave it.
 	signatureParams = []param{
-		{"exp", "", "When the address lapses, as the server signed it."},
+		{"exp", int64(0), "When the address lapses, as the server signed it."},
 		{"sig", "", "The server's signature of the path and exp."},
 	}
 )
