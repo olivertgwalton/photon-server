@@ -3,6 +3,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*"]
 permissions:
   contents: read
 jobs:
@@ -56,13 +57,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # A release is named by its version and is latest; main is named by its commit.
+      - name: Name the image
+        if: github.event_name == 'push'
+        id: name
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "tags=$IMAGE:${GITHUB_REF_NAME#v},$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "tags=$IMAGE:main,$IMAGE:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
       - uses: docker/build-push-action@v7
         if: github.event_name == 'push'
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ github.sha }}
+          build-args: VERSION=${{ steps.name.outputs.version }}
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:main
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ${{ steps.name.outputs.tags }}
