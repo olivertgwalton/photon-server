@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { settings } from "../src/lib/settings.ts";
 import { expectAccessible, logIn, switchToKids } from "./helpers";
 
 // Another device saves this change, then the page's stream comes back from a
@@ -12,6 +13,42 @@ async function savedElsewhere(page: Page, change: object) {
 		data: { event: "hello", data: { scans: [] } },
 	});
 }
+
+test("a setting is found by its name or another word for it, and opened at", async ({
+	page,
+}) => {
+	await logIn(page, "/settings");
+	const nav = page.getByRole("navigation", { name: "Settings" });
+	const search = nav.getByRole("searchbox", { name: "Search settings" });
+
+	await search.fill("captions");
+	await expect(nav.getByRole("link")).toHaveText([
+		"Subtitles · Playback",
+		"Subtitle language · Playback",
+		"Remember the subtitles chosen · Playback",
+	]);
+
+	await search.fill("nothing like it");
+	await expect(nav.getByText("No settings match.")).toBeVisible();
+
+	await search.fill("remote bitrate");
+	await search.press("Enter");
+	await expect(page).toHaveURL("/settings/server/network#remote-max");
+	await expect(page.getByLabel("Limit (Mbps)")).toBeFocused();
+});
+
+test("every setting search finds is on its page", async ({ page }) => {
+	await logIn(page, "/settings");
+	for (const [href, found] of Object.entries(settings)) {
+		await page.goto(href);
+		for (const [id] of found) {
+			await expect(
+				page.locator(`[id="${id}"]`),
+				`${href}#${id}`,
+			).toBeAttached();
+		}
+	}
+});
 
 test("an admin's settings are one place: their account, then the server", async ({
 	page,

@@ -198,7 +198,7 @@ async function setPassword(event: SubmitEvent) {
 
 	<Card.Root>
 		<Card.Header>
-			<Card.Title><h2 class="heading">PIN</h2></Card.Title>
+			<Card.Title><h2 id="pin" class="heading">PIN</h2></Card.Title>
 			<Card.Description>
 				{#if data.me.role === "admin"}
 					An admin's profile is always opened with its password, so it has no
