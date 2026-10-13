@@ -133,6 +133,7 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 // closing ends each of r's remuxes as the test does, before its folders are removed: Windows
 // removes no folder a remux still holds open.
 func closing(t *testing.T, r *hls.Remuxer) {
+	t.Helper()
 	t.Cleanup(func() {
 		for _, p := range r.Playbacks() {
 			r.Close(p)

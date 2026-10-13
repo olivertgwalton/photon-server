@@ -142,6 +142,7 @@ func TestAPluginListsTitlesAndStreamsThem(t *testing.T) {
 }
 
 func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
+	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		t.Error(err)

@@ -10,14 +10,14 @@ import (
 
 // Script writes a shell script named name into dir that runs body, and answers its path. The test
 // is skipped where there is no POSIX shell to run it.
-func Script(t testing.TB, dir, name, body string) string {
-	t.Helper()
+func Script(tb testing.TB, dir, name, body string) string {
+	tb.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("needs a POSIX shell to run a fake tool")
+		tb.Skip("needs a POSIX shell to run a fake tool")
 	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil { //nolint:gosec // a tool must be executable
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	return path
 }

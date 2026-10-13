@@ -67,7 +67,7 @@ func (p Proxies) HTTPS(r *http.Request) bool {
 // Untrusted is whether a request names its client through a proxy that is not trusted, as a
 // reverse proxy in front of the server does before an admin trusts it.
 func (p Proxies) Untrusted(r *http.Request) bool {
-	forwarded := r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Real-Ip") != ""
+	forwarded := r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Real-IP") != ""
 	return forwarded && !p.trusts(Direct(r))
 }
 

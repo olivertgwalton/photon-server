@@ -49,6 +49,7 @@ type scrobbled struct {
 }
 
 func newFake(t *testing.T, tracker domain.Tracker, clientID string) *fakeTracker {
+	t.Helper()
 	return &fakeTracker{t: t, tracker: tracker, clientID: clientID, access: "access", refresh: "refresh"}
 }
 
@@ -90,7 +91,7 @@ func (f *fakeTracker) serve() string {
 		var app string
 		switch f.tracker {
 		case domain.TrackerTrakt:
-			app = r.Header.Get("trakt-api-key")
+			app = r.Header.Get("Trakt-Api-Key")
 		case domain.TrackerSimkl:
 			app = r.URL.Query().Get("client_id")
 		// MDBList's app is named by its OAuth requests alone.

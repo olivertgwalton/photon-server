@@ -68,7 +68,10 @@ async function start(event: SubmitEvent) {
 		},
 	});
 	busy = false;
-	if (error) return toast.error(problemMessage(error));
+	if (error) {
+		toast.error(problemMessage(error));
+		return;
+	}
 	starting = false;
 	await refreshAll();
 }

@@ -66,6 +66,7 @@ func TestADirKeepsObjectsWholeOrNotAtAll(t *testing.T) { testWholeOrNotAtAll(t, 
 func TestADirListsObjectsByPrefix(t *testing.T) { testListedByPrefix(t, newDir(t)) }
 
 func testWholeOrNotAtAll(t *testing.T, s store) {
+	t.Helper()
 	ctx := t.Context()
 	// One object sent in one request, and one too large to be.
 	for _, size := range []int{6, partSize + 1} {
@@ -114,6 +115,7 @@ func testWholeOrNotAtAll(t *testing.T, s store) {
 }
 
 func testListedByPrefix(t *testing.T, s store) {
+	t.Helper()
 	ctx := t.Context()
 	for _, k := range []string{"p1/trickplay/0.jpg", "p1/trickplay/1.jpg", "p1/chapters/0.jpg", "p10/chapters/0.jpg", "top"} {
 		if err := s.Put(ctx, k, strings.NewReader(k)); err != nil {

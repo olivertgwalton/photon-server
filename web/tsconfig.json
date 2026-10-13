@@ -5,6 +5,8 @@
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
 		"sourceMap": true,
 		"types": ["bun", "$app/types"]
 	}

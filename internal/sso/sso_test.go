@@ -65,6 +65,7 @@ type authorization struct {
 }
 
 func newProvider(t *testing.T) *fakeProvider {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)

@@ -28,8 +28,8 @@ func newTrakt(version string) trakt {
 func (c trakt) header(clientID string) http.Header {
 	h := http.Header{}
 	h.Set("User-Agent", appName+"/"+c.version)
-	h.Set("trakt-api-key", clientID)
-	h.Set("trakt-api-version", "2")
+	h.Set("Trakt-Api-Key", clientID)
+	h.Set("Trakt-Api-Version", "2")
 	return h
 }
 

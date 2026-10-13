@@ -33,10 +33,12 @@ linters:
     - depguard
     - forbidigo
     - nolintlint
+    - thelper
     - sloglint
     # modern standard library
     - modernize
     - usestdlibvars
+    - canonicalheader
     - perfsprint
     - revive
     # duplication, speculative generality, security
