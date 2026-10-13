@@ -2,7 +2,6 @@
 import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CalendarDaysIcon from "@lucide/svelte/icons/calendar-days";
 import DownloadIcon from "@lucide/svelte/icons/download";
-import FilmIcon from "@lucide/svelte/icons/film";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HouseIcon from "@lucide/svelte/icons/house";
@@ -11,12 +10,12 @@ import ListVideoIcon from "@lucide/svelte/icons/list-video";
 import PuzzleIcon from "@lucide/svelte/icons/puzzle";
 import RotateCcwClockIcon from "@lucide/svelte/icons/rotate-ccw-clock";
 import SettingsIcon from "@lucide/svelte/icons/settings";
-import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
 import { on } from "svelte/events";
 import { setLibraryOrder, visitPage } from "#lib/actions.js";
 import type { components } from "#lib/api/schema.js";
 import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+import { libraryIcons } from "#lib/libraries.js";
 import { rowPages } from "#lib/rows.js";
 import { page } from "$app/state";
 import LibraryMenu from "./LibraryMenu.svelte";
@@ -31,11 +30,6 @@ let {
 	pages,
 }: { libraries: Library[]; collections: boolean; pages: PluginPage[] } =
 	$props();
-
-const kindIcons: Record<Library["kind"], Component> = {
-	movies: FilmIcon,
-	shows: TvIcon,
-};
 
 const sidebar = Sidebar.useSidebar();
 // While on, each library is dragged into place by its grip, or moved by the
@@ -204,7 +198,7 @@ function current(href: string) {
 							{@render item(
 								`/libraries/${library.id}`,
 								library.name,
-								kindIcons[library.kind],
+								libraryIcons[library.kind],
 								library,
 								index,
 							)}

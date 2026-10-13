@@ -47,10 +47,6 @@ func (d *Discover) Find(ctx context.Context, profile uuid.UUID, text string, kin
 	}
 	var out []store.Discovery
 	for _, lib := range libs {
-		kind := lib.Kind.ItemKinds()[0]
-		if len(kinds) > 0 && !slices.Contains(kinds, kind) {
-			continue
-		}
 		p, ok, err := d.providers.Get(ctx, lib.Source)
 		if err != nil {
 			return nil, err
@@ -59,16 +55,21 @@ func (d *Discover) Find(ctx context.Context, profile uuid.UUID, text string, kin
 		if !ok || !searches {
 			continue
 		}
-		found, err := s.Candidates(ctx, d.locale(), kind, text, 0)
-		if err != nil {
-			d.log.WarnContext(ctx, "a remote library's search failed", slog.String("provider", string(lib.Source)), slog.Any("err", err))
-			continue
+		for _, kind := range lib.Kind.Titles() {
+			if len(kinds) > 0 && !slices.Contains(kinds, kind) {
+				continue
+			}
+			found, err := s.Candidates(ctx, d.locale(), kind, text, 0)
+			if err != nil {
+				d.log.WarnContext(ctx, "a remote library's search failed", slog.String("provider", string(lib.Source)), slog.Any("err", err))
+				continue
+			}
+			saved, err := d.store.SaveDiscoveries(ctx, lib.ID, kind, domain.Provider(lib.Source), found[:min(len(found), maxFound)])
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, saved...)
 		}
-		saved, err := d.store.SaveDiscoveries(ctx, lib.ID, kind, domain.Provider(lib.Source), found[:min(len(found), maxFound)])
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, saved...)
 	}
 	return out, nil
 }

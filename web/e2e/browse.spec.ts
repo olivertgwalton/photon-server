@@ -102,6 +102,27 @@ test("a show library's wall shows its episodes across its shows", async ({
 	await expect(page.getByText("1 title", { exact: true })).toBeVisible();
 });
 
+test("a mixed library's wall shows its films, its shows, or both", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-mixed");
+	const all = page.getByText(/^\d+ titles$/);
+	await expect(all).toBeVisible();
+	const both = Number((await all.textContent())?.split(" ")[0]);
+	await page.getByRole("radio", { name: "Shows" }).click();
+	await expect(page).toHaveURL("/libraries/l-mixed?kind=shows");
+	await expect(page.getByText("1 title", { exact: true })).toBeVisible();
+	await page.getByRole("radio", { name: "Films" }).click();
+	await expect(page).toHaveURL("/libraries/l-mixed?kind=films");
+	await expect(
+		page.getByText(`${both - 1} titles`, { exact: true }),
+	).toBeVisible();
+	await page.getByRole("radio", { name: "Episodes" }).click();
+	await expect(page.getByText("3 episodes", { exact: true })).toBeVisible();
+	await page.getByRole("radio", { name: "All" }).click();
+	await expect(page).toHaveURL("/libraries/l-mixed");
+});
+
 test("a wall is sorted, filtered and drawn as the reader asks", async ({
 	page,
 }) => {

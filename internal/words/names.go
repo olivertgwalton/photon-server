@@ -92,7 +92,7 @@ var itemKinds = map[domain.ItemKind]string{
 }
 
 var libraryKinds = map[domain.LibraryKind]string{
-	domain.LibraryMovies: "Films", domain.LibraryShows: "Shows",
+	domain.LibraryMovies: "Films", domain.LibraryShows: "Shows", domain.LibraryMixed: "Films and shows",
 }
 
 var marks = map[domain.Mark]string{

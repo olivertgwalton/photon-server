@@ -71,7 +71,7 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Title: "Heat"},
 		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0499549"}, Title: "Avatar"},
 	}
-	if _, err := st.SaveListed(ctx, lib.ID, domain.ItemMovie, listed); err != nil {
+	if _, err := st.SaveListed(ctx, lib.ID, []domain.ItemKind{domain.ItemMovie}, listed); err != nil {
 		t.Fatal(err)
 	}
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)

@@ -26,6 +26,7 @@ const libraries: Schemas["LibraryList"] = {
 	items: [
 		{ id: "l-films", name: "Films", kind: "movies" },
 		{ id: "l-shows", name: "Shows", kind: "shows" },
+		{ id: "l-mixed", name: "Everything", kind: "mixed" },
 	],
 };
 
@@ -94,14 +95,24 @@ const collection = base("c-set", "collection", "Quiet Collection", {
 	origin: "tmdb",
 });
 
-// What a library's wall holds: its titles, or a show library's episodes in
-// their show's order.
-const wallOf = (library: string, url: URL) =>
-	library !== "l-shows"
-		? byTitle(films)
-		: url.searchParams.get("kind") === "episodes"
-			? [...episodes, later]
-			: byTitle(shows);
+// What a library's wall holds: its titles, its films or shows alone, or its
+// episodes in their show's order.
+const wallOf = (library: string, url: URL) => {
+	const held = {
+		"l-films": { films, shows: [] },
+		"l-shows": { films: [], shows },
+		"l-mixed": { films, shows },
+	}[library] ?? { films: [], shows: [] };
+	switch (url.searchParams.get("kind")) {
+		case "films":
+			return byTitle(held.films);
+		case "shows":
+			return byTitle(held.shows);
+		case "episodes":
+			return held.shows.length ? [...episodes, later] : [];
+	}
+	return byTitle([...held.films, ...held.shows]);
+};
 
 const card = (c: Schemas["Card"]): Schemas["Card"] => {
 	const state = states.get(c.id);
@@ -673,6 +684,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 	library_kinds: {
 		movies: "Films",
 		shows: "Shows",
+		mixed: "Films and shows",
 	},
 	stream_kinds: {
 		audio: "Audio",

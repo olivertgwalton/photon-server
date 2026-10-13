@@ -25,8 +25,15 @@ func (k LibraryKind) ItemKinds() []ItemKind {
 		return []ItemKind{ItemMovie}
 	case LibraryShows:
 		return []ItemKind{ItemShow, ItemSeason, ItemEpisode}
+	case LibraryMixed:
+		return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode}
 	}
 	return nil
+}
+
+// Titles are the kinds of title a library holds, which its wall lists.
+func (k LibraryKind) Titles() []ItemKind {
+	return slices.DeleteFunc(k.ItemKinds(), func(i ItemKind) bool { return i != ItemMovie && i != ItemShow })
 }
 
 // RankedAs is the kind whose sources an item takes: its own, or for a collection or an extra, its

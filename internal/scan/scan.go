@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -75,6 +76,69 @@ type run struct {
 	told   domain.ScanProgress
 	// folders and present are every folder read and every video and subtitle file in them.
 	folders, present []string
+	// shows says of each folder of a mixed library known to the run whether it is a show's own.
+	shows map[string]bool
+}
+
+// seriesOf is the folder of the series a folder of the library is in, none for a folder of films:
+// a shows library's first folder down from its root, and a mixed library's first one down that
+// isShow says is a show's, those below it being its seasons, as Jellyfin's are.
+func (r *run) seriesOf(folder library.Folder) (string, error) {
+	switch r.lib.Kind {
+	case domain.LibraryMovies:
+		return "", nil
+	case domain.LibraryShows:
+		return firstFolder(folder.Path), nil
+	case domain.LibraryMixed:
+	}
+	r.mu.Lock()
+	r.shows[folder.Path] = isShow(folder)
+	r.mu.Unlock()
+	at := "."
+	for name := range strings.SplitSeq(folder.Path, "/") {
+		if name == "." {
+			break
+		}
+		at = path.Join(at, name)
+		show, err := r.isShow(at)
+		if err != nil || show {
+			return at, err
+		}
+	}
+	return "", nil
+}
+
+// isShow is whether a folder of a mixed library is a show's own. Folders come before those under
+// them, so one the run read is known; one above the folders the scan asked for is read now.
+func (r *run) isShow(rel string) (bool, error) {
+	r.mu.Lock()
+	show, known := r.shows[rel]
+	r.mu.Unlock()
+	if known {
+		return show, nil
+	}
+	f, err := library.Read(r.lib.Root, rel)
+	if err != nil {
+		return false, err
+	}
+	show = isShow(f)
+	r.mu.Lock()
+	r.shows[rel] = show
+	r.mu.Unlock()
+	return show, nil
+}
+
+// remembered is what a folder's scan is remembered by: its fingerprint and, in a mixed library,
+// the series it was read as part of, so a folder a change above it makes a show's, or no longer
+// one's, is read again.
+func remembered(lib domain.LibraryKind, f library.Folder, series string) []byte {
+	if lib != domain.LibraryMixed {
+		return f.Fingerprint[:]
+	}
+	h := sha256.New()
+	h.Write(f.Fingerprint[:])
+	h.Write([]byte(series))
+	return h.Sum(nil)
 }
 
 // read takes one of the run's slots for reading files, to hand back with the function it answers.
@@ -147,7 +211,7 @@ func (s *Scanner) list(ctx context.Context, lib domain.Library, progress func(do
 			return Report{}, err
 		}
 	}
-	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.ItemKinds()[0], listed)
+	titles, err := s.store.SaveListed(ctx, lib.ID, lib.Kind.Titles(), listed)
 	if err != nil {
 		return Report{}, err
 	}
@@ -162,7 +226,7 @@ func (s *Scanner) list(ctx context.Context, lib domain.Library, progress func(do
 func (s *Scanner) walk(ctx context.Context, lib domain.Library, asked []string, progress func(domain.ScanProgress), changed func(store.Changed)) (Report, error) {
 	scoped := scopes(asked)
 	r := &run{
-		lib: lib, reads: make(chan struct{}, readsAtOnce), progress: progress, changed: changed,
+		lib: lib, reads: make(chan struct{}, readsAtOnce), progress: progress, changed: changed, shows: map[string]bool{},
 		// The folders asked for are known before they are read; each folder read makes its
 		// subfolders known.
 		told: domain.ScanProgress{Library: lib.ID, Phase: domain.ScanReading, Known: len(scoped)},
@@ -218,20 +282,24 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 	for _, sk := range folder.Skipped {
 		s.skip(ctx, r, path.Join(folder.Path, sk.Name), sk.Err)
 	}
-	if bytes.Equal(r.fingerprints[folder.Path], folder.Fingerprint[:]) {
+	series, err := r.seriesOf(folder)
+	if err != nil {
+		return fmt.Errorf("%s: %w", folder.Path, err)
+	}
+	rd := reading{run: r, dir: folder.Path, remembered: remembered(r.lib.Kind, folder, series), unread: new(atomic.Bool)}
+	if bytes.Equal(r.fingerprints[folder.Path], rd.remembered) {
 		r.count(func(rep *Report) { rep.Unchanged++ })
 		return nil
 	}
-	rd := reading{run: r, dir: folder.Path, unread: new(atomic.Bool)}
 	if rd.known, err = s.store.KnownFiles(ctx, r.lib.ID, videosIn(folder)); err != nil {
 		return err
 	}
 	var saved store.Saved
-	switch r.lib.Kind {
-	case domain.LibraryMovies:
+	// A shows library's root holds its series' folders, and no films.
+	if series != "" || r.lib.Kind == domain.LibraryShows {
+		saved, err = s.saveEpisodes(ctx, rd, folder, series)
+	} else {
 		saved, err = s.saveFilms(ctx, rd, folder)
-	case domain.LibraryShows:
-		saved, err = s.saveEpisodes(ctx, rd, folder)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", folder.Path, err)
@@ -248,20 +316,21 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 // reading is one changed folder of a library being read, and the files the last scan recorded in
 // it.
 type reading struct {
-	run   *run
-	dir   string
-	known map[string]store.KnownFile
+	run        *run
+	dir        string
+	remembered []byte
+	known      map[string]store.KnownFile
 	// unread is set by a file that could not be read, a mount's passing failure as often as not.
 	unread *atomic.Bool
 }
 
 // fingerprint is the folder's to remember, or nil to have the next scan read it again for a file
 // that could not be read now, as Plex and Jellyfin try a file again at their next scan.
-func (r reading) fingerprint(f library.Folder) []byte {
+func (r reading) fingerprint() []byte {
 	if r.unread.Load() {
 		return nil
 	}
-	return f.Fingerprint[:]
+	return r.remembered
 }
 
 func (s *Scanner) unreadable(ctx context.Context, r reading, rel string, err error) {
@@ -321,7 +390,7 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	}
 	r.run.saving.Lock()
 	defer r.run.saving.Unlock()
-	return s.store.SaveFolder(ctx, lib.ID, folder.Path, r.fingerprint(folder), films, extras)
+	return s.store.SaveFolder(ctx, lib.ID, folder.Path, r.fingerprint(), films, extras)
 }
 
 // filmNamed is the title of the film an extra's name gives: the folder's only film, else the one
@@ -355,12 +424,12 @@ func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, 
 	return extras, nil
 }
 
-func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
+func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Folder, series string) (store.Saved, error) {
 	lib := r.run.lib
-	series, season := seriesOf(folder.Path)
+	season := seasonOf(series, folder.Path)
 	var show store.Show
 	if series != "" {
-		name := naming.SeriesName(series)
+		name := naming.SeriesName(path.Base(series))
 		said := s.readNFO(ctx, lib, series, "tvshow.nfo")
 		show = store.Show{
 			Title: name.Title, Year: name.Year, Folder: series, IDs: ids(name.IDs), NFO: metadata(said),
@@ -390,7 +459,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 		}
 	}
 	var episodes []store.Episode
-	if holdsEpisodes(folder.Path) {
+	if holdsEpisodes(series, folder.Path) {
 		plans, unread := planEpisodes(folder, season, show.Title)
 		for _, rel := range unread {
 			s.skip(ctx, r.run, rel, errNoEpisode)
@@ -446,7 +515,7 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 	}
 	r.run.saving.Lock()
 	defer r.run.saving.Unlock()
-	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, r.fingerprint(folder), show, episodes, extras)
+	return s.store.SaveShowFolder(ctx, lib.ID, folder.Path, r.fingerprint(), show, episodes, extras)
 }
 
 var errNoEpisode = errors.New("its name says no season or episode")

@@ -22,16 +22,37 @@ func ParseSeason(folder, series string) (int, bool) {
 	if m := seasonToken.FindStringSubmatch(folder); m != nil && validSeason(atoi(m[1])) {
 		return atoi(m[1]), true
 	}
-	name := strings.TrimSpace(folder)
-	if s := strings.TrimSpace(series); s != "" && len(name) > len(s) && strings.EqualFold(name[:len(s)], s) {
-		name = strings.TrimLeft(name[len(s):], " ._-")
-	}
+	name := withoutSeries(folder, series)
 	if strings.EqualFold(name, "specials") {
 		return 0, true
 	}
 	if n, err := strconv.Atoi(name); err == nil && validSeason(n) {
 		return n, true
 	}
+	return seasonInWords(name)
+}
+
+// SaysSeason is whether a folder under one named series names a season in words, "Season 2" or
+// "3. Staffel", as Jellyfin asks of a folder in a library of films and shows before it takes the
+// folder above for a show's: a bare number, "S02" or "Specials" could as well be a film's.
+func SaysSeason(folder, series string) bool {
+	if _, ok := parseSxxEyy(folder, ""); ok {
+		return false
+	}
+	_, ok := seasonInWords(withoutSeries(folder, series))
+	return ok
+}
+
+// withoutSeries is a season folder's name with its series' name before it left off.
+func withoutSeries(folder, series string) string {
+	name := strings.TrimSpace(folder)
+	if s := strings.TrimSpace(series); s != "" && len(name) > len(s) && strings.EqualFold(name[:len(s)], s) {
+		name = strings.TrimLeft(name[len(s):], " ._-")
+	}
+	return name
+}
+
+func seasonInWords(name string) (int, bool) {
 	for _, re := range []*regexp.Regexp{seasonAfterKW, seasonBeforeKW} {
 		if m := re.FindStringSubmatch(name); m != nil && validSeason(atoi(m[1])) {
 			return atoi(m[1]), true

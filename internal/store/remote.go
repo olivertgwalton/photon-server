@@ -20,12 +20,12 @@ import (
 // under the ids it is listed by, named as the list names it until it is matched; one the list no
 // longer holds is removed, unless a profile has played, favourited or watchlisted it or anything in
 // it. A title of a kind the library does not hold, or listed by no id, is passed over.
-func (s *Store) SaveListed(ctx context.Context, lib uuid.UUID, kind domain.ItemKind, listed []domain.Listed) (Changed, error) {
+func (s *Store) SaveListed(ctx context.Context, lib uuid.UUID, kinds []domain.ItemKind, listed []domain.Listed) (Changed, error) {
 	changed := Changed{}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		held := []uuid.UUID{}
 		for _, l := range listed {
-			if l.Kind != kind || len(l.IDs) == 0 {
+			if !slices.Contains(kinds, l.Kind) || len(l.IDs) == 0 {
 				continue
 			}
 			id, err := listedItem(ctx, tx, lib, l)
@@ -38,7 +38,7 @@ func (s *Store) SaveListed(ctx context.Context, lib uuid.UUID, kind domain.ItemK
 			}
 			// A title the list does not name is called by an id it is listed by until it is matched.
 			title := cmp.Or(l.Title, l.IDs[slices.Sorted(maps.Keys(l.IDs))[0]])
-			item := model.Item{LibraryID: &lib, Kind: kind, ScanTitle: title, Title: title, SortTitle: sortTitle(title)}
+			item := model.Item{LibraryID: &lib, Kind: l.Kind, ScanTitle: title, Title: title, SortTitle: sortTitle(title)}
 			if err := insertItem(ctx, tx, &item); err != nil {
 				return err
 			}
@@ -55,13 +55,13 @@ func (s *Store) SaveListed(ctx context.Context, lib uuid.UUID, kind domain.ItemK
 			changed.add(domain.TitleAdded, item.ID)
 		}
 		removed, err := queryColumn[uuid.UUID](ctx, tx, `
-			DELETE FROM items i WHERE i.library_id = $1 AND i.kind = $2 AND NOT i.id = ANY($3)
+			DELETE FROM items i WHERE i.library_id = $1 AND i.kind = ANY($2) AND NOT i.id = ANY($3)
 				AND NOT EXISTS (SELECT 1 FROM items j LEFT JOIN items p ON p.id = j.parent_id
 					WHERE j.library_id = $1 AND i.id IN (j.id, j.parent_id, p.parent_id)
 						AND (EXISTS (SELECT 1 FROM watch_state w WHERE w.item_id = j.id)
 							OR EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = j.id)
 							OR EXISTS (SELECT 1 FROM watchlist w WHERE w.item_id = j.id)))
-			RETURNING i.id`, lib, kind, held)
+			RETURNING i.id`, lib, kinds, held)
 		changed.add(domain.TitleRemoved, removed...)
 		return err
 	})

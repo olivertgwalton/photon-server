@@ -53,22 +53,22 @@ func (a *API) person(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 // work counts someone's films and shows in the libraries the profile sees. Jellyfin's web app
 // lists a person's titles of each kind only where their item counts some.
 func (a *API) work(ctx context.Context, profile uuid.UUID, libs []*store.SeenLibrary, id uuid.UUID) (films, shows int, err error) {
-	byKind := map[domain.LibraryKind][]uuid.UUID{}
-	for _, lib := range libs {
-		byKind[lib.Kind] = append(byKind[lib.Kind], lib.ID)
+	ids := make([]uuid.UUID, len(libs))
+	for n, lib := range libs {
+		ids[n] = lib.ID
 	}
-	count := func(kind domain.LibraryKind) (int, error) {
-		if len(byKind[kind]) == 0 {
+	count := func(kind domain.WallKind) (int, error) {
+		if len(ids) == 0 {
 			return 0, nil
 		}
-		p := store.WallPage{Profile: profile, Sort: domain.SortTitle, Filter: store.WallFilter{People: []uuid.UUID{id}}}
-		_, total, err := a.svc.Catalogue.Wall(ctx, byKind[kind], p)
+		p := store.WallPage{Profile: profile, Kind: kind, Sort: domain.SortTitle, Filter: store.WallFilter{People: []uuid.UUID{id}}}
+		_, total, err := a.svc.Catalogue.Wall(ctx, ids, p)
 		return int(total), err
 	}
-	if films, err = count(domain.LibraryMovies); err != nil {
+	if films, err = count(domain.WallFilms); err != nil {
 		return 0, 0, err
 	}
-	shows, err = count(domain.LibraryShows)
+	shows, err = count(domain.WallShows)
 	return films, shows, err
 }
 

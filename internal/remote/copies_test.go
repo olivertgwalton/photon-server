@@ -91,7 +91,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.SaveListed(ctx, lib.ID, domain.ItemMovie, []domain.Listed{{Kind: domain.ItemMovie, IDs: heat.IDs, Title: "Heat"}}); err != nil {
+	if _, err := st.SaveListed(ctx, lib.ID, []domain.ItemKind{domain.ItemMovie}, []domain.Listed{{Kind: domain.ItemMovie, IDs: heat.IDs, Title: "Heat"}}); err != nil {
 		t.Fatal(err)
 	}
 	var item uuid.UUID
@@ -222,7 +222,7 @@ func TestAStreamBeingFetchedIsWaitedForAndADeadOnePassedOver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.SaveListed(ctx, lib.ID, domain.ItemMovie, []domain.Listed{{Kind: domain.ItemMovie, IDs: heat.IDs, Title: "Heat"}}); err != nil {
+	if _, err := st.SaveListed(ctx, lib.ID, []domain.ItemKind{domain.ItemMovie}, []domain.Listed{{Kind: domain.ItemMovie, IDs: heat.IDs, Title: "Heat"}}); err != nil {
 		t.Fatal(err)
 	}
 	titles, _, err := st.Search(ctx, store.SearchQuery{Text: "heat", Limit: 1})

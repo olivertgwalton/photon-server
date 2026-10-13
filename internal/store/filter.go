@@ -171,10 +171,10 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	if err != nil {
 		return f, err
 	}
-	// The facets are of each library's own kind of title.
-	ids, kinds := make([]any, len(libs)), make([]any, len(libs))
-	for n := range libs {
-		ids[n], kinds[n] = at["lib"+strconv.Itoa(n)], at["kind"+strconv.Itoa(n)]
+	// The facets are of the kinds of title each library's wall lists.
+	ids, kinds := []any{}, []any{}
+	for n := 0; at["lib"+strconv.Itoa(n)] != nil; n++ {
+		ids, kinds = append(ids, at["lib"+strconv.Itoa(n)]), append(kinds, at["kind"+strconv.Itoa(n)])
 	}
 	at["ids"], at["kinds"] = ids, kinds
 	at["sites"] = domain.RatingSites()

@@ -327,3 +327,59 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 		t.Errorf("a film library's episodes: %d of %d, %v; want none", len(cards), total, err)
 	}
 }
+
+// A mixed library's wall pages its films and shows together, or either alone, and its episodes;
+// it has both a film library's and a show library's recently added rows.
+func TestAMixedLibrarysWallHoldsFilmsAndShows(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddRemoteLibrary(ctx, "Popular", domain.LibraryMixed, Remote{ListSource: domain.PluginSource("aio"), ListID: "top", StreamSource: domain.PluginSource("aio")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := []domain.Listed{
+		{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Title: "Heat"},
+		{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0306414"}, Title: "The Wire"},
+	}
+	if _, err := s.SaveListed(ctx, lib.ID, domain.LibraryMixed.Titles(), listed); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := func(kind domain.WallKind) []string {
+		t.Helper()
+		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: admin.ID, Kind: kind, Sort: domain.SortTitle, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	for kind, want := range map[domain.WallKind][]string{
+		domain.WallTitles: {"Heat", "The Wire"}, domain.WallFilms: {"Heat"}, domain.WallShows: {"The Wire"}, domain.WallEpisodes: nil,
+	} {
+		if got := titles(kind); !slices.Equal(got, want) {
+			t.Errorf("a wall of %s: %v, want %v", kind, got, want)
+		}
+	}
+	seen := &SeenLibrary{ID: lib.ID, Name: "Popular", Kind: domain.LibraryMixed}
+	if cards, err := s.LibraryRow(ctx, admin.ID, domain.RowRecentFilms, seen, 10); err != nil || len(cards) != 1 || cards[0].Title != "Heat" {
+		t.Errorf("recently added films: %v, %v; want Heat", cards, err)
+	}
+	// A show is there by its newest episode, which a listed show has none of until it is matched.
+	if _, err := s.LibraryRow(ctx, admin.ID, domain.RowRecentShows, seen, 10); err != nil {
+		t.Errorf("recently added shows: %v", err)
+	}
+	// A list that drops a kind of title drops it alone.
+	if _, err := s.SaveListed(ctx, lib.ID, domain.LibraryMixed.Titles(), listed[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(domain.WallTitles); !slices.Equal(got, []string{"Heat"}) {
+		t.Errorf("after The Wire left the list: %v", got)
+	}
+}

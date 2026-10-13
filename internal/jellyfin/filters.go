@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"net/http"
 	"slices"
-	"strings"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -38,20 +37,26 @@ func asked(r *http.Request, libs []*store.SeenLibrary, seen map[uuid.UUID]*store
 }
 
 // wallKind is what an app's includeItemTypes asks a library for: its episodes where it asks for
-// those alone, as Jellyfin's Episodes tab does, else its titles.
+// those alone, as Jellyfin's Episodes tab does, its films or its shows where it asks for one and
+// not the other, else its titles.
 func wallKind(types []string) domain.WallKind {
-	if len(types) == 1 && strings.EqualFold(types[0], itemKinds[domain.ItemEpisode]) {
+	films, shows := has(types, itemKinds[domain.ItemMovie]), has(types, itemKinds[domain.ItemShow])
+	switch {
+	case len(types) == 1 && has(types, itemKinds[domain.ItemEpisode]):
 		return domain.WallEpisodes
+	case films && !shows:
+		return domain.WallFilms
+	case shows && !films:
+		return domain.WallShows
 	}
 	return domain.WallTitles
 }
 
 // holds is whether a library holds what an app's includeItemTypes asks for.
 func holds(l *store.SeenLibrary, types []string) bool {
-	if wallKind(types) == domain.WallEpisodes {
-		return slices.Contains(l.Kind.ItemKinds(), domain.ItemEpisode)
-	}
-	return len(types) == 0 || has(types, libraryKind(l))
+	return len(types) == 0 || slices.ContainsFunc(wallKind(types).Of(l.Kind), func(k domain.ItemKind) bool {
+		return has(types, itemKinds[k])
+	})
 }
 
 // facets are the values the titles of libraries, or their episodes, have.

@@ -11,6 +11,7 @@ import (
 	"image/jpeg"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -554,6 +555,86 @@ func TestScanShows(t *testing.T) {
 	}
 	if r := f.scan(); r.Probed != 0 {
 		t.Errorf("rescanning probed %d files", r.Probed)
+	}
+}
+
+func TestAMixedLibraryHoldsFilmsAndTheShowsItsFoldersSayAreShows(t *testing.T) {
+	f := newFixture(t, domain.LibraryMixed)
+	f.put("Films/Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979).mkv", "alien")
+	f.put("TV/The Wire (2002)/Season 1/The Wire S01E01.mkv", "wire1")
+	f.put("TV/The Wire (2002)/Season 1/The Wire S01E02.mkv", "wire2")
+	f.put("TV/The Wire (2002)/Extras/Making Of.mkv", "making")
+	f.put("TV/Fleabag/Fleabag S01E01.mkv", "flea1")
+	f.put("TV/Fleabag/Fleabag S01E02.mkv", "flea2")
+	f.put("Lost/Disc 1/Lost S01E01.mkv", "lost1")
+	// Loose episodes beside the shows leave TV a folder of shows, and themselves films.
+	f.put("TV/Taskmaster S01E01.mkv", "task1")
+	f.put("TV/Taskmaster S01E02.mkv", "task2")
+	f.scan()
+	titles := func() map[string]string {
+		t.Helper()
+		rows, err := f.db.Query(t.Context(), `SELECT title, kind FROM items WHERE kind IN ('movie', 'show') ORDER BY title`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (kv [2]string, err error) {
+			return kv, r.Scan(&kv[0], &kv[1])
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, kv := range got {
+			out[kv[0]] = kv[1]
+		}
+		return out
+	}
+	want := map[string]string{
+		"Heat": "movie", "Alien": "movie", "The Wire": "show", "Fleabag": "show", "Disc 1": "movie",
+		"Taskmaster S01E01": "movie", "Taskmaster S01E02": "movie",
+	}
+	if got := titles(); !maps.Equal(got, want) {
+		t.Errorf("titles %v, want %v", got, want)
+	}
+	if n := f.count(`SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id JOIN items sh ON sh.id = s.parent_id
+		WHERE e.kind = 'episode' AND s.season_number = 1 AND sh.title IN ('The Wire', 'Fleabag')`); n != 4 {
+		t.Errorf("%d episodes in the shows' first seasons, want 4", n)
+	}
+	if n := f.count(`SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id WHERE e.kind = 'extra' AND s.title = 'The Wire'`); n != 1 {
+		t.Error("The Wire's extra is not the show's")
+	}
+
+	// A tvshow.nfo makes Lost a show's folder, and the folder under it, unchanged, its season's.
+	f.put("Lost/tvshow.nfo", "<tvshow><title>Lost</title></tvshow>")
+	f.scan()
+	want["Lost"] = "show"
+	delete(want, "Disc 1")
+	if got := titles(); !maps.Equal(got, want) {
+		t.Errorf("after the tvshow.nfo, titles %v, want %v", got, want)
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE kind = 'episode' AND episode_number = 1 AND folder = 'Lost/Disc 1'`); n != 1 {
+		t.Error("Lost's first episode is not an episode")
+	}
+	if r := f.scan(); r.Unchanged != r.Folders {
+		t.Errorf("rescanning read %d of %d folders again", r.Folders-r.Unchanged, r.Folders)
+	}
+}
+
+func TestAScanOfAMixedLibrarysSeasonKnowsItsShow(t *testing.T) {
+	f := newFixture(t, domain.LibraryMixed)
+	f.put("TV/The Wire (2002)/Season 1/The Wire S01E01.mkv", "wire1")
+	f.scan()
+	f.put("TV/The Wire (2002)/Season 1/The Wire S01E02.mkv", "wire2")
+	if _, err := f.scanner.Scan(t.Context(), f.lib, []string{"TV/The Wire (2002)/Season 1"}, func(domain.ScanProgress) {}, func(store.Changed) {}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(`SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id JOIN items sh ON sh.id = s.parent_id
+		WHERE e.kind = 'episode' AND sh.title = 'The Wire'`); n != 2 {
+		t.Errorf("%d of The Wire's episodes after scanning its season alone, want 2", n)
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE kind = 'movie'`); n != 0 {
+		t.Errorf("%d films after scanning a season alone, want none", n)
 	}
 }
 
