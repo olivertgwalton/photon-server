@@ -29,9 +29,16 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 		// Trimmed to start, it has nothing yet at the next keyframe, and the MP4 muxer, holding
 		// its first fragment until every track has a sample (delay_moov), puts that keyframe in
 		// the fragment cut drops as before the segment.
-		a = append(a, "-noaccurate_seek")
+		// AVI gives a stream with B-frames no packet a PTS, which MPEG-TS refuses and MP4 shows in
+		// decode order; genpts makes them from the DTS, as Jellyfin's copies and the keyframe walk do.
+		a = append(a, "-noaccurate_seek", "-fflags", "+genpts")
 	}
-	a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64), "-copyts")
+	if start > 0 {
+		// Only past the start, as Jellyfin's: ffmpeg moves a seek in a stream with B-frames 3/23 s
+		// earlier, AVI refuses one before its start, and the refusal drops the first keyframe's GOP.
+		a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64))
+	}
+	a = append(a, "-copyts")
 	a = append(a, in.Args()...)
 	a = append(a, streamArgs(hw, video, audio, layer)...)
 	// The MP4 muxer writes a file's chapters as a text track, which Apple's players refuse a

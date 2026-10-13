@@ -138,6 +138,8 @@ func TestAFileWithNoIndexIsWalkedToItsKeyframes(t *testing.T) {
 	for file, want := range map[string][]int64{
 		"transport.ts": {1483, 2818, 3485, 6196, 6614, 8741},
 		"no-cues.mkv":  {0, 1335, 2002, 4713, 5130, 7257},
+		// No packet has a PTS, only a DTS; the first picture shown is a frame after the first decoded.
+		"b-frames.avi": {42, 1376, 2044, 4755, 5172, 7299},
 	} {
 		if _, err := IndexedKeyframes(t.Context(), Input{File: fixture(t, file)}); !errors.Is(err, ErrNoIndex) {
 			t.Errorf("%s: index read %v, want none", file, err)
