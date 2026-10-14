@@ -169,7 +169,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		src.DefaultSubtitleStreamIndex = (*int)(req.SubtitleStreamIndex)
 	}
 	if p.playsDirectly(c, video, sound, picked, limit) {
-		externalSubtitles(r, src, item, c, p)
+		deliverSubtitles(r, src, item, c, p, nil)
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
@@ -209,7 +209,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	address, err := a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
-		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS,
+		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS, Renditions: p.renditions(),
 	})
 	if err != nil {
 		a.logger.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
@@ -217,6 +217,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
 	src.TranscodingURL = address
+	deliverSubtitles(r, src, item, c, p, d.Video.Encode)
 }
 
 // transcodingContainers are Jellyfin's names for the segments of each format.

@@ -62,6 +62,8 @@ type transcode struct {
 	Segments domain.SegmentFormat     `json:"segments"`
 	Reasons  []domain.TranscodeReason `json:"reasons,omitempty"`
 	StartMS  int64                    `json:"start_ms,omitempty"`
+	// Renditions leave out of the HLS the subtitle files the app fetches itself.
+	Renditions playback.Renditions `json:"renditions"`
 }
 
 func transcodeSubject(item, session uuid.UUID, plan string) string {
@@ -205,7 +207,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	}
 	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
 		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
-		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS, Renditions: playback.RenditionsAll},
+		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS, Renditions: t.Renditions},
 	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })
 	switch {
 	case err == nil, errors.Is(err, playback.ErrStarted):

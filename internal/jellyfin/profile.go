@@ -333,6 +333,15 @@ func (d deviceProfile) sidecarFormat(codec string) string {
 	return d.subtitleFormat("webvtt", "external")
 }
 
+// renditions are the plain text subtitles the app is offered in HLS: the copy's own alone where it
+// fetches every file beside it itself, as WebVTT, which it would otherwise show twice.
+func (d deviceProfile) renditions() playback.Renditions {
+	if d.subtitleFormat("webvtt", "external") != "" {
+		return playback.RenditionsEmbedded
+	}
+	return playback.RenditionsAll
+}
+
 // readOut is the format the app is sent a subtitle stream of a codec in, read out of the file beside
 // it, where it draws the codec so and not from the file itself, as Jellyfin prefers; "" where it
 // is not sent so.
