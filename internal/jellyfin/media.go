@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"path"
+	"strings"
 
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
@@ -103,7 +106,6 @@ func textual(codec string) bool {
 	return hls.TextSubtitle(codec) || hls.StyledSubtitle(codec)
 }
 
-// sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
 // streamIndex is a track's index, which Jellyfin's web app sends as a string from its menus and
 // Jellyfin reads either way.
 type streamIndex int
@@ -112,11 +114,12 @@ func (i *streamIndex) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(bytes.Trim(b, `"`), (*int)(i))
 }
 
+// sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
 // never where it is on the server.
 func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	file := ""
 	if len(v.Files) > 0 {
-		file = v.Files[0].File
+		file = mediaName(v.Files[0].File, v.Container)
 	}
 	s := mediaSource{
 		Protocol: "File", ID: guid(v.ID), Path: file, Type: "Default", Container: domain.ContainerName(v.Container), Size: v.SizeBytes,
@@ -150,6 +153,15 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	}
 	s.HasSegments = len(v.Markers) > 0
 	return s
+}
+
+// mediaName is a file's name as an app should take it: a .strm's as the media it points to, by the
+// container it is in. Infuse reads a file named .strm whole as a shortcut, and refuses one over 4 GiB.
+func mediaName(name, container string) string {
+	if naming.IsShortcut(name) {
+		return strings.TrimSuffix(name, path.Ext(name)) + "." + domain.ContainerName(container)
+	}
+	return name
 }
 
 func streamOf(t domain.Stream, w words.Words) mediaStream {

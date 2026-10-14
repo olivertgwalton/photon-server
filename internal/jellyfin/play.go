@@ -12,10 +12,8 @@ import (
 	"math/rand/v2"
 	"mime"
 	"net/http"
-	"path"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 	"uuid"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
-	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -305,11 +302,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	}
 	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) {
 		in, err := a.svc.Parts.Open(ctx, c.Parts[0].ID)
-		name := in.Name
-		if naming.IsShortcut(name) {
-			name = strings.TrimSuffix(name, path.Ext(name)) + "." + domain.ContainerName(c.Container)
-		}
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": mediaName(in.Name, c.Container)}))
 		return in, err
 	})
 }

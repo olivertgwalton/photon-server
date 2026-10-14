@@ -3,6 +3,7 @@
 package jellyfin
 
 import (
+	"encoding/json"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -121,9 +122,9 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	}
 }
 
-// A .strm downloads as the media it names, under its name and its media's container, not as a
-// line of text.
-func TestAnAppDownloadsAStrmAsItsMedia(t *testing.T) {
+// A .strm reaches an app as the media it names, under its name and its media's container, not as a
+// line of text: Infuse reads a file named .strm whole, and refuses one over 4 GiB.
+func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 	media := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "heat.mkv", time.Unix(0, 0), strings.NewReader("0123456789"))
 	}))
@@ -171,5 +172,14 @@ func TestAnAppDownloadsAStrmAsItsMedia(t *testing.T) {
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" ||
 		w.Header().Get("Content-Disposition") != `attachment; filename="Heat (1995).mkv"` {
 		t.Errorf("the download: %d %v %q", w.Code, w.Header(), w.Body)
+	}
+	w = serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"?ApiKey=pst_ada&fields=MediaSources,Path", "", "")
+	var item struct {
+		Path         string
+		MediaSources []struct{ Path string }
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil || len(item.MediaSources) != 1 ||
+		item.Path != "Heat (1995).mkv" || item.MediaSources[0].Path != "Heat (1995).mkv" {
+		t.Errorf("the item: %d %s", w.Code, w.Body)
 	}
 }
