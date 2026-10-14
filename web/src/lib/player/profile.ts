@@ -7,13 +7,14 @@ type ClientProfile = Schemas["ClientProfile"];
 // What a browser says it plays, as asked: the types its video element and
 // media sources take, whether it shows HDR, whether it plays HLS itself, and
 // whether it draws styled subtitles: JASSUB's libass, in a worker, onto an
-// offscreen canvas.
+// offscreen canvas; and whether it draws PGS: libbitsub, in WebAssembly.
 export type Capabilities = {
 	types: string[];
 	pq: boolean;
 	hlg: boolean;
 	nativeHLS: boolean;
 	styled: boolean;
+	pictures: boolean;
 };
 
 // Each question is a type a browser is asked about, and what a yes means in
@@ -156,8 +157,9 @@ export function browserProfile(
 		audio: sound,
 		max_bitrate_kbps: maxBitrateKbps,
 		// A video element draws only a WebVTT track it is given, which SubRip
-		// becomes, and JASSUB draws ASS it is given; pictures, and styled text
-		// a browser without JASSUB cannot draw, are drawn into the video.
+		// becomes, JASSUB draws ASS it is given and libbitsub PGS; what a
+		// browser without them cannot draw, and other pictures, are drawn into
+		// the video.
 		subtitles: [
 			{ codec: "subrip", delivery: "sidecar" },
 			{ codec: "webvtt", delivery: "sidecar" },
@@ -166,6 +168,9 @@ export function browserProfile(
 						{ codec: "ass", delivery: "sidecar" },
 						{ codec: "ssa", delivery: "sidecar" },
 					] as const)
+				: []),
+			...(caps.pictures
+				? ([{ codec: "hdmv_pgs_subtitle", delivery: "sidecar" }] as const)
 				: []),
 		],
 	};
@@ -209,8 +214,8 @@ export async function probe(): Promise<Capabilities> {
 		return info?.supported ?? false;
 	};
 	const [pq, hlg] = await Promise.all([shows("pq"), shows("hlg")]);
+	const pictures = typeof WebAssembly === "object";
 	const styled =
-		typeof WebAssembly === "object" &&
-		"transferControlToOffscreen" in HTMLCanvasElement.prototype;
-	return { types, pq, hlg, nativeHLS, styled };
+		pictures && "transferControlToOffscreen" in HTMLCanvasElement.prototype;
+	return { types, pq, hlg, nativeHLS, styled, pictures };
 }

@@ -200,6 +200,23 @@ test("styled text handed beside the video shows without a new playback", () => {
 	expect(needsReplay(signs, burning)).toBe(true);
 });
 
+test("a picture handed beside the video shows without a new playback", () => {
+	const pgs = choices(version)[0];
+	const handed = {
+		...remux,
+		subtitles: [
+			{
+				stream: 2,
+				codec: "hdmv_pgs_subtitle",
+				kind: "picture" as const,
+				url: "/pgs",
+			},
+		],
+	};
+	expect(beside(pgs, handed)?.url).toBe("/pgs");
+	expect(needsReplay(pgs, handed)).toBe(false);
+});
+
 test("a play starts with the subtitle asked for, else the server's choice", () => {
 	expect(startingSubtitle(version, "off")).toBeUndefined();
 	expect(startingSubtitle(version, 3)).toBe("s3");
