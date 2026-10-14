@@ -85,8 +85,8 @@ func refused(err error) bool {
 // start starts s on node, and opens it there; one the node refuses is abandoned.
 func start(ctx context.Context, p placing, sessions starting, node domain.Node, s Start, d Decision) (domain.Playback, error) {
 	card := Card(s.Session, s.Address, s.Title, s.Copy, d, s.Tracks)
-	if d.Video != nil {
-		card.Acceleration = hls.EncodedOn(node.Encoder.Acceleration, *d.Video)
+	if d.Video != nil && d.Video.Encode != nil {
+		card.Acceleration = node.Encoder.Acceleration
 	}
 	started, err := sessions.Start(ctx, s.ID, d.Method, card, time.Duration(s.Opening.StartMS)*time.Millisecond, node.ID)
 	if err != nil {

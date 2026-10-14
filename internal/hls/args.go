@@ -21,7 +21,6 @@ func quiet() []string {
 // it, where WebVTT's ends one only as it begins the next.
 func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
 	a := quiet()
-	hw = hw.encoding(video)
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
 	} else {
@@ -67,41 +66,56 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 	return a
 }
 
+// burnArgs draws a subtitle into the picture in, which filter scales and tone maps on hw, as
+// Jellyfin's does: the subtitle drawn on the CPU at the size encoded, a picture one scaled to it
+// and styled text by libass, so it is drawn as it was authored and as sharp as it can be.
+func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.VideoEncode, layer *styledLayer) []string {
+	size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
+	if format, upload, overlay := hw.overlay(); overlay != "" {
+		// Uploaded and laid over the picture on the device; styled text drawn on a clear canvas.
+		var sub string
+		if layer != nil {
+			sub = layer.canvas(e.Width, e.Height, start, format)
+			if hw.Accel == domain.AccelNVENC {
+				// libass draws onto a YUV canvas premultiplied, which only overlay_cuda is told.
+				overlay += ":alpha_format=premultiplied"
+			}
+		} else {
+			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + ",format=" + format
+		}
+		graph := sub + "," + upload + "[sub];[" + in + "]" + filter + "[main];[main][sub]" + overlay + "[v]"
+		return []string{"-filter_complex", graph, "-map", "[v]"}
+	}
+	// Laid over the picture by FFmpeg, VAAPI's taken off the device and back.
+	ten := e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG
+	format, down, up := "yuv420p", "", ""
+	if ten {
+		format = "yuv420p10le"
+	}
+	if hw.Accel == domain.AccelVAAPI {
+		format = "nv12"
+		if ten {
+			format = "p010"
+		}
+		down, up = ",hwdownload,format="+format, ",hwupload"
+	}
+	if layer != nil {
+		return []string{"-map", in, "-vf", filter + down + "," + layer.filter("") + up}
+	}
+	graph := "[" + in + "]" + filter + down + "[main];[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + "[sub];" +
+		"[main][sub]overlay=eof_action=pass:repeatlast=0,format=" + format + up + "[v]"
+	return []string{"-filter_complex", graph, "-map", "[v]"}
+}
+
 // streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw,
 // from start.
 func streamArgs(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
 	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
-	case video.Burns() && hw.Accel == domain.AccelVideoToolbox:
-		// As Jellyfin's: the subtitle drawn at the size encoded on the CPU, a picture scaled to it
-		// and styled text on a clear canvas of it, uploaded and laid over the picture on the device.
+	case video.Burns():
 		filter, encoder := hw.videoArgs(*e, video.Codec)
-		var sub string
-		if layer != nil {
-			sub = layer.canvas(e.Width, e.Height, start)
-		} else {
-			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height) + ",format=bgra"
-		}
-		graph := sub + ",hwupload[sub];[" + in + "]" + filter + "[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]"
-		a = append(append(a, "-filter_complex", graph, "-map", "[v]"), encoder...)
-	case e != nil && layer != nil:
-		// Drawn by libass after the picture is scaled and tone mapped, as Jellyfin's is, at the
-		// size encoded, so it is as sharp as it can be.
-		filter, encoder := hw.videoArgs(*e, video.Codec)
-		a = append(append(a, "-map", in, "-vf", filter+","+layer.filter("")), encoder...)
-	case e != nil && e.Burn != nil:
-		// As Jellyfin's: picture and subtitle each scaled to the size encoded, the picture tone
-		// mapped first, so the subtitle is drawn as it was authored.
-		filter, encoder := hw.videoArgs(*e, video.Codec)
-		size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
-		format := "yuv420p"
-		if e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG {
-			format = "yuv420p10le"
-		}
-		graph := "[" + in + "]" + filter + "[main];[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + "[sub];" +
-			"[main][sub]overlay=eof_action=pass:repeatlast=0,format=" + format + "[v]"
-		a = append(append(a, "-filter_complex", graph, "-map", "[v]"), encoder...)
+		a = append(append(a, burnArgs(hw, start, in, filter, *e, layer)...), encoder...)
 	case e != nil:
 		filter, encoder := hw.videoArgs(*e, video.Codec)
 		a = append(append(a, "-map", in, "-vf", filter), encoder...)

@@ -303,14 +303,6 @@ func (r *Remuxer) SetHardware(hw Hardware) {
 // encodes is whether a remux encodes video; every part of a copy is played to the same plan.
 func (s *session) encodes() bool { return len(s.sources) > 0 && s.sources[0].Video.Encode != nil }
 
-// EncodedOn is what a node encoding on accel encodes video with, or nothing where it is copied.
-func EncodedOn(accel domain.Acceleration, video domain.VideoPlan) domain.Acceleration {
-	if video.Encode == nil {
-		return ""
-	}
-	return Hardware{Accel: accel}.encoding(video).Accel
-}
-
 // Close ends a playback's remux and removes its segments.
 func (r *Remuxer) Close(playback uuid.UUID) {
 	r.mu.Lock()
