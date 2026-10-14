@@ -74,9 +74,9 @@ func subtitleFormats() []subtitleFormat {
 	return []subtitleFormat{subtitleOriginal, subtitleWebVTT, subtitleMatroska}
 }
 
-// subtitleFile serves a subtitle file beside a copy as it is, a text one converted to WebVTT, as
-// Jellyfin's subtitle route converts, for a player that draws nothing else, or a VobSub, its .idx
-// and .sub, in one Matroska file.
+// subtitleFile serves a subtitle file beside a copy as it is, its text in UTF-8, a text one
+// converted to WebVTT, as Jellyfin's subtitle route converts, for a player that draws nothing else,
+// or a VobSub, its .idx and .sub, in one Matroska file.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
 	if !ok {
@@ -84,11 +84,30 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	switch format {
 	case subtitleOriginal:
-		a.serveLibraryFile(w, r, "id", a.openSubtitleFile, math.MaxInt64)
+		a.subtitleAsItIs(w, r)
 	case subtitleWebVTT:
 		a.subtitleVTT(w, r)
 	case subtitleMatroska:
 		a.subtitleMatroska(w, r)
+	}
+}
+
+func (a *API) subtitleAsItIs(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	in, err := a.openSubtitleFile(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	defer in.Close()
+	if err := library.ServeSubtitle(w, r, in, sub.Codec, string(domain.TagOf(sub.Language))); err != nil {
+		a.internal(w, r, err)
 	}
 }
 
@@ -198,7 +217,7 @@ func (a *API) streamsRoutes() []route {
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
 			summary: "A subtitle file beside a copy, as it is, as WebVTT or in Matroska, at the address play answered",
 			query: append([]param{
-				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is."},
+				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is, its text in UTF-8."},
 			}, signatureParams...),
 			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa", "application/octet-stream"}, handle: a.subtitleFile,
 		},

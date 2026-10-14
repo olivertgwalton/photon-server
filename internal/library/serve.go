@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"io"
 	"math"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
@@ -86,5 +88,29 @@ func serveRemote(w http.ResponseWriter, r *http.Request, u *url.URL, limit int64
 	// Once the status is sent, a player that stops reading, or a server that stops sending, ends
 	// what can be sent, as http.ServeContent's copy ends: there is no answer left to give either.
 	io.Copy(w, body) //nolint:errcheck // as said above
+	return nil
+}
+
+// ServeSubtitle sends a subtitle file beside a copy as Serve does, its text in UTF-8, as libass
+// and a browser read it: as it is if it is, else read in its charset. Pictures are sent as they are.
+func ServeSubtitle(w http.ResponseWriter, r *http.Request, in media.Input, codec, lang string) error {
+	if in.File == nil || !hls.TextSubtitle(codec) && !hls.StyledSubtitle(codec) {
+		return Serve(w, r, in, math.MaxInt64)
+	}
+	text, err := hls.UTF8Subtitle(in.File, lang)
+	if err != nil {
+		return err
+	}
+	if text == nil {
+		return Serve(w, r, in, math.MaxInt64)
+	}
+	info, err := in.File.Stat()
+	if err != nil {
+		return err
+	}
+	if t, ok := fileTypes[strings.ToLower(path.Ext(in.Name))]; ok {
+		w.Header().Set("Content-Type", t+"; charset=utf-8")
+	}
+	http.ServeContent(w, r, in.Name, info.ModTime(), bytes.NewReader(text))
 	return nil
 }
