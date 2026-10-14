@@ -6297,7 +6297,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is. */
+                    /** @description webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is, its text in UTF-8. */
                     format?: components["schemas"]["SubtitleFormat"];
                     /** @description When the address lapses, as the server signed it. */
                     exp?: number;
