@@ -3,6 +3,7 @@ package hls
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -218,11 +219,13 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 }
 
 // styledLayer is styled text libass draws into a part's video: its file, the fonts the part
-// carries for it, the charset of a file beside the copy that is not UTF-8, and where on the copy's
-// timeline, which such a file is timed on, the part starts.
+// carries for it, the charset of a file beside the copy that is not UTF-8, where on the copy's
+// timeline, which such a file is timed on, the part starts, and the video's frame rate, unknown
+// as 0.
 type styledLayer struct {
 	file, fonts, charset string
 	offset               time.Duration
+	rate                 float64
 }
 
 // styledName is what a styled file beside the copy is copied to in a playback's folder.
@@ -237,7 +240,7 @@ func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, of
 		if err != nil {
 			return nil, err
 		}
-		return &styledLayer{file: filepath.Join(dir, StyledName(*src.Stream)), fonts: filepath.Join(dir, FontsDir)}, nil
+		return &styledLayer{file: filepath.Join(dir, StyledName(*src.Stream)), fonts: filepath.Join(dir, FontsDir), rate: s.rate}, nil
 	}
 	in, err := src.Open()
 	if err != nil {
@@ -255,13 +258,13 @@ func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, of
 	if err := s.root.WriteFile(styledName, b, 0o640); err != nil {
 		return nil, err
 	}
-	return &styledLayer{file: filepath.Join(s.dir, styledName), charset: charset, offset: offset}, nil
+	return &styledLayer{file: filepath.Join(s.dir, styledName), charset: charset, offset: offset, rate: s.rate}, nil
 }
 
-// filter is the layer drawn in by FFmpeg's subtitles filter. A file beside the copy is drawn with
-// the part's frames moved onto the copy's timeline and back.
-func (l styledLayer) filter() string {
-	f := "subtitles=f=" + filterValue(l.file)
+// filter is the layer drawn in by FFmpeg's subtitles filter, given options of its own. A file
+// beside the copy is drawn with the part's frames moved onto the copy's timeline and back.
+func (l styledLayer) filter(options string) string {
+	f := "subtitles=f=" + filterValue(l.file) + options
 	if l.fonts != "" {
 		f += ":fontsdir=" + filterValue(l.fonts)
 	}
@@ -273,6 +276,16 @@ func (l styledLayer) filter() string {
 	}
 	at := strconv.FormatFloat(l.offset.Seconds(), 'f', 6, 64)
 	return "setpts=PTS+" + at + "/TB," + f + ",setpts=PTS-" + at + "/TB"
+}
+
+// canvas is the layer drawn by libass onto a clear picture of a size from start, as Jellyfin's
+// is for a device to lay over its own: at the video's frame rate, at most 60, or 25 where it is
+// not known. Without alpha libass leaves the canvas clear.
+func (l styledLayer) canvas(width, height int, start time.Duration) string {
+	rate := min(cmp.Or(l.rate, 25), 60)
+	return "alphasrc=s=" + strconv.Itoa(width) + "x" + strconv.Itoa(height) +
+		":r=" + strconv.FormatFloat(rate, 'f', 3, 64) + ":start=" + strconv.FormatFloat(start.Seconds(), 'f', 6, 64) +
+		",format=bgra," + l.filter(":alpha=1:sub2video=1")
 }
 
 // optionEscape and graphEscape escape a filter's option value as FFmpeg reads a filtergraph: once
