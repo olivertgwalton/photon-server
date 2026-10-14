@@ -178,6 +178,10 @@ func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, l
 		hw.HEVC = domain.HEVCDeny
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
+	if hw.Accel == domain.AccelVAAPI {
+		hw.Overlay = hls.ProbeOverlay(ctx, ffmpeg, hw.Device)
+		logger.InfoContext(ctx, "burning subtitles in on vaapi", slog.String("overlay", string(hw.Overlay)))
+	}
 	return hw, nil
 }
 

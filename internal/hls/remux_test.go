@@ -367,6 +367,77 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 	}
 }
 
+// VAAPI lays a subtitle over as its driver can: Intel's iHD with overlay_vaapi, which scales it
+// from at most 1080 high; AMD's Mesa through Vulkan, the picture mapped there from VAAPI and back,
+// tone mapped as before but kept in 10 bits on the CPU; and any other on the CPU.
+func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
+	const vaapi, vulkan = "-init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw ",
+		"-init_hw_device drm=dr:/dev/dri/renderD128 -init_hw_device vaapi=hw@dr -init_hw_device vulkan=vk@dr -filter_hw_device vk "
+	const toVulkan, fromVulkan = ",hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc,format=vulkan[main];",
+		"[main][sub]overlay_vulkan=eof_action=pass:repeatlast=0,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv[v]"
+	uhd := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 3840, Height: 1600, BitrateKbps: 20000, Range: domain.RangeSDR, Burn: new(2)}
+	hd := uhd
+	hd.Width, hd.Height, hd.BitrateKbps = 1920, 800, 8000
+	styled := hd
+	styled.Burn, styled.BurnFile = nil, new(uuid.New())
+	toneMapped := hd
+	toneMapped.ToneMap = true
+	kept := hd
+	kept.Range = domain.RangeHDR10
+	layer := &styledLayer{file: "/cache/part/2.ass", rate: 24}
+	for _, tc := range []struct {
+		name    string
+		overlay Overlay
+		codec   string
+		e       domain.VideoEncode
+		layer   *styledLayer
+		want    []string
+	}{
+		{"iHD, 4K", OverlayVAAPI, "hevc", uhd, nil, []string{
+			vaapi,
+			"[0:2]scale=2592:1080,format=bgra,hwupload[sub];[0:0]scale_vaapi=w=3840:h=1600:format=nv12[main];" +
+				"[main][sub]overlay_vaapi=eof_action=pass:repeatlast=0:w=3840:h=1600[v]",
+		}},
+		{"iHD, styled", OverlayVAAPI, "hevc", styled, layer, []string{
+			vaapi,
+			"alphasrc=s=1920x800:r=24.000:start=12.000000,format=bgra,subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1,hwupload[sub];" +
+				"[0:0]scale_vaapi=w=1920:h=800:format=nv12[main];[main][sub]overlay_vaapi=eof_action=pass:repeatlast=0:w=1920:h=800[v]",
+		}},
+		{"radeonsi", OverlayVulkan, "hevc", hd, nil, []string{
+			vulkan + "-hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_device hw ",
+			"[0:2]scale=1920:800,format=bgra,hwupload=derive_device=vulkan,format=vulkan[sub];[0:0]scale_vaapi=w=1920:h=800:format=nv12" + toVulkan + fromVulkan,
+		}},
+		{"radeonsi, styled, decoded by FFmpeg", OverlayVulkan, "av1", styled, layer, []string{
+			vulkan + "-ss",
+			"subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1,hwupload=derive_device=vulkan,format=vulkan[sub];" +
+				"[0:0]format=nv12|p010le,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=800:format=nv12" + toVulkan + fromVulkan,
+		}},
+		{"radeonsi, tone mapped", OverlayVulkan, "hevc", toneMapped, nil, []string{
+			vulkan,
+			"[0:0]tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=1920:h=800" + toVulkan + fromVulkan,
+		}},
+		{"radeonsi, HDR kept", OverlayVulkan, "hevc", kept, nil, []string{
+			vaapi,
+			"[0:0]scale_vaapi=w=1920:h=800:format=p010,hwdownload,format=p010[main];[0:2]scale=1920:800[sub];" +
+				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload[v]",
+		}},
+		{"i965", OverlayCPU, "hevc", hd, nil, []string{
+			vaapi,
+			"[0:0]scale_vaapi=w=1920:h=800:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:800[sub];" +
+				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
+		}},
+	} {
+		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay}
+		video := domain.VideoPlan{Codec: tc.codec, Encode: &tc.e}
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+		for _, w := range append(tc.want, "-c:v hevc_vaapi") {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: %q lacks %q", tc.name, got, w)
+			}
+		}
+	}
+}
+
 func TestASubtitleLaidOverOnTheCPUKeepsHDRInTenBits(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeHDR10, Burn: new(2)}
 	for accel, want := range map[domain.Acceleration]string{
