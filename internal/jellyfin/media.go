@@ -137,7 +137,7 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	base := externalBase(v)
 	for n, f := range v.Subtitles {
 		m := mediaStream{
-			Codec: f.Codec, Language: iso639(f.Language), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
+			Codec: subtitleCodec(f.Codec), Language: iso639(f.Language), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
 			IsHearingImpaired: f.HearingImpaired, Type: "Subtitle", Index: base + n, IsExternal: true,
 			IsTextSubtitleStream: textual(f.Codec), SupportsExternalStream: true, DeliveryMethod: "External",
 			DisplayTitle: w.SubtitleFile(f),
@@ -172,9 +172,24 @@ func streamOf(t domain.Stream, w words.Words) mediaStream {
 	case domain.StreamAudio:
 		m.Channels, m.ChannelLayout, m.SampleRate = t.Channels, t.ChannelLayout, t.SampleRate
 	case domain.StreamSubtitle:
-		m.IsTextSubtitleStream = textual(t.Codec)
+		m.Codec, m.IsTextSubtitleStream = subtitleCodec(t.Codec), textual(t.Codec)
 	}
 	return m
+}
+
+// subtitleCodec is a subtitle's codec as Jellyfin names it: its own names for pictures, which its
+// apps choose how to draw by (Jellyfin's web app draws only a "pgssub" with libbitsub), else
+// FFmpeg's.
+func subtitleCodec(codec string) string {
+	switch codec {
+	case "hdmv_pgs_subtitle":
+		return "PGSSUB"
+	case "dvd_subtitle":
+		return "DVDSUB"
+	case "dvb_subtitle":
+		return "DVBSUB"
+	}
+	return codec
 }
 
 // externalBase is the index of a copy's first subtitle file: after every track of its own.

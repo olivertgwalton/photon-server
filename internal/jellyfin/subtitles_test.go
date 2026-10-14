@@ -5,11 +5,13 @@ package jellyfin
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -148,4 +150,38 @@ func TestAnAppIsSentASubtitleStreamReadOutOfTheFile(t *testing.T) {
 	get("2", "0/Stream.vtt", http.StatusNotFound)
 	get("2", "0/Stream.js", http.StatusNotFound)
 	get("1", "0/Stream.sup", http.StatusNotFound)
+}
+
+// playbackInfo is what PlaybackInfo answers a Jellyfin web app of a profile for a film.
+func playbackInfo(t *testing.T, api http.Handler, film uuid.UUID, profile string) map[string]any {
+	t.Helper()
+	w := serve(api, http.MethodPost, "/Items/"+guid(film)+"/PlaybackInfo", jellyfinWeb,
+		`{"SubtitleStreamIndex":`+strconv.Itoa(pgsStream)+`,"DeviceProfile":`+profile+`}`)
+	var info struct{ MediaSources []map[string]any }
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 {
+		t.Fatalf("PlaybackInfo: %d %s", w.Code, w.Body)
+	}
+	return info.MediaSources[0]
+}
+
+// subtitleStream is a source's subtitle stream at an index.
+func subtitleStream(t *testing.T, src map[string]any, index int) map[string]any {
+	t.Helper()
+	streams, _ := src["MediaStreams"].([]any)
+	for _, s := range streams {
+		if m, _ := s.(map[string]any); m["Type"] == "Subtitle" && m["Index"] == float64(index) {
+			return m
+		}
+	}
+	t.Fatalf("no subtitle stream %d in %v", index, streams)
+	return nil
+}
+
+// A picture subtitle is named as Jellyfin names it, by which Jellyfin's web app draws PGS itself.
+func TestAPictureSubtitleIsNamedAsJellyfinNamesIt(t *testing.T) {
+	api, film, _ := aSubtitledFilm(t)
+	src := playbackInfo(t, api, film, `{}`)
+	if pgs, ass := subtitleStream(t, src, pgsStream), subtitleStream(t, src, assStream); pgs["Codec"] != "PGSSUB" || ass["Codec"] != "ass" {
+		t.Errorf("codecs %v and %v, want PGSSUB and ass", pgs["Codec"], ass["Codec"])
+	}
 }
