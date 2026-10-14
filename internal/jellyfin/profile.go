@@ -440,6 +440,18 @@ func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentF
 			p.Video = append(p.Video, d.videoLimits(codec, video, containers))
 		}
 	}
+	// A styled or picture subtitle the app draws beside the video is sent it so, not drawn in: the
+	// HLS keeps the film's clock, which the subtitle is fetched whole on.
+	for _, s := range c.Streams {
+		if s.Kind == domain.StreamSubtitle && d.readOut(s.Codec) != "" {
+			p.Subtitles = append(p.Subtitles, playback.SubtitleSupport{Codec: s.Codec, Delivery: domain.SubtitleSidecar})
+		}
+	}
+	for _, f := range c.Subtitles {
+		if d.sidecarFormat(f.Codec) != "" {
+			p.Subtitles = append(p.Subtitles, playback.SubtitleSupport{Codec: f.Codec, Delivery: domain.SubtitleSidecar})
+		}
+	}
 	channels := profileNumber(t.MaxAudioChannels)
 	for _, codec := range list(t.AudioCodec) {
 		a := playback.AudioSupport{Codec: strings.ReplaceAll(codec, "dca", "dts"), MaxChannels: channels}

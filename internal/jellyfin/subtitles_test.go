@@ -366,6 +366,31 @@ func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
 	}
 }
 
+// Jellyfin's web app given HLS of a file it cannot play as it is draws a PGS or ASS subtitle it
+// chose itself beside the video, as Jellyfin sends it, rather than have it drawn in: fetched whole,
+// it is timed on the film's clock, which the HLS keeps.
+func TestJellyfinWebDrawsAStyledOrPictureSubtitleBesideHLS(t *testing.T) {
+	api, film, copyID := aSubtitledFilm(t)
+	noMKV := strings.Replace(webProfile, `"Container": "mkv,webm"`, `"Container": "mp4"`, 1)
+	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	for index, want := range map[int]string{pgsStream: "2/0/Stream.pgssub", assStream: "3/0/Stream.ass", pgsFile: "6/0/Stream.pgssub", assFile: "4/0/Stream.ass"} {
+		src := playbackInfo(t, api, film, index, noMKV)
+		transcoding, _ := src["TranscodingUrl"].(string)
+		u, err := url.Parse(transcoding)
+		if err != nil || transcoding == "" {
+			t.Fatalf("the source with %d chosen: %v, want HLS", index, src)
+		}
+		plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
+		var tc transcode
+		if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode != nil {
+			t.Errorf("HLS with %d chosen: %s, want the video copied, nothing drawn in", index, plan)
+		}
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
+		}
+	}
+}
+
 // Jellyfin's web app starts its player on the subtitle PlaybackInfo's source names its default, so
 // the source names the one the app chose, a stream of the file or a file beside it, played as it is
 // or as HLS, and none where it chose none, as Jellyfin answers it.
