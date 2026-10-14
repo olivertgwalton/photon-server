@@ -73,6 +73,10 @@ func StyledSubtitle(codec string) bool { return codec == "ass" || codec == "ssa"
 // that draws them itself is handed read out of the file as it is.
 func PictureSubtitle(codec string) bool { return codec == "hdmv_pgs_subtitle" }
 
+// ReadOut reports whether a subtitle stream of a part is read out as it is, for a player to draw
+// beside its video: styled text, or PGS pictures.
+func ReadOut(codec string) bool { return StyledSubtitle(codec) || PictureSubtitle(codec) }
+
 // StyledName is the name a styled stream of a part is read out as, as it is, in the folder
 // Extracted answers.
 func StyledName(stream int) string { return strconv.Itoa(stream) + ".ass" }

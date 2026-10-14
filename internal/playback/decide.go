@@ -116,11 +116,11 @@ type Decision struct {
 }
 
 // Sidecar reports whether a client draws a subtitle from a file of its own beside the video: a
-// file beside the copy in a format it draws so, or a styled stream of a copy in one file, read out
-// as it is. A stream of a copy in several files is in each of them, timed on each one's clock, and
+// file beside the copy in a format it draws so, or a styled or PGS stream of a copy in one file,
+// read out as it is. A stream of a copy in several files is in each of them, timed on each one's clock, and
 // is never read out into one file.
 func (p Profile) Sidecar(codec string, file bool, parts int) bool {
-	return p.Draws(codec, domain.SubtitleSidecar) && (file || hls.StyledSubtitle(codec) && parts == 1)
+	return p.Draws(codec, domain.SubtitleSidecar) && (file || hls.ReadOut(codec) && parts == 1)
 }
 
 func (p Profile) Draws(codec string, d domain.SubtitleDelivery) bool {

@@ -65,6 +65,8 @@ func TestDecide(t *testing.T) {
 	browser.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleSidecar}, {Codec: "subrip", Delivery: domain.SubtitleSidecar}}
 	browserNoMKV := appleTV
 	browserNoMKV.Subtitles = browser.Subtitles
+	drawsPGSBeside := appleTV
+	drawsPGSBeside.Subtitles = []SubtitleSupport{{Codec: "hdmv_pgs_subtitle", Delivery: domain.SubtitleSidecar}}
 	sdrOnly := appleTV
 	sdrOnly.Video = []VideoSupport{{Codec: "hevc"}}
 	cappedRemux := appleTV
@@ -233,6 +235,14 @@ func TestDecide(t *testing.T) {
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, Burn: new(4),
 				}},
 				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "a picture subtitle a client draws beside the video goes beside HLS, the video copied", profile: drawsPGSBeside,
+			subtitle: new(4), audio: new(2),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{
