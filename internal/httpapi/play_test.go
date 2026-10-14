@@ -412,7 +412,7 @@ type fakeHLS struct {
 
 func (f fakeHLS) Hardware() hls.Hardware { return f.hw }
 
-func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, domain.SegmentFormat, time.Duration) error {
+func (fakeHLS) Open(context.Context, uuid.UUID, store.PlayCopy, domain.VideoPlan, *domain.AudioPlan, domain.SegmentFormat, time.Duration, playback.Renditions) error {
 	return nil
 }
 
@@ -747,7 +747,7 @@ func (*livePlaybacks) RecordPlay(context.Context, domain.Playback, time.Time, ti
 // alone places every playback on this node, as a server of one does, encoding in software, HEVC
 // never, and styled subtitles drawn in where libass.
 func alone(local interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions playback.Renditions) error
 }, libass bool,
 ) *playback.Placer {
 	self := func() domain.Node {
@@ -776,7 +776,7 @@ func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }
 
 type remuxOpener struct{ *hls.Remuxer }
 
-func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
+func (r remuxOpener) Open(ctx context.Context, id uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, _ playback.Renditions) error {
 	d := time.Duration(c.Parts[0].DurationMS) * time.Millisecond
 	return r.Remuxer.Open(ctx, id, hls.Copy{Parts: []hls.Source{{Open: func() (media.Input, error) { return media.Input{}, os.ErrNotExist }, Part: hls.Part{Duration: d, Keyframes: hls.Forced(d)}, Video: video, Audio: audio}}, Start: start, Segments: segments})
 }

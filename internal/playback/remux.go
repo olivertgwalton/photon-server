@@ -46,10 +46,21 @@ func NewRemuxes(st partStore, parts partOpener, h remuxer) *Remuxes {
 	return &Remuxes{store: st, parts: parts, hls: h}
 }
 
+// Renditions are the plain text subtitles of a copy its HLS offers as WebVTT.
+type Renditions string
+
+const (
+	// RenditionsAll are every one, embedded and beside it.
+	RenditionsAll Renditions = "all"
+	// RenditionsEmbedded are those embedded alone: the player fetches each file beside the copy
+	// itself, and would show one offered twice.
+	RenditionsEmbedded Renditions = "embedded"
+)
+
 // Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
 // its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
-// subtitles, embedded and beside it, as WebVTT.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error {
+// subtitles as WebVTT, as renditions says.
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
@@ -102,6 +113,11 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 		h.Subtitles = append(h.Subtitles, sub)
 	}
 	for _, f := range c.Subtitles {
+		switch renditions {
+		case RenditionsAll:
+		case RenditionsEmbedded:
+			continue
+		}
 		if !hls.TextSubtitle(f.Codec) {
 			continue
 		}

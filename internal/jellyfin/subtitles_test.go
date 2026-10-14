@@ -302,7 +302,7 @@ func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
 	if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode == nil || tc.Video.Encode.Burn == nil || *tc.Video.Encode.Burn != pgsStream {
 		t.Errorf("HLS for an app that draws no PGS: %s, want the PGS stream drawn in", plan)
 	}
-	if pgs := subtitleStream(t, src, pgsStream); pgs["DeliveryMethod"] != nil {
+	if pgs := subtitleStream(t, src, pgsStream); pgs["DeliveryMethod"] != "Encode" || pgs["DeliveryUrl"] != nil {
 		t.Errorf("the PGS stream drawn in: %v", pgs)
 	}
 }
@@ -327,6 +327,67 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 	if w := serve(api, http.MethodGet, strings.Replace(srt, ".vtt", ".js", 1), "", ""); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil ||
 		len(track.TrackEvents) != 1 || track.TrackEvents[0].Text != "<i>Café</i>" {
 		t.Errorf("the SubRip's cues: %d %s", w.Code, w.Body)
+	}
+}
+
+// Jellyfin's web app given HLS draws a subtitle file beside the copy itself, as it does the file
+// played as it is, fetched whole from the address PlaybackInfo gives it: the HLS keeps the film's
+// clock, so a cue is shown at its own time from wherever the app starts or seeks, and none is
+// offered in the HLS too. One drawn into the picture is said to be, and so is a file the app draws
+// in no format, which it is never sent to fetch.
+func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
+	api, film, copyID := aSubtitledFilm(t)
+	burns := strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1)
+	src := playbackInfo(t, api, film, pgsStream, burns)
+	transcoding, _ := src["TranscodingUrl"].(string)
+	u, err := url.Parse(transcoding)
+	if err != nil || transcoding == "" {
+		t.Fatalf("the web app's source with the PGS stream drawn in: %v, want HLS", src)
+	}
+	plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
+	var tc transcode
+	if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Renditions != playback.RenditionsEmbedded {
+		t.Errorf("HLS for the web app: %s, want no subtitle file in it", plan)
+	}
+	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	for index, want := range map[int]string{srtFile: "7/0/Stream.vtt", assFile: "4/0/Stream.ass", assStream: "3/0/Stream.ass", vobSubFile: "5/0/Stream.vobsub"} {
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
+		}
+	}
+	for _, index := range []int{pgsStream, pgsFile} {
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "Encode" || s["DeliveryUrl"] != nil {
+			t.Errorf("the subtitle at %d: %v, want it drawn in", index, s)
+		}
+	}
+	srt := subtitleStream(t, src, srtFile)["DeliveryUrl"].(string)
+	if w := serve(api, http.MethodGet, srt, "", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "00:01.000 --> 00:03.000") {
+		t.Errorf("the SubRip as WebVTT: %d %s", w.Code, w.Body)
+	}
+}
+
+// Jellyfin's web app given HLS of a file it cannot play as it is draws a PGS or ASS subtitle it
+// chose itself beside the video, as Jellyfin sends it, rather than have it drawn in: fetched whole,
+// it is timed on the film's clock, which the HLS keeps.
+func TestJellyfinWebDrawsAStyledOrPictureSubtitleBesideHLS(t *testing.T) {
+	api, film, copyID := aSubtitledFilm(t)
+	noMKV := strings.Replace(webProfile, `"Container": "mkv,webm"`, `"Container": "mp4"`, 1)
+	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	for index, want := range map[int]string{pgsStream: "2/0/Stream.pgssub", assStream: "3/0/Stream.ass", pgsFile: "6/0/Stream.pgssub", assFile: "4/0/Stream.ass"} {
+		src := playbackInfo(t, api, film, index, noMKV)
+		transcoding, _ := src["TranscodingUrl"].(string)
+		u, err := url.Parse(transcoding)
+		if err != nil || transcoding == "" {
+			t.Fatalf("the source with %d chosen: %v, want HLS", index, src)
+		}
+		plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
+		var tc transcode
+		if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode != nil {
+			t.Errorf("HLS with %d chosen: %s, want the video copied, nothing drawn in", index, plan)
+		}
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
+		}
 	}
 }
 

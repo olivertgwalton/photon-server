@@ -216,7 +216,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	s := auth.SessionOf(r.Context())
 	d, session, err := playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
 		ID: uuid.NewV7(), Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: tracks,
-		Opening: playback.Opening{Profile: s.Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS},
+		Opening: playback.Opening{Profile: s.Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS, Renditions: playback.RenditionsAll},
 	}, func(e playback.Encoding) (playback.Decision, error) {
 		return playback.Decide(*req.Profile, playback.CopyOf(c), tracks, e)
 	})

@@ -333,6 +333,15 @@ func (d deviceProfile) sidecarFormat(codec string) string {
 	return d.subtitleFormat("webvtt", "external")
 }
 
+// renditions are the plain text subtitles the app is offered in HLS: the copy's own alone where it
+// fetches every file beside it itself, as WebVTT, which it would otherwise show twice.
+func (d deviceProfile) renditions() playback.Renditions {
+	if d.subtitleFormat("webvtt", "external") != "" {
+		return playback.RenditionsEmbedded
+	}
+	return playback.RenditionsAll
+}
+
 // readOut is the format the app is sent a subtitle stream of a codec in, read out of the file beside
 // it, where it draws the codec so and not from the file itself, as Jellyfin prefers; "" where it
 // is not sent so.
@@ -429,6 +438,18 @@ func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentF
 	for _, codec := range list(t.VideoCodec) {
 		if slices.Contains(hlsCodecs, codec) {
 			p.Video = append(p.Video, d.videoLimits(codec, video, containers))
+		}
+	}
+	// A styled or picture subtitle the app draws beside the video is sent it so, not drawn in: the
+	// HLS keeps the film's clock, which the subtitle is fetched whole on.
+	for _, s := range c.Streams {
+		if s.Kind == domain.StreamSubtitle && d.readOut(s.Codec) != "" {
+			p.Subtitles = append(p.Subtitles, playback.SubtitleSupport{Codec: s.Codec, Delivery: domain.SubtitleSidecar})
+		}
+	}
+	for _, f := range c.Subtitles {
+		if d.sidecarFormat(f.Codec) != "" {
+			p.Subtitles = append(p.Subtitles, playback.SubtitleSupport{Codec: f.Codec, Delivery: domain.SubtitleSidecar})
 		}
 	}
 	channels := profileNumber(t.MaxAudioChannels)

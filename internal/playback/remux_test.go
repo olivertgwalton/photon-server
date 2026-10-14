@@ -120,7 +120,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, domain.SegmentsFMP4, 0); err != nil {
+			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -135,6 +135,25 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 				t.Errorf("subtitles (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// A player that fetches each subtitle file beside a copy itself is offered only the copy's own
+// plain text subtitles in its HLS, so none is shown twice.
+func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
+	c := store.PlayCopy{
+		BitrateKbps: film.BitrateKbps, Streams: film.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
+		Subtitles: []store.PlaySubtitle{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
+	}
+	for renditions, want := range map[Renditions]int{RenditionsAll: 2, RenditionsEmbedded: 1} {
+		hlsOf := opened{}
+		playback := uuid.NewV7()
+		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, domain.VideoPlan{Codec: "hevc"}, nil, domain.SegmentsFMP4, 0, renditions); err != nil {
+			t.Fatal(err)
+		}
+		if got := hlsOf[playback].Subtitles; len(got) != want || got[0].Stream == nil {
+			t.Errorf("%s: offered %+v, want the copy's own stream and %d in all", renditions, got, want)
+		}
 	}
 }
 
@@ -168,7 +187,7 @@ func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	} {
 		hlsOf := opened{}
 		playback := uuid.NewV7()
-		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0); err != nil {
+		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 			t.Fatal(err)
 		}
 		for i, src := range hlsOf[playback].Parts {
@@ -224,7 +243,7 @@ func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 			parts := &knownKeyframes{known: c.known}
 			hlsOf, playback := opened{}, uuid.NewV7()
 			copied := store.PlayCopy{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
-			if err := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0); err != nil {
+			if err := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {

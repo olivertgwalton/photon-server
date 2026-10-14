@@ -33,7 +33,7 @@ func TestARefusedPlayIsNoStart(t *testing.T) {
 	closing(t, remuxer)
 	// Another playback holds the only slot.
 	video := domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 2000}}
-	if err := (remuxOpener{remuxer}).Open(t.Context(), uuid.NewV7(), store.PlayCopy{Parts: []store.PlayPart{{DurationMS: 60_000}}}, video, nil, domain.SegmentsFMP4, 0); err != nil {
+	if err := (remuxOpener{remuxer}).Open(t.Context(), uuid.NewV7(), store.PlayCopy{Parts: []store.PlayPart{{DurationMS: 60_000}}}, video, nil, domain.SegmentsFMP4, 0, playback.RenditionsAll); err != nil {
 		t.Fatal(err)
 	}
 	live := &livePlaybacks{m: map[uuid.UUID]domain.Playback{}}
