@@ -26,6 +26,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/reach"
@@ -363,6 +364,18 @@ func (f *fakeRemuxes) Resource(_ context.Context, id uuid.UUID, name string) (hl
 
 func (f *fakeRemuxes) Extracted(context.Context, hls.SubtitleSource, string) (string, error) {
 	return "", errors.New("no subtitles read out here")
+}
+
+func (f *fakeRemuxes) WebVTT(context.Context, func() (media.Input, error), string) (string, error) {
+	return "", errors.New("no subtitles converted here")
+}
+
+func (f *fakeRemuxes) Cues(context.Context, func() (media.Input, error), string) ([]hls.Cue, error) {
+	return nil, errors.New("no subtitles converted here")
+}
+
+func (f *fakeRemuxes) VobSub(context.Context, func() (media.Input, error)) ([]byte, error) {
+	return nil, errors.New("no subtitles converted here")
 }
 
 // noOwners is a cluster of one node, which runs every playback itself.

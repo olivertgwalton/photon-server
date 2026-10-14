@@ -19,6 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -27,6 +28,9 @@ type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
 	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
+	WebVTT(ctx context.Context, open func() (media.Input, error), language string) (string, error)
+	Cues(ctx context.Context, open func() (media.Input, error), language string) ([]hls.Cue, error)
+	VobSub(ctx context.Context, open func() (media.Input, error)) ([]byte, error)
 }
 
 // placer chooses the node that delivers a playback, encoding it where it is encoded, and opens its
