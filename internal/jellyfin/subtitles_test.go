@@ -19,6 +19,9 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -34,15 +37,24 @@ import (
 const jellyfinWeb = `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="10.11.0", Token="pst_ada"`
 
 // pgsStream and assStream are the subtitle streams of the film aSubtitledFilm makes, and assFile,
-// vobSubFile, pgsFile and srtFile the indices of the files beside it, after them, by their names.
+// vobSubFile, pgsFile, srtFile, japaneseFile and russianFile the indices of the files beside it,
+// after them, by their names.
 const (
 	pgsStream, assStream                  = 2, 3
 	assFile, vobSubFile, pgsFile, srtFile = 4, 5, 6, 7
+	japaneseFile, russianFile             = 8, 9
 )
 
+// assScript is the styled subtitle of the film aSubtitledFilm makes, and of the files beside it.
+const assScript = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 240\n\n[V4+ Styles]\n" +
+	"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" +
+	"Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\n" +
+	"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+	"Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello\n"
+
 // aSubtitledFilm is a film in an MKV of H.264 and AAC carrying PGS and ASS, with ASS, VobSub, PGS
-// and SubRip files beside it, the SubRip French in Windows-1252, served by an API that reads its
-// subtitles with FFmpeg, and its copy.
+// and SubRip files beside it, the SubRip French in Windows-1252, and Japanese and Russian ASS files in
+// Shift_JIS and Windows-1251, served by an API that reads its subtitles with FFmpeg, and its copy.
 func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 	t.Helper()
 	ctx := t.Context()
@@ -55,12 +67,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 	}
 	ffmpeg, ffprobe := tool("ffmpeg", "PHOTON_FFMPEG"), tool("ffprobe", "PHOTON_FFPROBE")
 	root, work := t.TempDir(), t.TempDir()
-	ass := "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 240\n\n[V4+ Styles]\n" +
-		"Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n" +
-		"Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\n" +
-		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
-		"Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello\n"
-	for name, body := range map[string][]byte{"en.sup": testtool.PGS(0, 2*90000), "en.ass": []byte(ass)} {
+	for name, body := range map[string][]byte{"en.sup": testtool.PGS(0, 2*90000), "en.ass": []byte(assScript)} {
 		if err := os.WriteFile(filepath.Join(work, name), body, 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -86,8 +93,10 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 	idx := "# VobSub index file, v7 (do not modify this line!)\nsize: 320x240\npalette: 000000, ffffff, 000000, 000000, 000000, 000000, 000000, 000000, " +
 		"000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000\n\nid: en, index: 0\ntimestamp: 00:00:00:000, filepos: 000000000\n"
 	for name, body := range map[string][]byte{
-		"Akira.en.ass": []byte(ass), "Akira.en.idx": []byte(idx), "Akira.en.sup": testtool.PGS(0, 2*90000),
+		"Akira.en.ass": []byte(assScript), "Akira.en.idx": []byte(idx), "Akira.en.sup": testtool.PGS(0, 2*90000),
 		"Akira.fr.srt": []byte("1\r\n00:00:01,000 --> 00:00:03,000\r\n<i>Caf\xe9</i>\r\n\r\n"),
+		"Akira.ja.ass": encoded(t, japanese.ShiftJIS, strings.Replace(assScript, "Hello", "こんにちは", 1)),
+		"Akira.ru.ass": encoded(t, charmap.Windows1251, strings.Replace(assScript, "Hello", "Привет", 1)),
 	} {
 		if err := os.WriteFile(filepath.Join(root, "Akira", name), body, 0o644); err != nil {
 			t.Fatal(err)
@@ -124,6 +133,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 		{ContentKey: []byte("akira"), Parts: []store.Part{part}, Subtitles: []store.Subtitle{
 			sidecar("Akira.en.ass", "ass", language.English), sidecar("Akira.en.idx", "dvd_subtitle", language.English),
 			sidecar("Akira.en.sup", "hdmv_pgs_subtitle", language.English), sidecar("Akira.fr.srt", "subrip", language.French),
+			sidecar("Akira.ja.ass", "ass", language.Japanese), sidecar("Akira.ru.ass", "ass", language.Russian),
 		}},
 	}}}, nil); err != nil {
 		t.Fatal(err)
@@ -204,11 +214,17 @@ func TestAnAppIsSentASubtitleFileInTheFormatItAsks(t *testing.T) {
 		len(track.TrackEvents) != 1 || track.TrackEvents[0] != (trackEvent{ID: "1", Text: "<i>Café</i>", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
 		t.Errorf("the SubRip as JSON = %+v, %v", track, err)
 	}
-	if got := get(srtFile, "Stream.srt", http.StatusOK); !bytes.Contains(got, []byte("Caf\xe9")) {
-		t.Errorf("the SubRip as it is = %q", got)
+	if got := string(get(srtFile, "Stream.srt", http.StatusOK)); got != "1\r\n00:00:01,000 --> 00:00:03,000\r\n<i>Café</i>\r\n\r\n" {
+		t.Errorf("the SubRip as it is = %q, want it in UTF-8", got)
 	}
-	if got := get(assFile, "Stream.ssa", http.StatusOK); !strings.Contains(string(got), "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello") {
+	if got := string(get(assFile, "Stream.ssa", http.StatusOK)); got != assScript {
 		t.Errorf("the ASS as it is = %q", got)
+	}
+	// JASSUB reads only UTF-8.
+	for index, want := range map[int]string{japaneseFile: "こんにちは", russianFile: "Привет"} {
+		if got := string(get(index, "Stream.ass", http.StatusOK)); got != strings.Replace(assScript, "Hello", want, 1) {
+			t.Errorf("the ASS in its language's codepage = %q, want it in UTF-8", got)
+		}
 	}
 	if got := get(pgsFile, "Stream.pgssub", http.StatusOK); !bytes.Equal(got, testtool.PGS(0, 2*90000)) {
 		t.Errorf("the PGS as it is = %x", got)
@@ -219,9 +235,18 @@ func TestAnAppIsSentASubtitleFileInTheFormatItAsks(t *testing.T) {
 	for _, refused := range []struct {
 		index int
 		file  string
-	}{{srtFile, "Stream.ass"}, {assFile, "Stream.vtt"}, {assFile, "Stream.js"}, {pgsFile, "Stream.vtt"}, {vobSubFile, "Stream.idx"}, {srtFile + 1, "Stream.srt"}} {
+	}{{srtFile, "Stream.ass"}, {assFile, "Stream.vtt"}, {assFile, "Stream.js"}, {pgsFile, "Stream.vtt"}, {vobSubFile, "Stream.idx"}, {russianFile + 1, "Stream.srt"}} {
 		get(refused.index, refused.file, http.StatusNotFound)
 	}
+}
+
+func encoded(t *testing.T, e encoding.Encoding, s string) []byte {
+	t.Helper()
+	b, err := e.NewEncoder().Bytes([]byte(s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // playbackInfo is what PlaybackInfo answers a Jellyfin web app of a profile for a film, with a

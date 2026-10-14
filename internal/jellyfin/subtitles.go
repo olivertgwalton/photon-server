@@ -66,9 +66,9 @@ type trackEvent struct {
 // subtitleFile serves a subtitle file beside a copy in the format the file name asks for, as
 // Jellyfin converts one: plain text as WebVTT, read in its charset as photon's player has it, or as
 // the JSON of its cues Jellyfin's web app reads every text track from; VobSub, its .idx and .sub, in
-// one Matroska file, as the web app's libbitsub reads it; else the file as it is, asked for in its
-// own format. Any other format is refused: photon converts to no other. As for a stream, a start in
-// the path is not applied.
+// one Matroska file, as the web app's libbitsub reads it; else the file as it is, its text in UTF-8,
+// asked for in its own format. Any other format is refused: photon converts to no other. As for a
+// stream, a start in the path is not applied.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlaySubtitle) {
 	ctx := r.Context()
 	open := func() (media.Input, error) {
@@ -116,7 +116,14 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlayS
 		}
 		a.writeJSON(w, struct{ TrackEvents []trackEvent }{events})
 	case f.Codec != "dvd_subtitle" && (slices.Contains(subtitleFormats(f.Codec), format) || hls.StyledSubtitle(f.Codec) && hls.StyledSubtitle(format)):
-		a.serveFile(w, r, func(context.Context) (media.Input, error) { return open() })
+		in, err := open()
+		if failed(err) {
+			return
+		}
+		defer in.Close()
+		if err := library.ServeSubtitle(w, r, in, f.Codec, language); err != nil {
+			a.internal(w, r, err)
+		}
 	default:
 		a.refuse(w, http.StatusNotFound)
 	}
