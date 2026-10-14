@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { components } from "./api/schema.d.ts";
-import { fold } from "./credits.ts";
+import { castOf, fold } from "./credits.ts";
 
 type C = {
 	id: string;
@@ -38,4 +38,18 @@ test("a performer who also directed leads with the part, and stays a performer",
 	expect(f.said).toBe("Frankie, Director");
 	expect(f.kinds).toEqual(["director", "actor"]);
 	expect(f.all.find((c) => c.photo)?.photo).toBe("p");
+});
+
+test("a title's cast and crew starts with its directors", () => {
+	const ref = (person_id: string, kind: C["kind"]) => ({
+		person_id,
+		name: person_id,
+		kind,
+	});
+	const cast = castOf([
+		ref("kat", "actor"),
+		ref("hans", "composer"),
+		ref("greta", "director"),
+	]);
+	expect(cast.map((c) => c.id)).toEqual(["greta", "kat", "hans"]);
 });

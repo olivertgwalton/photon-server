@@ -50,19 +50,24 @@ export function fold<T>(
 	return out.sort((a, b) => acted(a) - acted(b));
 }
 
-// A title's cast and crew, one per person, by the copy with a photograph.
+// A title's cast and crew, one per person, by the copy with a photograph,
+// its directors first.
 export function castOf(credits: components["schemas"]["CreditRef"][]) {
+	const directed = (f: Folded<unknown>) =>
+		f.kinds.includes("director") ? 0 : 1;
 	return fold(
 		credits,
 		(c) => c.person_id,
 		(c) => c.kind,
 		(c) => c.role,
-	).map((f) => ({
-		...(f.all.find((c) => c.photo) ?? f.all[0]),
-		id: f.all[0].person_id,
-		kinds: f.kinds,
-		said: f.said,
-	}));
+	)
+		.sort((a, b) => directed(a) - directed(b))
+		.map((f) => ({
+			...(f.all.find((c) => c.photo) ?? f.all[0]),
+			id: f.all[0].person_id,
+			kinds: f.kinds,
+			said: f.said,
+		}));
 }
 
 const crafts: [string, Kind[]][] = [
