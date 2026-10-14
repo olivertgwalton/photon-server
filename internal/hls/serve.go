@@ -52,7 +52,7 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 		read := sub.read
 		sub.mu.Unlock()
 		if !read {
-			cues, err := r.convert(ctx, *sub.File)
+			cues, err := r.Cues(ctx, sub.File.Open, sub.File.Language)
 			if err != nil {
 				return "", err
 			}
