@@ -38,6 +38,28 @@ type Segment struct {
 	Start, End time.Duration
 }
 
+// SubtitlePieceLength is the least a piece of a subtitle playlist runs, as Jellyfin cuts its: cut
+// at every segment, a subtitle playlist is as long as the video's for a few bytes of text a line.
+const SubtitlePieceLength = 30 * time.Second
+
+// piece is the segments, first to last, of one part, that a subtitle playlist names as one.
+type piece struct{ first, last int }
+
+// pieces groups a plan's segments into pieces of at least SubtitlePieceLength, the last of a part
+// what is left of it.
+func pieces(plan []Segment) []piece {
+	var out []piece
+	for n, seg := range plan {
+		if k := len(out) - 1; k >= 0 && plan[out[k].first].Part == seg.Part &&
+			plan[out[k].last].End-plan[out[k].first].Start < SubtitlePieceLength {
+			out[k].last = n
+			continue
+		}
+		out = append(out, piece{n, n})
+	}
+	return out
+}
+
 // Plan cuts each part at its first keyframe at or after every SegmentLength, so a segment always
 // begins on a keyframe and copied video can start it. Segments never cross from one part to the
 // next.

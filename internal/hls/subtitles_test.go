@@ -81,8 +81,9 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 		}
 	}
 	subs, err := r.Playlist(playback, "sub0.m3u8")
-	if err != nil || strings.Contains(subs, "EXT-X-MAP") || !strings.Contains(subs, "#EXT-X-DISCONTINUITY\n#EXTINF:6.000000,\nsub0-600.vtt\n") {
-		t.Fatalf("subtitle playlist = %v\n%s\nwant the video's segments with no initialisation", err, subs)
+	if err != nil || strings.Contains(subs, "EXT-X-MAP") || !strings.HasPrefix(subs, "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:30\n") ||
+		!strings.Contains(subs, "#EXT-X-DISCONTINUITY\n#EXTINF:30.000000,\nsub0-120.vtt\n") || strings.Contains(subs, "sub0-240.vtt") {
+		t.Fatalf("subtitle playlist = %v\n%s\nwant the parts in pieces of 30 seconds, with no initialisation", err, subs)
 	}
 	for _, tc := range []struct {
 		n    int
@@ -90,9 +91,9 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 		not  []string
 	}{
 		{0, []string{"X-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000", "00:00:01.000 --> 00:00:03.000 align:start\nHello.", "00:00:05.500 --> 00:00:07.000\nAcross the cut,\non two lines."}, []string{"After"}},
-		{1, []string{"Across the cut"}, []string{"Hello"}},
-		// The second part's first segment, on its own clock.
-		{600, []string{"00:00:00.000 --> 00:00:02.000\nAfter the interval."}, []string{"Hello"}},
+		{1, nil, []string{"Hello", "Across", "After"}},
+		// The second part's first piece, on its own clock.
+		{120, []string{"00:00:00.000 --> 00:00:02.000\nAfter the interval."}, []string{"Hello"}},
 	} {
 		got, err := r.SubtitleSegment(t.Context(), playback, 0, tc.n)
 		if err != nil {
@@ -295,14 +296,15 @@ func TestASubtitleFileReadsAsWebVTT(t *testing.T) {
 	}
 }
 
-// A film's own subtitles come with the run that remuxes its video, a segment's as soon as the run
-// is past it, wherever the player starts: the film is read once, never whole beforehand. Italics
-// are kept, as WebVTT has them, and colours, which it has not, are left out.
+// A film's own subtitles come with the run that remuxes its video, a piece's as soon as the run is
+// past it: the film is read once, never whole beforehand. What the run will not reach, before where
+// the player started, is read by itself, never by moving the run. Italics are kept, as WebVTT has
+// them, and colours, which it has not, are left out.
 func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
 	dir := t.TempDir()
 	for name, cues := range map[string]string{
-		"en.srt": "1\n00:00:01,000 --> 00:00:03,000\n<i>Hello.</i>\n\n2\n00:00:19,000 --> 00:00:20,000\n<font color=\"#ffff00\">Halfway.</font>\n\n3\n00:00:25,000 --> 00:00:27,000\nGoodbye.\n",
+		"en.srt": "1\n00:00:01,000 --> 00:00:03,000\n<i>Hello.</i>\n\n2\n00:00:19,000 --> 00:00:20,000\n<font color=\"#ffff00\">Halfway.</font>\n\n3\n00:00:45,000 --> 00:00:47,000\nGoodbye.\n",
 		"fr.srt": "1\n00:00:07,000 --> 00:00:09,000\nBonjour.\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(cues), 0o644); err != nil {
@@ -312,7 +314,7 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	film := filepath.Join(dir, "film.mkv")
 	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
 		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "en.srt"), "-i", filepath.Join(dir, "fr.srt"),
-		"-t", "30", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-g", "24", "-c:s", "srt", film)
+		"-t", "60", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-g", "24", "-c:s", "srt", film)
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
@@ -325,16 +327,23 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 	fetched := func() (media.Input, error) { return media.Input{URL: address}, nil }
 	runs := filepath.Join(dir, "runs")
 	counting := testtool.Script(t, dir, "ffmpeg", "echo >> '"+runs+"'\nexec '"+ffmpeg+"' \"$@\"\n")
+	type asked struct{ track, piece int }
+	english, french := 1, 2
+	all := map[asked][]string{
+		{0, 0}: {"00:00:01.000 --> 00:00:03.000\n<i>Hello.</i>\n", "00:00:19.000 --> 00:00:20.000\nHalfway.\n"},
+		{1, 0}: {"Bonjour."},
+		{0, 1}: {"00:00:45.000 --> 00:00:47.000\nGoodbye.\n"},
+	}
 	for _, tc := range []struct {
 		name  string
 		open  func() (media.Input, error)
 		start time.Duration
-		asked []int
-		want  map[int]string
+		reads int
 	}{
-		{"from the start", opening(film), 0, []int{0, 1, 3, 4}, map[int]string{0: "00:00:01.000 --> 00:00:03.000\n<i>Hello.</i>\n", 1: "Bonjour.", 3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
-		{"from a seek", opening(film), 18 * time.Second, []int{3, 4}, map[int]string{3: "00:00:19.000 --> 00:00:20.000\nHalfway.\n", 4: "Goodbye."}},
-		{"from an address", fetched, 0, []int{0, 1, 4}, map[int]string{0: "<i>Hello.</i>", 1: "Bonjour.", 4: "Goodbye."}},
+		{"from the start", opening(film), 0, 1},
+		// The run starts in the first piece; the 18 seconds before it are read for the piece alone.
+		{"from a seek", opening(film), 18 * time.Second, 2},
+		{"from an address", fetched, 0, 1},
 	} {
 		_ = os.Remove(runs)
 		extracted := t.TempDir()
@@ -342,31 +351,28 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		english, french := 1, 2
 		playback := uuid.NewV7()
 		if err := r.Open(t.Context(), playback, Copy{
-			Parts:     []Source{{Open: tc.open, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}}},
+			Parts:     []Source{{Open: tc.open, Part: Part{Duration: time.Minute, Keyframes: Forced(time.Minute)}, Video: domain.VideoPlan{Codec: "h264"}}},
 			Subtitles: []Subtitle{{Name: "English", Stream: &english}, {Name: "French", Stream: &french}},
 			Start:     tc.start,
 		}); err != nil {
 			t.Fatal(err)
 		}
-		for _, n := range tc.asked {
-			track := 0
-			if n == 1 {
-				track = 1
-			}
-			got, err := r.SubtitleSegment(t.Context(), playback, track, n)
+		for _, a := range []asked{{0, 0}, {1, 0}, {0, 1}} {
+			got, err := r.SubtitleSegment(t.Context(), playback, a.track, a.piece)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(got, tc.want[n]) {
-				t.Errorf("%s: segment %d of track %d =\n%s\nwant %q", tc.name, n, track, got, tc.want[n])
+			for _, want := range all[a] {
+				if !strings.Contains(got, want) {
+					t.Errorf("%s: piece %d of track %d =\n%s\nwant %q", tc.name, a.piece, a.track, got, want)
+				}
 			}
 		}
 		r.Close(playback)
-		if read, err := os.ReadFile(runs); err != nil || strings.Count(string(read), "\n") != 1 {
-			t.Errorf("%s: the film was read %q times, %v; want once", tc.name, read, err)
+		if read, err := os.ReadFile(runs); err != nil || strings.Count(string(read), "\n") != tc.reads {
+			t.Errorf("%s: the film was read %q times, %v; want %d", tc.name, read, err, tc.reads)
 		}
 		left, err := os.ReadDir(extracted)
 		if err != nil {

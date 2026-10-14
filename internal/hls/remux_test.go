@@ -842,7 +842,7 @@ func TestMPEGTSSegmentsAreExactlyWhatThePlaylistSays(t *testing.T) {
 	for name, want := range map[string][]string{
 		"main.m3u8":  {"#EXT-X-VERSION:3\n", "SUBTITLES=\"subs\"", "URI=\"sub0.m3u8\""},
 		"video.m3u8": {"#EXT-X-VERSION:3\n", "#EXTINF:6.000000,\n0.ts\n", "#EXTINF:6.000000,\n4.ts\n"},
-		"sub0.m3u8":  {"#EXT-X-VERSION:3\n", "sub0-4.vtt"},
+		"sub0.m3u8":  {"#EXT-X-VERSION:3\n", "#EXTINF:30.000000,\nsub0-0.vtt\n#EXT-X-ENDLIST"},
 	} {
 		playlist, err := r.Playlist(playback, name)
 		if err != nil {
