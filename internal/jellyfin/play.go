@@ -160,6 +160,14 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
 	video, sound := direct(c, (*int)(req.AudioStreamIndex))
 	sub, picked := subtitleOf(c, (*int)(req.SubtitleStreamIndex))
+	// An app starts its player on the source's defaults, so they are the tracks it chose, as
+	// Jellyfin answers: its subtitle as it sent it, -1 for none.
+	if sound != nil {
+		src.DefaultAudioStreamIndex = &sound.Index
+	}
+	if req.SubtitleStreamIndex != nil {
+		src.DefaultSubtitleStreamIndex = (*int)(req.SubtitleStreamIndex)
+	}
 	if p.playsDirectly(c, video, sound, picked, limit) {
 		externalSubtitles(r, src, item, c, p)
 		return
