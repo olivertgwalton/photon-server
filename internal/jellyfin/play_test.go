@@ -436,13 +436,16 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	if card, ok := plays.started[session]; !ok || card.Version.ID != copyID {
 		t.Errorf("the playback the dashboard shows: %v", plays.started)
 	}
-	query := transcoding[strings.Index(transcoding, "?")+1:]
-	if !strings.Contains(master.Body.String(), "video.m3u8?"+query) {
-		t.Errorf("the master's variant does not carry the app's query:\n%s", master.Body)
+	// Past the master, an address carries the app's token and its play session alone: the plan and
+	// its signature open the session, and on every line they made a playlist many times its size.
+	query := "ApiKey=pst_ada&PlaySessionId=" + info.PlaySessionID
+	if !strings.Contains(master.Body.String(), "video.m3u8?"+query+"\n") {
+		t.Errorf("the master's variant does not carry the app's token and session alone:\n%s", master.Body)
 	}
 	variant := fetch("/videos/" + guid(heat) + "/video.m3u8?" + query)
-	if !strings.Contains(variant.Body.String(), `URI="init0.mp4?`+query+`"`) || !strings.Contains(variant.Body.String(), "0.m4s?"+query) {
-		t.Errorf("the variant's addresses do not carry the app's query:\n%s", variant.Body)
+	if body := variant.Body.String(); !strings.Contains(body, `URI="init0.mp4?`+query+`"`) || !strings.Contains(body, "0.m4s?"+query+"\n") ||
+		strings.Contains(body, "Plan=") {
+		t.Errorf("the variant's addresses do not carry the app's token and session alone:\n%s", variant.Body)
 	}
 	if again := fetch(transcoding); again.Code != http.StatusOK || len(remuxes.opened) != 1 {
 		t.Errorf("fetching the master again: %d, %d remuxes", again.Code, len(remuxes.opened))

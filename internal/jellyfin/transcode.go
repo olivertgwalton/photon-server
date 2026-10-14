@@ -144,7 +144,7 @@ func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID
 	}
 	w.Header().Set("Content-Type", res.Type)
 	if res.File == nil {
-		a.write(w, []byte(carryQuery(res.Text, r.URL.RawQuery, name)))
+		a.write(w, []byte(carryQuery(res.Text, playlistQuery(r), name)))
 		return
 	}
 	defer res.File.Close()
@@ -258,7 +258,7 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 		return
 	}
 	exp, sig := a.svc.Signer.Token(subject, time.Now().Add(time.Hour))
-	appQuery := r.URL.RawQuery
+	appQuery := playlistQuery(r)
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
@@ -284,8 +284,19 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 	proxy.ServeHTTP(w, r)
 }
 
-// carryQuery puts the app's query on every address a playlist names, its own lines and URI
-// attributes, as no app sends its token with what it fetches of HLS.
+// playlistQuery is what an address a playlist names carries of the app's query: its token, as no
+// app sends one with what it fetches of HLS, and its play session. The plan, its signature and the
+// copy only open the session, at the master; carried on every line, they made a playlist about
+// ten times its size.
+func playlistQuery(r *http.Request) string {
+	q := url.Values{"PlaySessionId": {query(r, "PlaySessionId")}}
+	if key := query(r, "ApiKey"); key != "" {
+		q.Set("ApiKey", key)
+	}
+	return q.Encode()
+}
+
+// carryQuery puts query on every address a playlist names, its own lines and URI attributes.
 func carryQuery(playlist, query, name string) string {
 	if query == "" || !strings.HasSuffix(name, ".m3u8") {
 		return playlist
