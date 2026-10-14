@@ -19,6 +19,9 @@ export const settings: Record<string, [string, string, string][]> = {
 		["skip-intro", "Intros and recaps", "skip"],
 		["skip-credits", "Credits and previews", "skip outro"],
 		["theme-music", "Play theme music", "tune song"],
+		["subtitle-size", "Subtitle size", "text font bigger smaller"],
+		["subtitle-colour", "Subtitle colour", "text color yellow white"],
+		["subtitle-backing", "Subtitle background", "text box shadow outline"],
 	],
 	"/settings/server/general": [
 		["server-name", "Server name", "rename"],

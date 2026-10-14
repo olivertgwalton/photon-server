@@ -153,6 +153,34 @@ test("playback settings follow another device's, after one is saved here", async
 	await expect(subtitles).toHaveText("Never");
 });
 
+test("subtitles look as this device was set, in the player", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/playback");
+	await page.getByLabel("Subtitle colour").click();
+	await page.getByRole("option", { name: "Yellow" }).click();
+	await expect(page.getByText("Saved on this device.")).toBeVisible();
+	await page.getByLabel("Subtitle size").click();
+	await page.getByRole("option", { name: "Larger" }).click();
+	await expectAccessible(page);
+	await page.reload();
+	await expect(page.getByLabel("Subtitle colour")).toHaveText("Yellow");
+
+	await page.goto("/play/p-film?t=1");
+	await page.getByRole("button", { name: "Subtitles" }).click();
+	const style = await page
+		.locator("video")
+		.evaluate((v) => getComputedStyle(v).getPropertyValue("--cue-scale"));
+	expect(style.trim()).toBe("1.5");
+	await expect
+		.poll(() =>
+			page
+				.locator("video")
+				.evaluate((v) => getComputedStyle(v).getPropertyValue("--cue-colour")),
+		)
+		.toBe("#ffe14d");
+});
+
 test("a show's episode plays its theme once the profile asks for theme music", async ({
 	page,
 }) => {
