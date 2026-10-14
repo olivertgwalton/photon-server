@@ -16,6 +16,7 @@ import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
 import type JASSUB from "jassub";
+import type { PgsRenderer } from "libbitsub";
 import { onMount, untrack } from "svelte";
 import { on } from "svelte/events";
 import { client } from "#lib/api/client.js";
@@ -114,6 +115,9 @@ let trackFile: string | undefined;
 // The styled subtitle JASSUB draws over the video, by its address.
 let styled: JASSUB | undefined;
 let styledURL: string | undefined;
+// The PGS subtitle libbitsub draws over the video, by its address.
+let pictures: { renderer: PgsRenderer; canvas: HTMLCanvasElement } | undefined;
+let picturesURL: string | undefined;
 
 let part = $state(0);
 let time = $state(0);
@@ -288,6 +292,7 @@ function detach() {
 	hls?.destroy();
 	hls = undefined;
 	void showStyled(undefined);
+	void showPictures(undefined);
 	clearTrack();
 	if (video?.hasAttribute("src")) {
 		video.removeAttribute("src");
@@ -333,15 +338,16 @@ function seek(seconds: number) {
 }
 
 // Shows the subtitle chosen in the playback there is: styled text drawn by
-// JASSUB, a file beside the copy as a track, or one of the HLS playlist's
-// renditions.
+// JASSUB, PGS drawn by libbitsub, a file beside the copy as a track, or one of
+// the HLS playlist's renditions.
 async function showSubtitle() {
 	if (!playback || !video) return;
 	const given = beside(subtitle, playback);
-	const styledText = given?.kind === "styled";
-	void showStyled(styledText ? given : undefined);
+	const drawn = given?.kind === "styled" || given?.kind === "picture";
+	void showStyled(given?.kind === "styled" ? given : undefined);
+	void showPictures(given?.kind === "picture" ? given : undefined);
 	if (playback.method === "direct") {
-		const file = styledText ? undefined : given;
+		const file = drawn ? undefined : given;
 		if (file?.id === trackFile) return;
 		clearTrack();
 		trackFile = file?.id;
@@ -396,6 +402,24 @@ async function showStyled(sub: Schemas["Subtitle"] | undefined) {
 	]);
 	if (styledURL !== sub.url || !video) return;
 	styled = new JASSUB({ video, subUrl: absolute(sub.url), fonts });
+}
+
+// Draws PGS over the video with libbitsub, or stops drawing it. Its canvas
+// sits just after the video, as JASSUB's does, so the controls stay above it.
+async function showPictures(sub: Schemas["Subtitle"] | undefined) {
+	if (sub?.url === picturesURL) return;
+	picturesURL = sub?.url;
+	pictures?.renderer.dispose();
+	pictures?.canvas.remove();
+	pictures = undefined;
+	if (!sub || !video) return;
+	const { PgsRenderer } = await import("libbitsub");
+	if (picturesURL !== sub.url || !video) return;
+	const canvas = document.createElement("canvas");
+	canvas.style.zIndex = "auto";
+	video.after(canvas);
+	const subUrl = new URL(sub.url, location.href).href;
+	pictures = { renderer: new PgsRenderer({ video, canvas, subUrl }), canvas };
 }
 
 // A choice in one of the settings menu's submenus leaves bits-ui's menu open,

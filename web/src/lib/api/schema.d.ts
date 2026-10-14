@@ -4771,7 +4771,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A styled subtitle stream of a part, read out as it is, at the address play answered */
+        /** A styled (ASS) or PGS subtitle stream of a part, read out as it is, at the address play answered */
         get: {
             parameters: {
                 query?: {
@@ -4796,6 +4796,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/octet-stream": unknown;
                         "text/x-ssa": unknown;
                     };
                 };

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -31,12 +32,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
 var (
 	partOne = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b1")
 	partTwo = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
-	// anime is a film in one file with signs and songs in ASS, inside it and beside it.
+	// anime is a film in one file with signs and songs in ASS, inside it and beside it, and PGS
+	// inside it.
 	anime     = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000a1")
 	animePart = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b3")
 	signsID   = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d3")
@@ -53,6 +56,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 			Streams: []domain.Stream{
 				{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 				{Index: 1, Kind: domain.StreamSubtitle, Codec: "ass", Language: language.Japanese},
+				{Index: 2, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle", Language: language.English},
 			},
 			Subtitles: []store.PlaySubtitle{
 				{ID: signsID, Codec: "ass", Language: language.English}, {ID: subtitleID, Codec: "subrip", Language: language.English},
@@ -290,7 +294,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		"Style: Sign,Shop Sans,24,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,8,10,10,10,1\n\n[Events]\n" +
 		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
 		"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
-	for name, text := range map[string]string{"signs.ass": signs, "Shop Sans.ttf": "a font"} {
+	for name, text := range map[string]string{"signs.ass": signs, "Shop Sans.ttf": "a font", "en.sup": string(testtool.PGS(0, 2*90000))} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -299,9 +303,9 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		t.Fatal(err)
 	}
 	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "signs.ass"),
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "signs.ass"), "-i", filepath.Join(dir, "en.sup"),
 		"-attach", filepath.Join(dir, "Shop Sans.ttf"), "-metadata:s:t:0", "mimetype=font/ttf",
-		"-t", "4", "-map", "0", "-map", "1", "-c:v", "libx264", "-c:s", "copy", filepath.Join(root, "Anime", "Anime.mkv"))
+		"-t", "4", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-c:s", "copy", filepath.Join(root, "Anime", "Anime.mkv"))
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
@@ -323,7 +327,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	play := func(subtitles string) (got struct {
+	play := func(stream int, subtitles string) (got struct {
 		Method string `json:"method"`
 		Video  struct {
 			BurnedSubtitle *int `json:"burned_subtitle"`
@@ -331,7 +335,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		Subtitles []subtitleJSON `json:"subtitles"`
 	},
 	) {
-		body := `{"subtitle_stream": 1, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "subtitles": ` + subtitles + `}}`
+		body := `{"subtitle_stream": ` + strconv.Itoa(stream) + `, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "subtitles": ` + subtitles + `}}`
 		rec := do(httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+anime.String()+"/play", strings.NewReader(body)))
 		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK {
 			t.Fatalf("play: %d, %v", rec.Code, err)
@@ -339,7 +343,7 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		return got
 	}
 
-	browser := play(`[{"codec": "ass", "delivery": "sidecar"}, {"codec": "subrip", "delivery": "sidecar"}]`)
+	browser := play(1, `[{"codec": "ass", "delivery": "sidecar"}, {"codec": "subrip", "delivery": "sidecar"}]`)
 	if browser.Method != "direct" || len(browser.Subtitles) != 3 || browser.Subtitles[0].Stream == nil || *browser.Subtitles[0].Stream != 1 ||
 		browser.Subtitles[1].ID != signsID || browser.Subtitles[2].ID != subtitleID {
 		t.Fatalf("a browser's play = %+v, want the file as it is, its ASS stream and both files beside it", browser)
@@ -357,18 +361,29 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	}
 	var fonts fontsJSON
 	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.Fonts), nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
-		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "2.ttf" {
+		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "3.ttf" {
 		t.Fatalf("fonts: %d %+v, want the one the file carries", rec.Code, fonts)
 	}
 	if rec := do(httptest.NewRequest(http.MethodGet, string(fonts.Fonts[0].URL), nil)); rec.Code != http.StatusOK || rec.Body.String() != "a font" ||
 		rec.Header().Get("Content-Type") != "font/ttf" {
 		t.Errorf("the font: %d %q %q, want it as the file carries it", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
-	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(string(fonts.Fonts[0].URL), "2.ttf", "3.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
+	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(string(fonts.Fonts[0].URL), "3.ttf", "4.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a font the list did not sign: %d, want 401", rec.Code)
 	}
 
-	drawsNothing := play(`[]`)
+	// A browser that draws PGS beside the video is handed it read out as it is, with no fonts.
+	pictures := play(2, `[{"codec": "hdmv_pgs_subtitle", "delivery": "sidecar"}]`)
+	if pictures.Method != "direct" || len(pictures.Subtitles) != 1 || pictures.Subtitles[0].Stream == nil || *pictures.Subtitles[0].Stream != 2 ||
+		pictures.Subtitles[0].Kind != subtitlePicture || pictures.Subtitles[0].Fonts != "" {
+		t.Fatalf("a PGS drawing browser's play = %+v, want the file as it is and its PGS stream beside it", pictures)
+	}
+	if rec := do(httptest.NewRequest(http.MethodGet, string(pictures.Subtitles[0].URL), nil)); rec.Code != http.StatusOK ||
+		!bytes.Equal(rec.Body.Bytes(), testtool.PGS(0, 2*90000)) || rec.Header().Get("Content-Type") != "application/octet-stream" {
+		t.Errorf("the PGS stream: %d %x %q, want it as it is", rec.Code, rec.Body.Bytes(), rec.Header().Get("Content-Type"))
+	}
+
+	drawsNothing := play(1, `[]`)
 	if drawsNothing.Method != "transcode" || drawsNothing.Video.BurnedSubtitle == nil || *drawsNothing.Video.BurnedSubtitle != 1 || len(drawsNothing.Subtitles) != 0 {
 		t.Errorf("a client that draws no ASS: %+v, want it drawn in, and nothing beside it", drawsNothing)
 	}
