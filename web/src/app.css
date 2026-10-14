@@ -158,6 +158,14 @@
 	p {
 		text-wrap: pretty;
 	}
+
+	/* A plain text subtitle as the reader set it (lib/player/appearance.ts). */
+	video::cue {
+		font-size: calc(var(--cue-scale, 1) * 100%);
+		color: var(--cue-colour, #fff);
+		background: var(--cue-background, rgb(0 0 0 / 0.75));
+		text-shadow: var(--cue-shadow, none);
+	}
 }
 
 /*

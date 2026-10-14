@@ -26,6 +26,7 @@ import { artworkURL } from "#lib/artwork.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
 import { bitrate, fullTitle, timecode } from "#lib/format.js";
+import { cueStyle, keptAppearance } from "#lib/player/appearance.js";
 import { type Preferences, skipping } from "#lib/player/preferences.js";
 import {
 	browserProfile,
@@ -113,6 +114,7 @@ let lastSubtitle = $state<string>();
 // set it; another subtitle starts on time.
 let subtitleDelay = $state(0);
 const delayed = new WeakMap<object, number>();
+const appearance = keptAppearance();
 let quality = $derived(prefs.max_bitrate_kbps);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
@@ -721,6 +723,7 @@ onMount(() => {
 		bind:readyState
 		{@attach (v) => on(v.textTracks, "addtrack", tracksAdded)}
 		class="size-full object-contain"
+		style={cueStyle(appearance)}
 		playsinline
 		preload="auto"
 		onclick={toggle}

@@ -9,6 +9,14 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
 import { bitrate, localeOptions } from "#lib/format.js";
+import {
+	type Appearance,
+	backings,
+	colours,
+	keepAppearance,
+	keptAppearance,
+	sizes,
+} from "#lib/player/appearance.js";
 import type { PreferencesChange } from "#lib/player/preferences.js";
 import { qualities } from "#lib/player/words.js";
 
@@ -76,6 +84,22 @@ const subtitleModes: { value: Schemas["SubtitleMode"]; label: string }[] = [
 	{ value: "only_forced", label: "Only forced subtitles" },
 	{ value: "none", label: "Never" },
 ];
+// How subtitles look is this device's, as its screen and the distance from it
+// are, so it is kept in the browser rather than by the server.
+let appearance = $state(keptAppearance());
+
+function look(change: Partial<Appearance>) {
+	appearance = { ...appearance, ...change };
+	keepAppearance(appearance);
+	toast.success("Saved on this device.");
+}
+
+const options = <T extends string>(set: Record<T, { label: string }>) =>
+	(Object.keys(set) as T[]).map((value) => ({
+		value,
+		label: set[value].label,
+	}));
+
 const skipActions: { value: Schemas["SegmentAction"]; label: string }[] = [
 	{ value: "ask", label: "Show a button to skip" },
 	{ value: "skip", label: "Skip by itself" },
@@ -249,6 +273,53 @@ const skipActions: { value: Schemas["SegmentAction"]; label: string }[] = [
 						page.
 					</Field.Description>
 				</Field.Content>
+			</Field.Field>
+		</Field.Group>
+	</Card.Content>
+</Card.Root>
+
+<Card.Root class="mt-6 max-w-2xl">
+	<Card.Header>
+		<Card.Title>Subtitles on this device</Card.Title>
+		<Card.Description>
+			How plain text subtitles look here. Styled subtitles keep the look their
+			file gives them, and picture subtitles are shown as they were made.
+		</Card.Description>
+	</Card.Header>
+	<Card.Content>
+		<Field.Group>
+			<Field.Field>
+				<Field.Label for="subtitle-size">Subtitle size</Field.Label>
+				<Choice
+					id="subtitle-size"
+					name="subtitle-size"
+					options={options(sizes)}
+					value={appearance.size}
+					onchange={(size: Appearance["size"]) => look({ size })}
+					class="w-full sm:w-72"
+				/>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="subtitle-colour">Subtitle colour</Field.Label>
+				<Choice
+					id="subtitle-colour"
+					name="subtitle-colour"
+					options={options(colours)}
+					value={appearance.colour}
+					onchange={(colour: Appearance["colour"]) => look({ colour })}
+					class="w-full sm:w-72"
+				/>
+			</Field.Field>
+			<Field.Field>
+				<Field.Label for="subtitle-backing">Subtitle background</Field.Label>
+				<Choice
+					id="subtitle-backing"
+					name="subtitle-backing"
+					options={options(backings)}
+					value={appearance.backing}
+					onchange={(backing: Appearance["backing"]) => look({ backing })}
+					class="w-full sm:w-72"
+				/>
 			</Field.Field>
 		</Field.Group>
 	</Card.Content>
