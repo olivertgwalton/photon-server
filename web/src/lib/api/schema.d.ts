@@ -4771,7 +4771,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A styled (ASS) or PGS subtitle stream of a part, read out as it is, at the address play answered */
+        /** A styled (ASS) or picture (PGS, VobSub) subtitle stream of a part, read out as it is, at the address play answered */
         get: {
             parameters: {
                 query?: {

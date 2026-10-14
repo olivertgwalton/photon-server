@@ -46,7 +46,7 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
 }
 
-// readOutStream serves a styled or PGS subtitle stream of a part, read out as it is.
+// readOutStream serves a styled or picture subtitle stream of a part, read out as it is.
 func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 	part, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -70,7 +70,7 @@ func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 	}
 	name, typ := hls.StyledName(n), "text/x-ssa; charset=utf-8"
 	if hls.PictureSubtitle(src.Streams[i].Codec) {
-		name, typ = hls.PictureName(n), "application/octet-stream"
+		name, typ = hls.PictureName(n, src.Streams[i].Codec), "application/octet-stream"
 	}
 	dir, err := a.svc.HLS.Extracted(r.Context(), src, name)
 	if a.answered(w, r, err) {
@@ -160,7 +160,7 @@ func (a *API) styledRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/parts/{id}/subtitles/{subtitle}", access: signedAddress,
-			summary: "A styled (ASS) or PGS subtitle stream of a part, read out as it is, at the address play answered",
+			summary: "A styled (ASS) or picture (PGS, VobSub) subtitle stream of a part, read out as it is, at the address play answered",
 			path:    []param{{"subtitle", "", "The stream's index in the part's file."}},
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa", "application/octet-stream"},
 			handle: a.readOutStream,

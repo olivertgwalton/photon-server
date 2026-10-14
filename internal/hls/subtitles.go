@@ -69,21 +69,29 @@ func TextSubtitle(codec string) bool {
 // motion), which WebVTT would lose: drawn by the player, or by libass into the video.
 func StyledSubtitle(codec string) bool { return codec == "ass" || codec == "ssa" }
 
-// PictureSubtitle reports whether a subtitle codec is Blu-ray's pictures (PGS), which a player
-// that draws them itself is handed read out of the file as it is.
-func PictureSubtitle(codec string) bool { return codec == "hdmv_pgs_subtitle" }
+// PictureSubtitle reports whether a subtitle codec is pictures a player that draws them itself is
+// handed read out of the file as it is: Blu-ray's (PGS) or DVD's (VobSub). DVB's are not: FFmpeg
+// copies them into no file a player reads them from.
+func PictureSubtitle(codec string) bool {
+	return codec == "hdmv_pgs_subtitle" || codec == "dvd_subtitle"
+}
 
 // ReadOut reports whether a subtitle stream of a part is read out as it is, for a player to draw
-// beside its video: styled text, or PGS pictures.
+// beside its video: styled text, or pictures.
 func ReadOut(codec string) bool { return StyledSubtitle(codec) || PictureSubtitle(codec) }
 
 // StyledName is the name a styled stream of a part is read out as, as it is, in the folder
 // Extracted answers.
 func StyledName(stream int) string { return strconv.Itoa(stream) + ".ass" }
 
-// PictureName is the name a PGS stream of a part is read out as, as it is, in the folder Extracted
-// answers.
-func PictureName(stream int) string { return strconv.Itoa(stream) + ".sup" }
+// PictureName is the name a stream of pictures of a part is read out as, as it is, in the folder
+// Extracted answers: PGS as a .sup file, VobSub in Matroska, as FFmpeg writes no .idx and .sub.
+func PictureName(stream int, codec string) string {
+	if codec == "dvd_subtitle" {
+		return strconv.Itoa(stream) + ".mks"
+	}
+	return strconv.Itoa(stream) + ".sup"
+}
 
 // FontsDir is the folder of the fonts a part carries for its styled streams, in the folder
 // Extracted answers.
@@ -141,7 +149,7 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (media.Input, error), 
 	return string(out), cmd.Err(err)
 }
 
-// Extracted answers the folder a part's styled and PGS subtitle streams are read out into, with
+// Extracted answers the folder a part's styled and picture subtitle streams are read out into, with
 // want in it, reading them out if no one is. Reading one means reading the whole file, so every
 // such stream of the part is read out in the same pass and kept as it is (see StyledName and
 // PictureName), for this
@@ -183,7 +191,7 @@ func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string
 	}
 }
 
-// extract writes each of a part's styled and PGS subtitle streams into dir in one read of the file, with
+// extract writes each of a part's styled and picture subtitle streams into dir in one read of the file, with
 // the fonts its header lists, each named by its stream: FFmpeg refuses to write one under the name
 // the file gives it unless that is plain ASCII with no spaces.
 func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) error {
@@ -221,8 +229,10 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 		case s.Kind != domain.StreamSubtitle:
 		case StyledSubtitle(s.Codec):
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
-		case PictureSubtitle(s.Codec):
-			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "sup", filepath.Join(made, PictureName(s.Index)))
+		case s.Codec == "hdmv_pgs_subtitle":
+			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "sup", filepath.Join(made, PictureName(s.Index, s.Codec)))
+		case s.Codec == "dvd_subtitle":
+			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "matroska", filepath.Join(made, PictureName(s.Index, s.Codec)))
 		}
 	}
 	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)

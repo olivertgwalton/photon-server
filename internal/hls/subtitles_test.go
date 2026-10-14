@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -395,12 +396,48 @@ func TestPictureSubtitlesAreReadOutAsTheyAre(t *testing.T) {
 		Open: opening(film), Stream: &pgs, Part: uuid.NewV7(),
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264"}, {Index: pgs, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle"}},
 	}
-	out, err := r.Extracted(t.Context(), src, PictureName(pgs))
+	out, err := r.Extracted(t.Context(), src, PictureName(pgs, "hdmv_pgs_subtitle"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(out, PictureName(pgs)))
+	got, err := os.ReadFile(filepath.Join(out, PictureName(pgs, "hdmv_pgs_subtitle")))
 	if err != nil || !bytes.Equal(got, testtool.PGS(0, 2*90000)) {
 		t.Errorf("the PGS stream = %x, %v; want it as it was", got, err)
+	}
+}
+
+// A part's VobSub stream is read out as it is, in Matroska, as FFmpeg writes no .idx and .sub.
+func TestVobSubIsReadOutInMatroska(t *testing.T) {
+	ffmpeg, ffprobe := tool(t, "ffmpeg", "PHOTON_FFMPEG"), tool(t, "ffprobe", "PHOTON_FFPROBE")
+	dir := t.TempDir()
+	sup := filepath.Join(dir, "film.sup")
+	if err := os.WriteFile(sup, testtool.PGS(0, 2*90000, 4*90000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error", "-fix_sub_duration",
+		"-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24", "-i", sup,
+		"-t", "6", "-map", "0", "-map", "1", "-c:v", "libx264", "-c:s", "dvdsub", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}, FFprobe: media.Tool{Path: ffprobe}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vobsub := 1
+	src := SubtitleSource{
+		Open: opening(film), Stream: &vobsub, Part: uuid.NewV7(),
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264"}, {Index: vobsub, Kind: domain.StreamSubtitle, Codec: "dvd_subtitle"}},
+	}
+	name := PictureName(vobsub, "dvd_subtitle")
+	out, err := r.Extracted(t.Context(), src, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probed, err := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-show_entries", "stream=codec_name:packet=pts_time",
+		"-of", "csv=p=0", filepath.Join(out, name)).Output()
+	if got := strings.Fields(string(probed)); err != nil || !slices.Equal(got, []string{"0.000000", "2.000000", "4.000000", "dvd_subtitle"}) {
+		t.Errorf("the VobSub read out = %q, %v; want each of its pictures, and its stream", got, err)
 	}
 }
