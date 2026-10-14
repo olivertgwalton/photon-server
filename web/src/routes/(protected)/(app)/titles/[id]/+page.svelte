@@ -173,6 +173,15 @@ const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 // Whose box sets, links and likes the page shows: an episode's are its
 // show's.
 const about = $derived(data.show ?? t);
+// Every site that did not score an episode lends its show's score.
+const ratings = $derived.by(() => {
+	const own = t.ratings ?? [];
+	const show = data.show?.ratings ?? [];
+	return [
+		...show.map((r) => own.find((o) => o.site === r.site) ?? r),
+		...own.filter((o) => !show.some((r) => r.site === o.site)),
+	];
+});
 const extras = $derived(
 	data.extras.length || !data.show
 		? { of: t.id, items: data.extras }
@@ -338,9 +347,9 @@ const poster = $derived(art("poster"));
 			{#if t.genres?.length}
 				<p class="text-ink-2 text-sm">{t.genres.join(", ")}</p>
 			{/if}
-			{#if t.ratings?.length}
+			{#if ratings?.length}
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
-					{#each t.ratings as rating (rating.site)}
+					{#each ratings as rating (rating.site)}
 						<li
 							class="flex rounded-full bg-white/8 px-3 py-1.25 text-sm backdrop-blur-xl"
 						>
