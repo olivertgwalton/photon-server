@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -329,14 +330,19 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 	layer := &styledLayer{file: "/cache/part/2.ass", fonts: "/cache/part/fonts", rate: 24000.0 / 1001}
 	const canvas = "alphasrc=s=1920x1040:r=23.976:start=12.000000,format="
 	const styled = ",subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1:fontsdir=/cache/part/fonts,"
+	// On Windows QSV decodes through D3D11, whose frames the encoder must not hold.
+	qsv := "hwmap=derive_device=qsv,vpp_qsv=w=1920:h=1040:format=nv12"
+	if runtime.GOOS == "windows" {
+		qsv += ":passthrough=0"
+	}
 	for accel, want := range map[domain.Acceleration][2]string{
 		domain.AccelVideoToolbox: {
 			"[0:2]scale=1920:1040,format=bgra,hwupload[sub];[0:0]scale_vt=w=1920:h=1040:format=nv12[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]",
 			canvas + "bgra" + styled + "hwupload[sub];[0:0]scale_vt=w=1920:h=1040:format=nv12[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]",
 		},
 		domain.AccelQSV: {
-			"[0:2]scale=1920:1040,format=bgra,hwupload=extra_hw_frames=64[sub];[0:0]hwmap=derive_device=qsv,vpp_qsv=w=1920:h=1040:format=nv12[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
-			canvas + "bgra" + styled + "hwupload=extra_hw_frames=64[sub];[0:0]hwmap=derive_device=qsv,vpp_qsv=w=1920:h=1040:format=nv12[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
+			"[0:2]scale=1920:1040,format=bgra,hwupload=extra_hw_frames=64[sub];[0:0]" + qsv + "[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
+			canvas + "bgra" + styled + "hwupload=extra_hw_frames=64[sub];[0:0]" + qsv + "[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
 		},
 		domain.AccelNVENC: {
 			"[0:2]scale=1920:1040,format=yuva420p,hwupload[sub];[0:0]scale_cuda=w=1920:h=1040:format=nv12[main];[main][sub]overlay_cuda=eof_action=pass:repeatlast=0[v]",
