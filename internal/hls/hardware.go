@@ -324,39 +324,60 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 	return filter, append(encoder, keyframes...)
 }
 
-// errHardware is a device that would not encode.
-var errHardware = errors.New("hls: the hardware would not encode")
+var (
+	// errHardware is a device that would not encode.
+	errHardware = errors.New("hls: the hardware would not encode")
+	// errBurn is a device that would not burn a subtitle in.
+	errBurn = errors.New("hls: the hardware would not burn a subtitle in")
+)
 
 // Check encodes a second of SDR test picture, deinterlaced, and of HDR through the device's whole
 // chain to codec, as a title would be: tone mapped, and for HEVC kept in 10 bits too. A device that
 // is missing, a driver without a filter, or one that cannot encode the codec is found at start
 // rather than at the first play.
 func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCodec) error {
+	cases := []domain.VideoEncode{{Range: domain.RangeSDR, Deinterlace: true}, {Range: domain.RangeSDR, ToneMap: true}}
+	if codec == domain.VideoHEVC {
+		cases = append(cases, domain.VideoEncode{Range: domain.RangeHDR10})
+	}
+	return h.check(ctx, ffmpeg, codec, errHardware, cases)
+}
+
+// CheckBurn encodes a second of test picture with a picture subtitle burned in, through the graph
+// a title's goes through: SDR to H.264, and where the device encodes HEVC, HDR kept in 10 bits. An
+// overlay the driver lacks or fails to run is found at start rather than at the first play.
+func (h Hardware) CheckBurn(ctx context.Context, ffmpeg string) error {
+	err := h.check(ctx, ffmpeg, domain.VideoH264, errBurn, []domain.VideoEncode{{Range: domain.RangeSDR, Burn: new(1)}})
+	if err != nil || h.HEVC != domain.HEVCAllow {
+		return err
+	}
+	return h.check(ctx, ffmpeg, domain.VideoHEVC, errBurn, []domain.VideoEncode{{Range: domain.RangeHDR10, Burn: new(1)}})
+}
+
+// check encodes a second of test picture to codec as each of cases, through the arguments a
+// title's encode is given, answering failed with why where one fails. The picture is HDR where it
+// is tone mapped or kept, and a subtitle burned in is the source's second output.
+func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCodec, failed error, cases []domain.VideoEncode) error {
 	const sdr, hdr = "testsrc2=size=1280x720:rate=24,format=yuv420p",
 		"testsrc2=size=1280x720:rate=24,format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc"
-	type test struct {
-		source string
-		e      domain.VideoEncode
-	}
-	cases := []test{
-		{sdr, domain.VideoEncode{Range: domain.RangeSDR, Deinterlace: true}},
-		{hdr, domain.VideoEncode{Range: domain.RangeSDR, ToneMap: true}},
-	}
-	if codec == domain.VideoHEVC {
-		cases = append(cases, test{hdr, domain.VideoEncode{Range: domain.RangeHDR10}})
-	}
-	for _, tc := range cases {
-		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
-		e := tc.e
+	const subtitle = "color=c=white@0.5:size=320x60:rate=24,format=yuva420p"
+	for _, e := range cases {
 		e.Codec, e.Width, e.Height, e.BitrateKbps = codec, 640, 360, 2000
-		a := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
+		source := sdr
+		if e.ToneMap || e.Range != domain.RangeSDR {
+			source = hdr
+		}
+		if e.Burn != nil {
+			source += "[out0];" + subtitle + "[out1]"
+		}
+		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
+		a := quiet()
 		a = append(a, h.inputArgs("rawvideo", e)...)
-		a = append(a, "-f", "lavfi", "-i", tc.source, "-t", "1")
-		filter, encoder := h.videoArgs(e, "rawvideo")
-		a = append(append(a, "-vf", filter), encoder...)
+		a = append(a, "-f", "lavfi", "-i", source, "-t", "1")
+		a = append(a, streamArgs(h, 0, domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
 		a = append(a, "-f", "null", "-")
 		if err := encodeTest(ctx, ffmpeg, a); err != nil {
-			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", errHardware, h.Accel, codec, e.Range, e.ToneMap, err)
+			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", failed, h.Accel, codec, e.Range, e.ToneMap, err)
 		}
 	}
 	return nil
