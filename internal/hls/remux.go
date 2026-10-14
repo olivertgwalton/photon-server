@@ -159,6 +159,7 @@ type session struct {
 	dir       string
 	root      *os.Root
 	format    domain.SegmentFormat
+	rate      float64
 	sources   []Source
 	offsets   []time.Duration
 	plan      []Segment
@@ -224,6 +225,7 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 	}
 	s := &session{
 		dir: filepath.Join(r.dir, playback.String()), format: cmp.Or(c.Segments, domain.SegmentsFMP4),
+		rate:    c.Variant.FrameRate,
 		sources: c.Parts, offsets: offsets, plan: Plan(parts),
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]chan struct{}{},
 		cued: map[int]chan struct{}{}, cueFailed: map[int]error{},

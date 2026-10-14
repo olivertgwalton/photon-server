@@ -318,6 +318,48 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 	}
 }
 
+// On VideoToolbox a subtitle drawn in is laid over the picture on the device, a picture one scaled
+// to the size encoded and styled text drawn on a clear canvas of it from where the run starts;
+// every other device has FFmpeg draw it in and encodes in software.
+func TestVideoToolboxLaysASubtitleOverThePicture(t *testing.T) {
+	video := domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{
+		Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: true, Burn: new(2),
+	}}
+	for _, accel := range domain.Accelerations() {
+		want := domain.AccelSoftware
+		if accel == domain.AccelVideoToolbox {
+			want = accel
+		}
+		if got := EncodedOn(accel, video); got != want {
+			t.Errorf("%s: a subtitle drawn in is encoded on %s, want %s", accel, got, want)
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		layer *styledLayer
+		want  []string
+	}{
+		{
+			"a picture subtitle",
+			nil,
+			[]string{"-filter_complex [0:2]scale=1920:1040,format=bgra,hwupload[sub];[0:0]scale_vt=w=1920:h=1040,tonemap_videotoolbox="},
+		},
+		{
+			"styled text, at the video's frame rate",
+			&styledLayer{file: "/cache/part/2.ass", fonts: "/cache/part/fonts", rate: 24000.0 / 1001},
+			[]string{"-filter_complex alphasrc=s=1920x1040:r=23.976:start=12.000000,format=bgra,subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1:fontsdir=/cache/part/fonts,hwupload[sub];[0:0]scale_vt="},
+		},
+		{"styled text, at 25 frames a second where the video's rate is not known", &styledLayer{file: "/cache/part/2.ass"}, []string{"alphasrc=s=1920x1040:r=25.000:"}},
+	} {
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: domain.AccelVideoToolbox}, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+		for _, w := range append(tc.want, "[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v] -map [v] -c:v hevc_videotoolbox") {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: %q lacks %q", tc.name, got, w)
+			}
+		}
+	}
+}
+
 // unplayed is a file a test never plays: the run its remux starts with ends at once.
 func unplayed() (media.Input, error) { return media.Input{}, os.ErrNotExist }
 

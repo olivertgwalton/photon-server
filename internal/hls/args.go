@@ -40,7 +40,7 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 	}
 	a = append(a, "-copyts")
 	a = append(a, in.Args()...)
-	a = append(a, streamArgs(hw, video, audio, layer)...)
+	a = append(a, streamArgs(hw, start, video, audio, layer)...)
 	// The MP4 muxer writes a file's chapters as a text track, which Apple's players refuse a
 	// segment for.
 	a = append(a, "-map_chapters", "-1")
@@ -67,16 +67,29 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 	return a
 }
 
-// streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw.
-func streamArgs(hw Hardware, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
+// streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw,
+// from start.
+func streamArgs(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
 	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
+	case video.Burns() && hw.Accel == domain.AccelVideoToolbox:
+		// As Jellyfin's: the subtitle drawn at the size encoded on the CPU, a picture scaled to it
+		// and styled text on a clear canvas of it, uploaded and laid over the picture on the device.
+		filter, encoder := hw.videoArgs(*e, video.Codec)
+		var sub string
+		if layer != nil {
+			sub = layer.canvas(e.Width, e.Height, start)
+		} else {
+			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height) + ",format=bgra"
+		}
+		graph := sub + ",hwupload[sub];[" + in + "]" + filter + "[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]"
+		a = append(append(a, "-filter_complex", graph, "-map", "[v]"), encoder...)
 	case e != nil && layer != nil:
 		// Drawn by libass after the picture is scaled and tone mapped, as Jellyfin's is, at the
 		// size encoded, so it is as sharp as it can be.
 		filter, encoder := hw.videoArgs(*e, video.Codec)
-		a = append(append(a, "-map", in, "-vf", filter+","+layer.filter()), encoder...)
+		a = append(append(a, "-map", in, "-vf", filter+","+layer.filter("")), encoder...)
 	case e != nil && e.Burn != nil:
 		// As Jellyfin's: picture and subtitle each scaled to the size encoded, the picture tone
 		// mapped first, so the subtitle is drawn as it was authored.

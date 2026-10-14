@@ -23,10 +23,11 @@ type Hardware struct {
 	HEVC domain.HEVCEncoding
 }
 
-// encoding is the hardware video planned so is encoded on: a subtitle is drawn in in software, as
-// each device overlays in its own way.
+// encoding is the hardware video planned so is encoded on. VideoToolbox lays a subtitle over the
+// picture itself (see streamArgs); every other device overlays with filters of its own, which
+// photon does not build, so there a subtitle is drawn in in software.
 func (h Hardware) encoding(video domain.VideoPlan) Hardware {
-	if video.Burns() {
+	if video.Burns() && h.Accel != domain.AccelVideoToolbox {
 		return Hardware{Accel: domain.AccelSoftware, HEVC: h.HEVC}
 	}
 	return h
