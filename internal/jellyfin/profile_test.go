@@ -160,3 +160,26 @@ func TestAnAppsHLSIsInSegmentsThatCarryItsAudio(t *testing.T) {
 		}
 	}
 }
+
+// An app is sent a subtitle stream read out beside the file only where it draws the codec so and
+// not from the file itself, as Jellyfin prefers, and only a stream photon reads out.
+func TestAnAppIsSentASubtitleReadOutOnlyWhereItDrawsItSo(t *testing.T) {
+	both := profileOf(t, `{"SubtitleProfiles": [{"Format": "pgssub", "Method": "Embed"}, {"Format": "PGSSUB", "Method": "External"}, {"Format": "srt", "Method": "External"}]}`)
+	external := profileOf(t, `{"SubtitleProfiles": [{"Format": "PGSSUB", "Method": "External"}, {"Format": "srt", "Method": "External"}]}`)
+	for _, tc := range []struct {
+		p     deviceProfile
+		codec string
+		want  string
+	}{
+		{both, "hdmv_pgs_subtitle", ""},
+		{external, "hdmv_pgs_subtitle", "pgssub"},
+		{external, "subrip", ""},
+	} {
+		if got := tc.p.readOut(tc.codec); got != tc.want {
+			t.Errorf("%s read out as %q, want %q", tc.codec, got, tc.want)
+		}
+	}
+	if external.subtitleTaken("subrip", domain.SubtitleEmbedded) || !both.subtitleTaken("hdmv_pgs_subtitle", domain.SubtitleEmbedded) {
+		t.Error("an embedded stream is taken as photon delivers it")
+	}
+}

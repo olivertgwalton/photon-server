@@ -5,9 +5,11 @@ package jellyfin
 import (
 	"bytes"
 	"cmp"
+	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,5 +185,52 @@ func TestAPictureSubtitleIsNamedAsJellyfinNamesIt(t *testing.T) {
 	src := playbackInfo(t, api, film, `{}`)
 	if pgs, ass := subtitleStream(t, src, pgsStream), subtitleStream(t, src, assStream); pgs["Codec"] != "PGSSUB" || ass["Codec"] != "ass" {
 		t.Errorf("codecs %v and %v, want PGSSUB and ass", pgs["Codec"], ass["Codec"])
+	}
+}
+
+// webProfile is Jellyfin's web app in a browser that plays MKV of H.264 and AAC, as its profile
+// says, and draws ASS, SSA and PGS itself beside the video, with JASSUB and libbitsub.
+const webProfile = `{
+	"DirectPlayProfiles": [{"Type": "Video", "Container": "mkv,webm", "VideoCodec": "h264,vp9", "AudioCodec": "aac,opus"}],
+	"TranscodingProfiles": [{"Type": "Video", "Container": "mp4", "Protocol": "hls", "VideoCodec": "h264", "AudioCodec": "aac", "MaxAudioChannels": "2"}],
+	"SubtitleProfiles": [{"Format": "vtt", "Method": "External"}, {"Format": "ass", "Method": "External"},
+		{"Format": "ssa", "Method": "External"}, {"Format": "pgssub", "Method": "External"}]
+}`
+
+// An app that draws PGS itself beside the video plays a file carrying it as it is, the stream
+// read out for it at the address PlaybackInfo gives it, as Jellyfin's DeliveryUrl; an app that
+// does not is sent HLS with the subtitle drawn in.
+func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
+	api, film, copyID := aSubtitledFilm(t)
+	src := playbackInfo(t, api, film, webProfile)
+	if src["SupportsDirectPlay"] != true || src["TranscodingUrl"] != nil {
+		t.Fatalf("the web app's source: %v, want the file as it is", src)
+	}
+	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	pgs, ass := subtitleStream(t, src, pgsStream), subtitleStream(t, src, assStream)
+	if pgs["DeliveryMethod"] != "External" || pgs["DeliveryUrl"] != base+"2/0/Stream.pgssub?ApiKey=pst_ada" {
+		t.Errorf("the PGS stream: %v", pgs)
+	}
+	if ass["DeliveryMethod"] != "External" || ass["DeliveryUrl"] != base+"3/0/Stream.ass?ApiKey=pst_ada" {
+		t.Errorf("the ASS stream: %v", ass)
+	}
+	// The app fetches it with no header, as libbitsub does.
+	if w := serve(api, http.MethodGet, pgs["DeliveryUrl"].(string), "", ""); w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), testtool.PGS(0, 2*90000)) {
+		t.Errorf("fetching the PGS stream: %d %x", w.Code, w.Body)
+	}
+
+	src = playbackInfo(t, api, film, strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1))
+	transcoding, _ := src["TranscodingUrl"].(string)
+	u, err := url.Parse(transcoding)
+	if err != nil || src["SupportsDirectPlay"] != false {
+		t.Fatalf("a source for an app that draws no PGS: %v", src)
+	}
+	plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
+	var tc transcode
+	if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode == nil || tc.Video.Encode.Burn == nil || *tc.Video.Encode.Burn != pgsStream {
+		t.Errorf("HLS for an app that draws no PGS: %s, want the PGS stream drawn in", plan)
+	}
+	if pgs := subtitleStream(t, src, pgsStream); pgs["DeliveryMethod"] != nil {
+		t.Errorf("the PGS stream drawn in: %v", pgs)
 	}
 }

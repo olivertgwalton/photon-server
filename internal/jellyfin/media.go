@@ -81,6 +81,7 @@ type mediaStream struct {
 	IsTextSubtitleStream   bool    `json:"IsTextSubtitleStream"`
 	SupportsExternalStream bool    `json:"SupportsExternalStream"`
 	DeliveryMethod         string  `json:"DeliveryMethod,omitempty"`
+	DeliveryURL            string  `json:"DeliveryUrl,omitempty"`
 	Level                  int     `json:"Level,omitempty"`
 }
 

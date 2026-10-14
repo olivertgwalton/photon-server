@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"slices"
 	"strconv"
@@ -106,4 +107,21 @@ func readsOutAs(codec, name, format string) bool {
 		return hls.StyledSubtitle(format)
 	}
 	return format == strings.TrimPrefix(path.Ext(name), ".") || slices.Contains(subtitleFormats(codec), format)
+}
+
+// readOutSubtitles marks each stream of a copy played as it is that the app draws read out beside
+// it External, at the address Jellyfin gives it, carrying the app's token, as an app sends none
+// with what it fetches for its player.
+func readOutSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile) {
+	for i, m := range src.MediaStreams {
+		n := slices.IndexFunc(c.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamSubtitle && s.Index == m.Index })
+		if m.IsExternal || n < 0 {
+			continue
+		}
+		if format := p.readOut(c.Streams[n].Codec); format != "" {
+			src.MediaStreams[i].DeliveryMethod = "External"
+			src.MediaStreams[i].DeliveryURL = "/Videos/" + guid(item) + "/" + src.ID + "/Subtitles/" + strconv.Itoa(m.Index) + "/0/Stream." + format +
+				"?" + url.Values{"ApiKey": {appOf(r).Token}}.Encode()
+		}
+	}
 }

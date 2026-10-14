@@ -161,6 +161,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	video, sound := direct(c, (*int)(req.AudioStreamIndex))
 	sub, picked := subtitleOf(c, (*int)(req.SubtitleStreamIndex))
 	if p.playsDirectly(c, video, sound, picked, limit) {
+		readOutSubtitles(r, src, item, c, p)
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false

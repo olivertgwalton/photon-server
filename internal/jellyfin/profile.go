@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -310,18 +311,37 @@ type subtitleChoice struct {
 	file     uuid.UUID
 }
 
-// subtitleTaken is whether the app draws a subtitle of a codec itself, delivered so.
+// subtitleTaken is whether the app draws a subtitle of a codec itself, delivered so: a stream of the
+// file drawn from it or read out beside it, or a file beside the copy.
 func (d deviceProfile) subtitleTaken(codec string, delivery domain.SubtitleDelivery) bool {
-	var method string
 	switch delivery {
 	case domain.SubtitleEmbedded:
-		method = "embed"
+		return d.subtitleFormat(codec, "embed") != "" || d.readOut(codec) != ""
 	case domain.SubtitleSidecar:
-		method = "external"
+		return d.subtitleFormat(codec, "external") != ""
 	}
-	return slices.ContainsFunc(d.SubtitleProfiles, func(s subtitleProfile) bool {
-		return strings.EqualFold(s.Method, method) && slices.Contains(subtitleFormats(codec), strings.ToLower(s.Format))
-	})
+	return false
+}
+
+// readOut is the format the app is sent a subtitle stream of a codec in, read out of the file beside
+// it, where it draws the codec so and not from the file itself, as Jellyfin prefers; "" where it
+// is not sent so.
+func (d deviceProfile) readOut(codec string) string {
+	if !hls.ReadOut(codec) || d.subtitleFormat(codec, "embed") != "" {
+		return ""
+	}
+	return d.subtitleFormat(codec, "external")
+}
+
+// subtitleFormat is the format of the app's subtitle profile that takes a codec by a method, ""
+// where none does.
+func (d deviceProfile) subtitleFormat(codec, method string) string {
+	for _, s := range d.SubtitleProfiles {
+		if f := strings.ToLower(s.Format); strings.EqualFold(s.Method, method) && slices.Contains(subtitleFormats(codec), f) {
+			return f
+		}
+	}
+	return ""
 }
 
 // subtitleFormats are the names Jellyfin's apps give a subtitle codec's format.
