@@ -4,6 +4,7 @@ package jellyfin
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -149,5 +150,47 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 	save("/Users/"+guid(bea.ID)+"/Configuration", `{"SubtitleMode":"None"}`, http.StatusForbidden)
 	if p, err := st.Preferences(ctx, bea.ID); err != nil || p.SubtitleMode != domain.SubtitlesDefault {
 		t.Errorf("another profile's preferences: %+v, %v", p, err)
+	}
+}
+
+// Jellyfin's web app waits on the languages a user may prefer before it shows its playback and
+// subtitle settings, and shows the language a user saved as the one chosen: each it offers reads
+// back as itself.
+func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
+	st, ada, _, _ := aFilm(t)
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Sent: playback.NewSent(), Network: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
+	})
+	const web = `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="10.11.0", Token="pst_ada"`
+	w := serve(api, http.MethodGet, "/Localization/cultures", web, "")
+	var cultures []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &cultures); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("/Localization/cultures: %d %s", w.Code, w.Body)
+	}
+	names := map[string]bool{}
+	for _, c := range cultures {
+		requireKeys(t, "a culture", c, "Name", "DisplayName", "TwoLetterISOLanguageName", "ThreeLetterISOLanguageName", "ThreeLetterISOLanguageNames")
+		names[c["DisplayName"].(string)] = true
+	}
+	for _, name := range []string{"English", "French", "Japanese", "Norwegian Bokmål"} {
+		if !names[name] {
+			t.Errorf("%s is not offered among %d languages", name, len(cultures))
+		}
+	}
+	for _, c := range cultures {
+		code, _ := c["ThreeLetterISOLanguageName"].(string)
+		body := fmt.Sprintf(`{"AudioLanguagePreference":%q,"SubtitleLanguagePreference":%q}`, code, code)
+		if w := serve(api, http.MethodPost, "/Users/Configuration", web, body); w.Code != http.StatusNoContent {
+			t.Fatalf("saving %v: %d %s", code, w.Code, w.Body)
+		}
+		var u struct{ Configuration map[string]any }
+		if err := json.Unmarshal(serve(api, http.MethodGet, "/Users/Me", web, "").Body.Bytes(), &u); err != nil {
+			t.Fatal(err)
+		}
+		if a, s := u.Configuration["AudioLanguagePreference"], u.Configuration["SubtitleLanguagePreference"]; a != code || s != code {
+			t.Errorf("%s saved as %v, read back as %v and %v", c["DisplayName"], code, a, s)
+		}
 	}
 }
