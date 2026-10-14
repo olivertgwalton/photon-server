@@ -5,9 +5,12 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
+	"sync"
 	"uuid"
 
 	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -176,4 +179,43 @@ func (a *API) chooseTracks(ctx context.Context, profile, item uuid.UUID, version
 	}
 	playback.ChooseTracks(versions, prefs, last)
 	return nil
+}
+
+// culture is Jellyfin's CultureDto: a language a user may prefer, which its web app's playback and
+// subtitle settings offer, by ThreeLetterISOLanguageName. That is the code a configuration
+// answers, so the language a user chose is the one shown chosen: "fra" for French, where
+// Jellyfin's own list leads with "fre".
+type culture struct {
+	Name                        string   `json:"Name"`
+	DisplayName                 string   `json:"DisplayName"`
+	TwoLetterISOLanguageName    string   `json:"TwoLetterISOLanguageName"`
+	ThreeLetterISOLanguageName  string   `json:"ThreeLetterISOLanguageName"`
+	ThreeLetterISOLanguageNames []string `json:"ThreeLetterISOLanguageNames"`
+}
+
+// cultures are the languages with an ISO 639-1 code, as Jellyfin lists only those, named in
+// English as Jellyfin names them, in the order of their names.
+var cultures = sync.OnceValue(func() []culture {
+	names := display.English.Languages()
+	var list []culture
+	for a := 'a'; a <= 'z'; a++ {
+		for b := 'a'; b <= 'z'; b++ {
+			code := string([]rune{a, b})
+			// A code withdrawn for another, as iw was for he, is the other's.
+			if base, err := language.ParseBase(code); err != nil || base.String() != code {
+				continue
+			}
+			name, three := names.Name(language.Make(code)), iso639(code)
+			list = append(list, culture{
+				Name: name, DisplayName: name, TwoLetterISOLanguageName: code,
+				ThreeLetterISOLanguageName: three, ThreeLetterISOLanguageNames: []string{three},
+			})
+		}
+	}
+	slices.SortFunc(list, func(x, y culture) int { return strings.Compare(x.Name, y.Name) })
+	return list
+})
+
+func (a *API) cultures(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, cultures())
 }
