@@ -153,6 +153,9 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.authorizeQuickConnect, "POST /QuickConnect/Authorize")
 	a.handle(a.systemInfo, "GET /System/Info")
 	a.handle(a.endpoint, "GET /System/Endpoint")
+	// Jellyfin's web app reads this before JASSUB draws styled subtitles, and draws none if it is
+	// missing. Photon keeps no fallback fonts, so a file's own fonts and JASSUB's default are all.
+	a.handle(a.constant(`{"EnableFallbackFont":false}`), "GET /System/Configuration/encoding")
 	a.handle(a.me, "GET /Users/Me")
 	a.handle(a.user, "GET /Users/{userId}")
 	a.handle(a.setConfiguration, "POST /Users/Configuration", "POST /Users/{userId}/Configuration")
