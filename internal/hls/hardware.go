@@ -332,31 +332,33 @@ var errHardware = errors.New("hls: the hardware would not encode")
 // is missing, a driver without a filter, or one that cannot encode the codec is found at start
 // rather than at the first play.
 func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCodec) error {
+	cases := []domain.VideoEncode{{Range: domain.RangeSDR, Deinterlace: true}, {Range: domain.RangeSDR, ToneMap: true}}
+	if codec == domain.VideoHEVC {
+		cases = append(cases, domain.VideoEncode{Range: domain.RangeHDR10})
+	}
+	return h.check(ctx, ffmpeg, codec, errHardware, cases)
+}
+
+// check encodes a second of test picture to codec as each of cases, through the arguments a
+// title's encode is given, answering failed with why where one fails. The picture is HDR where it
+// is tone mapped or kept.
+func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCodec, failed error, cases []domain.VideoEncode) error {
 	const sdr, hdr = "testsrc2=size=1280x720:rate=24,format=yuv420p",
 		"testsrc2=size=1280x720:rate=24,format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc"
-	type test struct {
-		source string
-		e      domain.VideoEncode
-	}
-	cases := []test{
-		{sdr, domain.VideoEncode{Range: domain.RangeSDR, Deinterlace: true}},
-		{hdr, domain.VideoEncode{Range: domain.RangeSDR, ToneMap: true}},
-	}
-	if codec == domain.VideoHEVC {
-		cases = append(cases, test{hdr, domain.VideoEncode{Range: domain.RangeHDR10}})
-	}
-	for _, tc := range cases {
-		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
-		e := tc.e
+	for _, e := range cases {
 		e.Codec, e.Width, e.Height, e.BitrateKbps = codec, 640, 360, 2000
-		a := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
+		source := sdr
+		if e.ToneMap || e.Range != domain.RangeSDR {
+			source = hdr
+		}
+		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
+		a := quiet()
 		a = append(a, h.inputArgs("rawvideo", e)...)
-		a = append(a, "-f", "lavfi", "-i", tc.source, "-t", "1")
-		filter, encoder := h.videoArgs(e, "rawvideo")
-		a = append(append(a, "-vf", filter), encoder...)
+		a = append(a, "-f", "lavfi", "-i", source, "-t", "1")
+		a = append(a, streamArgs(h, 0, domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
 		a = append(a, "-f", "null", "-")
 		if err := encodeTest(ctx, ffmpeg, a); err != nil {
-			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", errHardware, h.Accel, codec, e.Range, e.ToneMap, err)
+			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", failed, h.Accel, codec, e.Range, e.ToneMap, err)
 		}
 	}
 	return nil
