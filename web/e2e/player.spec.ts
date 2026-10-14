@@ -306,6 +306,15 @@ test("the system's media keys and controls drive the player", async ({
 	await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 	await press("nexttrack");
 	await expect(page).toHaveURL("/play/p-ep2");
+	await page.route("**/api/v1/titles/t-show/playable", async (route) => {
+		const card = async (id: string) =>
+			(await page.request.get(`/api/v1/titles/${id}`)).json();
+		await route.fulfill({
+			json: { items: [await card("p-ep"), await card("p-ep2")] },
+		});
+	});
+	await press("previoustrack");
+	await expect(page).toHaveURL("/play/p-ep");
 });
 
 test("an episode goes on to the next and back to the one before", async ({

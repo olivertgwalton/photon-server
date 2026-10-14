@@ -670,6 +670,7 @@ $effect(() => {
 		["seekforward", (d) => seek(position + (d.seekOffset ?? step))],
 		["seekto", (d) => seek(d.seekTime ?? position)],
 		["nexttrack", next ? playNext : null],
+		["previoustrack", hasPrevious ? () => void playPrevious() : null],
 	];
 	for (const [action, handler] of handlers) {
 		try {
