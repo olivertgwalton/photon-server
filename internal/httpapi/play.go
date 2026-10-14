@@ -325,8 +325,8 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
 // beside one drawn in: the files beside the copy it draws so, but plain ones HLS carries itself,
-// and the styled streams of a copy in one file, read out as they are, but those it draws from the
-// file it plays.
+// and the styled and PGS streams of a copy in one file, read out as they are, but those it draws
+// from the file it plays.
 func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayMethod, until time.Time) []subtitleJSON {
 	var out []subtitleJSON
 	for _, s := range c.Streams {
@@ -335,12 +335,15 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 			continue
 		}
 		part := "/api/v1/parts/" + c.Parts[0].ID.String()
-		out = append(out, subtitleJSON{
+		sub := subtitleJSON{
 			Stream: &s.Index, Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.TagOf(s.Language), Title: s.Title, Default: s.Default,
 			Forced: s.Forced, HearingImpaired: s.HearingImpaired,
-			URL:   uriReference(a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until)),
-			Fonts: uriReference(a.svc.Signer.Sign(part+"/fonts", until)),
-		})
+			URL: uriReference(a.svc.Signer.Sign(part+"/subtitles/"+strconv.Itoa(s.Index), until)),
+		}
+		if hls.StyledSubtitle(s.Codec) {
+			sub.Fonts = uriReference(a.svc.Signer.Sign(part+"/fonts", until))
+		}
+		out = append(out, sub)
 	}
 	for _, f := range c.Subtitles {
 		if !p.Sidecar(f.Codec, true, len(c.Parts)) || method != domain.PlayDirect && hls.TextSubtitle(f.Codec) {

@@ -69,9 +69,21 @@ func TextSubtitle(codec string) bool {
 // motion), which WebVTT would lose: drawn by the player, or by libass into the video.
 func StyledSubtitle(codec string) bool { return codec == "ass" || codec == "ssa" }
 
+// PictureSubtitle reports whether a subtitle codec is Blu-ray's pictures (PGS), which a player
+// that draws them itself is handed read out of the file as it is.
+func PictureSubtitle(codec string) bool { return codec == "hdmv_pgs_subtitle" }
+
+// ReadOut reports whether a subtitle stream of a part is read out as it is, for a player to draw
+// beside its video: styled text, or PGS pictures.
+func ReadOut(codec string) bool { return StyledSubtitle(codec) || PictureSubtitle(codec) }
+
 // StyledName is the name a styled stream of a part is read out as, as it is, in the folder
 // Extracted answers.
 func StyledName(stream int) string { return strconv.Itoa(stream) + ".ass" }
+
+// PictureName is the name a PGS stream of a part is read out as, as it is, in the folder Extracted
+// answers.
+func PictureName(stream int) string { return strconv.Itoa(stream) + ".sup" }
 
 // FontsDir is the folder of the fonts a part carries for its styled streams, in the folder
 // Extracted answers.
@@ -129,9 +141,10 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (media.Input, error), 
 	return string(out), cmd.Err(err)
 }
 
-// Extracted answers the folder a part's styled subtitle streams are read out into, with want in
-// it, reading them out if no one is. Reading one means reading the whole file, so every styled
-// stream of the part is read out in the same pass and kept as it is (see StyledName), for this
+// Extracted answers the folder a part's styled and PGS subtitle streams are read out into, with
+// want in it, reading them out if no one is. Reading one means reading the whole file, so every
+// such stream of the part is read out in the same pass and kept as it is (see StyledName and
+// PictureName), for this
 // playback and the next, with the fonts the file carries for them (see FontsDir). A folder lacking
 // want, kept from before a stream was read out so, is read again. The pass outlives the request
 // that started it: a player that gives up waiting finds it further on when it asks again.
@@ -170,7 +183,7 @@ func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string
 	}
 }
 
-// extract writes each of a part's styled subtitle streams into dir in one read of the file, with
+// extract writes each of a part's styled and PGS subtitle streams into dir in one read of the file, with
 // the fonts its header lists, each named by its stream: FFmpeg refuses to write one under the name
 // the file gives it unless that is plain ASCII with no spaces.
 func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) error {
@@ -204,8 +217,12 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 	a = append(a, in.Args()...)
 	for _, s := range src.Streams {
 		n := strconv.Itoa(s.Index)
-		if s.Kind == domain.StreamSubtitle && StyledSubtitle(s.Codec) {
+		switch {
+		case s.Kind != domain.StreamSubtitle:
+		case StyledSubtitle(s.Codec):
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
+		case PictureSubtitle(s.Codec):
+			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "sup", filepath.Join(made, PictureName(s.Index)))
 		}
 	}
 	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)
