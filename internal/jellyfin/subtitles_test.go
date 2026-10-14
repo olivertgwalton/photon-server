@@ -329,3 +329,25 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 		t.Errorf("the SubRip's cues: %d %s", w.Code, w.Body)
 	}
 }
+
+// Jellyfin's web app starts its player on the subtitle PlaybackInfo's source names its default, so
+// the source names the one the app chose, a stream of the file or a file beside it, played as it is
+// or as HLS, and none where it chose none, as Jellyfin answers it.
+func TestAnAppStartsOnTheSubtitleItChose(t *testing.T) {
+	api, film, _ := aSubtitledFilm(t)
+	burns := strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1)
+	for _, c := range []struct {
+		name     string
+		subtitle int
+		profile  string
+	}{
+		{"an ASS stream", assStream, webProfile},
+		{"a SubRip file", srtFile, webProfile},
+		{"none", -1, webProfile},
+		{"a PGS stream drawn into HLS", pgsStream, burns},
+	} {
+		if src := playbackInfo(t, api, film, c.subtitle, c.profile); src["DefaultSubtitleStreamIndex"] != float64(c.subtitle) {
+			t.Errorf("%s chosen: the default is %v, want %d", c.name, src["DefaultSubtitleStreamIndex"], c.subtitle)
+		}
+	}
+}
