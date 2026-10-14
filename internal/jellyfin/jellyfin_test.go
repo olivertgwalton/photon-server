@@ -674,6 +674,15 @@ type fakeNetwork domain.Network
 
 func (n fakeNetwork) Network(context.Context) (domain.Network, error) { return domain.Network(n), nil }
 
+// Jellyfin's web app draws styled subtitles only once it has read the encoding configuration.
+func TestTheWebAppIsToldItHasNoFallbackFonts(t *testing.T) {
+	api, _, _, _ := newAPI()
+	w := serve(api, http.MethodGet, "/System/Configuration/encoding", "MediaBrowser Token=pst_device", "")
+	if w.Code != http.StatusOK || w.Body.String() != `{"EnableFallbackFont":false}` {
+		t.Errorf("%d %q, want 200 with no fallback fonts", w.Code, w.Body)
+	}
+}
+
 // An app is told whether it is on the server's machine and its networks, which Jellyfin's web
 // app needs to know before it measures its bitrate rather than stream at 1.5 Mbps.
 func TestAnAppIsToldWhetherItIsOnTheServersNetwork(t *testing.T) {
