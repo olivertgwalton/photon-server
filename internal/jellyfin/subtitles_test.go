@@ -5,11 +5,9 @@ package jellyfin
 import (
 	"bytes"
 	"cmp"
-	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,7 +157,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 	api = New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Copies: noCopies{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(),
-		Watching: st, Preferences: st, HLS: remuxer, Placer: alone(newFakeRemuxes()), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		Watching: st, Preferences: st, HLS: remuxer, Placer: alone(newFakeRemuxes()), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 	})
 	return api, film, versions[film][0].ID
 }
@@ -318,14 +316,11 @@ func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
 
 	src = playbackInfo(t, api, film, pgsStream, strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1))
 	transcoding, _ := src["TranscodingUrl"].(string)
-	u, err := url.Parse(transcoding)
-	if err != nil || src["SupportsDirectPlay"] != false {
+	if transcoding == "" || src["SupportsDirectPlay"] != false {
 		t.Fatalf("a source for an app that draws no PGS: %v", src)
 	}
-	plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
-	var tc transcode
-	if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode == nil || tc.Video.Encode.Burn == nil || *tc.Video.Encode.Burn != pgsStream {
-		t.Errorf("HLS for an app that draws no PGS: %s, want the PGS stream drawn in", plan)
+	if tc := plannedFor(t, api, transcoding); tc.Video.Encode == nil || tc.Video.Encode.Burn == nil || *tc.Video.Encode.Burn != pgsStream {
+		t.Errorf("HLS for an app that draws no PGS: %+v, want the PGS stream drawn in", tc)
 	}
 	if pgs := subtitleStream(t, src, pgsStream); pgs["DeliveryMethod"] != "Encode" || pgs["DeliveryUrl"] != nil {
 		t.Errorf("the PGS stream drawn in: %v", pgs)
@@ -365,14 +360,11 @@ func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
 	burns := strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1)
 	src := playbackInfo(t, api, film, pgsStream, burns)
 	transcoding, _ := src["TranscodingUrl"].(string)
-	u, err := url.Parse(transcoding)
-	if err != nil || transcoding == "" {
+	if transcoding == "" {
 		t.Fatalf("the web app's source with the PGS stream drawn in: %v, want HLS", src)
 	}
-	plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
-	var tc transcode
-	if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Renditions != playback.RenditionsEmbedded {
-		t.Errorf("HLS for the web app: %s, want no subtitle file in it", plan)
+	if tc := plannedFor(t, api, transcoding); tc.Renditions != playback.RenditionsEmbedded {
+		t.Errorf("HLS for the web app: %+v, want no subtitle file in it", tc)
 	}
 	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
 	for index, want := range map[int]string{srtFile: "7/0/Stream.vtt", assFile: "4/0/Stream.ass", assStream: "3/0/Stream.ass", vobSubFile: "5/0/Stream.vobsub"} {
@@ -401,14 +393,11 @@ func TestJellyfinWebDrawsAStyledOrPictureSubtitleBesideHLS(t *testing.T) {
 	for index, want := range map[int]string{pgsStream: "2/0/Stream.pgssub", assStream: "3/0/Stream.ass", pgsFile: "6/0/Stream.pgssub", assFile: "4/0/Stream.ass"} {
 		src := playbackInfo(t, api, film, index, noMKV)
 		transcoding, _ := src["TranscodingUrl"].(string)
-		u, err := url.Parse(transcoding)
-		if err != nil || transcoding == "" {
+		if transcoding == "" {
 			t.Fatalf("the source with %d chosen: %v, want HLS", index, src)
 		}
-		plan, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
-		var tc transcode
-		if err != nil || json.Unmarshal(plan, &tc) != nil || tc.Video.Encode != nil {
-			t.Errorf("HLS with %d chosen: %s, want the video copied, nothing drawn in", index, plan)
+		if tc := plannedFor(t, api, transcoding); tc.Video.Encode != nil {
+			t.Errorf("HLS with %d chosen: %+v, want the video copied, nothing drawn in", index, tc)
 		}
 		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
 			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
