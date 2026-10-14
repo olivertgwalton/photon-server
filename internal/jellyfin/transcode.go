@@ -26,6 +26,7 @@ import (
 type hlsFiles interface {
 	Has(playback uuid.UUID) bool
 	Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error)
+	Extracted(ctx context.Context, src hls.SubtitleSource, want string) (string, error)
 }
 
 // placer chooses the node that delivers a playback, encoding it where it is encoded, and opens its
