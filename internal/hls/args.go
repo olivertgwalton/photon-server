@@ -74,15 +74,24 @@ const vaapiDrawnHeight = 1080
 // and styled text by libass, so it is drawn as it was authored and as sharp as it can be.
 func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.VideoEncode, layer *styledLayer) []string {
 	size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
-	if format, upload, overlay := hw.overlay(); overlay != "" {
+	if format, upload, overlay := hw.overlay(e); overlay != "" {
 		// Uploaded and laid over the picture on the device; styled text drawn on a clear canvas.
-		width, height := e.Width, e.Height
-		if hw.Accel == domain.AccelVAAPI && hw.Overlay == OverlayVAAPI {
-			// overlay_vaapi scales what it lays over, so as Jellyfin's the subtitle is drawn at most
-			// vaapiDrawnHeight high, and less is uploaded.
-			overlay += ":w=" + strconv.Itoa(e.Width) + ":h=" + strconv.Itoa(e.Height)
-			if height > vaapiDrawnHeight {
-				width, height = width*vaapiDrawnHeight/height/2*2, vaapiDrawnHeight
+		width, height, after := e.Width, e.Height, ""
+		if hw.Accel == domain.AccelVAAPI {
+			switch hw.burnOverlay(e) {
+			case OverlayVAAPI:
+				// overlay_vaapi scales what it lays over, so as Jellyfin's the subtitle is drawn at
+				// most vaapiDrawnHeight high, and less is uploaded.
+				overlay += ":w=" + strconv.Itoa(e.Width) + ":h=" + strconv.Itoa(e.Height)
+				if height > vaapiDrawnHeight {
+					width, height = width*vaapiDrawnHeight/height/2*2, vaapiDrawnHeight
+				}
+			case OverlayVulkan:
+				// As Jellyfin's: the picture mapped to libplacebo, made the subtitle's BGRA, which
+				// overlay_vulkan needs, and mapped back to VAAPI's NV12 for the encoder.
+				filter += ",hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc,format=vulkan"
+				after = ",hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+			case OverlayCPU:
 			}
 		}
 		var sub string
@@ -95,7 +104,7 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 		} else {
 			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + strconv.Itoa(width) + ":" + strconv.Itoa(height) + ",format=" + format
 		}
-		graph := sub + "," + upload + "[sub];[" + in + "]" + filter + "[main];[main][sub]" + overlay + "[v]"
+		graph := sub + "," + upload + "[sub];[" + in + "]" + filter + "[main];[main][sub]" + overlay + after + "[v]"
 		return []string{"-filter_complex", graph, "-map", "[v]"}
 	}
 	// Laid over the picture by FFmpeg, VAAPI's taken off the device and back where its driver

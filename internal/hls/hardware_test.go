@@ -28,7 +28,7 @@ func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 720, Height: 576, BitrateKbps: 4000, Range: domain.RangeSDR, Deinterlace: true}
 	for accel, filter := range map[domain.Acceleration]string{
 		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le,hwupload,scale_vt",
-		domain.AccelVAAPI: "hwupload,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
+		domain.AccelVAAPI: "hwupload=derive_device=vaapi,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
 		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda", domain.AccelAMF: "yadif=0:-1:0,scale=",
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
