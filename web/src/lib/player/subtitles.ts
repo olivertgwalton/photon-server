@@ -122,6 +122,23 @@ export function needsReplay(
 	return playback.method === "direct" && wants(choice).viaHLS;
 }
 
+// Moves cues to show delay seconds later than their file says, each by what
+// it has not been moved yet: the browser's HLS and hls.js add cues as they
+// read them, and the delay changes as the reader sets it.
+export function delayCues(
+	cues: Iterable<{ startTime: number; endTime: number }>,
+	delay: number,
+	moved: WeakMap<object, number>,
+) {
+	for (const cue of cues) {
+		const by = delay - (moved.get(cue) ?? 0);
+		if (!by) continue;
+		cue.startTime += by;
+		cue.endTime += by;
+		moved.set(cue, delay);
+	}
+}
+
 // A SubRip file as WebVTT, which is all a browser's track reads.
 // ponytail: decoded as UTF-8, so a file in another charset reads garbled
 // where HLS would convert it; sniff the charset if that bites.

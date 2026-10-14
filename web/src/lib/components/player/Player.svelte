@@ -36,6 +36,7 @@ import { ProgressReporter, type Report } from "#lib/player/progress.js";
 import {
 	beside,
 	choices,
+	delayCues,
 	needsReplay,
 	startingSubtitle,
 	wants,
@@ -108,6 +109,10 @@ let subtitleKey = $derived(
 	startVersion && startingSubtitle(startVersion, askedSubtitle),
 );
 let lastSubtitle = $state<string>();
+// How much later than its file the subtitle shows, in seconds, as the reader
+// set it; another subtitle starts on time.
+let subtitleDelay = $state(0);
+const delayed = new WeakMap<object, number>();
 let quality = $derived(prefs.max_bitrate_kbps);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
@@ -173,6 +178,10 @@ const waiting = $derived(readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
 const fullscreen = $derived(!!fullscreenElement);
 const subtitleChoices = $derived(version ? choices(version) : []);
 const subtitle = $derived(subtitleChoices.find((c) => c.key === subtitleKey));
+const burned = $derived(
+	playback?.video?.burned_subtitle != null ||
+		playback?.video?.burned_subtitle_file != null,
+);
 const audioStreams = $derived(
 	version?.streams.filter((s) => s.kind === "audio") ?? [],
 );
@@ -406,9 +415,6 @@ async function showSubtitle() {
 		);
 		return;
 	}
-	const burned =
-		playback.video?.burned_subtitle != null ||
-		playback.video?.burned_subtitle_file != null;
 	const n = burned ? -1 : (subtitle?.rendition ?? -1);
 	if (hls) {
 		hls.subtitleTrack = n;
@@ -443,7 +449,12 @@ async function showStyled(sub: Schemas["Subtitle"] | undefined) {
 			: [],
 	]);
 	if (styledURL !== sub.url || !video) return;
-	styled = new JASSUB({ video, subUrl: absolute(sub.url), fonts });
+	styled = new JASSUB({
+		video,
+		subUrl: absolute(sub.url),
+		fonts,
+		timeOffset: -subtitleDelay,
+	});
 }
 
 // Draws PGS or VobSub over the video with libbitsub, or stops drawing it. The
@@ -466,7 +477,24 @@ async function showPictures(sub: Schemas["Subtitle"] | undefined) {
 		sub.codec === "dvd_subtitle"
 			? new VobSubRenderer({ video, canvas, subUrl, fileName: "track.mks" })
 			: new PgsRenderer({ video, canvas, subUrl });
+	renderer.timeOffset = -subtitleDelay;
 	pictures = { renderer, canvas };
+}
+
+// Shows the subtitle as late as the reader set it: its cues moved, or the
+// clock JASSUB and libbitsub draw by.
+function delaySubtitle() {
+	for (const t of video?.textTracks ?? []) {
+		if (t.mode === "showing" && t.cues)
+			delayCues(t.cues, subtitleDelay, delayed);
+	}
+	if (styled) styled.timeOffset = -subtitleDelay;
+	if (pictures) pictures.renderer.timeOffset = -subtitleDelay;
+}
+
+function moveSubtitle(by: number) {
+	subtitleDelay = Math.round((subtitleDelay + by) * 10) / 10;
+	delaySubtitle();
 }
 
 // A choice in one of the settings menu's submenus leaves bits-ui's menu open,
@@ -476,6 +504,7 @@ function chooseSubtitle(key: string) {
 	const chosen = subtitleChoices.find((c) => c.key === key);
 	if (chosen) lastSubtitle = key;
 	subtitleKey = chosen?.key;
+	subtitleDelay = 0;
 	if (playback && needsReplay(chosen, playback)) reopen();
 	else void showSubtitle();
 }
@@ -703,6 +732,7 @@ onMount(() => {
 		ontimeupdate={() => {
 			if (!video || pendingSeek !== undefined) return;
 			time = video.currentTime;
+			delaySubtitle();
 			if (!marker || skipping(marker.kind, prefs) !== "skip") return;
 			if (skippedAt.has(marker.start_ms)) return;
 			skippedAt.add(marker.start_ms);
@@ -947,6 +977,36 @@ onMount(() => {
 												<Menu.RadioItem value={c.key}>{c.label}</Menu.RadioItem>
 											{/each}
 										</Menu.RadioGroup>
+									</Menu.SubContent>
+								</Menu.Sub>
+							{/if}
+							{#if subtitle && !burned}
+								<Menu.Sub>
+									<Menu.SubTrigger>
+										Subtitle timing
+										<span class="text-ink-2 ml-auto text-xs tabular-nums">
+											{subtitleDelay
+												? `${Math.abs(subtitleDelay)} s ${subtitleDelay > 0 ? "later" : "earlier"}`
+												: "On time"}
+										</span>
+									</Menu.SubTrigger>
+									<Menu.SubContent portalProps={{ to: root }}>
+										{#each [-1, -0.1, 0.1, 1] as by (by)}
+											<Menu.Item
+												closeOnSelect={false}
+												onSelect={() => moveSubtitle(by)}
+											>
+												{by < 0 ? "Earlier" : "Later"}
+												by {Math.abs(by)} s
+											</Menu.Item>
+										{/each}
+										<Menu.Item
+											closeOnSelect={false}
+											disabled={!subtitleDelay}
+											onSelect={() => moveSubtitle(-subtitleDelay)}
+										>
+											On time
+										</Menu.Item>
 									</Menu.SubContent>
 								</Menu.Sub>
 							{/if}
