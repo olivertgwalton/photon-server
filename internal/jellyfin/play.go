@@ -149,6 +149,10 @@ type playbackRequest struct {
 	StartTimeTicks      int64          `json:"StartTimeTicks"`
 	MaxStreamingBitrate int64          `json:"MaxStreamingBitrate"`
 	DeviceProfile       *deviceProfile `json:"DeviceProfile"`
+	// Jellyfin's web app asks again with these false when what it was given fails to play.
+	EnableDirectPlay     *bool `json:"EnableDirectPlay"`
+	AllowVideoStreamCopy *bool `json:"AllowVideoStreamCopy"`
+	AllowAudioStreamCopy *bool `json:"AllowAudioStreamCopy"`
 }
 
 // decide says how the app plays a copy: as it is, where its profile plays that; else as HLS photon
@@ -168,13 +172,15 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if req.SubtitleStreamIndex != nil {
 		src.DefaultSubtitleStreamIndex = (*int)(req.SubtitleStreamIndex)
 	}
-	if p.playsDirectly(c, video, sound, picked, limit) {
+	t, segments, takesHLS := p.hls(sound)
+	if (req.EnableDirectPlay == nil || *req.EnableDirectPlay) && p.playsDirectly(c, video, sound, picked, limit) {
+		// So Jellyfin's web app falls back to HLS where the copy fails to play, as Jellyfin answers.
+		src.SupportsTranscoding = takesHLS
 		deliverSubtitles(r, src, item, c, p, nil)
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
-	t, segments, ok := p.hls(sound)
-	if !ok {
+	if !takesHLS {
 		return
 	}
 	var audio *int
@@ -210,7 +216,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	address, err := a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS, Renditions: p.renditions(),
-	})
+	}, req.AllowVideoStreamCopy, req.AllowAudioStreamCopy)
 	if err != nil {
 		a.logger.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
 		return

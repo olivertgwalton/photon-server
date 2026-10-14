@@ -665,6 +665,45 @@ type someNodes []domain.Node
 
 func (n someNodes) Nodes(context.Context) ([]domain.Node, error) { return n, nil }
 
+// Jellyfin's web app plays a copy as it is, and where that fails asks again with direct play off
+// and is given HLS from where it was; its second and third asks forbid copying the video, then the
+// audio, which the address says so that its third failure stops rather than asks again.
+func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	remuxes := newFakeRemuxes()
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Sent:    playback.NewSent(),
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+	})
+	const webOS = `MediaBrowser Client="Jellyfin for WebOS", Device="LG Smart TV", DeviceId="lg", Version="1.2.2", Token="pst_ada"`
+	const profile = `"DeviceProfile":{"MaxStreamingBitrate":120000000,
+		"DirectPlayProfiles":[{"Container":"mkv","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3"}],
+		"TranscodingProfiles":[{"Container":"ts","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3","Protocol":"hls"}]}`
+	ask := func(flags string) map[string]any {
+		t.Helper()
+		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webOS, `{"StartTimeTicks":9663630000,`+flags+profile+`}`)
+		var info struct{ MediaSources []map[string]any }
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) == 0 {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+		return info.MediaSources[0]
+	}
+	if src := ask(""); src["SupportsDirectPlay"] != true || src["SupportsTranscoding"] != true || src["TranscodingUrl"] != nil {
+		t.Errorf("played as it is, with HLS to fall back on: %v", src)
+	}
+	first, _ := ask(`"EnableDirectPlay":false,"EnableDirectStream":false,"AllowVideoStreamCopy":false,`)["TranscodingUrl"].(string)
+	if first == "" || !strings.Contains(first, "allowVideoStreamCopy=false") || strings.Contains(first, "allowAudioStreamCopy") {
+		t.Errorf("the first fall back: %q", first)
+	}
+	last, _ := ask(`"EnableDirectPlay":false,"EnableDirectStream":false,"AllowVideoStreamCopy":false,"AllowAudioStreamCopy":false,`)["TranscodingUrl"].(string)
+	if lower := strings.ToLower(last); !strings.Contains(lower, "allowvideostreamcopy=false") || !strings.Contains(lower, "allowaudiostreamcopy=false") {
+		t.Errorf("the last fall back, which the web app does not ask again after: %q", last)
+	}
+}
+
 // Infuse takes HLS only in MPEG-TS, as its profile says, and is given it.
 func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
