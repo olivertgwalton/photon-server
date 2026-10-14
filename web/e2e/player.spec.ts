@@ -203,6 +203,56 @@ test("the next episode is offered in the credits and plays", async ({
 	).toBeVisible();
 });
 
+test("the system's media keys and controls drive the player", async ({
+	page,
+}) => {
+	// The page's handlers are kept where the test can press them, as the
+	// system would.
+	await page.addInitScript(() => {
+		const keys: Record<string, MediaSessionActionHandler | null> = {};
+		Object.assign(window, { mediaKeys: keys });
+		const set = navigator.mediaSession.setActionHandler.bind(
+			navigator.mediaSession,
+		);
+		navigator.mediaSession.setActionHandler = (action, handler) => {
+			keys[action] = handler;
+			set(action, handler);
+		};
+	});
+	const press = (action: MediaSessionAction, details = {}) =>
+		page.evaluate(
+			([a, d]) =>
+				(
+					window as unknown as {
+						mediaKeys: Record<string, MediaSessionActionHandler>;
+					}
+				).mediaKeys[a as string]({
+					action: a,
+					...d,
+				} as MediaSessionActionDetails),
+			[action, details] as const,
+		);
+	await logIn(page, "/play/p-ep?t=0");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
+	expect(
+		await page.evaluate(() => ({
+			title: navigator.mediaSession.metadata?.title,
+			artist: navigator.mediaSession.metadata?.artist,
+		})),
+	).toEqual({ title: "Pilot", artist: "Small Show" });
+
+	await press("pause");
+	await expect(
+		page.getByRole("button", { name: "Play", exact: true }),
+	).toBeVisible();
+	await press("seekto", { seekTime: 3 });
+	await expect.poll(() => time(page)).toBeCloseTo(3, 0);
+	await press("play");
+	await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+	await press("nexttrack");
+	await expect(page).toHaveURL("/play/p-ep2");
+});
+
 test("a playlist plays in its order, not the show's", async ({ page }) => {
 	await logIn(page);
 	const list = await (

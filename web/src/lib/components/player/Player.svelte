@@ -22,6 +22,7 @@ import { on } from "svelte/events";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
+import { artworkURL } from "#lib/artwork.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
 import { bitrate, fullTitle, timecode } from "#lib/format.js";
@@ -560,6 +561,53 @@ function keydown(event: KeyboardEvent) {
 		wake();
 	}
 }
+
+// The title, and the keys and controls of the system and of headphones, are
+// the player's while it is open.
+$effect(() => {
+	if (!("mediaSession" in navigator)) return;
+	const art = title.artwork?.thumb?.[0] ?? title.artwork?.poster?.[0];
+	navigator.mediaSession.metadata = new MediaMetadata({
+		title: title.title,
+		artist: title.show?.title ?? "",
+		album: title.season?.title ?? "",
+		artwork: art
+			? [{ src: new URL(artworkURL(art, 640), location.href).href }]
+			: [],
+	});
+	const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
+		["play", () => void video?.play()],
+		["pause", () => video?.pause()],
+		["seekbackward", (d) => seek(position - (d.seekOffset ?? step))],
+		["seekforward", (d) => seek(position + (d.seekOffset ?? step))],
+		["seekto", (d) => seek(d.seekTime ?? position)],
+		["nexttrack", next ? playNext : null],
+	];
+	for (const [action, handler] of handlers) {
+		try {
+			navigator.mediaSession.setActionHandler(action, handler);
+		} catch {
+			// An action this browser has not heard of.
+		}
+	}
+	return () => {
+		navigator.mediaSession.metadata = null;
+		for (const [action] of handlers) {
+			try {
+				navigator.mediaSession.setActionHandler(action, null);
+			} catch {}
+		}
+	};
+});
+
+$effect(() => {
+	if (!("mediaSession" in navigator) || !duration) return;
+	navigator.mediaSession.setPositionState({
+		duration,
+		position: Math.min(Math.max(position, 0), duration),
+		playbackRate: rate,
+	});
+});
 
 // The browser's own HLS adds the playlist's subtitles as it reads them.
 function tracksAdded() {
