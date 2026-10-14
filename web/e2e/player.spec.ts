@@ -134,6 +134,44 @@ test("a lower quality stops the playback and plays the server's HLS", async ({
 	await settings(page, "Quality", "Original");
 });
 
+test("a stream the server let go is opened again where it was", async ({
+	page,
+}) => {
+	// The playlist is gone, as it is once the server ends a playback, until the
+	// player asks for the title again.
+	const plays: number[] = [];
+	page.on("request", (r) => {
+		if (r.url().endsWith("/titles/p-film/play"))
+			plays.push(r.postDataJSON().profile.max_bitrate_kbps);
+	});
+	await page.route("**/api/v1/hls/pb/1/sig/video.m3u8", (route) =>
+		plays.length < 3 ? route.fulfill({ status: 404 }) : route.fallback(),
+	);
+	await logIn(page, "/play/p-film?t=0");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
+	await settings(page, "Quality", "420 kbps");
+	await expect.poll(() => plays, { timeout: 15_000 }).toEqual([0, 420, 420]);
+	await expect.poll(() => time(page)).toBeGreaterThan(0.5);
+	await expect(page.getByRole("alert")).not.toBeAttached();
+	await settings(page, "Quality", "Original");
+});
+
+test("a stream that breaks again at once is said to have stopped", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/hls/pb/1/sig/video.m3u8", (route) =>
+		route.fulfill({ status: 404 }),
+	);
+	await logIn(page, "/play/p-film?t=0");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
+	await settings(page, "Quality", "420 kbps");
+	await expect(page.getByRole("alert")).toContainText("The stream stopped", {
+		timeout: 15_000,
+	});
+	await page.getByRole("button", { name: "Try again" }).click();
+	await settings(page, "Quality", "Original");
+});
+
 test("a busy server and an unplayable file are said plainly", async ({
 	page,
 }) => {
