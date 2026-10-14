@@ -180,9 +180,30 @@ func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, l
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
 	if hw.Accel == domain.AccelVAAPI {
 		hw.Overlay = hls.ProbeOverlay(ctx, ffmpeg, hw.Device)
-		logger.InfoContext(ctx, "burning subtitles in on vaapi", slog.String("overlay", string(hw.Overlay)))
 	}
-	return hw, nil
+	return burning(ctx, ffmpeg, hw, logger), nil
+}
+
+// burning is hw with an overlay that burns a test subtitle in. VAAPI's driver's own, or Vulkan's,
+// that will not is given up for the CPU's. Any other device has one overlay; one that will not is
+// reported, and the device kept, as it still encodes all a subtitle is not burned into.
+func burning(ctx context.Context, ffmpeg string, hw hls.Hardware, logger *slog.Logger) hls.Hardware {
+	for {
+		err := hw.CheckBurn(ctx, ffmpeg)
+		switch {
+		case err == nil:
+			if hw.Accel == domain.AccelVAAPI {
+				logger.InfoContext(ctx, "burning subtitles in on vaapi", slog.String("overlay", string(hw.Overlay)))
+			}
+			return hw
+		case hw.Accel == domain.AccelVAAPI && hw.Overlay != hls.OverlayCPU:
+			logger.WarnContext(ctx, "burning subtitles in on vaapi through the cpu instead", slog.String("overlay", string(hw.Overlay)), slog.Any("err", err))
+			hw.Overlay = hls.OverlayCPU
+		default:
+			logger.ErrorContext(ctx, "burning subtitles in will fail: ffmpeg would not burn one into a test picture", slog.Any("err", err))
+			return hw
+		}
+	}
 }
 
 // chosen are the encoders of all on the acceleration choice sets, on its device where it names
