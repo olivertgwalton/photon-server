@@ -21,6 +21,8 @@ type Choice = {
 
 // What a browser reads from a file played as it is.
 const drawnBeside = new Set(["subrip", "webvtt"]);
+// The pictures libbitsub draws over the video.
+const drawnPictures = new Set(["hdmv_pgs_subtitle", "dvd_subtitle"]);
 
 export function choices(version: Schemas["VersionPage"]): Choice[] {
 	const out: Choice[] = [];
@@ -36,9 +38,10 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 			rendition: s.subtitle_kind === "text" ? rendition++ : undefined,
 		});
 	}
-	// A picture beside the copy is never drawn: only a track inside it is.
+	// A picture beside the copy is never drawn into the video: it shows only
+	// where the browser draws it, which it does of PGS and VobSub.
 	(version.subtitles ?? []).forEach((f, i) => {
-		if (f.kind === "picture") return;
+		if (f.kind === "picture" && !drawnPictures.has(f.codec)) return;
 		out.push({
 			key: `f${i}`,
 			label: f.display_title,
@@ -84,7 +87,7 @@ export function wants(choice: Choice | undefined): {
 }
 
 // The subtitle a playback hands the browser to draw beside the video for a
-// choice: a file beside the copy, or a styled or PGS track read out of it.
+// choice: a file beside the copy, or a styled or picture track read out of it.
 export function beside(
 	choice: Choice | undefined,
 	playback: Schemas["Playback"],
