@@ -90,11 +90,13 @@ type Services struct {
 	// sources' default tracks follow.
 	Preferences preferences
 	// HLS is this node's remuxes, which Placer opens on the node it chooses and Owners find on
-	// whichever node runs them; Signer signs a TranscodingUrl's plan and the addresses of another
-	// node's HLS.
+	// whichever node runs them; Plans keep how each play session's is to be made, as PlaybackInfo
+	// decided it, for whichever node is asked for it; Signer signs the addresses of another node's
+	// HLS.
 	HLS    hlsFiles
 	Placer placer
 	Owners owners
+	Plans  plans
 	Signer playback.Signer
 	// Network is how the server is reached, of which its limit on a remote stream's bitrate.
 	Network settings

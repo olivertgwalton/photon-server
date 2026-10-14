@@ -4,7 +4,6 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -17,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -388,7 +388,8 @@ func (noOwners) Owner(context.Context, uuid.UUID) (domain.Node, bool, error) {
 
 // An app whose player opens no MKV is given HLS of one, at the TranscodingUrl its PlaybackInfo
 // answers: fetching it starts the playback and its remux, once, and every address in its playlists
-// carries the app's token; a plan tampered with is refused, and the app ends it as it moves on.
+// carries the app's token; a play session it was not given is refused, and the app ends it as it
+// moves on.
 func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
 	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
@@ -397,7 +398,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: plays, Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 	})
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
@@ -451,9 +452,12 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 		t.Errorf("fetching the master again: %d, %d remuxes", again.Code, len(remuxes.opened))
 	}
 
-	tampered := strings.Replace(transcoding, "PlaySessionId="+info.PlaySessionID, "PlaySessionId="+guid(uuid.NewV7()), 1)
-	if w := fetch(tampered); w.Code != http.StatusUnauthorized {
-		t.Errorf("a plan signed for another session: %d, want 401", w.Code)
+	if strings.Contains(transcoding, "Plan=") || strings.Contains(transcoding, "Signature=") {
+		t.Errorf("the TranscodingUrl carries its plan: %s, want it kept on the server", transcoding)
+	}
+	unknown := strings.Replace(transcoding, "PlaySessionId="+info.PlaySessionID, "PlaySessionId="+guid(uuid.NewV7()), 1)
+	if w := fetch(unknown); w.Code != http.StatusNotFound {
+		t.Errorf("a play session PlaybackInfo did not answer: %d, want 404", w.Code)
 	}
 	if w := serve(api, http.MethodDelete, "/Videos/ActiveEncodings?deviceId=iOS_1&playSessionId="+info.PlaySessionID, swiftfinHeader, ""); w.Code != http.StatusNoContent || plays.stopped[session] != -1 {
 		t.Errorf("ending the encoding: %d, stopped %v", w.Code, plays.stopped)
@@ -541,7 +545,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 			Sent:    playback.NewSent(),
 			Network: st, Reach: rc,
 			Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-			HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+			HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 		})
 	}
 	api := reached()
@@ -628,7 +632,7 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 			Network: st,
 			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
 			HLS: remuxes, Placer: playback.NewPlacer(someNodes(tc.others), func() domain.Node { return self }, remuxes, noDirect{}, nodecall.Key{}),
-			Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+			Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 		})
 		r := httptest.NewRequest(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", strings.NewReader(`{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`))
 		r.Header.Set("Authorization", swiftfinHeader)
@@ -646,18 +650,7 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 			}
 			continue
 		}
-		u, err := url.Parse(transcoding)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var plan transcode
-		b, err := base64.RawURLEncoding.DecodeString(u.Query().Get("Plan"))
-		if err == nil {
-			err = json.Unmarshal(b, &plan)
-		}
-		if err != nil {
-			t.Fatal(transcoding, err)
-		}
+		plan := plannedFor(t, api, transcoding)
 		if e := plan.Video.Encode; e == nil || e.Codec != tc.codec {
 			t.Errorf("encode %+v, want %s, as the node transcoding makes", e, tc.codec)
 		}
@@ -680,7 +673,7 @@ func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 	})
 	const webOS = `MediaBrowser Client="Jellyfin for WebOS", Device="LG Smart TV", DeviceId="lg", Version="1.2.2", Token="pst_ada"`
 	const profile = `"DeviceProfile":{"MaxStreamingBitrate":120000000,
@@ -731,7 +724,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
-		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", infuse, `{"IsPlayback":true,"EnableDirectPlay":true,
@@ -840,4 +833,48 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 	if !strings.Contains(w.Body.String(), guid(versions[heat][0].ID)) || !strings.Contains(w.Body.String(), guid(versions[heat][1].ID)) {
 		t.Errorf("asked for none, answered %s; want both", w.Body)
 	}
+}
+
+// memoryPlans keeps play sessions' plans as Valkey does.
+type memoryPlans struct {
+	mu    sync.Mutex
+	plans map[uuid.UUID][]byte
+}
+
+func newPlans() *memoryPlans { return &memoryPlans{plans: map[uuid.UUID][]byte{}} }
+
+func (p *memoryPlans) SavePlan(_ context.Context, session uuid.UUID, plan []byte, _ time.Duration) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.plans[session] = plan
+	return nil
+}
+
+func (p *memoryPlans) Plan(_ context.Context, session uuid.UUID) ([]byte, bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	plan, ok := p.plans[session]
+	return plan, ok, nil
+}
+
+// plannedFor is the transcode the API kept for the play session a TranscodingUrl names.
+func plannedFor(t *testing.T, api http.Handler, transcoding string) transcode {
+	t.Helper()
+	u, err := url.Parse(transcoding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := uuid.Parse(u.Query().Get("PlaySessionId"))
+	if err != nil {
+		t.Fatal(transcoding, err)
+	}
+	b, ok, err := api.(*API).svc.Plans.Plan(t.Context(), session)
+	var p planned
+	if err == nil && ok {
+		err = json.Unmarshal(b, &p)
+	}
+	if err != nil || !ok {
+		t.Fatalf("no plan kept for %s: %v", transcoding, err)
+	}
+	return p.Transcode
 }

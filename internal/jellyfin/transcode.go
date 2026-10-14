@@ -3,7 +3,6 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -48,11 +47,25 @@ type owners interface {
 	Owner(ctx context.Context, playback uuid.UUID) (domain.Node, bool, error)
 }
 
+// plans keep how each play session's HLS is to be made, for whichever node is asked for it.
+type plans interface {
+	SavePlan(ctx context.Context, session uuid.UUID, plan []byte, ttl time.Duration) error
+	Plan(ctx context.Context, session uuid.UUID) ([]byte, bool, error)
+}
+
 // transcodeFor is how long a TranscodingUrl may be fetched for, as long as any film plays.
 const transcodeFor = 48 * time.Hour
 
-// transcode is how a copy is made into HLS for an app, as decided when it asked: carried in its
-// TranscodingUrl, signed, so whichever node it is fetched from starts it as decided.
+// planned is a play session's plan as kept: whose it is, of what, and the transcode.
+type planned struct {
+	Profile   uuid.UUID `json:"profile"`
+	Item      uuid.UUID `json:"item"`
+	Transcode transcode `json:"transcode"`
+}
+
+// transcode is how a copy is made into HLS for an app, as decided when it asked: kept under its
+// play session (see plans), so whichever node its TranscodingUrl is fetched from starts it as
+// decided.
 type transcode struct {
 	Version  uuid.UUID                `json:"version"`
 	Method   domain.PlayMethod        `json:"method"`
@@ -66,23 +79,18 @@ type transcode struct {
 	Renditions playback.Renditions `json:"renditions"`
 }
 
-func transcodeSubject(item, session uuid.UUID, plan string) string {
-	return "jellyfin/" + guid(item) + "/" + guid(session) + "/" + plan
-}
-
-// transcodingURL is where an app fetches a copy's HLS: relative, as every app puts its own base
-// before it, and carrying the app's token, as no app sends one with media.
+// transcodingURL keeps a play session's plan and answers where an app fetches its HLS: relative, as
+// every app puts its own base before it, and carrying the app's token, as no app sends one with
+// media.
 func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transcode, copyVideo, copyAudio *bool) (string, error) {
-	b, err := json.Marshal(t)
+	b, err := json.Marshal(planned{Profile: auth.SessionOf(r.Context()).Profile.ID, Item: item, Transcode: t})
 	if err != nil {
 		return "", err
 	}
-	plan := base64.RawURLEncoding.EncodeToString(b)
-	exp, sig := a.svc.Signer.Token(transcodeSubject(item, session, plan), time.Now().Add(transcodeFor))
-	q := url.Values{
-		"PlaySessionId": {guid(session)}, "MediaSourceId": {guid(t.Version)}, "ApiKey": {appOf(r).Token},
-		"Plan": {plan}, "Expires": {exp}, "Signature": {sig},
+	if err := a.svc.Plans.SavePlan(r.Context(), session, b, transcodeFor); err != nil {
+		return "", err
 	}
+	q := url.Values{"PlaySessionId": {guid(session)}, "MediaSourceId": {guid(t.Version)}, "ApiKey": {appOf(r).Token}}
 	// Jellyfin's web app falls back again on an error until its stream's address refuses both
 	// copies, which Jellyfin's own address never says.
 	for name, allowed := range map[string]*bool{"allowVideoStreamCopy": copyVideo, "allowAudioStreamCopy": copyAudio} {
@@ -170,21 +178,22 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	} else if elsewhere {
 		return false
 	}
-	plan := query(r, "Plan")
-	if !a.svc.Signer.Valid(transcodeSubject(item, session, plan), query(r, "Expires"), query(r, "Signature"), time.Now()) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return true
-	}
-	b, err := base64.RawURLEncoding.DecodeString(plan)
-	var t transcode
-	if err == nil {
-		err = json.Unmarshal(b, &t)
+	s := auth.SessionOf(r.Context())
+	b, ok, err := a.svc.Plans.Plan(r.Context(), session)
+	var p planned
+	if err == nil && ok {
+		err = json.Unmarshal(b, &p)
 	}
 	if err != nil {
-		a.refuse(w, http.StatusBadRequest)
+		a.internal(w, r, err)
 		return true
 	}
-	s := auth.SessionOf(r.Context())
+	// A session another profile asked for, or of another title, is one this app has not.
+	if !ok || p.Profile != s.Profile.ID || p.Item != item {
+		a.refuse(w, http.StatusNotFound)
+		return true
+	}
+	t := p.Transcode
 	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, t.Version)
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
