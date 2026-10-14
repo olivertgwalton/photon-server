@@ -205,7 +205,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	}
 	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
 		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
-		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS},
+		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS, Renditions: playback.RenditionsAll},
 	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })
 	switch {
 	case err == nil, errors.Is(err, playback.ErrStarted):

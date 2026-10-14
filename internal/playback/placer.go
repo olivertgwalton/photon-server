@@ -29,7 +29,7 @@ type adverts interface {
 }
 
 type opener interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error
 }
 
 // delivering are the playbacks a node delivers, of at most as many as it may at once.
@@ -209,6 +209,8 @@ type Opening struct {
 	Audio    *domain.AudioPlan    `json:"audio,omitempty"`
 	Segments domain.SegmentFormat `json:"segments"`
 	StartMS  int64                `json:"start_ms"`
+	// Renditions are the subtitles its HLS offers as WebVTT.
+	Renditions Renditions `json:"renditions"`
 }
 
 // Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that
@@ -225,7 +227,7 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 		switch o.Method {
 		case domain.PlayDirect:
 		case domain.PlayRemux, domain.PlayTranscode:
-			if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond); err != nil {
+			if err := p.local.Open(ctx, playback, c, o.Video, o.Audio, o.Segments, time.Duration(o.StartMS)*time.Millisecond, o.Renditions); err != nil {
 				p.delivers.Release(playback)
 				return err
 			}
