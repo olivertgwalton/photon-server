@@ -100,6 +100,24 @@ test("subtitles beside the file show as a track", async ({ page }) => {
 		.toBe("A line to read");
 });
 
+test("a subtitle out of time is moved later and back", async ({ page }) => {
+	const firstCue = () =>
+		video(page).evaluate(
+			(v: HTMLVideoElement) => v.textTracks[0]?.cues?.[0]?.startTime,
+		);
+	await logIn(page, "/play/p-film?t=1");
+	await page.getByRole("button", { name: "Subtitles" }).click();
+	await expect.poll(firstCue).toBe(0.5);
+	await settings(page, "Subtitle timing", "Later by 1 s");
+	await page.getByRole("menuitem", { name: "Later by 0.1 s" }).click();
+	await expect(
+		page.getByRole("menuitem", { name: "Subtitle timing 1.1 s later" }),
+	).toBeVisible();
+	expect(await firstCue()).toBeCloseTo(1.6);
+	await page.getByRole("menuitem", { name: "On time" }).click();
+	expect(await firstCue()).toBeCloseTo(0.5);
+});
+
 test("ASS inside the file is drawn over it by JASSUB, with the file's fonts", async ({
 	page,
 }) => {
