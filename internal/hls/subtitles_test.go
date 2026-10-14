@@ -1,6 +1,7 @@
 package hls
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -367,5 +368,39 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 		if len(left) != 0 {
 			t.Errorf("%s: %d read out whole, want none", tc.name, len(left))
 		}
+	}
+}
+
+// A part's PGS stream is read out as it is, for a player that draws it beside the video.
+func TestPictureSubtitlesAreReadOutAsTheyAre(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	dir := t.TempDir()
+	sup := filepath.Join(dir, "film.sup")
+	if err := os.WriteFile(sup, testtool.PGS(0, 2*90000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	film := filepath.Join(dir, "film.mkv")
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", sup,
+		"-t", "4", "-map", "0", "-map", "1", "-c:v", "libx264", "-c:s", "copy", film)
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the film: %v: %s", err, out)
+	}
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}, FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgs := 1
+	src := SubtitleSource{
+		Open: opening(film), Stream: &pgs, Part: uuid.NewV7(),
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264"}, {Index: pgs, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle"}},
+	}
+	out, err := r.Extracted(t.Context(), src, PictureName(pgs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(out, PictureName(pgs)))
+	if err != nil || !bytes.Equal(got, testtool.PGS(0, 2*90000)) {
+		t.Errorf("the PGS stream = %x, %v; want it as it was", got, err)
 	}
 }
