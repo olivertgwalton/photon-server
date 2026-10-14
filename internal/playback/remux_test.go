@@ -99,7 +99,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		{
 			name: "Dolby Vision in AV1 copied", copy: av1DV,
 			video: domain.VideoPlan{Stream: 0, Codec: "av1", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
-			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"dav1.10.09", "ec-3"}, Range: "PQ", Width: 3840, Height: 2160},
+			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"av01.0.13M.10", "ec-3"}, SupplementalCodecs: "dav1.10.09/db1p", Range: "PQ", Width: 3840, Height: 2160},
 			subtitles: []string{"English"},
 		},
 		{

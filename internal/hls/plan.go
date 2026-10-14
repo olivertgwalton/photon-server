@@ -118,6 +118,9 @@ func Master(subs []Subtitle, v Variant, version int, video string, subtitle func
 	if len(v.Codecs) > 0 {
 		fmt.Fprintf(&b, ",CODECS=\"%s\"", strings.Join(v.Codecs, ","))
 	}
+	if v.SupplementalCodecs != "" {
+		fmt.Fprintf(&b, ",SUPPLEMENTAL-CODECS=%q", v.SupplementalCodecs)
+	}
 	if v.Range != "" {
 		b.WriteString(",VIDEO-RANGE=" + v.Range)
 	}
