@@ -2,6 +2,7 @@
 import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CaptionsOffIcon from "@lucide/svelte/icons/captions-off";
+import CastIcon from "@lucide/svelte/icons/cast";
 import InfoIcon from "@lucide/svelte/icons/info";
 import LoaderIcon from "@lucide/svelte/icons/loader-circle";
 import MaximizeIcon from "@lucide/svelte/icons/maximize";
@@ -160,6 +161,10 @@ $effect(() => {
 let rate = $state(1);
 let fullscreenElement = $state<Element | null>(null);
 const pipAvailable = document.pictureInPictureEnabled;
+// Whether there is a screen to play on through the browser: AirPlay in
+// Safari, Cast in Chrome on Android. It can only send a stream it plays itself,
+// not one hls.js feeds it.
+let remoteAvailable = $state(false);
 let resting = $state(false);
 let menuOpen = $state(false);
 let infoOpen = $state(false);
@@ -660,6 +665,21 @@ $effect(() => {
 	});
 });
 
+$effect(() => {
+	const remote = video?.remote;
+	if (!remote) return;
+	const watching: Promise<number | undefined> = remote
+		.watchAvailability((available) => {
+			remoteAvailable = available;
+		})
+		.catch(() => undefined);
+	return () => {
+		void watching.then((id) => {
+			if (id !== undefined) remote.cancelWatchAvailability(id).catch(() => {});
+		});
+	};
+});
+
 // The browser's own HLS adds the playlist's subtitles as it reads them.
 function tracksAdded() {
 	if (playback?.playlist && !hls) void showSubtitle();
@@ -1078,6 +1098,16 @@ onMount(() => {
 							{/if}
 						</Menu.Content>
 					</Menu.Root>
+					{#if remoteAvailable}
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label="Play on another screen"
+							onclick={() => video?.remote.prompt().catch(() => {})}
+						>
+							<CastIcon class="size-5" />
+						</Button>
+					{/if}
 					{#if pipAvailable}
 						<Button
 							variant="ghost"
