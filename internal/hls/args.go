@@ -66,27 +66,49 @@ func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPl
 	return a
 }
 
+// vaapiDrawnHeight is the most a subtitle overlay_vaapi lays over is drawn high.
+const vaapiDrawnHeight = 1080
+
 // burnArgs draws a subtitle into the picture in, which filter scales and tone maps on hw, as
 // Jellyfin's does: the subtitle drawn on the CPU at the size encoded, a picture one scaled to it
 // and styled text by libass, so it is drawn as it was authored and as sharp as it can be.
 func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.VideoEncode, layer *styledLayer) []string {
 	size := strconv.Itoa(e.Width) + ":" + strconv.Itoa(e.Height)
-	if format, upload, overlay := hw.overlay(); overlay != "" {
+	if format, upload, overlay := hw.overlay(e); overlay != "" {
 		// Uploaded and laid over the picture on the device; styled text drawn on a clear canvas.
+		width, height, after := e.Width, e.Height, ""
+		if hw.Accel == domain.AccelVAAPI {
+			switch hw.burnOverlay(e) {
+			case OverlayVAAPI:
+				// overlay_vaapi scales what it lays over, so as Jellyfin's the subtitle is drawn at
+				// most vaapiDrawnHeight high, and less is uploaded.
+				overlay += ":w=" + strconv.Itoa(e.Width) + ":h=" + strconv.Itoa(e.Height)
+				if height > vaapiDrawnHeight {
+					width, height = width*vaapiDrawnHeight/height/2*2, vaapiDrawnHeight
+				}
+			case OverlayVulkan:
+				// As Jellyfin's: the picture mapped to libplacebo, made the subtitle's BGRA, which
+				// overlay_vulkan needs, and mapped back to VAAPI's NV12 for the encoder.
+				filter += ",hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc,format=vulkan"
+				after = ",hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+			case OverlayCPU:
+			}
+		}
 		var sub string
 		if layer != nil {
-			sub = layer.canvas(e.Width, e.Height, start, format)
+			sub = layer.canvas(width, height, start, format)
 			if hw.Accel == domain.AccelNVENC {
 				// libass draws onto a YUV canvas premultiplied, which only overlay_cuda is told.
 				overlay += ":alpha_format=premultiplied"
 			}
 		} else {
-			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + ",format=" + format
+			sub = "[0:" + strconv.Itoa(*e.Burn) + "]scale=" + strconv.Itoa(width) + ":" + strconv.Itoa(height) + ",format=" + format
 		}
-		graph := sub + "," + upload + "[sub];[" + in + "]" + filter + "[main];[main][sub]" + overlay + "[v]"
+		graph := sub + "," + upload + "[sub];[" + in + "]" + filter + "[main];[main][sub]" + overlay + after + "[v]"
 		return []string{"-filter_complex", graph, "-map", "[v]"}
 	}
-	// Laid over the picture by FFmpeg, VAAPI's taken off the device and back.
+	// Laid over the picture by FFmpeg, VAAPI's taken off the device and back where its driver
+	// overlays neither itself nor through Vulkan.
 	ten := e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG
 	// overlay blends in 8 bits unless told otherwise, dropping 10-bit HDR to 8 and back.
 	format, blend, down, up := "yuv420p", "yuv420", "", ""

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -21,17 +23,108 @@ type Hardware struct {
 	Device string
 	// HEVC is whether video is encoded to HEVC for a client that plays it.
 	HEVC domain.HEVCEncoding
+	// Overlay is how VAAPI lays a burned-in subtitle over the picture.
+	Overlay Overlay
+}
+
+// Overlay is how a VAAPI device lays a subtitle drawn on the CPU over the picture, chosen by its
+// driver as Jellyfin's pipelines are (see ProbeOverlay).
+type Overlay string
+
+const (
+	// OverlayVAAPI is the driver's own overlay_vaapi: Intel's iHD.
+	OverlayVAAPI Overlay = "vaapi"
+	// OverlayVulkan maps the picture to Vulkan for overlay_vulkan and back: AMD's Mesa driver, where
+	// Vulkan imports its frames.
+	OverlayVulkan Overlay = "vulkan"
+	// OverlayCPU takes the picture off the device for FFmpeg's overlay and puts it back: Intel's
+	// i965, and AMD without that import.
+	OverlayCPU Overlay = "cpu"
+)
+
+// ProbeOverlay is how the VAAPI device at device lays a subtitle over the picture, learnt as
+// Jellyfin's is from what FFmpeg says opening it: the driver's name, and for Mesa's the extensions
+// Vulkan opens the same device with, which map frames between the two, on a kernel with AMD's
+// format modifiers.
+func ProbeOverlay(ctx context.Context, ffmpeg, device string) Overlay {
+	vaapi := said(ctx, ffmpeg, "-init_hw_device", "vaapi=va:"+device)
+	var vulkan, kernel string
+	if strings.Contains(vaapi, mesaDriver) {
+		vulkan = said(ctx, ffmpeg, "-init_hw_device", "drm=dr:"+device, "-init_hw_device", "vulkan=vk@dr")
+		// A kernel not read is taken as too old.
+		if release, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
+			kernel = string(release)
+		}
+	}
+	return overlayOf(vaapi, vulkan, kernel)
+}
+
+const (
+	ihdDriver  = "VAAPI driver: Intel iHD driver"
+	mesaDriver = "VAAPI driver: Mesa Gallium driver"
+)
+
+// vulkanInterop are the Vulkan device extensions Jellyfin's AMD pipeline needs: a VAAPI frame
+// imported as a DMA-BUF with its format modifier, and synchronised by a semaphore.
+var vulkanInterop = []string{
+	"VK_KHR_external_memory_fd", "VK_EXT_external_memory_dma_buf", "VK_KHR_external_semaphore_fd",
+	"VK_EXT_external_memory_host", "VK_EXT_image_drm_format_modifier",
+}
+
+// overlayOf is the overlay of a device whose opening by FFmpeg said vaapi, by Vulkan said vulkan,
+// on the kernel release kernel. Jellyfin's AMD pipeline asks for Linux 5.15, where amdgpu gives
+// its frames format modifiers.
+func overlayOf(vaapi, vulkan, kernel string) Overlay {
+	switch {
+	case strings.Contains(vaapi, ihdDriver):
+		return OverlayVAAPI
+	case strings.Contains(vaapi, mesaDriver):
+		for _, ext := range vulkanInterop {
+			if !strings.Contains(vulkan, "Using device extension "+ext+"\n") {
+				return OverlayCPU
+			}
+		}
+		var major, minor int
+		if _, err := fmt.Sscanf(kernel, "%d.%d", &major, &minor); err != nil || major < 5 || major == 5 && minor < 15 {
+			return OverlayCPU
+		}
+		return OverlayVulkan
+	}
+	return OverlayCPU
+}
+
+// said is what FFmpeg says, verbosely, encoding a frame of nothing after args; nothing where it
+// fails, as one that cannot open a device does.
+func said(ctx context.Context, ffmpeg string, args ...string) string {
+	ctx, cancel := media.Within(ctx, ffmpeg, media.PartRun)
+	defer cancel()
+	a := append([]string{"-v", "verbose", "-hide_banner", "-nostdin"}, args...)
+	a = append(a, "-f", "lavfi", "-i", "nullsrc", "-frames:v", "1", "-f", "null", "-")
+	var out strings.Builder
+	cmd := media.NewCommand(ctx, media.Foreground, ffmpeg, a...)
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return ""
+	}
+	return out.String()
 }
 
 // overlay is how a subtitle drawn on the CPU is laid over the picture on the device, as Jellyfin's
 // is: the format it is drawn in, the filter uploading it, and the overlay. None where FFmpeg lays it
-// over: software and AMF, whose pictures are on the CPU, and VAAPI, as Jellyfin's does on a driver
-// it has neither OpenCL nor Vulkan for. VAAPI here mostly drives AMD, whose Mesa driver blended
-// nothing for overlay_vaapi until May 2026, and where Jellyfin overlays with Vulkan instead.
-func (h Hardware) overlay() (format, upload, overlay string) {
+// over: software and AMF, whose pictures are on the CPU, and VAAPI on a driver Jellyfin overlays
+// on neither the device nor Vulkan with.
+func (h Hardware) overlay(e domain.VideoEncode) (format, upload, overlay string) {
 	const pass = "=eof_action=pass:repeatlast=0"
 	switch h.Accel {
-	case domain.AccelSoftware, domain.AccelAMF, domain.AccelVAAPI:
+	case domain.AccelSoftware, domain.AccelAMF:
+	case domain.AccelVAAPI:
+		switch h.burnOverlay(e) {
+		case OverlayVAAPI:
+			return "bgra", "hwupload", "overlay_vaapi" + pass
+		case OverlayVulkan:
+			return "bgra", "hwupload=derive_device=vulkan,format=vulkan", "overlay_vulkan" + pass
+		case OverlayCPU:
+		}
 	case domain.AccelVideoToolbox:
 		return "bgra", "hwupload", "overlay_videotoolbox" + pass
 	case domain.AccelQSV:
@@ -42,6 +135,16 @@ func (h Hardware) overlay() (format, upload, overlay string) {
 		return "yuva420p", "hwupload", "overlay_cuda" + pass
 	}
 	return "", "", ""
+}
+
+// burnOverlay is how VAAPI lays a subtitle over e's picture: as its driver does, but on the CPU for
+// 10-bit HDR kept where that is through Vulkan. overlay_vulkan lays over only a picture in the
+// subtitle's own format, which Jellyfin's pipeline makes 8-bit BGRA.
+func (h Hardware) burnOverlay(e domain.VideoEncode) Overlay {
+	if h.Overlay == OverlayVulkan && (e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG) {
+		return OverlayCPU
+	}
+	return h.Overlay
 }
 
 // longGOP stops an encoder adding keyframes of its own between those it is told to make.
@@ -66,6 +169,11 @@ func (h Hardware) inputArgs(codec string, e domain.VideoEncode) []string {
 		decode = []string{"-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"}
 	case domain.AccelVAAPI:
 		init = []string{"-init_hw_device", "vaapi=hw:" + h.Device, "-filter_hw_device", "hw"}
+		if (e.Burn != nil || e.BurnFile != nil) && h.burnOverlay(e) == OverlayVulkan {
+			// As Jellyfin's: VAAPI and Vulkan opened on the one DRM device, so frames map between
+			// them, and Vulkan the filters' device, as libplacebo needs.
+			init = []string{"-init_hw_device", "drm=dr:" + h.Device, "-init_hw_device", "vaapi=hw@dr", "-init_hw_device", "vulkan=vk@dr", "-filter_hw_device", "vk"}
+		}
 		decode = []string{"-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi", "-hwaccel_device", "hw"}
 	case domain.AccelQSV:
 		// QSV decodes through VAAPI on Linux and D3D11 on Windows, as Jellyfin's does, and its frames
@@ -177,6 +285,10 @@ func (h Hardware) videoArgs(e domain.VideoEncode, codec string) (string, []strin
 		}
 		encoder = append(encoder, "-prio_speed", "1")
 	case domain.AccelVAAPI:
+		if upload != "" {
+			// To VAAPI where the filters' device is Vulkan, a subtitle being laid over through it.
+			upload = "format=nv12|p010le,hwupload=derive_device=vaapi,"
+		}
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
 		if e.ToneMap {
 			filter = upload + deinterlace + "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
