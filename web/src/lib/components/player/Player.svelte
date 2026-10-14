@@ -759,6 +759,20 @@ onMount(() => {
 
 <svelte:document bind:fullscreenElement />
 
+{#snippet clock(
+	place: string,
+)}
+	<span
+		class={[
+			"text-ink font-mono text-xs whitespace-nowrap tabular-nums sm:text-sm",
+			place,
+		]}
+	>
+		{timecode(position * 1000)}
+		/ {timecode(duration * 1000)}
+	</span>
+{/snippet}
+
 <svelte:head><title>{heading} · Photon</title></svelte:head>
 
 <section
@@ -900,6 +914,8 @@ onMount(() => {
 				{/if}
 			</div>
 
+			<!-- A phone's bar has no room for the time beside its buttons. -->
+			{@render clock("sm:hidden")}
 			<SeekBar
 				{position}
 				{duration}
@@ -985,10 +1001,7 @@ onMount(() => {
 						muted = false;
 					}}
 				>
-				<span class="text-ink ml-1 font-mono text-xs tabular-nums sm:text-sm">
-					{timecode(position * 1000)}
-					/ {timecode(duration * 1000)}
-				</span>
+				{@render clock("ml-1 hidden sm:inline")}
 
 				<div class="ml-auto flex items-center gap-1 sm:gap-2">
 					{#if subtitleChoices.length}

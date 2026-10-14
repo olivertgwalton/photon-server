@@ -123,6 +123,22 @@ test("the picture is cropped or stretched to the screen as asked", async ({
 	expect(await fit()).toBe("fill");
 });
 
+test("a phone shows a long title's time on one line", async ({ page }) => {
+	await page.route("**/api/v1/titles/p-film", async (route) => {
+		const title = await (await route.fetch()).json();
+		if (title.versions) title.versions[0].duration_ms = 2 * 3_600_000;
+		await route.fulfill({ json: title });
+	});
+	await page.setViewportSize({ width: 390, height: 844 });
+	await logIn(page, "/play/p-film?t=1");
+	const clock = page.getByText("/ 2:00:00").and(page.locator(":visible"));
+	await expect(clock).toBeVisible();
+	expect((await clock.boundingBox())?.height).toBeLessThan(24);
+	await expect(
+		page.getByRole("button", { name: "Full screen" }),
+	).toBeInViewport();
+});
+
 test("subtitles beside the file show as a track", async ({ page }) => {
 	await logIn(page, "/play/p-film?t=1");
 	await page.getByRole("button", { name: "Subtitles" }).click();
