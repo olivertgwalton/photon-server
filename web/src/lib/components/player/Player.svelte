@@ -128,8 +128,28 @@ let time = $state(0);
 let buffered = $state<{ start: number; end: number }[]>([]);
 let readyState = $state(0);
 let paused = $state(true);
-let volume = $state(1);
-let muted = $state(false);
+// The volume is the browser's, as it was last left, where storage allows.
+const volumeKey = "photon:volume";
+const kept = (() => {
+	try {
+		return JSON.parse(localStorage.getItem(volumeKey) ?? "null");
+	} catch {
+		return null;
+	}
+})();
+let volume = $state(
+	typeof kept?.volume === "number" && kept.volume >= 0 && kept.volume <= 1
+		? kept.volume
+		: 1,
+);
+let muted = $state(kept?.muted === true);
+$effect(() => {
+	try {
+		localStorage.setItem(volumeKey, JSON.stringify({ volume, muted }));
+	} catch {
+		// Not kept where storage is refused.
+	}
+});
 let rate = $state(1);
 let fullscreenElement = $state<Element | null>(null);
 const pipAvailable = document.pictureInPictureEnabled;

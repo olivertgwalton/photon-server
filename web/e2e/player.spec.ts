@@ -74,6 +74,19 @@ test("the keys play, pause, seek and mute as YouTube's do", async ({
 	await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
+test("the volume and mute are as they were left", async ({ page }) => {
+	await logIn(page, "/play/p-film?t=0");
+	await page.waitForRequest("**/api/v1/playbacks/*/progress");
+	await page.keyboard.press("ArrowDown");
+	await page.keyboard.press("ArrowDown");
+	await page.keyboard.press("m");
+	await page.reload();
+	await expect(page.getByRole("button", { name: "Unmute" })).toBeVisible();
+	expect(
+		await video(page).evaluate((v: HTMLVideoElement) => v.volume),
+	).toBeCloseTo(0.9);
+});
+
 test("subtitles beside the file show as a track", async ({ page }) => {
 	await logIn(page, "/play/p-film?t=1");
 	await page.getByRole("button", { name: "Subtitles" }).click();
