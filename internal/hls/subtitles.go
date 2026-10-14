@@ -115,9 +115,9 @@ type extraction struct {
 	at   time.Time
 }
 
-// convert reads a subtitle file's cues.
-func (r *Remuxer) convert(ctx context.Context, src SubtitleSource) ([]Cue, error) {
-	vtt, err := r.WebVTT(ctx, src.Open, src.Language)
+// Cues reads a text subtitle file's cues, as WebVTT reads it.
+func (r *Remuxer) Cues(ctx context.Context, open func() (media.Input, error), language string) ([]Cue, error) {
+	vtt, err := r.WebVTT(ctx, open, language)
 	if err != nil {
 		return nil, err
 	}
