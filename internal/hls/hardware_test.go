@@ -2,6 +2,7 @@ package hls
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -155,6 +156,57 @@ func TestADeviceThatWillNotOpenOverlaysOnTheCPU(t *testing.T) {
 		ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", script)
 		if got := ProbeOverlay(t.Context(), ffmpeg, "/dev/dri/renderD128"); got != want {
 			t.Errorf("%q: %s, want %s", script, got, want)
+		}
+	}
+}
+
+// A subtitle is burned into the test picture through each device's own overlay, the subtitle the
+// source's second output: SDR in H.264, and HDR kept in 10-bit HEVC where the device encodes HEVC,
+// which Vulkan's lays over on the CPU.
+func TestEachDeviceBurnsASubtitleInAtStart(t *testing.T) {
+	for _, tc := range []struct {
+		hw           Hardware
+		overlay, hdr string
+	}{
+		{Hardware{Accel: domain.AccelSoftware}, "[main][sub]overlay=", ""},
+		{Hardware{Accel: domain.AccelVideoToolbox}, "[main][sub]overlay_videotoolbox=", ""},
+		{Hardware{Accel: domain.AccelQSV, Device: "/dev/dri/renderD128"}, "[main][sub]overlay_qsv=", ""},
+		{Hardware{Accel: domain.AccelNVENC, Device: "0"}, "[main][sub]overlay_cuda=", ""},
+		{Hardware{Accel: domain.AccelAMF}, "[main][sub]overlay=", ""},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayVAAPI}, "[main][sub]overlay_vaapi=", ""},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayVulkan}, "[main][sub]overlay_vulkan=", "[main][sub]overlay="},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayCPU}, "[main][sub]overlay=", ""},
+	} {
+		for hevc, runs := range map[domain.HEVCEncoding]int{domain.HEVCAllow: 2, domain.HEVCDeny: 1} {
+			dir := t.TempDir()
+			ffmpeg := testtool.Script(t, dir, "ffmpeg", `echo "$*" >> "`+dir+`/runs"`+"\n")
+			hw := tc.hw
+			hw.HEVC = hevc
+			if err := hw.CheckBurn(t.Context(), ffmpeg); err != nil {
+				t.Fatal(err)
+			}
+			b, err := os.ReadFile(dir + "/runs")
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+			if len(lines) != runs {
+				t.Errorf("%s %s, HEVC %s: %d runs, want %d", hw.Accel, hw.Overlay, hevc, len(lines), runs)
+			}
+			for i, l := range lines {
+				overlay := tc.overlay
+				if i == 1 && tc.hdr != "" {
+					overlay = tc.hdr
+				}
+				for _, w := range []string{"[out0];color=c=white@0.5:size=320x60:rate=24,format=yuva420p[out1]", "[0:1]scale=640:360", overlay} {
+					if !strings.Contains(l, w) {
+						t.Errorf("%s %s: %q lacks %q", hw.Accel, hw.Overlay, l, w)
+					}
+				}
+			}
+			if hevc == domain.HEVCAllow && !strings.Contains(lines[1], "p010") && !strings.Contains(lines[1], "yuv420p10") {
+				t.Errorf("%s %s: HDR kept is not burned in 10 bits: %q", hw.Accel, hw.Overlay, lines[1])
+			}
 		}
 	}
 }
