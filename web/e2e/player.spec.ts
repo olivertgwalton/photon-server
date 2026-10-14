@@ -87,6 +87,30 @@ test("the volume and mute are as they were left", async ({ page }) => {
 	).toBeCloseTo(0.9);
 });
 
+test("another screen the browser offers is played on from the player", async ({
+	page,
+}) => {
+	// A screen to send to, as Safari's AirPlay or Chrome's Cast offers one.
+	await page.addInitScript(() => {
+		Object.defineProperty(HTMLMediaElement.prototype, "remote", {
+			get: () => ({
+				watchAvailability: (seen: (available: boolean) => void) => {
+					seen(true);
+					return Promise.resolve(1);
+				},
+				cancelWatchAvailability: () => Promise.resolve(),
+				prompt: () => {
+					Object.assign(window, { prompted: true });
+					return Promise.resolve();
+				},
+			}),
+		});
+	});
+	await logIn(page, "/play/p-film?t=0");
+	await page.getByRole("button", { name: "Play on another screen" }).click();
+	expect(await page.evaluate(() => "prompted" in window)).toBe(true);
+});
+
 test("subtitles beside the file show as a track", async ({ page }) => {
 	await logIn(page, "/play/p-film?t=1");
 	await page.getByRole("button", { name: "Subtitles" }).click();
