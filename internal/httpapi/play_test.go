@@ -75,7 +75,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2},
 		},
-		Subtitles: []store.PlaySubtitle{{ID: subtitleID, Codec: "subrip", Language: language.English}},
+		Subtitles: []store.PlaySubtitle{{ID: subtitleID, Codec: "subrip", Language: language.English}, {ID: pictureID, Codec: "dvd_subtitle"}},
 	}, nil
 }
 
@@ -258,6 +258,21 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	if rec := do(httptest.NewRequest(http.MethodGet, picture+"&format=webvtt", nil)); rec.Code != http.StatusBadRequest {
 		t.Errorf("pictures as WebVTT: %d, want 400", rec.Code)
 	}
+	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL+"&format=matroska", nil)); rec.Code != http.StatusBadRequest {
+		t.Errorf("SubRip in Matroska: %d, want 400", rec.Code)
+	}
+	// A client that draws VobSub is handed the one beside the film, its .idx and .sub joined.
+	vobsub := httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", strings.NewReader(`{"subtitle_file": "`+pictureID.String()+`",
+		"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each",
+		"subtitles": [{"codec": "dvd_subtitle", "delivery": "sidecar"}]}}`))
+	vobsub.Header.Set("Authorization", "Bearer "+goodToken)
+	var drawn struct {
+		Subtitles []subtitleJSON `json:"subtitles"`
+	}
+	if rec := do(vobsub); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&drawn) != nil || len(drawn.Subtitles) != 1 ||
+		drawn.Subtitles[0].ID != pictureID || !strings.HasSuffix(string(drawn.Subtitles[0].URL), "&format=matroska") {
+		t.Errorf("a VobSub drawing client's play: %d %+v, want the VobSub beside the film, in Matroska", rec.Code, drawn)
+	}
 
 	ranged := httptest.NewRequest(http.MethodGet, got.Parts[0].URL, nil)
 	ranged.Header.Set("Range", "bytes=2-5")
@@ -425,6 +440,10 @@ func (f fakeHLS) Extracted(context.Context, hls.SubtitleSource, string) (string,
 }
 
 // WebVTT answers the file's text under a WebVTT header naming its language.
+func (fakeHLS) VobSub(context.Context, func() (media.Input, error)) ([]byte, error) {
+	return nil, errors.ErrUnsupported
+}
+
 func (fakeHLS) WebVTT(_ context.Context, open func() (media.Input, error), language string) (string, error) {
 	in, err := open()
 	if err != nil {

@@ -149,6 +149,21 @@ func (r *Remuxer) WebVTT(ctx context.Context, open func() (media.Input, error), 
 	return string(out), cmd.Err(err)
 }
 
+// VobSub reads a VobSub file, its .idx with the .sub FFmpeg finds beside it, as one Matroska file,
+// which a player that draws VobSub reads, as FFmpeg writes no .idx and .sub.
+func (r *Remuxer) VobSub(ctx context.Context, open func() (media.Input, error)) ([]byte, error) {
+	in, err := open()
+	if err != nil {
+		return nil, err
+	}
+	defer in.Close()
+	a := append(quiet(), in.Args()...)
+	a = append(a, "-map", "0:s:0", "-c:s", "copy", "-f", "matroska", "-")
+	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)
+	out, err := cmd.Output()
+	return out, cmd.Err(err)
+}
+
 // Extracted answers the folder a part's styled and picture subtitle streams are read out into, with
 // want in it, reading them out if no one is. Reading one means reading the whole file, so every
 // such stream of the part is read out in the same pass and kept as it is (see StyledName and

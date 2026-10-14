@@ -441,3 +441,41 @@ func TestVobSubIsReadOutInMatroska(t *testing.T) {
 		t.Errorf("the VobSub read out = %q, %v; want each of its pictures, and its stream", got, err)
 	}
 }
+
+// A VobSub file, its .idx with its .sub beside it, reads as one Matroska file.
+func TestAVobSubFileReadsAsMatroska(t *testing.T) {
+	ffmpeg, ffprobe := tool(t, "ffmpeg", "PHOTON_FFMPEG"), tool(t, "ffprobe", "PHOTON_FFPROBE")
+	dir := t.TempDir()
+	sup := filepath.Join(dir, "film.sup")
+	if err := os.WriteFile(sup, testtool.PGS(0, 2*90000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// FFmpeg writes a .sub, which is MPEG program stream, but no .idx.
+	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error", "-fix_sub_duration",
+		"-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24", "-i", sup, "-t", "4", "-map", "1", "-c:s", "dvdsub", "-f", "vob", filepath.Join(dir, "film.sub"))
+	if out, err := made.CombinedOutput(); err != nil {
+		t.Fatalf("making the .sub: %v: %s", err, out)
+	}
+	idx := "# VobSub index file, v7 (do not modify this line!)\nsize: 640x360\npalette: 000000, ffffff, 000000, 000000, 000000, 000000, 000000, 000000, " +
+		"000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000\n\nid: en, index: 0\ntimestamp: 00:00:00:000, filepos: 000000000\n"
+	if err := os.WriteFile(filepath.Join(dir, "film.idx"), []byte(idx), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}, FFprobe: media.Tool{Path: ffprobe}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mks, err := r.VobSub(t.Context(), opening(filepath.Join(dir, "film.idx")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := filepath.Join(dir, "film.mks")
+	if err := os.WriteFile(read, mks, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	probed, err := exec.CommandContext(t.Context(), ffprobe, "-v", "error", "-show_entries", "stream=codec_name:packet=pts_time",
+		"-of", "csv=p=0", read).Output()
+	if got := strings.Fields(string(probed)); err != nil || !slices.Equal(got, []string{"0.000000", "dvd_subtitle"}) {
+		t.Errorf("the VobSub in Matroska = %q, %v; want its picture, and its stream", got, err)
+	}
+}

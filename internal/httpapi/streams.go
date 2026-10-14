@@ -67,12 +67,16 @@ type subtitleFormat string
 const (
 	subtitleOriginal subtitleFormat = "original"
 	subtitleWebVTT   subtitleFormat = "webvtt"
+	subtitleMatroska subtitleFormat = "matroska"
 )
 
-func subtitleFormats() []subtitleFormat { return []subtitleFormat{subtitleOriginal, subtitleWebVTT} }
+func subtitleFormats() []subtitleFormat {
+	return []subtitleFormat{subtitleOriginal, subtitleWebVTT, subtitleMatroska}
+}
 
-// subtitleFile serves a subtitle file beside a copy as it is, or a text one converted to WebVTT,
-// as Jellyfin's subtitle route converts, for a player that draws nothing else.
+// subtitleFile serves a subtitle file beside a copy as it is, a text one converted to WebVTT, as
+// Jellyfin's subtitle route converts, for a player that draws nothing else, or a VobSub, its .idx
+// and .sub, in one Matroska file.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
 	if !ok {
@@ -83,7 +87,31 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 		a.serveLibraryFile(w, r, "id", a.openSubtitleFile, math.MaxInt64)
 	case subtitleWebVTT:
 		a.subtitleVTT(w, r)
+	case subtitleMatroska:
+		a.subtitleMatroska(w, r)
 	}
+}
+
+func (a *API) subtitleMatroska(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
+	if a.answered(w, r, err) {
+		return
+	}
+	if sub.Codec != "dvd_subtitle" {
+		writeProblem(w, a.logger, codeInvalidParameter, "format matroska is for VobSub, whose .idx and .sub it joins")
+		return
+	}
+	ctx := r.Context()
+	mks, err := a.svc.HLS.VobSub(ctx, func() (media.Input, error) { return a.openSubtitleFile(ctx, id) })
+	if a.answered(w, r, err) {
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	writeBody(w, a.logger, mks)
 }
 
 func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
@@ -168,11 +196,11 @@ func (a *API) streamsRoutes() []route {
 		},
 		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
-			summary: "A subtitle file beside a copy, as it is or as WebVTT, at the address play answered",
+			summary: "A subtitle file beside a copy, as it is, as WebVTT or in Matroska, at the address play answered",
 			query: append([]param{
-				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is."},
+				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is."},
 			}, signatureParams...),
-			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa"}, handle: a.subtitleFile,
+			status: http.StatusOK, reply: asFile{"application/x-subrip", "text/vtt", "text/x-ssa", "application/octet-stream"}, handle: a.subtitleFile,
 		},
 	}
 }

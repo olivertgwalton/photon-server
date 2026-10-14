@@ -69,8 +69,9 @@ var (
 	ErrNoSuchAudio = errors.New("playback: the copy has no such audio stream")
 	// ErrNoSuchSubtitle is a subtitle stream asked for that the copy does not have.
 	ErrNoSuchSubtitle = errors.New("playback: the copy has no such subtitle stream")
-	// ErrNoSuchSubtitleFile is a subtitle file asked for that is not a text file beside the copy.
-	ErrNoSuchSubtitleFile = errors.New("playback: the copy has no such text subtitle file")
+	// ErrNoSuchSubtitleFile is a subtitle file asked for that is not one beside the copy the client
+	// can be shown: text, or pictures it draws itself.
+	ErrNoSuchSubtitleFile = errors.New("playback: the copy has no such subtitle file the client can be shown")
 )
 
 // Copy is what deciding needs of a copy: its container, its bitrate, how many files it is in, its
@@ -154,7 +155,7 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 	if tracks.Audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
 	}
-	sub, err := c.subtitle(tracks)
+	sub, err := c.subtitle(p, tracks)
 	if err != nil {
 		return Decision{}, err
 	}
@@ -251,9 +252,9 @@ type chosenSubtitle struct {
 	file   *uuid.UUID
 }
 
-// subtitle finds the subtitle tracks ask for, nil for none. A picture beside the copy is not one: a
-// player draws only a picture inside the file.
-func (c Copy) subtitle(tracks domain.ChosenTracks) (*chosenSubtitle, error) {
+// subtitle finds the subtitle tracks ask for, nil for none. A picture beside the copy is one only
+// for a client that draws it beside the video: it is never drawn in.
+func (c Copy) subtitle(p Profile, tracks domain.ChosenTracks) (*chosenSubtitle, error) {
 	switch {
 	case tracks.Subtitle != nil:
 		i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool {
@@ -265,7 +266,11 @@ func (c Copy) subtitle(tracks domain.ChosenTracks) (*chosenSubtitle, error) {
 		return &chosenSubtitle{codec: c.Streams[i].Codec, stream: tracks.Subtitle}, nil
 	case tracks.SubtitleFile != nil:
 		i := slices.IndexFunc(c.Files, func(f SubtitleFile) bool { return f.ID == *tracks.SubtitleFile })
-		if i < 0 || !hls.TextSubtitle(c.Files[i].Codec) && !hls.StyledSubtitle(c.Files[i].Codec) {
+		if i < 0 {
+			return nil, ErrNoSuchSubtitleFile
+		}
+		codec := c.Files[i].Codec
+		if shown := hls.TextSubtitle(codec) || hls.StyledSubtitle(codec) || hls.PictureSubtitle(codec) && p.Sidecar(codec, true, c.Parts); !shown {
 			return nil, ErrNoSuchSubtitleFile
 		}
 		return &chosenSubtitle{codec: c.Files[i].Codec, file: tracks.SubtitleFile}, nil
