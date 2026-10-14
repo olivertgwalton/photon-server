@@ -342,7 +342,7 @@ const poster = $derived(art("poster"));
 				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
 					{#each t.ratings as rating (rating.site)}
 						<li
-							class="flex rounded-full bg-white/8 px-3 py-1 text-sm backdrop-blur-xl"
+							class="flex rounded-full bg-white/8 px-3 py-[5.25px] text-sm backdrop-blur-xl"
 						>
 							<RatingScore {rating} />
 						</li>
