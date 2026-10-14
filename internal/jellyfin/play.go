@@ -202,7 +202,10 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if len(candidates) > 0 {
 		encoder = candidates[0]
 	}
-	d, err := playback.Decide(p.hlsProfile(t, segments, c, limit), playback.CopyOf(c), chosen, playback.EncodingOf(encoder))
+	hp := p.hlsProfile(t, segments, c, limit)
+	hp.EncodeVideo = req.AllowVideoStreamCopy != nil && !*req.AllowVideoStreamCopy
+	hp.EncodeAudio = req.AllowAudioStreamCopy != nil && !*req.AllowAudioStreamCopy
+	d, err := playback.Decide(hp, playback.CopyOf(c), chosen, playback.EncodingOf(encoder))
 	if err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0 {
 		err = a.svc.Placer.Refuse(candidates, nil)
 	}

@@ -210,6 +210,7 @@ var transcodeReasons = map[domain.TranscodeReason]Described{
 	domain.BitrateExceedsLimit:         {"Bitrate", "The file is above the quality chosen."},
 	domain.SubtitleCodecNotSupported:   {"Subtitles", "The subtitles are pictures, drawn into the video."},
 	domain.PartsNotSupported:           {"Several files", "The title is in several files, played as one."},
+	domain.DirectPlayError:             {"Playback failed", "The player failed to play it as it is."},
 }
 
 // Sorted is a wall's order by name, and each way of it.

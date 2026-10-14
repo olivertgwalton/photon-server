@@ -318,13 +318,15 @@ const (
 	SubtitleCodecNotSupported   TranscodeReason = "subtitle_codec_not_supported"
 	// PartsNotSupported is a copy in several files for a client that plays one.
 	PartsNotSupported TranscodeReason = "parts_not_supported"
+	// DirectPlayError is a client that failed to play a copy as it is, asking again for it encoded.
+	DirectPlayError TranscodeReason = "direct_play_error"
 )
 
 func TranscodeReasons() []TranscodeReason {
 	return []TranscodeReason{
 		ContainerNotSupported, VideoCodecNotSupported, VideoProfileNotSupported, VideoLevelNotSupported,
 		VideoResolutionNotSupported, VideoBitDepthNotSupported, VideoRangeNotSupported, AudioCodecNotSupported,
-		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported, PartsNotSupported,
+		AudioChannelsNotSupported, BitrateExceedsLimit, SubtitleCodecNotSupported, PartsNotSupported, DirectPlayError,
 	}
 }
 

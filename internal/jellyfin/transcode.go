@@ -84,7 +84,7 @@ func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transco
 		"Plan": {plan}, "Expires": {exp}, "Signature": {sig},
 	}
 	// Jellyfin's web app falls back again on an error until its stream's address refuses both
-	// copies, as Jellyfin writes it; without them it would ask for HLS forever.
+	// copies, which Jellyfin's own address never says.
 	for name, allowed := range map[string]*bool{"allowVideoStreamCopy": copyVideo, "allowAudioStreamCopy": copyAudio} {
 		if allowed != nil && !*allowed {
 			q.Set(name, "false")
