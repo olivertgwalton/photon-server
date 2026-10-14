@@ -84,6 +84,13 @@ const step = 10;
 const nudge = 5;
 const restAfter = 3000;
 const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+// How the picture meets a screen of another shape: whole, cropped to fill it,
+// or stretched to it.
+const fits = {
+	contain: { label: "Fit", class: "object-contain" },
+	cover: { label: "Crop to fill", class: "object-cover" },
+	fill: { label: "Stretch", class: "object-fill" },
+};
 
 let root = $state<HTMLElement>();
 let video = $state<HTMLVideoElement>();
@@ -161,6 +168,7 @@ $effect(() => {
 	}
 });
 let rate = $state(1);
+let fit = $state<keyof typeof fits>("contain");
 let fullscreenElement = $state<Element | null>(null);
 const pipAvailable = document.pictureInPictureEnabled;
 // Whether there is a screen to play on through the browser: AirPlay in
@@ -775,7 +783,7 @@ onMount(() => {
 		bind:buffered
 		bind:readyState
 		{@attach (v) => on(v.textTracks, "addtrack", tracksAdded)}
-		class="size-full object-contain"
+		class={["size-full", fits[fit].class]}
 		style={cueStyle(appearance)}
 		playsinline
 		preload="auto"
@@ -1117,6 +1125,22 @@ onMount(() => {
 											<Menu.RadioItem value={String(s)}
 												>{s === 1 ? "Normal" : `${s}×`}</Menu.RadioItem
 											>
+										{/each}
+									</Menu.RadioGroup>
+								</Menu.SubContent>
+							</Menu.Sub>
+							<Menu.Sub>
+								<Menu.SubTrigger>Picture</Menu.SubTrigger>
+								<Menu.SubContent portalProps={{ to: root }}>
+									<Menu.RadioGroup
+										value={fit}
+										onValueChange={(v) => {
+											menuOpen = false;
+											fit = v as keyof typeof fits;
+										}}
+									>
+										{#each Object.entries(fits) as [value, f] (value)}
+											<Menu.RadioItem {value}>{f.label}</Menu.RadioItem>
 										{/each}
 									</Menu.RadioGroup>
 								</Menu.SubContent>
