@@ -110,11 +110,7 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlayS
 		if failed(err) {
 			return
 		}
-		events := make([]trackEvent, len(cues))
-		for i, c := range cues {
-			events[i] = trackEvent{ID: strconv.Itoa(i + 1), Text: c.Text, StartPositionTicks: int64(c.Start / 100), EndPositionTicks: int64(c.End / 100)}
-		}
-		a.writeJSON(w, struct{ TrackEvents []trackEvent }{events})
+		a.writeTrackEvents(w, cues)
 	case f.Codec != "dvd_subtitle" && (slices.Contains(subtitleFormats(f.Codec), format) || hls.StyledSubtitle(f.Codec) && hls.StyledSubtitle(format)):
 		in, err := open()
 		if failed(err) {
@@ -129,21 +125,39 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlayS
 	}
 }
 
+// writeTrackEvents answers cues as the JSON Jellyfin's apps read a text track from (Stream.js).
+func (a *API) writeTrackEvents(w http.ResponseWriter, cues []hls.Cue) {
+	events := make([]trackEvent, len(cues))
+	for i, c := range cues {
+		events[i] = trackEvent{ID: strconv.Itoa(i + 1), Text: c.Text, StartPositionTicks: int64(c.Start / 100), EndPositionTicks: int64(c.End / 100)}
+	}
+	a.writeJSON(w, struct{ TrackEvents []trackEvent }{events})
+}
+
 // readOut serves a subtitle stream of a copy's file read out of it, where the file name asks for it
-// in the format it is read out in: styled text and pictures as they are, as the web player's are,
-// plain text as WebVTT, as Jellyfin converts it. A start in the path is not applied: Jellyfin
-// serves a stream from its start.
+// in a format it is read out in, as Jellyfin answers any of a stream's: styled text and pictures as
+// they are, as the web player's are; plain text as WebVTT or the JSON of its cues, and SubRip as
+// itself too. A start in the path is not applied: Jellyfin serves a stream from its start.
 func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayCopy, s domain.Stream) {
+	format := strings.ToLower(strings.TrimPrefix(path.Ext(r.PathValue("file")), "."))
 	var name string
+	cues := false
 	switch {
 	case hls.TextSubtitle(s.Codec):
-		name = hls.TextName(s.Index)
+		switch {
+		case slices.Contains(subtitleFormats("webvtt"), format):
+			name = hls.TextName(s.Index)
+		case format == "js":
+			name, cues = hls.TextName(s.Index), true
+		case s.Codec == "subrip" && slices.Contains(subtitleFormats("subrip"), format):
+			name = hls.SubRipName(s.Index)
+		}
 	case hls.PictureSubtitle(s.Codec):
 		name = hls.PictureName(s.Index, s.Codec)
 	case hls.StyledSubtitle(s.Codec):
 		name = hls.StyledName(s.Index)
 	}
-	if name == "" || !readsOutAs(s.Codec, name, strings.ToLower(strings.TrimPrefix(path.Ext(r.PathValue("file")), "."))) {
+	if name == "" || !hls.TextSubtitle(s.Codec) && !readsOutAs(s.Codec, name, format) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
@@ -160,18 +174,23 @@ func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayCopy, 
 		a.internal(w, r, err)
 		return
 	}
+	if cues {
+		read, err := a.svc.HLS.Cues(r.Context(), func() (media.Input, error) { return library.OpenMedia(dir, name) }, "")
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		a.writeTrackEvents(w, read)
+		return
+	}
 	a.serveFile(w, r, func(context.Context) (media.Input, error) { return library.OpenMedia(dir, name) })
 }
 
-// readsOutAs is whether a stream of a codec, read out into a file of a name, is in a format an app
-// asks for: WebVTT for plain text, which is read out as that; either of ASS and SSA for styled
-// text, which is read out as ASS, SSA's superset; else its codec as Jellyfin's apps name it, or the
-// file's own.
+// readsOutAs is whether a styled or picture stream, read out into a file of a name, is in a format
+// an app asks for: either of ASS and SSA for styled text, which is read out as ASS, SSA's superset;
+// else its codec as Jellyfin's apps name it, or the file's own.
 func readsOutAs(codec, name, format string) bool {
-	switch {
-	case hls.TextSubtitle(codec):
-		return slices.Contains(subtitleFormats("webvtt"), format)
-	case hls.StyledSubtitle(codec):
+	if hls.StyledSubtitle(codec) {
 		return hls.StyledSubtitle(format)
 	}
 	return format == strings.TrimPrefix(path.Ext(name), ".") || slices.Contains(subtitleFormats(codec), format)

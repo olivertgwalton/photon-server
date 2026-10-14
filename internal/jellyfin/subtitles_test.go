@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -347,6 +348,22 @@ func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
 	if w := serve(api, http.MethodGet, address, "", ""); w.Code != http.StatusOK || !strings.HasPrefix(w.Body.String(), "WEBVTT") ||
 		!strings.Contains(w.Body.String(), "00:01.000 --> 00:03.000\nHello.") {
 		t.Errorf("fetching the SubRip stream: %d %q, want it as WebVTT", w.Code, w.Body)
+	}
+	// As Jellyfin answers any format of a stream: the JSON of its cues, which apps that draw text
+	// themselves ask for first, and SubRip as it is.
+	other := func(format string) *httptest.ResponseRecorder {
+		return serve(api, http.MethodGet, strings.Replace(address, "Stream.vtt", "Stream."+format, 1), "", "")
+	}
+	var track struct{ TrackEvents []trackEvent }
+	if w := other("js"); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil || len(track.TrackEvents) != 1 ||
+		track.TrackEvents[0] != (trackEvent{ID: "1", Text: "Hello.", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
+		t.Errorf("the SubRip stream as JSON: %d %s", w.Code, w.Body)
+	}
+	if w := other("srt"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "00:00:01,000 --> 00:00:03,000\nHello.") {
+		t.Errorf("the SubRip stream as itself: %d %q", w.Code, w.Body)
+	}
+	if w := other("ass"); w.Code != http.StatusNotFound {
+		t.Errorf("the SubRip stream as ASS: %d, want 404, as it is not read out so", w.Code)
 	}
 
 	src = playbackInfo(t, api, film, srtStream, strings.Replace(webProfile, `"VideoCodec": "h264,vp9"`, `"VideoCodec": "vp9"`, 1))
