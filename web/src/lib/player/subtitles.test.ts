@@ -115,6 +115,14 @@ test("each subtitle is named and placed where HLS publishes it", () => {
 			rendition: 1,
 		},
 		{
+			key: "f1",
+			label: "German (VobSub External)",
+			codec: "dvd_subtitle",
+			kind: "picture",
+			file: 1,
+			id: "s2",
+		},
+		{
 			key: "f2",
 			label: "Signs (ASS External)",
 			codec: "ass",
@@ -151,7 +159,7 @@ test("a plain track inside the file comes through HLS", () => {
 });
 
 test("styled text, inside the file or beside it, is drawn in, never made plain", () => {
-	const [, , songs, , signs] = choices(version);
+	const [, , songs, , , signs] = choices(version);
 	expect(wants(songs)).toEqual({ subtitle_stream: 4, viaHLS: false });
 	expect(wants(signs)).toEqual({ subtitle_file: "s3", viaHLS: false });
 	expect(needsReplay(signs, direct)).toBe(true);
@@ -174,7 +182,7 @@ test("SubRip reads as WebVTT", () => {
 });
 
 test("styled text handed beside the video shows without a new playback", () => {
-	const [, , songs, , signs] = choices(version);
+	const [, , songs, , , signs] = choices(version);
 	const handed = {
 		...remux,
 		subtitles: [
@@ -215,6 +223,24 @@ test("a picture handed beside the video shows without a new playback", () => {
 	};
 	expect(beside(pgs, handed)?.url).toBe("/pgs");
 	expect(needsReplay(pgs, handed)).toBe(false);
+});
+
+test("a picture beside the copy is asked for, and shows once handed beside the video", () => {
+	const vobsub = choices(version)[4];
+	expect(wants(vobsub)).toEqual({ subtitle_file: "s2", viaHLS: false });
+	expect(needsReplay(vobsub, direct)).toBe(true);
+	const handed = {
+		...direct,
+		subtitles: [
+			{
+				id: "s2",
+				codec: "dvd_subtitle",
+				kind: "picture" as const,
+				url: "/vobsub",
+			},
+		],
+	};
+	expect(needsReplay(vobsub, handed)).toBe(false);
 });
 
 test("a play starts with the subtitle asked for, else the server's choice", () => {

@@ -7,7 +7,8 @@ type ClientProfile = Schemas["ClientProfile"];
 // What a browser says it plays, as asked: the types its video element and
 // media sources take, whether it shows HDR, whether it plays HLS itself, and
 // whether it draws styled subtitles: JASSUB's libass, in a worker, onto an
-// offscreen canvas; and whether it draws PGS: libbitsub, in WebAssembly.
+// offscreen canvas; and whether it draws PGS and VobSub: libbitsub, in
+// WebAssembly.
 export type Capabilities = {
 	types: string[];
 	pq: boolean;
@@ -157,9 +158,9 @@ export function browserProfile(
 		audio: sound,
 		max_bitrate_kbps: maxBitrateKbps,
 		// A video element draws only a WebVTT track it is given, which SubRip
-		// becomes, JASSUB draws ASS it is given and libbitsub PGS; what a
-		// browser without them cannot draw, and other pictures, are drawn into
-		// the video.
+		// becomes, JASSUB draws ASS it is given and libbitsub PGS and VobSub;
+		// what a browser without them cannot draw, and DVB, are drawn into the
+		// video.
 		subtitles: [
 			{ codec: "subrip", delivery: "sidecar" },
 			{ codec: "webvtt", delivery: "sidecar" },
@@ -170,7 +171,10 @@ export function browserProfile(
 					] as const)
 				: []),
 			...(caps.pictures
-				? ([{ codec: "hdmv_pgs_subtitle", delivery: "sidecar" }] as const)
+				? ([
+						{ codec: "hdmv_pgs_subtitle", delivery: "sidecar" },
+						{ codec: "dvd_subtitle", delivery: "sidecar" },
+					] as const)
 				: []),
 		],
 	};

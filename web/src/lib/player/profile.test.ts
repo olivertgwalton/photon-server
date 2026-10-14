@@ -119,13 +119,14 @@ test("the quality chosen is the most the server sends", () => {
 	expect(browserProfile(chrome, 0).max_bitrate_kbps).toBe(0);
 });
 
-test("a browser draws the text files it is given, ASS where JASSUB runs and PGS where libbitsub does", () => {
+test("a browser draws the text files it is given, ASS where JASSUB runs and PGS and VobSub where libbitsub does", () => {
 	expect(browserProfile(safari, 0).subtitles).toEqual([
 		{ codec: "subrip", delivery: "sidecar" },
 		{ codec: "webvtt", delivery: "sidecar" },
 		{ codec: "ass", delivery: "sidecar" },
 		{ codec: "ssa", delivery: "sidecar" },
 		{ codec: "hdmv_pgs_subtitle", delivery: "sidecar" },
+		{ codec: "dvd_subtitle", delivery: "sidecar" },
 	]);
 	expect(
 		browserProfile({ ...firefox, styled: false, pictures: false }, 0).subtitles,

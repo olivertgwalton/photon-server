@@ -306,7 +306,14 @@ func TestDecide(t *testing.T) {
 				Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
 			},
 		},
-		{name: "a picture beside the copy is no subtitle a player shows", profile: everything, file: &pgsFile, err: ErrNoSuchSubtitleFile},
+		{name: "a picture beside the copy is no subtitle a player that does not draw it shows", profile: everything, file: &pgsFile, err: ErrNoSuchSubtitleFile},
+		{
+			name: "a picture beside the copy a client draws goes beside HLS, the video copied", profile: drawsPGSBeside, file: &pgsFile, audio: new(2),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
+			},
+		},
 		{name: "a subtitle file not beside the copy", profile: everything, file: new(uuid.NewV7()), err: ErrNoSuchSubtitleFile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

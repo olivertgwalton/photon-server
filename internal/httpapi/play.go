@@ -325,7 +325,7 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
 // beside one drawn in: the files beside the copy it draws so, but plain ones HLS carries itself,
-// and the styled and PGS streams of a copy in one file, read out as they are, but those it draws
+// and a VobSub's in Matroska, and the styled and picture streams of a copy in one file, read out as they are, but those it draws
 // from the file it plays.
 func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayMethod, until time.Time) []subtitleJSON {
 	var out []subtitleJSON
@@ -349,9 +349,13 @@ func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayM
 		if !p.Sidecar(f.Codec, true, len(c.Parts)) || method != domain.PlayDirect && hls.TextSubtitle(f.Codec) {
 			continue
 		}
+		at := a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until)
+		if f.Codec == "dvd_subtitle" {
+			at += "&format=" + string(subtitleMatroska)
+		}
 		out = append(out, subtitleJSON{
 			ID: f.ID, Codec: f.Codec, Kind: subtitleKindOf(f.Codec), Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
-			HearingImpaired: f.HearingImpaired, URL: uriReference(a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until)),
+			HearingImpaired: f.HearingImpaired, URL: uriReference(at),
 		})
 	}
 	return out

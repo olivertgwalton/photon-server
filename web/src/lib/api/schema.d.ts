@@ -4771,7 +4771,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A styled (ASS) or PGS subtitle stream of a part, read out as it is, at the address play answered */
+        /** A styled (ASS) or picture (PGS, VobSub) subtitle stream of a part, read out as it is, at the address play answered */
         get: {
             parameters: {
                 query?: {
@@ -6293,11 +6293,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A subtitle file beside a copy, as it is or as WebVTT, at the address play answered */
+        /** A subtitle file beside a copy, as it is, as WebVTT or in Matroska, at the address play answered */
         get: {
             parameters: {
                 query?: {
-                    /** @description webvtt converts a text subtitle to WebVTT; original, the default, is the file as it is. */
+                    /** @description webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is. */
                     format?: components["schemas"]["SubtitleFormat"];
                     /** @description When the address lapses, as the server signed it. */
                     exp?: number;
@@ -6318,6 +6318,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
+                        "application/octet-stream": unknown;
                         "application/x-subrip": unknown;
                         "text/vtt": unknown;
                         "text/x-ssa": unknown;
@@ -8877,7 +8878,7 @@ export interface components {
         /** @enum {string} */
         SubtitleDelivery: "embedded" | "sidecar";
         /** @enum {string} */
-        SubtitleFormat: "original" | "webvtt";
+        SubtitleFormat: "original" | "webvtt" | "matroska";
         /** @enum {string} */
         SubtitleKind: "text" | "styled" | "picture";
         /** @enum {string} */
