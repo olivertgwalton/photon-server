@@ -35,15 +35,14 @@ func (r *Remuxer) Playlist(playback uuid.UUID, name string) (string, error) {
 	return p, nil
 }
 
-// SubtitleSegment answers segment n of subtitle track as WebVTT. A file's cues are read the first
-// time it is asked for; a stream's come with the run that remuxes the segment, which is started
-// there if no run will reach it.
+// SubtitleSegment answers piece n of subtitle track as WebVTT. A file's cues are read the first
+// time it is asked for; a stream's come as cuesThrough finds them.
 func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track, n int) (string, error) {
 	s, err := r.session(playback)
 	if err != nil {
 		return "", err
 	}
-	if track < 0 || track >= len(s.subtitles) || n < 0 || n >= len(s.plan) {
+	if track < 0 || track >= len(s.subtitles) || n < 0 || n >= len(s.pieces) {
 		return "", ErrNoRemux
 	}
 	sub := s.subtitles[track]
@@ -60,31 +59,54 @@ func (r *Remuxer) SubtitleSegment(ctx context.Context, playback uuid.UUID, track
 			sub.cues, sub.read = cues, true
 			sub.mu.Unlock()
 		}
-	} else if err := r.cuesOf(ctx, s, n); err != nil {
+	} else if err := r.cuesThrough(ctx, s, s.pieces[n]); err != nil {
 		return "", err
 	}
-	seg := s.plan[n]
+	seg := s.span(s.pieces[n])
 	sub.mu.Lock()
 	defer sub.mu.Unlock()
 	return writeVTT(sub.cues, s.offsets[seg.Part], seg.Start, seg.End), nil
 }
 
-// cuesOf waits until the embedded subtitles' cues of segment n are read. A run reads them from
-// where it starts; one that started after n, or stopped before it, will not reach them.
-func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
+// cuesThrough waits until the embedded subtitles' cues of a piece are read, without moving the
+// video's run: a run under way on the piece's part reads them as it passes, and is let run that far
+// ahead; those it will not reach, before where it started or with none under way, are read by
+// themselves (see readCues).
+func (r *Remuxer) cuesThrough(ctx context.Context, s *session, p piece) error {
 	s.mu.Lock()
-	wait := waiter(s.cued, n)
-	if !closed(wait) {
-		if s.run == nil || s.run.part != s.plan[n].Part || n < s.run.first || n > s.run.at+jump {
-			r.start(ctx, s, n)
-		}
-		// They are whole once the segment after is made (see cut).
-		s.furthest = max(s.furthest, n+1)
-		select {
-		case s.run.more <- struct{}{}:
-		default:
+	from := p.first
+	for from <= p.last && closed(waiter(s.cued, from)) {
+		from++
+	}
+	if from > p.last {
+		s.mu.Unlock()
+		return nil
+	}
+	run := s.run
+	if run != nil && run.part != s.plan[from].Part {
+		run = nil
+	}
+	before := p.last
+	if run != nil {
+		before = min(p.last, run.first-1)
+	}
+	s.mu.Unlock()
+	if from <= before {
+		if err := r.readCues(ctx, s, from, before); err != nil {
+			return err
 		}
 	}
+	if run == nil || p.last < run.first {
+		return nil
+	}
+	s.mu.Lock()
+	// They are whole once the segment after is made (see cut).
+	s.furthest = max(s.furthest, p.last+1)
+	select {
+	case run.more <- struct{}{}:
+	default:
+	}
+	wait := waiter(s.cued, p.last)
 	s.mu.Unlock()
 	select {
 	case <-ctx.Done():
@@ -93,9 +115,9 @@ func (r *Remuxer) cuesOf(ctx context.Context, s *session, n int) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.cueFailed[n]; err != nil {
-		delete(s.cueFailed, n)
-		delete(s.cued, n)
+	if err := s.cueFailed[p.last]; err != nil {
+		delete(s.cueFailed, p.last)
+		delete(s.cued, p.last)
 		return err
 	}
 	return nil

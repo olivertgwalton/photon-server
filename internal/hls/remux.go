@@ -165,6 +165,7 @@ type session struct {
 	sources   []Source
 	offsets   []time.Duration
 	plan      []Segment
+	pieces    []piece
 	playlists map[string]string
 	subtitles []*subtitle
 
@@ -178,6 +179,11 @@ type session struct {
 	// They are kept with the cues, never forgotten as segments are.
 	cued      map[int]chan struct{}
 	cueFailed map[int]error
+}
+
+// span is the stretch of its part a piece covers.
+func (s *session) span(p piece) Segment {
+	return Segment{Part: s.plan[p.first].Part, Start: s.plan[p.first].Start, End: s.plan[p.last].End}
 }
 
 // run is one ffmpeg producing the segments of one part from first onwards.
@@ -243,9 +249,14 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		MasterName: Master(c.Subtitles, c.Variant, version, videoName, subtitleName),
 		videoName:  Playlist(s.plan, version, init, func(n int) string { return segmentName(s.format, n) }),
 	}
+	s.pieces = pieces(s.plan)
+	pieced := make([]Segment, len(s.pieces))
+	for k, p := range s.pieces {
+		pieced[k] = s.span(p)
+	}
 	for n, sub := range c.Subtitles {
 		s.subtitles = append(s.subtitles, &subtitle{Subtitle: sub})
-		s.playlists[subtitleName(n)] = Playlist(s.plan, version, nil, func(k int) string { return subtitleSegmentName(n, k) })
+		s.playlists[subtitleName(n)] = Playlist(pieced, version, nil, func(k int) string { return subtitleSegmentName(n, k) })
 	}
 	if s.encodes() {
 		if free, ok := r.free(r.dir); ok && free < spareSpace {

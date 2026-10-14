@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -117,13 +118,29 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	if err != nil {
 		return err
 	}
+	readers := s.keepCues(sockets, s.offsets[run.part])
+	err = r.cut(ctx, s, run, out)
+	if err != nil {
+		stop(err)
+	}
+	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
+	// holding it past the grace a stop gives it.
+	closeErr := out.Close()
+	err = cmp.Or(err, closeErr, cmd.Err(cmd.Wait()))
+	closeSockets(sockets)
+	return cmp.Or(err, readers.Wait())
+}
+
+// keepCues keeps the cues ffmpeg writes to each embedded subtitle's socket, on the copy's clock: the
+// part's, from offset.
+func (s *session) keepCues(sockets []subtitleSocket, offset time.Duration) *errgroup.Group {
 	var readers errgroup.Group
 	k := 0
 	for _, sub := range s.subtitles {
 		if sub.Stream == nil {
 			continue
 		}
-		socket, offset := sockets[k], s.offsets[run.part]
+		socket := sockets[k]
 		k++
 		readers.Go(func() error {
 			conn, err := socket.ln.Accept()
@@ -143,16 +160,49 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 			return errors.Join(err, conn.Close())
 		})
 	}
-	err = r.cut(ctx, s, run, out)
+	return &readers
+}
+
+// readCues reads the embedded subtitles' cues of segments first to last, of one part, by an ffmpeg
+// of their own that reads only that stretch of the file and writes nothing else: what no run of
+// the video will reach, which subtitles must not move it to.
+func (r *Remuxer) readCues(ctx context.Context, s *session, first, last int) error {
+	part := s.plan[first].Part
+	in, err := s.sources[part].Open()
 	if err != nil {
-		stop(err)
+		return err
 	}
-	// Nothing reads what ffmpeg writes now, so a write it is blocked on fails at once rather than
-	// holding it past the grace a stop gives it.
-	closeErr := out.Close()
-	err = cmp.Or(err, closeErr, cmd.Err(cmd.Wait()))
+	defer in.Close()
+	sockets, err := s.subtitleSockets(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeSockets(sockets)
+	start, end := s.plan[first].Start, s.plan[last].End
+	a := quiet()
+	if start > 0 {
+		a = append(a, "-ss", strconv.FormatFloat(start.Seconds(), 'f', 6, 64))
+	}
+	a = append(a, "-t", strconv.FormatFloat((end-start).Seconds(), 'f', 6, 64), "-copyts")
+	a = append(a, in.Args()...)
+	for _, k := range sockets {
+		a = append(a, "-map", "0:"+strconv.Itoa(k.stream), "-c:s", "subrip", "-f", "srt", "-flush_packets", "1", k.url())
+	}
+	readers := s.keepCues(sockets, s.offsets[part])
+	cmd := media.NewCommand(ctx, media.Foreground, r.tools.FFmpeg.Path, a...)
+	err = cmd.Err(cmd.Run())
 	closeSockets(sockets)
-	return cmp.Or(err, readers.Wait())
+	if err := cmp.Or(err, readers.Wait()); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for n := first; n <= last; n++ {
+		if c := waiter(s.cued, n); !closed(c) {
+			close(c)
+		}
+	}
+	return nil
 }
 
 // subtitleSocket is a loopback socket ffmpeg writes a subtitle stream to.
