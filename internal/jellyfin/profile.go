@@ -318,9 +318,19 @@ func (d deviceProfile) subtitleTaken(codec string, delivery domain.SubtitleDeliv
 	case domain.SubtitleEmbedded:
 		return d.subtitleFormat(codec, "embed") != "" || d.readOut(codec) != ""
 	case domain.SubtitleSidecar:
-		return d.subtitleFormat(codec, "external") != ""
+		return d.sidecarFormat(codec) != ""
 	}
 	return false
+}
+
+// sidecarFormat is the format the app is sent a subtitle file of a codec in, as Jellyfin chooses
+// it: the codec's own, else WebVTT for plain text, which photon converts it to; "" where the app
+// draws neither.
+func (d deviceProfile) sidecarFormat(codec string) string {
+	if f := d.subtitleFormat(codec, "external"); f != "" || !hls.TextSubtitle(codec) {
+		return f
+	}
+	return d.subtitleFormat("webvtt", "external")
 }
 
 // readOut is the format the app is sent a subtitle stream of a codec in, read out of the file beside

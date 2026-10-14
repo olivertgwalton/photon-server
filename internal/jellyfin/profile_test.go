@@ -183,3 +183,29 @@ func TestAnAppIsSentASubtitleReadOutOnlyWhereItDrawsItSo(t *testing.T) {
 		t.Error("an embedded stream is taken as photon delivers it")
 	}
 }
+
+// An app is sent a subtitle file beside a copy in its own format where it draws that, else, plain
+// text, as WebVTT where it draws that, as Jellyfin chooses; and not where it draws neither.
+func TestAnAppIsSentASubtitleFileInAFormatItDraws(t *testing.T) {
+	web := profileOf(t, `{"SubtitleProfiles": [{"Format": "vtt", "Method": "External"}, {"Format": "ass", "Method": "External"},
+		{"Format": "pgssub", "Method": "External"}, {"Format": "vobsub", "Container": "mks", "Method": "External"}]}`)
+	srt := profileOf(t, `{"SubtitleProfiles": [{"Format": "vtt", "Method": "External"}, {"Format": "srt", "Method": "External"}]}`)
+	for _, tc := range []struct {
+		p     deviceProfile
+		codec string
+		want  string
+	}{
+		{web, "subrip", "vtt"},
+		{web, "sami", "vtt"},
+		{web, "ass", "ass"},
+		{web, "hdmv_pgs_subtitle", "pgssub"},
+		{web, "dvd_subtitle", "vobsub"},
+		{web, "ssa", ""},
+		{srt, "subrip", "srt"},
+		{srt, "hdmv_pgs_subtitle", ""},
+	} {
+		if got := tc.p.sidecarFormat(tc.codec); got != tc.want {
+			t.Errorf("a %s file sent as %q, want %q", tc.codec, got, tc.want)
+		}
+	}
+}
