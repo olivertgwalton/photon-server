@@ -88,9 +88,10 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 	}
 	// Laid over the picture by FFmpeg, VAAPI's taken off the device and back.
 	ten := e.Range == domain.RangeHDR10 || e.Range == domain.RangeHLG
-	format, down, up := "yuv420p", "", ""
+	// overlay blends in 8 bits unless told otherwise, dropping 10-bit HDR to 8 and back.
+	format, blend, down, up := "yuv420p", "yuv420", "", ""
 	if ten {
-		format = "yuv420p10le"
+		format, blend = "yuv420p10le", "yuv420p10"
 	}
 	if hw.Accel == domain.AccelVAAPI {
 		format = "nv12"
@@ -103,7 +104,7 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 		return []string{"-map", in, "-vf", filter + down + "," + layer.filter("") + up}
 	}
 	graph := "[" + in + "]" + filter + down + "[main];[0:" + strconv.Itoa(*e.Burn) + "]scale=" + size + "[sub];" +
-		"[main][sub]overlay=eof_action=pass:repeatlast=0,format=" + format + up + "[v]"
+		"[main][sub]overlay=eof_action=pass:repeatlast=0:format=" + blend + ",format=" + format + up + "[v]"
 	return []string{"-filter_complex", graph, "-map", "[v]"}
 }
 

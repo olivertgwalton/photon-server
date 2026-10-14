@@ -273,7 +273,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000, Burn: new(3)}},
 			nil,
 			nil,
-			[]string{"-filter_complex [0:0]scale=1280:720,format=yuv420p[main];[0:3]scale=1280:720[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v] -map [v]", "-c:v libx264"},
+			[]string{"-filter_complex [0:0]scale=1280:720,format=yuv420p[main];[0:3]scale=1280:720[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=yuv420p[v] -map [v]", "-c:v libx264"},
 		},
 		{
 			"styled text is drawn in by libass after the picture is scaled, with the fonts the file carries",
@@ -343,11 +343,11 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 			canvas + "yuva420p" + styled + "hwupload[sub];[0:0]scale_cuda=w=1920:h=1040:format=nv12[main];[main][sub]overlay_cuda=eof_action=pass:repeatlast=0:alpha_format=premultiplied[v]",
 		},
 		domain.AccelVAAPI: {
-			"[0:0]scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=nv12,hwupload[v]",
+			"[0:0]scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
 			"-vf scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts,hwupload ",
 		},
 		domain.AccelAMF: {
-			"[0:0]scale=1920:1040,format=yuv420p[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v]",
+			"[0:0]scale=1920:1040,format=yuv420p[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=yuv420p[v]",
 			"-vf scale=1920:1040,format=yuv420p,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts ",
 		},
 	} {
@@ -363,6 +363,21 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 					t.Errorf("%s, styled %t: %q lacks %q", accel, tc.layer != nil, got, w)
 				}
 			}
+		}
+	}
+}
+
+func TestASubtitleLaidOverOnTheCPUKeepsHDRInTenBits(t *testing.T) {
+	e := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeHDR10, Burn: new(2)}
+	for accel, want := range map[domain.Acceleration]string{
+		domain.AccelSoftware: "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=yuv420p10le[v]",
+		domain.AccelAMF:      "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=yuv420p10le[v]",
+		domain.AccelVAAPI:    "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload[v]",
+	} {
+		video := domain.VideoPlan{Codec: "hevc", Encode: &e}
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: accel}, 0, video, nil, nil, domain.SegmentsFMP4, nil), " ")
+		if !strings.Contains(got, want) {
+			t.Errorf("%s: %q lacks %q", accel, got, want)
 		}
 	}
 }
