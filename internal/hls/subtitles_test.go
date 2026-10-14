@@ -133,7 +133,7 @@ const styledFilm = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 
 
 // A part's subtitle streams are read out in one read of the file, which a request given up does not
 // stop and a later one does not repeat: styled ones as they are, with the fonts the file carries
-// for them, and plain text as WebVTT.
+// for them, plain text as WebVTT, and SubRip as itself too.
 func TestSubtitlesAreReadOutOnce(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
 	dir := t.TempDir()
@@ -194,6 +194,10 @@ func TestSubtitlesAreReadOutOnce(t *testing.T) {
 		got, err := os.ReadFile(filepath.Join(out, TextName(stream)))
 		if err != nil || !strings.HasPrefix(string(got), "WEBVTT") || !strings.Contains(string(got), "00:01.000 --> 00:03.000\n"+text) {
 			t.Errorf("text stream %d = %q, %v; want it as WebVTT", stream, got, err)
+		}
+		got, err = os.ReadFile(filepath.Join(out, SubRipName(stream)))
+		if err != nil || !strings.Contains(string(got), "00:00:01,000 --> 00:00:03,000\n"+text) {
+			t.Errorf("SubRip stream %d = %q, %v; want it as itself too", stream, got, err)
 		}
 	}
 	read, err := os.ReadFile(runs)

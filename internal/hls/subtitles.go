@@ -84,6 +84,10 @@ func ReadOut(codec string) bool { return StyledSubtitle(codec) || PictureSubtitl
 // Extracted answers.
 func TextName(stream int) string { return strconv.Itoa(stream) + ".vtt" }
 
+// SubRipName is the name a SubRip stream of a part is also read out as, as it is, in the folder
+// Extracted answers.
+func SubRipName(stream int) string { return strconv.Itoa(stream) + ".srt" }
+
 // StyledName is the name a styled stream of a part is read out as, as it is, in the folder
 // Extracted answers.
 func StyledName(stream int) string { return strconv.Itoa(stream) + ".ass" }
@@ -171,7 +175,8 @@ func (r *Remuxer) VobSub(ctx context.Context, open func() (media.Input, error)) 
 // Extracted answers the folder a part's subtitle streams are read out into, with want in it,
 // reading them out if no one is. Reading one means reading the whole file, so every subtitle
 // stream of the part is read out in the same pass, styled and pictures as they are, plain text as
-// WebVTT (see StyledName, PictureName and TextName), for this playback and the next, with the fonts the file carries for them (see FontsDir). A folder lacking
+// WebVTT and SubRip as itself too (see StyledName, PictureName, TextName and SubRipName), for this
+// playback and the next, with the fonts the file carries for them (see FontsDir). A folder lacking
 // want, kept from before a stream was read out so, is read again. The pass outlives the request
 // that started it: a player that gives up waiting finds it further on when it asks again.
 func (r *Remuxer) Extracted(ctx context.Context, src SubtitleSource, want string) (string, error) {
@@ -247,6 +252,9 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 		case s.Kind != domain.StreamSubtitle:
 		case TextSubtitle(s.Codec):
 			a = append(a, "-map", "0:"+n, "-c:s", "webvtt", "-f", "webvtt", filepath.Join(made, TextName(s.Index)))
+			if s.Codec == "subrip" {
+				a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "srt", filepath.Join(made, SubRipName(s.Index)))
+			}
 		case StyledSubtitle(s.Codec):
 			a = append(a, "-map", "0:"+n, "-c:s", "copy", "-f", "ass", filepath.Join(made, StyledName(s.Index)))
 		case s.Codec == "hdmv_pgs_subtitle":
