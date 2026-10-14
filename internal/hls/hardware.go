@@ -111,13 +111,18 @@ func said(ctx context.Context, ffmpeg string, args ...string) string {
 
 // overlay is how a subtitle drawn on the CPU is laid over the picture on the device, as Jellyfin's
 // is: the format it is drawn in, the filter uploading it, and the overlay. None where FFmpeg lays it
-// over: software and AMF, whose pictures are on the CPU, and VAAPI, as Jellyfin's does on a driver
-// it has neither OpenCL nor Vulkan for. VAAPI here mostly drives AMD, whose Mesa driver blended
-// nothing for overlay_vaapi until May 2026, and where Jellyfin overlays with Vulkan instead.
+// over: software and AMF, whose pictures are on the CPU, and VAAPI on a driver Jellyfin overlays
+// on neither the device nor Vulkan with.
 func (h Hardware) overlay() (format, upload, overlay string) {
 	const pass = "=eof_action=pass:repeatlast=0"
 	switch h.Accel {
-	case domain.AccelSoftware, domain.AccelAMF, domain.AccelVAAPI:
+	case domain.AccelSoftware, domain.AccelAMF:
+	case domain.AccelVAAPI:
+		switch h.Overlay {
+		case OverlayVAAPI:
+			return "bgra", "hwupload", "overlay_vaapi" + pass
+		case OverlayVulkan, OverlayCPU:
+		}
 	case domain.AccelVideoToolbox:
 		return "bgra", "hwupload", "overlay_videotoolbox" + pass
 	case domain.AccelQSV:

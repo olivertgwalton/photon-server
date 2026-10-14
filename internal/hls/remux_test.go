@@ -367,6 +367,49 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 	}
 }
 
+// VAAPI lays a subtitle over as its driver can: Intel's iHD with overlay_vaapi, which scales it
+// from at most 1080 high, and any other on the CPU.
+func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
+	uhd := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 3840, Height: 1600, BitrateKbps: 20000, Range: domain.RangeSDR, Burn: new(2)}
+	hd := uhd
+	hd.Width, hd.Height, hd.BitrateKbps = 1920, 800, 8000
+	styled := hd
+	styled.Burn, styled.BurnFile = nil, new(uuid.New())
+	layer := &styledLayer{file: "/cache/part/2.ass", rate: 24}
+	for _, tc := range []struct {
+		name    string
+		overlay Overlay
+		e       domain.VideoEncode
+		layer   *styledLayer
+		want    string
+	}{
+		{
+			"iHD, 4K", OverlayVAAPI, uhd, nil,
+			"[0:2]scale=2592:1080,format=bgra,hwupload[sub];[0:0]scale_vaapi=w=3840:h=1600:format=nv12[main];" +
+				"[main][sub]overlay_vaapi=eof_action=pass:repeatlast=0:w=3840:h=1600[v]",
+		},
+		{
+			"iHD, styled", OverlayVAAPI, styled, layer,
+			"alphasrc=s=1920x800:r=24.000:start=0.000000,format=bgra,subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1,hwupload[sub];" +
+				"[0:0]scale_vaapi=w=1920:h=800:format=nv12[main];[main][sub]overlay_vaapi=eof_action=pass:repeatlast=0:w=1920:h=800[v]",
+		},
+		{
+			"i965", OverlayCPU, hd, nil,
+			"[0:0]scale_vaapi=w=1920:h=800:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:800[sub];" +
+				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
+		},
+	} {
+		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay}
+		video := domain.VideoPlan{Codec: "hevc", Encode: &tc.e}
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 0, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+		for _, w := range []string{"-init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw", tc.want, "-c:v hevc_vaapi"} {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: %q lacks %q", tc.name, got, w)
+			}
+		}
+	}
+}
+
 func TestASubtitleLaidOverOnTheCPUKeepsHDRInTenBits(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeHDR10, Burn: new(2)}
 	for accel, want := range map[domain.Acceleration]string{
