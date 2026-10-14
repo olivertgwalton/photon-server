@@ -29,6 +29,9 @@ type Profile struct {
 	// Segments is the container of the HLS segments it plays: fragmented MP4, the default, or
 	// MPEG-TS.
 	Segments domain.SegmentFormat `json:"segments,omitzero"`
+	// EncodeVideo and EncodeAudio are a client that failed to play a track as it is: it is encoded
+	// however well the client takes it.
+	EncodeVideo, EncodeAudio bool `json:"-"`
 }
 
 // VideoSupport is a video codec a client decodes, by FFmpeg's name, and how far. A zero limit is
@@ -164,6 +167,9 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 	if video != nil {
 		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
 		videoReasons = p.videoReasons(*video)
+		if p.EncodeVideo {
+			videoReasons = append(videoReasons, domain.DirectPlayError)
+		}
 		if video.DolbyVision != nil && len(videoReasons) == 0 {
 			switch {
 			case p.showsDolbyVision(*video):
@@ -178,6 +184,9 @@ func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decisi
 	if sound != nil {
 		d.Audio = &domain.AudioPlan{Stream: sound.Index}
 		audioReasons = p.audioReasons(*sound)
+		if p.EncodeAudio {
+			audioReasons = append(audioReasons, domain.DirectPlayError)
+		}
 	}
 	if !p.opens(c.Container) {
 		d.Reasons = append(d.Reasons, domain.ContainerNotSupported)

@@ -9045,7 +9045,7 @@ export interface components {
         /** @enum {string} */
         TrackerState: "unavailable" | "unlinked" | "linking" | "linked";
         /** @enum {string} */
-        TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported" | "parts_not_supported";
+        TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported" | "parts_not_supported" | "direct_play_error";
         Transcodes: {
             active: number;
             conversions: number;

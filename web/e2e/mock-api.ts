@@ -590,6 +590,10 @@ const vocabulary: Schemas["Vocabulary"] = {
 			name: "Several files",
 			description: "The title is in several files, played as one.",
 		},
+		direct_play_error: {
+			name: "Playback failed",
+			description: "The player failed to play it as it is.",
+		},
 		subtitle_codec_not_supported: {
 			name: "Subtitles",
 			description: "The subtitles are pictures, drawn into the video.",

@@ -332,15 +332,16 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 // fakeRemuxes are a node's remuxes: those opened, by playback, and the playlists each answers.
 type fakeRemuxes struct {
 	opened   map[uuid.UUID]domain.VideoPlan
+	audio    map[uuid.UUID]*domain.AudioPlan
 	segments map[uuid.UUID]domain.SegmentFormat
 }
 
 func newFakeRemuxes() *fakeRemuxes {
-	return &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}, segments: map[uuid.UUID]domain.SegmentFormat{}}
+	return &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}, audio: map[uuid.UUID]*domain.AudioPlan{}, segments: map[uuid.UUID]domain.SegmentFormat{}}
 }
 
-func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, _ *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
-	f.opened[id], f.segments[id] = video, segments
+func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
+	f.opened[id], f.audio[id], f.segments[id] = video, audio, segments
 	return nil
 }
 
@@ -664,6 +665,59 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 type someNodes []domain.Node
 
 func (n someNodes) Nodes(context.Context) ([]domain.Node, error) { return n, nil }
+
+// Jellyfin's web app plays a copy as it is, and where that fails asks again with direct play off and
+// copying the video forbidden, then the audio too, and is given HLS from where it was, encoding what
+// it forbade; the address says what it forbade, so that its last failure stops rather than asks again.
+func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
+	st, ada, heat, _ := aFilm(t)
+	remuxes := newFakeRemuxes()
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Sent:    playback.NewSent(),
+		Network: st,
+		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
+		HLS: remuxes, Placer: alone(remuxes), Owners: noOwners{}, Signer: playback.NewSigner([]byte("key")),
+	})
+	const webOS = `MediaBrowser Client="Jellyfin for WebOS", Device="LG Smart TV", DeviceId="lg", Version="1.2.2", Token="pst_ada"`
+	const profile = `"DeviceProfile":{"MaxStreamingBitrate":120000000,
+		"DirectPlayProfiles":[{"Container":"mkv","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3"}],
+		"TranscodingProfiles":[{"Container":"ts","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3","Protocol":"hls"}]}`
+	// ask answers the copy, and where it is HLS, what fetching it opened.
+	ask := func(flags string) (map[string]any, string, domain.VideoPlan, *domain.AudioPlan) {
+		t.Helper()
+		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webOS, `{"StartTimeTicks":9663630000,`+flags+profile+`}`)
+		var info struct {
+			MediaSources  []map[string]any
+			PlaySessionID string `json:"PlaySessionId"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) == 0 {
+			t.Fatalf("%d %s", w.Code, w.Body)
+		}
+		address, _ := info.MediaSources[0]["TranscodingUrl"].(string)
+		if address == "" {
+			return info.MediaSources[0], "", domain.VideoPlan{}, nil
+		}
+		api.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, address, nil))
+		session := uuidOf(t, info.PlaySessionID)
+		return info.MediaSources[0], strings.ToLower(address), remuxes.opened[session], remuxes.audio[session]
+	}
+	if src, address, _, _ := ask(""); src["SupportsDirectPlay"] != true || src["SupportsTranscoding"] != true || address != "" {
+		t.Errorf("played as it is, with HLS to fall back on: %v", src)
+	}
+	_, first, video, _ := ask(`"EnableDirectPlay":false,"EnableDirectStream":false,"AllowVideoStreamCopy":false,`)
+	if !strings.Contains(first, "allowvideostreamcopy=false") || strings.Contains(first, "allowaudiostreamcopy") || video.Encode == nil {
+		t.Errorf("the first fall back, its video encoded: %q, %+v", first, video)
+	}
+	_, last, video, audio := ask(`"EnableDirectPlay":false,"EnableDirectStream":false,"AllowVideoStreamCopy":false,"AllowAudioStreamCopy":false,`)
+	if !strings.Contains(last, "allowvideostreamcopy=false") || !strings.Contains(last, "allowaudiostreamcopy=false") ||
+		video.Encode == nil || audio == nil || audio.Encode == nil {
+		t.Errorf("the last fall back, both encoded, which the web app does not ask again after: %q, %+v, %+v", last, video, audio)
+	}
+	if _, _, video, audio := ask(`"EnableDirectPlay":false,"AllowAudioStreamCopy":false,`); video.Encode != nil || audio == nil || audio.Encode == nil {
+		t.Errorf("copying the audio forbidden alone, its video copied and its audio encoded: %+v, %+v", video, audio)
+	}
+}
 
 // Infuse takes HLS only in MPEG-TS, as its profile says, and is given it.
 func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
