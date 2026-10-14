@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -358,6 +359,10 @@ func (f *fakeRemuxes) Resource(_ context.Context, id uuid.UUID, name string) (hl
 		return hls.Resource{Text: "#EXTM3U\n#EXT-X-MAP:URI=\"init0.mp4\"\n#EXTINF:6.0,\n0.m4s\n#EXT-X-ENDLIST\n", Type: "application/vnd.apple.mpegurl"}, nil
 	}
 	return hls.Resource{}, hls.ErrNoRemux
+}
+
+func (f *fakeRemuxes) Extracted(context.Context, hls.SubtitleSource, string) (string, error) {
+	return "", errors.New("no subtitles read out here")
 }
 
 // noOwners is a cluster of one node, which runs every playback itself.

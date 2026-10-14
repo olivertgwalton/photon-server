@@ -320,51 +320,6 @@ func (a *API) serveFile(w http.ResponseWriter, r *http.Request, open func(contex
 	}
 }
 
-// subtitle serves a subtitle file beside a copy, by the index its media source gives it.
-func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.itemID(w, r)
-	if !ok {
-		return
-	}
-	source, err := uuid.Parse(r.PathValue("sourceId"))
-	index, ierr := strconv.Atoi(r.PathValue("index"))
-	if err != nil || ierr != nil {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	if _, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, source); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			a.refuse(w, http.StatusNotFound)
-			return
-		}
-		a.internal(w, r, err)
-		return
-	}
-	versions, err := a.svc.Catalogue.Versions(r.Context(), []uuid.UUID{id})
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	n := slices.IndexFunc(versions[id], func(v store.VersionPage) bool { return v.ID == source })
-	if n < 0 {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	v := versions[id][n]
-	file := index - externalBase(v)
-	if file < 0 || file >= len(v.Subtitles) {
-		a.refuse(w, http.StatusNotFound)
-		return
-	}
-	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) {
-		root, rel, err := a.svc.Playing.SubtitleFile(ctx, v.Subtitles[file].ID)
-		if err != nil {
-			return media.Input{}, err
-		}
-		return library.OpenMedia(root, rel)
-	})
-}
-
 // report is Jellyfin's PlaybackStartInfo, PlaybackProgressInfo and PlaybackStopInfo, as much of
 // them as photon keeps.
 type report struct {
