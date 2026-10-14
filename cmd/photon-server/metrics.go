@@ -15,6 +15,7 @@ func metrics(version string, cs ...prometheus.Collector) *prometheus.Registry {
 	build.Set(1)
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}), build)
+	reg.MustRegister(memoryCollectors()...)
 	reg.MustRegister(cs...)
 	return reg
 }

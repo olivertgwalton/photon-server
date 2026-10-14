@@ -4,6 +4,7 @@ go 1.27.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/ebitengine/purego v0.11.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.11.0
