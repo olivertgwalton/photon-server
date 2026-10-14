@@ -106,3 +106,55 @@ func TestEachDeviceKeepsHDRInHEVC(t *testing.T) {
 		}
 	}
 }
+
+// What FFmpeg says opening a device, its lines as reported for Intel's iHD (immich#18001)
+// and i965 (intel-vaapi-driver#480) drivers, AMD's Mesa one (mpv#17672), and a Vulkan device's
+// extensions (jellyfin#17144).
+const (
+	ihdSaid    = "[AVHWDeviceContext @ 0x43c7a020480] VAAPI driver: Intel iHD driver for Intel(R) Gen Graphics - 24.4.2 (b6b411f).\n"
+	i965Said   = "[AVHWDeviceContext @ 0xbd4580] VAAPI driver: Intel i965 driver for Intel(R) Broxton - 2.4.0.pre1 (2.3.0-18-geefe4be).\n"
+	mesaSaid   = "[AVHWDeviceContext @ 0x55e218b198c0] VAAPI driver: Mesa Gallium driver 26.0.3 for AMD Radeon RX 7700 XT (radeonsi, navi32, ACO, DRM 3.64, 7.0.0-rc6).\n"
+	vulkanSaid = "[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_KHR_push_descriptor\n" +
+		"[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_KHR_external_memory_fd\n" +
+		"[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_EXT_external_memory_dma_buf\n" +
+		"[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_KHR_external_semaphore_fd\n" +
+		"[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_EXT_external_memory_host\n" +
+		"[AVHWDeviceContext @ 0x55e218b198c0] Using device extension VK_EXT_image_drm_format_modifier\n"
+)
+
+// Intel's iHD driver overlays on the device, AMD's through Vulkan where Vulkan imports its frames
+// on Linux 5.15 or later, and anything else on the CPU.
+func TestAVAAPIDevicesOverlayIsChosenByItsDriver(t *testing.T) {
+	noModifier := strings.ReplaceAll(vulkanSaid, "VK_EXT_image_drm_format_modifier", "VK_KHR_video_queue")
+	for _, tc := range []struct {
+		name, vaapi, vulkan, kernel string
+		want                        Overlay
+	}{
+		{"iHD", ihdSaid, "", "", OverlayVAAPI},
+		{"i965", i965Said, "", "6.8.0-45-generic\n", OverlayCPU},
+		{"radeonsi", mesaSaid, vulkanSaid, "6.12.33-production+truenas\n", OverlayVulkan},
+		{"radeonsi on 5.15", mesaSaid, vulkanSaid, "5.15.0-122-generic\n", OverlayVulkan},
+		{"radeonsi on 5.10", mesaSaid, vulkanSaid, "5.10.0-28-amd64\n", OverlayCPU},
+		{"radeonsi, Vulkan without format modifiers", mesaSaid, noModifier, "6.8.0\n", OverlayCPU},
+		{"radeonsi, no Vulkan device", mesaSaid, "", "6.8.0\n", OverlayCPU},
+		{"radeonsi, kernel unread", mesaSaid, vulkanSaid, "", OverlayCPU},
+		{"no device", "", "", "6.8.0\n", OverlayCPU},
+	} {
+		if got := overlayOf(tc.vaapi, tc.vulkan, tc.kernel); got != tc.want {
+			t.Errorf("%s: %s, want %s", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A device FFmpeg fails to open says nothing of its driver.
+func TestADeviceThatWillNotOpenOverlaysOnTheCPU(t *testing.T) {
+	for script, want := range map[string]Overlay{
+		"echo '" + strings.TrimSpace(ihdSaid) + "' >&2\n":         OverlayVAAPI,
+		"echo '" + strings.TrimSpace(ihdSaid) + "' >&2\nexit 1\n": OverlayCPU,
+	} {
+		ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", script)
+		if got := ProbeOverlay(t.Context(), ffmpeg, "/dev/dri/renderD128"); got != want {
+			t.Errorf("%q: %s, want %s", script, got, want)
+		}
+	}
+}
