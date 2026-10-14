@@ -148,9 +148,11 @@ type Copy struct {
 type Variant struct {
 	BandwidthKbps int
 	Codecs        []string
-	Range         string
-	Width, Height int
-	FrameRate     float64
+	// SupplementalCodecs is what the video carries beyond what Codecs names, as Dolby Vision in AV1.
+	SupplementalCodecs string
+	Range              string
+	Width, Height      int
+	FrameRate          float64
 }
 
 // session is one playback's remux: its plan, the segments made so far, and the ffmpeg making more.

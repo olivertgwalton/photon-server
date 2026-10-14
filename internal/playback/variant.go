@@ -15,6 +15,15 @@ var h264Profiles = map[string]string{
 	"Constrained Baseline": "42E0", "Baseline": "4200", "Main": "4D40", "High": "6400", "High 10": "6E00",
 }
 
+// av1Profiles are AV1's profiles as ffprobe names them, numbered as its codec string has them.
+var av1Profiles = map[string]int{"Main": 0, "High": 1, "Professional": 2}
+
+// dav1Brands are the brands Apple's HLS spec gives Dolby Vision in AV1 for the range its base layer
+// shows alone.
+var dav1Brands = map[domain.DolbyVisionCompatibility]string{
+	domain.CompatibleHDR10: "/db1p", domain.CompatibleSDR: "/db2g", domain.CompatibleHLG: "/db4h",
+}
+
 // audioCodecs are audio formats as RFC 6381 names them in MP4, as Jellyfin's master playlist does.
 var audioCodecs = map[string]string{
 	"aac": "mp4a.40.2", "mp3": "mp4a.40.34", "ac3": "ac-3", "eac3": "ec-3", "flac": "fLaC", "alac": "alac",
@@ -38,6 +47,10 @@ func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.Audi
 	}
 	if !slices.Contains(codecs, "") {
 		v.Codecs = codecs
+		// AV1 is copied as av01 whatever it carries, so Dolby Vision in it is named beside.
+		if dv := picture.DolbyVision; video.Encode == nil && video.DolbyVision == domain.DolbyVisionKeep && dv != nil && picture.Codec == "av1" {
+			v.SupplementalCodecs = fmt.Sprintf("dav1.%02d.%02d", dv.Profile, dv.Level) + dav1Brands[dv.Compatibility]
+		}
 	}
 	v.Range, v.Width, v.Height, v.FrameRate = videoRange(picture, video), picture.Width, picture.Height, picture.FrameRate
 	if e := video.Encode; e != nil {
@@ -63,7 +76,7 @@ func videoCodec(s domain.Stream, v domain.VideoPlan) string {
 		return fmt.Sprintf("hvc1.1.6.L%d.B0", 3*level)
 	}
 	switch {
-	case v.DolbyVision == domain.DolbyVisionKeep && s.DolbyVision != nil:
+	case v.DolbyVision == domain.DolbyVisionKeep && s.DolbyVision != nil && s.Codec != "av1":
 		return fmt.Sprintf("dvh1.%02d.%02d", s.DolbyVision.Profile, s.DolbyVision.Level)
 	case v.DolbyVision == domain.DolbyVisionConvert && s.DolbyVision != nil:
 		return fmt.Sprintf("dvh1.08.%02d", s.DolbyVision.Level)
@@ -76,6 +89,12 @@ func videoCodec(s domain.Stream, v domain.VideoPlan) string {
 			profile = "2"
 		}
 		return fmt.Sprintf("hvc1.%s.4.L%d.B0", profile, s.Level)
+	case s.Codec == "av1" && s.Level > 0 && s.BitDepth > 0:
+		// ffprobe's AV1 level is the sequence's seq_level_idx, as the string wants it. It does not
+		// say the tier, and High is for professional work, so it is taken as Main.
+		if profile, ok := av1Profiles[s.Profile]; ok {
+			return fmt.Sprintf("av01.%d.%02dM.%02d", profile, s.Level, s.BitDepth)
+		}
 	}
 	return ""
 }
