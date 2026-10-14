@@ -21,3 +21,20 @@ photon_build_info{version="v1.2.3"} 1
 		t.Errorf("go_goroutines: %d, %v", n, err)
 	}
 }
+
+// Every release build reports the memory the server holds, macOS's without cgo among them.
+func TestMetricsSayTheResidentMemory(t *testing.T) {
+	families, err := metrics("v1.2.3").Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range families {
+		if f.GetName() == "process_resident_memory_bytes" {
+			if v := f.GetMetric()[0].GetGauge().GetValue(); v <= 0 {
+				t.Errorf("resident memory %v", v)
+			}
+			return
+		}
+	}
+	t.Error("no process_resident_memory_bytes")
+}
