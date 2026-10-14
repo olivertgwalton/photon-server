@@ -111,6 +111,18 @@ test("another screen the browser offers is played on from the player", async ({
 	expect(await page.evaluate(() => "prompted" in window)).toBe(true);
 });
 
+test("the picture is cropped or stretched to the screen as asked", async ({
+	page,
+}) => {
+	const fit = () => video(page).evaluate((v) => getComputedStyle(v).objectFit);
+	await logIn(page, "/play/p-film?t=0");
+	expect(await fit()).toBe("contain");
+	await settings(page, "Picture", "Crop to fill");
+	expect(await fit()).toBe("cover");
+	await settings(page, "Picture", "Stretch");
+	expect(await fit()).toBe("fill");
+});
+
 test("subtitles beside the file show as a track", async ({ page }) => {
 	await logIn(page, "/play/p-film?t=1");
 	await page.getByRole("button", { name: "Subtitles" }).click();
