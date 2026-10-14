@@ -306,6 +306,40 @@ test("the system's media keys and controls drive the player", async ({
 	await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 	await press("nexttrack");
 	await expect(page).toHaveURL("/play/p-ep2");
+	await page.route("**/api/v1/titles/t-show/playable", async (route) => {
+		const card = async (id: string) =>
+			(await page.request.get(`/api/v1/titles/${id}`)).json();
+		await route.fulfill({
+			json: { items: [await card("p-ep"), await card("p-ep2")] },
+		});
+	});
+	await press("previoustrack");
+	await expect(page).toHaveURL("/play/p-ep");
+});
+
+test("an episode goes on to the next and back to the one before", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/titles/t-show/playable", async (route) => {
+		const card = async (id: string) =>
+			(await page.request.get(`/api/v1/titles/${id}`)).json();
+		await route.fulfill({
+			json: { items: [await card("p-ep"), await card("p-ep2")] },
+		});
+	});
+	await logIn(page, "/play/p-ep?t=2");
+	await page.getByRole("button", { name: "Next: Second" }).click();
+	await expect(page).toHaveURL("/play/p-ep2");
+	await expect(
+		page.getByRole("button", { name: "Next", exact: false }),
+	).not.toBeAttached();
+	await page.getByRole("button", { name: "Previous" }).click();
+	await expect(page).toHaveURL("/play/p-ep");
+	// The show's first episode starts again.
+	await expect.poll(() => time(page)).toBeGreaterThan(0.5);
+	await page.keyboard.press("Shift+P");
+	await expect.poll(() => time(page)).toBeLessThan(0.5);
+	await expect(page).toHaveURL("/play/p-ep");
 });
 
 test("a playlist plays in its order, not the show's", async ({ page }) => {

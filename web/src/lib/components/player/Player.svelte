@@ -13,6 +13,8 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import BackIcon from "@lucide/svelte/icons/rotate-ccw";
 import ForwardIcon from "@lucide/svelte/icons/rotate-cw";
 import SettingsIcon from "@lucide/svelte/icons/settings";
+import PreviousIcon from "@lucide/svelte/icons/skip-back";
+import NextIcon from "@lucide/svelte/icons/skip-forward";
 import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
@@ -574,6 +576,34 @@ function playNext() {
 	});
 }
 
+// Whether there is a title before this one to go back to: the queue's, or
+// the episode before in its show.
+const hasPrevious = $derived(
+	at === undefined ? title.kind === "episode" && !!title.show : at > 0,
+);
+
+// Plays the title before this one, as the queue or the show has them, or
+// starts this one again where it is the first.
+async function playPrevious() {
+	let before: Schemas["Card"] | undefined;
+	if (at !== undefined) before = queued(at - 1);
+	else if (title.show) {
+		const { data } = await api.GET("/api/v1/titles/{id}/playable", {
+			params: { path: { id: title.show.id } },
+		});
+		const items = data?.items ?? [];
+		before = items[items.findIndex((c) => c.id === title.id) - 1];
+	}
+	if (!before) {
+		seek(0);
+		return;
+	}
+	void goto(`/play/${before.id}`, {
+		replace: true,
+		state: at === undefined ? {} : { queued: at - 1 },
+	});
+}
+
 function skip(m: Schemas["MarkerRef"]) {
 	if (next && m.end_ms / 1000 >= duration - 1) playNext();
 	else seek(m.end_ms / 1000);
@@ -610,6 +640,8 @@ function keydown(event: KeyboardEvent) {
 	else if (key === "m") muted = !muted;
 	else if (key === "f") toggleFullscreen();
 	else if (key === "c") toggleSubtitles();
+	else if (key === "N" && next) playNext();
+	else if (key === "P" && hasPrevious) void playPrevious();
 	else if (/^[0-9]$/.test(key) && duration) seek((duration * Number(key)) / 10);
 	else handled = false;
 	if (handled) {
@@ -638,6 +670,7 @@ $effect(() => {
 		["seekforward", (d) => seek(position + (d.seekOffset ?? step))],
 		["seekto", (d) => seek(d.seekTime ?? position)],
 		["nexttrack", next ? playNext : null],
+		["previoustrack", hasPrevious ? () => void playPrevious() : null],
 	];
 	for (const [action, handler] of handlers) {
 		try {
@@ -881,6 +914,17 @@ onMount(() => {
 						<PauseIcon class="size-5" />
 					{/if}
 				</Button>
+				{#if hasPrevious}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="hidden sm:inline-flex"
+						aria-label="Previous"
+						onclick={() => void playPrevious()}
+					>
+						<PreviousIcon class="size-5" />
+					</Button>
+				{/if}
 				<Button
 					variant="ghost"
 					size="icon"
@@ -897,6 +941,17 @@ onMount(() => {
 				>
 					<ForwardIcon class="size-5" />
 				</Button>
+				{#if next}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="hidden sm:inline-flex"
+						aria-label="Next: {next.title}"
+						onclick={playNext}
+					>
+						<NextIcon class="size-5" />
+					</Button>
+				{/if}
 				<Button
 					variant="ghost"
 					size="icon"
