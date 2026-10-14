@@ -139,6 +139,10 @@ let frames = $state.raw<VideoPlaybackQuality>();
 let next = $state.raw<Schemas["Card"]>();
 let upNextHidden = $state(false);
 let restTimer: ReturnType<typeof setTimeout> | undefined;
+// When a broken stream was last opened again. One that breaks again within
+// mendWithin of that is not mended by opening it once more.
+let mendedAt = Number.NEGATIVE_INFINITY;
+const mendWithin = 60_000;
 
 const duration = $derived((version?.duration_ms ?? 0) / 1000);
 const offset = $derived((playback?.parts?.[part]?.offset_ms ?? 0) / 1000);
@@ -259,6 +263,17 @@ function reopen() {
 	void open(position);
 }
 
+// Opens a stream that broke again where it was, as the server may have let the
+// playback go or its connection dropped, unless that was just tried.
+function mend(message: string) {
+	if (performance.now() - mendedAt < mendWithin) {
+		refusal = { message, reasons: [] };
+		return;
+	}
+	mendedAt = performance.now();
+	reopen();
+}
+
 async function attach(p: Schemas["Playback"], at: number, mine: number) {
 	if (!video || !caps) return;
 	if (p.playlist) {
@@ -271,14 +286,18 @@ async function attach(p: Schemas["Playback"], at: number, mine: number) {
 			const { default: HLS } = await import("hls.js");
 			// Opened again while hls.js loaded: that playback has the video.
 			if (mine !== opening) return;
-			hls = new HLS({ startPosition: at });
+			const player = new HLS({ startPosition: at });
+			hls = player;
 			hls.on(HLS.Events.SUBTITLE_TRACKS_UPDATED, () => void showSubtitle());
+			// A picture the decoder stopped on is mended in place first, as
+			// Jellyfin's is, without asking the server again.
+			let decoderMended = false;
 			hls.on(HLS.Events.ERROR, (_, e) => {
-				if (e.fatal)
-					refusal = {
-						message: `The stream stopped: ${e.details}.`,
-						reasons: [],
-					};
+				if (!e.fatal) return;
+				if (e.type === HLS.ErrorTypes.MEDIA_ERROR && !decoderMended) {
+					decoderMended = true;
+					player.recoverMediaError();
+				} else mend(`The stream stopped: ${e.details}.`);
 			});
 			hls.loadSource(p.playlist);
 			hls.attachMedia(video);
@@ -637,12 +656,7 @@ onMount(() => {
 			if (playback?.method === "direct" && !convert) {
 				convert = true;
 				reopen();
-			} else if (playback) {
-				refusal = {
-					message: "This browser couldn't play the stream.",
-					reasons: [],
-				};
-			}
+			} else if (playback) mend("This browser couldn't play the stream.");
 		}}
 	>
 		{#if trackSrc}
