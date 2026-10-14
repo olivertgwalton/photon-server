@@ -54,6 +54,13 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Profile: "High", Level: 41, Range: domain.RangeSDR},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC"},
 	}}
+	av1 := Copy{BitrateKbps: 16_000, Streams: []domain.Stream{
+		{Index: 0, Kind: domain.StreamVideo, Codec: "av1", Profile: "Main", Level: 13, BitDepth: 10, Range: domain.RangeHDR10, Width: 3840, Height: 2160},
+		{Index: 1, Kind: domain.StreamAudio, Codec: "eac3"},
+	}}
+	av1DV := av1
+	av1DV.Streams = slices.Clone(av1.Streams)
+	av1DV.Streams[0].Range, av1DV.Streams[0].DolbyVision = domain.RangeDV, &domain.DolbyVision{Profile: 10, Level: 9, Compatibility: domain.CompatibleHDR10}
 	dv7 := film
 	dv7.Streams = slices.Clone(film.Streams)
 	dv7.Streams[0].DolbyVision = &domain.DolbyVision{Profile: 7, Level: 6, Compatibility: domain.CompatibleBluRay}
@@ -82,6 +89,18 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionStrip}, audio: &domain.AudioPlan{Stream: 2},
 			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"hvc1.2.4.L153.B0", "ac-3"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
+		},
+		{
+			name: "AV1 copied", copy: av1,
+			video: domain.VideoPlan{Stream: 0, Codec: "av1"}, audio: &domain.AudioPlan{Stream: 1},
+			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"av01.0.13M.10", "ec-3"}, Range: "PQ", Width: 3840, Height: 2160},
+			subtitles: []string{"English"},
+		},
+		{
+			name: "Dolby Vision in AV1 copied", copy: av1DV,
+			video: domain.VideoPlan{Stream: 0, Codec: "av1", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
+			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"dav1.10.09", "ec-3"}, Range: "PQ", Width: 3840, Height: 2160},
+			subtitles: []string{"English"},
 		},
 		{
 			name: "H.264 copied, AAC encoded", copy: h264,
