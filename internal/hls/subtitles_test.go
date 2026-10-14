@@ -130,10 +130,10 @@ const styledFilm = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 
 	"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
 	"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
 
-// A part's styled subtitle streams are read out as they are, with the fonts the file carries for
-// them, in one read of the file, which a request given up does not stop and a later one does not
-// repeat.
-func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
+// A part's subtitle streams are read out in one read of the file, which a request given up does not
+// stop and a later one does not repeat: styled ones as they are, with the fonts the file carries
+// for them, and plain text as WebVTT.
+func TestSubtitlesAreReadOutOnce(t *testing.T) {
 	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
 	dir := t.TempDir()
 	for name, text := range map[string]string{"en.srt": "Hello.", "fr.srt": "Bonjour."} {
@@ -188,6 +188,12 @@ func TestStyledSubtitlesAreReadOutOnce(t *testing.T) {
 	// The font is the film's fifth stream, after the video and three subtitles.
 	if got, err := os.ReadFile(filepath.Join(out, FontsDir, "4.ttf")); err != nil || string(got) != "a font" {
 		t.Errorf("the film's font = %q, %v; want it beside the styled stream", got, err)
+	}
+	for stream, text := range map[int]string{english: "Hello.", french: "Bonjour."} {
+		got, err := os.ReadFile(filepath.Join(out, TextName(stream)))
+		if err != nil || !strings.HasPrefix(string(got), "WEBVTT") || !strings.Contains(string(got), "00:01.000 --> 00:03.000\n"+text) {
+			t.Errorf("text stream %d = %q, %v; want it as WebVTT", stream, got, err)
+		}
 	}
 	read, err := os.ReadFile(runs)
 	if err != nil {

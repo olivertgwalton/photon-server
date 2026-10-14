@@ -129,15 +129,21 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlayS
 	}
 }
 
-// readOut serves a styled or picture subtitle stream of a copy's file read out as it is, as the
-// web player's is, where the file name asks for it in that format. A start in the path is not
-// applied: Jellyfin serves a stream it need not convert as it is, from its start.
+// readOut serves a subtitle stream of a copy's file read out of it, where the file name asks for it
+// in the format it is read out in: styled text and pictures as they are, as the web player's are,
+// plain text as WebVTT, as Jellyfin converts it. A start in the path is not applied: Jellyfin
+// serves a stream from its start.
 func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayCopy, s domain.Stream) {
-	name := hls.StyledName(s.Index)
-	if hls.PictureSubtitle(s.Codec) {
+	var name string
+	switch {
+	case hls.TextSubtitle(s.Codec):
+		name = hls.TextName(s.Index)
+	case hls.PictureSubtitle(s.Codec):
 		name = hls.PictureName(s.Index, s.Codec)
+	case hls.StyledSubtitle(s.Codec):
+		name = hls.StyledName(s.Index)
 	}
-	if !hls.ReadOut(s.Codec) || !readsOutAs(s.Codec, name, strings.ToLower(strings.TrimPrefix(path.Ext(r.PathValue("file")), "."))) {
+	if name == "" || !readsOutAs(s.Codec, name, strings.ToLower(strings.TrimPrefix(path.Ext(r.PathValue("file")), "."))) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
@@ -158,10 +164,14 @@ func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayCopy, 
 }
 
 // readsOutAs is whether a stream of a codec, read out into a file of a name, is in a format an app
-// asks for: its codec as Jellyfin's apps name it, or the file's own, and either of ASS and SSA for
-// styled text, which is read out as ASS, SSA's superset.
+// asks for: WebVTT for plain text, which is read out as that; either of ASS and SSA for styled
+// text, which is read out as ASS, SSA's superset; else its codec as Jellyfin's apps name it, or the
+// file's own.
 func readsOutAs(codec, name, format string) bool {
-	if hls.StyledSubtitle(codec) {
+	switch {
+	case hls.TextSubtitle(codec):
+		return slices.Contains(subtitleFormats("webvtt"), format)
+	case hls.StyledSubtitle(codec):
 		return hls.StyledSubtitle(format)
 	}
 	return format == strings.TrimPrefix(path.Ext(name), ".") || slices.Contains(subtitleFormats(codec), format)
@@ -173,7 +183,7 @@ func readsOutAs(codec, name, format string) bool {
 // video: a stream read out of the file, or a file beside it, in the format the app takes it in.
 // Encode where it is drawn in, the subtitle burn draws, or is a file the app draws in no format.
 // A subtitle is fetched whole, from the start, beside HLS too: that keeps the film's own clock.
-func deliverSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile, burn *domain.VideoEncode) {
+func deliverSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile, burn *domain.VideoEncode, direct bool) {
 	for i, m := range src.MediaStreams {
 		_, s := subtitleOf(c, &m.Index)
 		if s == nil {
@@ -183,6 +193,10 @@ func deliverSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store
 		format := ""
 		if len(c.Parts) == 1 {
 			format = p.readOut(s.codec)
+			// Beside HLS, plain text is a rendition of it: read out too, an app would show it twice.
+			if format == "" && direct {
+				format = p.textReadOut(s.codec)
+			}
 		}
 		burned := burn != nil && burn.Burn != nil && *burn.Burn == m.Index
 		if s.delivery == domain.SubtitleSidecar {

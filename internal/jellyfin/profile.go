@@ -316,7 +316,7 @@ type subtitleChoice struct {
 func (d deviceProfile) subtitleTaken(codec string, delivery domain.SubtitleDelivery) bool {
 	switch delivery {
 	case domain.SubtitleEmbedded:
-		return d.subtitleFormat(codec, "embed") != "" || d.readOut(codec) != ""
+		return d.subtitleFormat(codec, "embed") != "" || d.readOut(codec) != "" || d.textReadOut(codec) != ""
 	case domain.SubtitleSidecar:
 		return d.sidecarFormat(codec) != ""
 	}
@@ -350,6 +350,17 @@ func (d deviceProfile) readOut(codec string) string {
 		return ""
 	}
 	return d.subtitleFormat(codec, "external")
+}
+
+// textReadOut is the format the app is sent a plain text stream in, read out of a file played as it
+// is, where it draws it so and not from the file itself: WebVTT, which Jellyfin converts every text
+// stream to, as photon does a file beside the copy; "" where it is not sent so. Turning such a
+// subtitle on so keeps the copy played as it is, as Jellyfin keeps it.
+func (d deviceProfile) textReadOut(codec string) string {
+	if !hls.TextSubtitle(codec) || d.subtitleFormat(codec, "embed") != "" {
+		return ""
+	}
+	return d.subtitleFormat("webvtt", "external")
 }
 
 // subtitleFormat is the format of the app's subtitle profile that takes a codec by a method, ""
