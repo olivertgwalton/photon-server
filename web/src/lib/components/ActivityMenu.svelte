@@ -45,16 +45,16 @@ const running = $derived(working + state.playbacks.length);
 		</Popover.Trigger>
 		<Popover.Content
 			align="end"
-			class="grid w-80 gap-3"
+			class="grid w-80 grid-cols-1 gap-3"
 			role="dialog"
 			aria-label="Activity"
 		>
 			<Popover.Title class="text-ink font-semibold">Activity</Popover.Title>
 			{#if state.playbacks.length}
-				<ul class="grid gap-3 text-sm" aria-label="Streams">
+				<ul class="grid grid-cols-1 gap-3 text-sm" aria-label="Streams">
 					{#each state.playbacks as p (p.id)}
 						{@const name = fullTitle(p.title, p.title.show)}
-						<li class="grid gap-1.5">
+						<li class="grid grid-cols-1 gap-1.5">
 							<p class="flex justify-between gap-4">
 								<a
 									href="/titles/{p.title.id}"
