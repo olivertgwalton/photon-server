@@ -318,43 +318,50 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 	}
 }
 
-// On VideoToolbox a subtitle drawn in is laid over the picture on the device, a picture one scaled
-// to the size encoded and styled text drawn on a clear canvas of it from where the run starts;
-// every other device has FFmpeg draw it in and encodes in software.
-func TestVideoToolboxLaysASubtitleOverThePicture(t *testing.T) {
-	video := domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{
-		Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: true, Burn: new(2),
-	}}
-	for _, accel := range domain.Accelerations() {
-		want := domain.AccelSoftware
-		if accel == domain.AccelVideoToolbox {
-			want = accel
-		}
-		if got := EncodedOn(accel, video); got != want {
-			t.Errorf("%s: a subtitle drawn in is encoded on %s, want %s", accel, got, want)
-		}
-	}
-	for _, tc := range []struct {
-		name  string
-		layer *styledLayer
-		want  []string
-	}{
-		{
-			"a picture subtitle",
-			nil,
-			[]string{"-filter_complex [0:2]scale=1920:1040,format=bgra,hwupload[sub];[0:0]scale_vt=w=1920:h=1040,tonemap_videotoolbox="},
+// Every device encodes a picture a subtitle is drawn into, the subtitle drawn on the CPU at the
+// size encoded, a picture one scaled and styled text, here a file beside the copy, by libass on a
+// clear canvas from where the run starts: VideoToolbox, QSV and NVENC lay it over the picture themselves, VAAPI's picture is taken
+// off the device to be drawn on and put back, and AMF's is on the CPU throughout.
+func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
+	picture := domain.VideoEncode{Codec: domain.VideoHEVC, Width: 1920, Height: 1040, BitrateKbps: 8000, Range: domain.RangeSDR, Burn: new(2)}
+	file := picture
+	file.Burn, file.BurnFile = nil, new(uuid.New())
+	layer := &styledLayer{file: "/cache/part/2.ass", fonts: "/cache/part/fonts", rate: 24000.0 / 1001}
+	const canvas = "alphasrc=s=1920x1040:r=23.976:start=12.000000,format="
+	const styled = ",subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1:fontsdir=/cache/part/fonts,"
+	for accel, want := range map[domain.Acceleration][2]string{
+		domain.AccelVideoToolbox: {
+			"[0:2]scale=1920:1040,format=bgra,hwupload[sub];[0:0]scale_vt=w=1920:h=1040:format=nv12[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]",
+			canvas + "bgra" + styled + "hwupload[sub];[0:0]scale_vt=w=1920:h=1040:format=nv12[main];[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v]",
 		},
-		{
-			"styled text, at the video's frame rate",
-			&styledLayer{file: "/cache/part/2.ass", fonts: "/cache/part/fonts", rate: 24000.0 / 1001},
-			[]string{"-filter_complex alphasrc=s=1920x1040:r=23.976:start=12.000000,format=bgra,subtitles=f=/cache/part/2.ass:alpha=1:sub2video=1:fontsdir=/cache/part/fonts,hwupload[sub];[0:0]scale_vt="},
+		domain.AccelQSV: {
+			"[0:2]scale=1920:1040,format=bgra,hwupload=extra_hw_frames=64[sub];[0:0]hwmap=derive_device=qsv,vpp_qsv=w=1920:h=1040:format=nv12[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
+			canvas + "bgra" + styled + "hwupload=extra_hw_frames=64[sub];[0:0]hwmap=derive_device=qsv,vpp_qsv=w=1920:h=1040:format=nv12[main];[main][sub]overlay_qsv=eof_action=pass:repeatlast=0[v]",
 		},
-		{"styled text, at 25 frames a second where the video's rate is not known", &styledLayer{file: "/cache/part/2.ass"}, []string{"alphasrc=s=1920x1040:r=25.000:"}},
+		domain.AccelNVENC: {
+			"[0:2]scale=1920:1040,format=yuva420p,hwupload[sub];[0:0]scale_cuda=w=1920:h=1040:format=nv12[main];[main][sub]overlay_cuda=eof_action=pass:repeatlast=0[v]",
+			canvas + "yuva420p" + styled + "hwupload[sub];[0:0]scale_cuda=w=1920:h=1040:format=nv12[main];[main][sub]overlay_cuda=eof_action=pass:repeatlast=0:alpha_format=premultiplied[v]",
+		},
+		domain.AccelVAAPI: {
+			"[0:0]scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=nv12,hwupload[v]",
+			"-vf scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts,hwupload ",
+		},
+		domain.AccelAMF: {
+			"[0:0]scale=1920:1040,format=yuv420p[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0,format=yuv420p[v]",
+			"-vf scale=1920:1040,format=yuv420p,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts ",
+		},
 	} {
-		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: domain.AccelVideoToolbox}, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
-		for _, w := range append(tc.want, "[main][sub]overlay_videotoolbox=eof_action=pass:repeatlast=0[v] -map [v] -c:v hevc_videotoolbox") {
-			if !strings.Contains(got, w) {
-				t.Errorf("%s: %q lacks %q", tc.name, got, w)
+		hw := Hardware{Accel: accel, Device: "/dev/dri/renderD128"}
+		for i, tc := range []struct {
+			e     domain.VideoEncode
+			layer *styledLayer
+		}{{picture, nil}, {file, layer}} {
+			video := domain.VideoPlan{Codec: "hevc", Encode: &tc.e}
+			got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+			for _, w := range []string{want[i], "-c:v " + hw.encoder(domain.VideoHEVC)} {
+				if !strings.Contains(got, w) {
+					t.Errorf("%s, styled %t: %q lacks %q", accel, tc.layer != nil, got, w)
+				}
 			}
 		}
 	}

@@ -148,8 +148,8 @@ func encoders() ([]hls.Hardware, error) {
 
 // hardware is the first of the encoders choice allows that encodes a test picture, or software
 // where none does; one an admin set that encodes none is reported, and the first of all that does
-// taken instead. HEVC is encoded too where the device, and software for a subtitle drawn in,
-// encode it; otherwise H.264 alone, which is reported.
+// taken instead. HEVC is encoded too where the device encodes it; otherwise H.264 alone, which is
+// reported.
 func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, logger *slog.Logger) (hls.Hardware, error) {
 	all, err := encoders()
 	if err != nil {
@@ -173,11 +173,7 @@ func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, l
 		}
 	}
 	hw.HEVC = domain.HEVCAllow
-	err = hw.Check(ctx, ffmpeg, domain.VideoHEVC)
-	if err == nil && hw.Accel != domain.AccelSoftware {
-		err = hls.Hardware{Accel: domain.AccelSoftware}.Check(ctx, ffmpeg, domain.VideoHEVC)
-	}
-	if err != nil {
+	if err := hw.Check(ctx, ffmpeg, domain.VideoHEVC); err != nil {
 		logger.WarnContext(ctx, "encoding H.264 alone", slog.Any("err", err))
 		hw.HEVC = domain.HEVCDeny
 	}

@@ -278,14 +278,14 @@ func (l styledLayer) filter(options string) string {
 	return "setpts=PTS+" + at + "/TB," + f + ",setpts=PTS-" + at + "/TB"
 }
 
-// canvas is the layer drawn by libass onto a clear picture of a size from start, as Jellyfin's
+// canvas is the layer drawn by libass onto a clear picture of a size and format from start, as Jellyfin's
 // is for a device to lay over its own: at the video's frame rate, at most 60, or 25 where it is
 // not known. Without alpha libass leaves the canvas clear.
-func (l styledLayer) canvas(width, height int, start time.Duration) string {
+func (l styledLayer) canvas(width, height int, start time.Duration, format string) string {
 	rate := min(cmp.Or(l.rate, 25), 60)
 	return "alphasrc=s=" + strconv.Itoa(width) + "x" + strconv.Itoa(height) +
 		":r=" + strconv.FormatFloat(rate, 'f', 3, 64) + ":start=" + strconv.FormatFloat(start.Seconds(), 'f', 6, 64) +
-		",format=bgra," + l.filter(":alpha=1:sub2video=1")
+		",format=" + format + "," + l.filter(":alpha=1:sub2video=1")
 }
 
 // optionEscape and graphEscape escape a filter's option value as FFmpeg reads a filtergraph: once

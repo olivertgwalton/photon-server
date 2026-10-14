@@ -23,14 +23,25 @@ type Hardware struct {
 	HEVC domain.HEVCEncoding
 }
 
-// encoding is the hardware video planned so is encoded on. VideoToolbox lays a subtitle over the
-// picture itself (see streamArgs); every other device overlays with filters of its own, which
-// photon does not build, so there a subtitle is drawn in in software.
-func (h Hardware) encoding(video domain.VideoPlan) Hardware {
-	if video.Burns() && h.Accel != domain.AccelVideoToolbox {
-		return Hardware{Accel: domain.AccelSoftware, HEVC: h.HEVC}
+// overlay is how a subtitle drawn on the CPU is laid over the picture on the device, as Jellyfin's
+// is: the format it is drawn in, the filter uploading it, and the overlay. None where FFmpeg lays it
+// over: software and AMF, whose pictures are on the CPU, and VAAPI, as Jellyfin's does on a driver
+// it has neither OpenCL nor Vulkan for. VAAPI here mostly drives AMD, whose Mesa driver blended
+// nothing for overlay_vaapi until May 2026, and where Jellyfin overlays with Vulkan instead.
+func (h Hardware) overlay() (format, upload, overlay string) {
+	const pass = "=eof_action=pass:repeatlast=0"
+	switch h.Accel {
+	case domain.AccelSoftware, domain.AccelAMF, domain.AccelVAAPI:
+	case domain.AccelVideoToolbox:
+		return "bgra", "hwupload", "overlay_videotoolbox" + pass
+	case domain.AccelQSV:
+		// QSV's frame pool cannot grow.
+		return "bgra", "hwupload=extra_hw_frames=64", "overlay_qsv" + pass
+	case domain.AccelNVENC:
+		// overlay_cuda lays no RGB over YUV.
+		return "yuva420p", "hwupload", "overlay_cuda" + pass
 	}
-	return h
+	return "", "", ""
 }
 
 // longGOP stops an encoder adding keyframes of its own between those it is told to make.
