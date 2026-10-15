@@ -91,4 +91,15 @@ func TestAProfileKeepsHowItPlays(t *testing.T) {
 			t.Errorf("PATCH %s = %d %s, want 400", bad, code, body)
 		}
 	}
+	// Quiet libraries are kept as given, left as they were when unsaid, and all cleared by [].
+	films := uuid.NewV7().String()
+	if _, body := call(http.MethodPatch, `{"quiet_libraries": ["`+films+`"]}`); !strings.Contains(body, `"quiet_libraries":["`+films+`"]`) {
+		t.Errorf("quieting Films: %s", body)
+	}
+	if _, body := call(http.MethodPatch, `{"notify": "all"}`); !strings.Contains(body, films) || !strings.Contains(body, `"notify":"all"`) {
+		t.Errorf("changing notify alone: %s, want Films still quiet", body)
+	}
+	if _, body := call(http.MethodPatch, `{"quiet_libraries": []}`); !strings.Contains(body, `"quiet_libraries":[]`) {
+		t.Errorf("clearing quiet libraries: %s", body)
+	}
 }

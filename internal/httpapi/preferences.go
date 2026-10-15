@@ -37,8 +37,10 @@ type preferencesJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action"`
 	// ThemeMusic is whether a title's page plays its theme tune.
 	ThemeMusic domain.ThemeMusic `json:"theme_music"`
-	// Notify is what the profile is told of as it is added.
-	Notify domain.Notify `json:"notify"`
+	// Notify is what the profile is told of as it is added, QuietLibraries the libraries it is
+	// told nothing of.
+	Notify         domain.Notify `json:"notify"`
+	QuietLibraries []uuid.UUID   `json:"quiet_libraries"`
 	// Home is every row of the profile's home, in the order the home page draws them.
 	Home []homeSectionJSON `json:"home"`
 	// SavedAt is when they were last changed: absent while every one is its default.
@@ -59,6 +61,8 @@ type preferencesChangeJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
 	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
 	Notify            domain.Notify        `json:"notify,omitzero"`
+	// QuietLibraries replaces the libraries told nothing of; [] has every library tell.
+	QuietLibraries *[]uuid.UUID `json:"quiet_libraries,omitzero"`
 	// Home is the rows in the order wanted, each once; any left out follow, shown.
 	Home []homeSectionChangeJSON `json:"home,omitzero"`
 }
@@ -83,7 +87,8 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic, Notify: p.Notify,
-		Home: make([]homeSectionJSON, len(p.Home)),
+		QuietLibraries: nonNil(p.QuietLibraries),
+		Home:           make([]homeSectionJSON, len(p.Home)),
 	}
 	for i, h := range p.Home {
 		out.Home[i] = homeSectionJSON{Row: h.Row, Visibility: h.Visibility, LibraryKinds: h.Row.LibraryKinds()}
@@ -139,6 +144,9 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
 	p.ThemeMusic = cmp.Or(req.ThemeMusic, p.ThemeMusic)
 	p.Notify = cmp.Or(req.Notify, p.Notify)
+	if req.QuietLibraries != nil {
+		p.QuietLibraries = *req.QuietLibraries
+	}
 	if req.Home != nil {
 		seen := map[domain.HomeRow]bool{}
 		p.Home = make([]domain.HomeSection, len(req.Home))
