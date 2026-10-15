@@ -125,11 +125,17 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if len(sub.Seasons) != 0 || sub.Order != domain.OrderAired {
 		t.Fatalf("matched: %+v; want nothing left to ask, in aired order", sub)
 	}
-	if err := s.SetEpisodeOrder(ctx, id, domain.OrderDVD); err != nil {
+	if err := s.SetEpisodeOrder(ctx, id, domain.OrderGroup, "5ad0df1cc3a36825ac00c087"); err != nil {
+		t.Fatal(err)
+	}
+	if sub, _, err = s.IdentifySubject(ctx, id); err != nil || sub.Order != domain.OrderGroup || sub.Group != "5ad0df1cc3a36825ac00c087" {
+		t.Fatalf("grouped: %+v, %v; want the story arcs asked for", sub, err)
+	}
+	if err := s.SetEpisodeOrder(ctx, id, domain.OrderDVD, ""); err != nil {
 		t.Fatal(err)
 	}
 	sub, _, err = s.IdentifySubject(ctx, id)
-	if err != nil || sub.Order != domain.OrderDVD || len(sub.Seasons) != 1 {
+	if err != nil || sub.Order != domain.OrderDVD || sub.Group != "" || len(sub.Seasons) != 1 {
 		t.Fatalf("renumbered: %+v, %v; want season 1 asked again, on DVD", sub, err)
 	}
 	// Until it is matched again, and for good should the new order have nothing of it, the first
@@ -147,7 +153,7 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if err != nil || page.Title != "Serenity" || len(page.Artwork[domain.ArtworkThumb]) != 0 {
 		t.Errorf("the first file on DVD: %q, stills %v, %v; want Serenity and the aired still gone", page.Title, page.Artwork, err)
 	}
-	if err := s.SetEpisodeOrder(ctx, e.ID, domain.OrderDVD); !errors.Is(err, ErrNotFound) {
+	if err := s.SetEpisodeOrder(ctx, e.ID, domain.OrderDVD, ""); !errors.Is(err, ErrNotFound) {
 		t.Errorf("renumbering an episode: %v, want ErrNotFound", err)
 	}
 }

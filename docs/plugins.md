@@ -133,7 +133,9 @@ than none.
 ### `POST /describe/v1/describe`
 
 Say what is known of the title matched. For a show, `seasons` are the seasons the server wants,
-numbered in `order` (`aired`, `dvd` or `absolute`); describe those you have. A `season_scope` of
+numbered in `order` (`aired`, `dvd`, `absolute`, or `group` as the TMDB episode group whose id is
+`episode_group` numbers them); describe those you have, and none in an order you cannot number
+them in. A `season_scope` of
 `every`, which a show in a remote library has no files to number seasons by is asked with, wants
 every season you have; `numbered`, or none, wants those in `seasons`.
 

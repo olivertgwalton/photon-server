@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"slices"
+	"strconv"
 	"time"
 	"uuid"
 
@@ -22,7 +23,7 @@ type editing interface {
 	EditMetadata(ctx context.Context, id uuid.UUID, m domain.Metadata) error
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
-	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
+	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder, group string) error
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
@@ -183,6 +184,8 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 
 type setEpisodeOrderJSON struct {
 	Order domain.EpisodeOrder `json:"order"`
+	// Group is the TMDB episode group a show in the group order is numbered by, and only then.
+	Group string `json:"group,omitzero"`
 }
 
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
@@ -196,15 +199,66 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.Order == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd or absolute")
+	if req.Order == "" || (req.Order == domain.OrderGroup) != (req.Group != "") {
+		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd, absolute or group, and group names a TMDB episode group with group alone")
 		return
 	}
-	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order)
+	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order, req.Group)
 	if a.answeredAs(w, r, err, "no show has that id") {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+type episodeGroupJSON struct {
+	ID       string           `json:"id"`
+	Name     string           `json:"name"`
+	Kind     domain.GroupKind `json:"kind"`
+	Seasons  int              `json:"seasons"`
+	Episodes int              `json:"episodes"`
+}
+
+// episodeGrouper is TMDB, which has other orders of a show's episodes, its episode groups.
+type episodeGrouper interface {
+	EpisodeGroups(ctx context.Context, loc domain.Locale, show int) ([]domain.EpisodeGroup, error)
+}
+
+// episodeGroups lists the episode groups TMDB has a show in, for an admin choosing the one its
+// files are numbered by.
+func (a *API) episodeGroups(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	sub, ok, err := a.svc.Editing.IdentifySubject(r.Context(), id)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	if !ok || sub.Kind != domain.ItemShow {
+		writeProblem(w, a.logger, codeNotFound, "no show has that id")
+		return
+	}
+	show, err := strconv.Atoi(sub.IDs[domain.ProviderTMDB])
+	if err != nil {
+		writeProblem(w, a.logger, codeConflict, "the show has no TMDB id to find its episode groups by")
+		return
+	}
+	p, _, err := a.svc.Providers.Get(r.Context(), domain.SourceTMDB)
+	grouper, ok := p.(episodeGrouper)
+	if err != nil || !ok {
+		a.internal(w, r, cmp.Or(err, errors.New("tmdb has no episode groups")))
+		return
+	}
+	groups, err := grouper.EpisodeGroups(r.Context(), sub.Locale.Or(a.svc.Identity.Locale()), show)
+	if a.answered(w, r, err) {
+		return
+	}
+	out := make([]episodeGroupJSON, len(groups))
+	for i, g := range groups {
+		out[i] = episodeGroupJSON(g)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[episodeGroupJSON]{Items: out})
 }
 
 type refreshJSON struct {
@@ -385,6 +439,11 @@ func (a *API) editRoutes() []route {
 			pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin,
 			summary: "Say the order a show's episode files are numbered in",
 			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,
+		},
+		{
+			pattern: "GET /api/v1/admin/titles/{id}/episode-groups", access: admin,
+			summary: "List the episode groups TMDB has a show in, to number its files by",
+			status:  http.StatusOK, reply: listJSON[episodeGroupJSON]{}, handle: a.episodeGroups,
 		},
 		{
 			pattern: "POST /api/v1/admin/titles/{id}/refresh", access: admin,

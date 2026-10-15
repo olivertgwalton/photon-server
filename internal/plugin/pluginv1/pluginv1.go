@@ -96,9 +96,10 @@ type DescribeRequest struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
 	// Seasons are a show's seasons to describe, in the order its files are numbered in: "aired",
-	// "dvd" or "absolute".
-	Seasons []int  `json:"seasons,omitempty"`
-	Order   string `json:"order,omitempty"`
+	// "dvd", "absolute", or "group" as the TMDB episode group EpisodeGroup numbers them.
+	Seasons      []int  `json:"seasons,omitempty"`
+	Order        string `json:"order,omitempty"`
+	EpisodeGroup string `json:"episode_group,omitempty"`
 	// SeasonScope is "every" for every season the plugin has, else "numbered", for Seasons.
 	SeasonScope string `json:"season_scope,omitempty"`
 }

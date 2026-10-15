@@ -185,10 +185,39 @@ const (
 	OrderDVD EpisodeOrder = "dvd"
 	// OrderAbsolute counts every episode from the first, as anime often is.
 	OrderAbsolute EpisodeOrder = "absolute"
+	// OrderGroup is as one TMDB episode group numbers them, the show's own choice of its groups.
+	OrderGroup EpisodeOrder = "group"
 )
 
 func EpisodeOrders() []EpisodeOrder {
-	return []EpisodeOrder{OrderAired, OrderDVD, OrderAbsolute}
+	return []EpisodeOrder{OrderAired, OrderDVD, OrderAbsolute, OrderGroup}
+}
+
+// GroupKind is the order an episode group puts a show's episodes in, as TMDB types its groups.
+type GroupKind string
+
+const (
+	GroupAired      GroupKind = "aired"
+	GroupAbsolute   GroupKind = "absolute"
+	GroupDVD        GroupKind = "dvd"
+	GroupDigital    GroupKind = "digital"
+	GroupStoryArc   GroupKind = "story_arc"
+	GroupProduction GroupKind = "production"
+	GroupTV         GroupKind = "tv"
+)
+
+func GroupKinds() []GroupKind {
+	return []GroupKind{GroupAired, GroupAbsolute, GroupDVD, GroupDigital, GroupStoryArc, GroupProduction, GroupTV}
+}
+
+// EpisodeGroup is another order TMDB has a show's episodes in, as its editors grouped them: a
+// network's seasons, story arcs, one absolute run.
+type EpisodeGroup struct {
+	ID       string
+	Name     string
+	Kind     GroupKind
+	Seasons  int
+	Episodes int
 }
 
 // RefreshMode is how much of a title an admin's refresh asks its providers about again. Either
@@ -223,4 +252,6 @@ type SeasonRequest struct {
 	Scope   SeasonScope
 	Numbers []int
 	Order   EpisodeOrder
+	// Group is the TMDB episode group a show in OrderGroup is numbered by.
+	Group string
 }

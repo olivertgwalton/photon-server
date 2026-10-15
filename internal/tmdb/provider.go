@@ -32,10 +32,14 @@ func (c *Client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemK
 	return id, err
 }
 
+// groupOrders are the episode groups a show numbered in an order other than as aired is
+// described by: the first of the show's groups of the kind, as Jellyfin's display order picks one.
+var groupOrders = map[domain.EpisodeOrder]domain.GroupKind{domain.OrderDVD: domain.GroupDVD, domain.OrderAbsolute: domain.GroupAbsolute}
+
 // Describe answers TMDB's details of a title, its score among them, and of the seasons of a show
-// asked for that TMDB has (every one, where every one is asked for), with the season its next
-// episode to air is in, so the episodes yet to air are known. TMDB numbers episodes as aired, so a show numbered otherwise is described without
-// its seasons.
+// asked for that TMDB has (every one, where every one is asked for). As aired, they come with the
+// season its next episode to air is in, so the episodes yet to air are known; otherwise as the
+// episode group the order names numbers them, and none where TMDB has no such group.
 func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	n, err := strconv.Atoi(id)
 	if err != nil {
@@ -45,26 +49,67 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	said := map[int]domain.SeasonMetadata{}
-	if seasons.Order != domain.OrderAired {
-		return m, said, nil
+	var said map[int]domain.SeasonMetadata
+	switch seasons.Order {
+	case domain.OrderAired:
+		said, err = c.aired(ctx, loc, n, shown, seasons)
+	case domain.OrderDVD, domain.OrderAbsolute:
+		var groups []domain.EpisodeGroup
+		if groups, err = c.EpisodeGroups(ctx, loc, n); err != nil {
+			break
+		}
+		i := slices.IndexFunc(groups, func(g domain.EpisodeGroup) bool { return g.Kind == groupOrders[seasons.Order] })
+		if i < 0 {
+			return m, map[int]domain.SeasonMetadata{}, nil
+		}
+		said, err = c.grouped(ctx, loc, groups[i].ID, seasons)
+	case domain.OrderGroup:
+		said, err = c.grouped(ctx, loc, seasons.Group, seasons)
 	}
+	if err != nil {
+		return domain.Metadata{}, nil, err
+	}
+	return m, said, nil
+}
+
+// grouped answers the seasons asked for of those an episode group makes; none of a group TMDB no
+// longer has.
+func (c *Client) grouped(ctx context.Context, loc domain.Locale, group string, seasons domain.SeasonRequest) (map[int]domain.SeasonMetadata, error) {
+	all, err := c.Group(ctx, loc, group)
+	if errors.Is(err, provider.ErrNotFound) {
+		return map[int]domain.SeasonMetadata{}, nil
+	}
+	if err != nil || seasons.Scope == domain.SeasonsEvery {
+		return all, err
+	}
+	said := map[int]domain.SeasonMetadata{}
+	for _, number := range seasons.Numbers {
+		if s, ok := all[number]; ok {
+			said[number] = s
+		}
+	}
+	return said, nil
+}
+
+// aired answers the seasons asked for as TMDB numbers them, with the one airing.
+func (c *Client) aired(ctx context.Context, loc domain.Locale, show int, shown ShowSeasons, seasons domain.SeasonRequest) (map[int]domain.SeasonMetadata, error) {
+	said := map[int]domain.SeasonMetadata{}
 	numbers := slices.Concat(seasons.Numbers, shown.Airing)
 	if seasons.Scope == domain.SeasonsEvery {
 		numbers = shown.Every
 	}
 	slices.Sort(numbers)
 	for _, number := range slices.Compact(numbers) {
-		s, err := c.Season(ctx, loc, n, number)
+		s, err := c.Season(ctx, loc, show, number)
 		if errors.Is(err, provider.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return domain.Metadata{}, nil, err
+			return nil, err
 		}
 		said[number] = s
 	}
-	return m, said, nil
+	return said, nil
 }
 
 // DescribePerson answers what TMDB knows of someone with a TMDB id; provider.ErrNotFound for anyone

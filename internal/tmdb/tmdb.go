@@ -354,21 +354,11 @@ var videoKinds = map[string]domain.ExtraKind{
 
 func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int) (domain.SeasonMetadata, error) {
 	var s struct {
-		Name     string `json:"name"`
-		Overview string `json:"overview"`
-		AirDate  string `json:"air_date"`
-		Poster   string `json:"poster_path"`
-		Episodes []struct {
-			Number     int      `json:"episode_number"`
-			Name       string   `json:"name"`
-			Overview   string   `json:"overview"`
-			AirDate    string   `json:"air_date"`
-			Still      string   `json:"still_path"`
-			GuestStars []person `json:"guest_stars"`
-			Crew       []person `json:"crew"`
-			Score      float64  `json:"vote_average"`
-			Votes      int      `json:"vote_count"`
-		} `json:"episodes"`
+		Name     string    `json:"name"`
+		Overview string    `json:"overview"`
+		AirDate  string    `json:"air_date"`
+		Poster   string    `json:"poster_path"`
+		Episodes []episode `json:"episodes"`
 	}
 	if err := c.get(ctx, loc, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
 		return domain.SeasonMetadata{}, err
@@ -382,19 +372,96 @@ func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int
 		Episodes: make(map[int]domain.Metadata, len(s.Episodes)),
 	}
 	for _, e := range s.Episodes {
-		aired := provider.Date(e.AirDate)
-		out.Episodes[e.Number] = domain.Metadata{
-			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
-			Artwork: picture(domain.ArtworkThumb, e.Still),
-			Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
-		}
-		if e.Votes > 0 {
-			m := out.Episodes[e.Number]
-			m.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: e.Score * 10, Votes: e.Votes}}
-			out.Episodes[e.Number] = m
+		out.Episodes[e.Number] = e.metadata()
+	}
+	return out, nil
+}
+
+// groupKinds are TMDB's types of episode group, by their numbers.
+var groupKinds = map[int]domain.GroupKind{
+	1: domain.GroupAired, 2: domain.GroupAbsolute, 3: domain.GroupDVD, 4: domain.GroupDigital,
+	5: domain.GroupStoryArc, 6: domain.GroupProduction, 7: domain.GroupTV,
+}
+
+// EpisodeGroups answers the other orders TMDB has a show's episodes in, those of a type it does
+// not know left out.
+func (c *Client) EpisodeGroups(ctx context.Context, loc domain.Locale, show int) ([]domain.EpisodeGroup, error) {
+	var body struct {
+		Results []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Type     int    `json:"type"`
+			Groups   int    `json:"group_count"`
+			Episodes int    `json:"episode_count"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, loc, fmt.Sprintf("/tv/%d/episode_groups", show), nil, &body); err != nil {
+		return nil, err
+	}
+	out := []domain.EpisodeGroup{}
+	for _, r := range body.Results {
+		if kind, ok := groupKinds[r.Type]; ok {
+			out = append(out, domain.EpisodeGroup{ID: r.ID, Name: r.Name, Kind: kind, Seasons: r.Groups, Episodes: r.Episodes})
 		}
 	}
 	return out, nil
+}
+
+// Group answers a show's seasons as an episode group numbers them: each of its groups a season,
+// numbered by its order, so the one ordered 0 is the specials, and each episode in it numbered
+// from 1 in the group's order.
+func (c *Client) Group(ctx context.Context, loc domain.Locale, id string) (map[int]domain.SeasonMetadata, error) {
+	var body struct {
+		Groups []struct {
+			Name     string `json:"name"`
+			Order    int    `json:"order"`
+			Episodes []struct {
+				episode
+				Order int `json:"order"`
+			} `json:"episodes"`
+		} `json:"groups"`
+	}
+	if err := c.get(ctx, loc, "/tv/episode_group/"+url.PathEscape(id), nil, &body); err != nil {
+		return nil, err
+	}
+	out := make(map[int]domain.SeasonMetadata, len(body.Groups))
+	for _, g := range body.Groups {
+		s := domain.SeasonMetadata{Metadata: domain.Metadata{Title: g.Name}, Episodes: make(map[int]domain.Metadata, len(g.Episodes))}
+		for _, e := range g.Episodes {
+			s.Episodes[e.Order+1] = e.metadata()
+		}
+		// A group says no date of its own: it began with its first episode.
+		if first, ok := s.Episodes[1]; ok {
+			s.Metadata.ReleaseDate, s.Metadata.Year = first.ReleaseDate, first.Year
+		}
+		out[g.Order] = s
+	}
+	return out, nil
+}
+
+type episode struct {
+	Number     int      `json:"episode_number"`
+	Name       string   `json:"name"`
+	Overview   string   `json:"overview"`
+	AirDate    string   `json:"air_date"`
+	Still      string   `json:"still_path"`
+	GuestStars []person `json:"guest_stars"`
+	Crew       []person `json:"crew"`
+	Score      float64  `json:"vote_average"`
+	Votes      int      `json:"vote_count"`
+}
+
+func (e episode) metadata() domain.Metadata {
+	aired := provider.Date(e.AirDate)
+	m := domain.Metadata{
+		Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
+		Artwork: picture(domain.ArtworkThumb, e.Still),
+		Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
+	}
+	if e.Votes > 0 {
+		m.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: e.Score * 10, Votes: e.Votes}}
+	}
+	return m
 }
 
 // person is someone TMDB credits: in a film's cast with the character, in a show's with each role

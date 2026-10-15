@@ -217,12 +217,14 @@ func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.R
 	})
 }
 
-// SetEpisodeOrder renumbers a show's episodes in the order its files are numbered in: what any
-// provider said of its seasons and episodes under the old numbers is taken back, so an episode the
-// new order has nothing of is titled as its file again, and every season is matched again.
-func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
+// SetEpisodeOrder renumbers a show's episodes in the order its files are numbered in, as the TMDB
+// episode group named numbers them in OrderGroup: what any provider said of its seasons and
+// episodes under the old numbers is taken back, so an episode the new order has nothing of is
+// titled as its file again, and every season is matched again.
+func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder, group string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := affected(tx.Exec(ctx, `UPDATE items SET episode_order = $2 WHERE id = $1 AND kind = 'show'`, id, order)); err != nil {
+		if err := affected(tx.Exec(ctx, `UPDATE items SET episode_order = $2, episode_group = nullif($3, '') WHERE id = $1 AND kind = 'show'`,
+			id, order, group)); err != nil {
 			return err
 		}
 		below, err := queryColumn[uuid.UUID](ctx, tx, `

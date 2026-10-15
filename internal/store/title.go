@@ -43,8 +43,10 @@ type TitlePage struct {
 	Rule      *SmartRule
 	List      *ListRef
 	Libraries []uuid.UUID
-	// EpisodeOrder is the order a show's episode files are numbered in.
+	// EpisodeOrder is the order a show's episode files are numbered in, and EpisodeGroup the TMDB
+	// episode group in OrderGroup.
 	EpisodeOrder domain.EpisodeOrder
+	EpisodeGroup string
 	// Locale and Titles are a film's or show's own metadata language, certification country and
 	// title language, over its library's; empty where it takes its library's.
 	Locale        domain.Locale
@@ -249,6 +251,9 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	switch item.Kind {
 	case domain.ItemShow:
 		p.EpisodeOrder = item.EpisodeOrder
+		if item.EpisodeGroup != nil {
+			p.EpisodeGroup = *item.EpisodeGroup
+		}
 		var states map[uuid.UUID]TitleState
 		p.Seasons, states, err = s.seasons(ctx, profile, item.ID, item)
 		p.State = states[item.ID]
