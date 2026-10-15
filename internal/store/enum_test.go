@@ -53,6 +53,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"video_range":              names(domain.Ranges()),
 		"stream_video_range":       names(domain.Ranges()),
 		"job_kind":                 names(domain.JobKinds()),
+		"webhook_format":           names(domain.WebhookFormats()),
 		"job_due":                  names(domain.JobDues()),
 		"job_state":                names(domain.JobStates()),
 		"profile_role":             names(domain.Roles()),

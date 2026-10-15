@@ -24,7 +24,7 @@ func TestAWebhookBodyIsMadeOnlyWhereOneAskedForIt(t *testing.T) {
 	if err := s.QueueWebhooks(ctx, domain.EventPlaybackStarted, body); err != nil || made != 0 {
 		t.Fatalf("with no webhooks: made %d bodies, %v; want none", made, err)
 	}
-	if _, err := s.AddWebhook(ctx, "http://example.com/hook", []domain.EventKind{domain.EventPlaybackStarted}, "s"); err != nil {
+	if _, err := s.AddWebhook(ctx, "http://example.com/hook", domain.WebhookDiscord, []domain.EventKind{domain.EventPlaybackStarted}, "s"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.QueueWebhooks(ctx, domain.EventPlaybackPaused, body); err != nil || made != 0 {
@@ -35,6 +35,9 @@ func TestAWebhookBodyIsMadeOnlyWhereOneAskedForIt(t *testing.T) {
 	}
 	jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobDeliverWebhook}, nil, uuid.NewV7(), time.Minute, 10)
 	if err != nil || len(jobs) != 1 {
-		t.Errorf("queued %d deliveries, %v; want one", len(jobs), err)
+		t.Fatalf("queued %d deliveries, %v; want one", len(jobs), err)
+	}
+	if d, err := s.Delivery(ctx, jobs[0].Subject); err != nil || d.Format != domain.WebhookDiscord {
+		t.Errorf("the delivery: %+v %v, want it sent as its webhook's format", d, err)
 	}
 }

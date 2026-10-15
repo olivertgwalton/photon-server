@@ -783,7 +783,12 @@ export async function admin(
 			return json({ items: webhooks });
 		case "POST /api/v1/admin/webhooks": {
 			const body = (await request.json()) as Schemas["AddWebhook"];
-			const hook = { id: "w-1", created_at: "2026-10-06T20:00:00Z", ...body };
+			const hook = {
+				id: "w-1",
+				created_at: "2026-10-06T20:00:00Z",
+				...body,
+				format: body.format ?? "photon",
+			};
 			webhooks = [hook];
 			return json(
 				{ ...hook, secret: "S3CRET-ONCE" } satisfies Schemas["AddedWebhook"],

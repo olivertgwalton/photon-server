@@ -5,6 +5,7 @@ import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -21,8 +22,14 @@ const words = vocabulary();
 
 const api = client();
 let adding = $state(false);
-// The secret is answered once, when the webhook is added, and never again.
+// The secret is answered once, when the webhook is added, and never again;
+// only photon's own JSON is signed with it.
 let added = $state.raw<components["schemas"]["AddedWebhook"]>();
+let format = $state<components["schemas"]["WebhookFormat"]>("photon");
+const formats = Object.entries(words.webhook_formats).map(([value, label]) => ({
+	value: value as components["schemas"]["WebhookFormat"],
+	label,
+}));
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
@@ -30,6 +37,7 @@ async function add(event: SubmitEvent) {
 		api.POST("/api/v1/admin/webhooks", {
 			body: {
 				url: textAsTyped(form, "url"),
+				format,
 				events: form
 					.getAll("events")
 					.map(String) as components["schemas"]["EventKind"][],
@@ -38,7 +46,7 @@ async function add(event: SubmitEvent) {
 	);
 	if (!hook) return;
 	adding = false;
-	added = hook.data;
+	if (hook.data.format === "photon") added = hook.data;
 }
 </script>
 
@@ -60,9 +68,15 @@ async function add(event: SubmitEvent) {
 					<Dialog.Header>
 						<Dialog.Title>Add a webhook</Dialog.Title>
 						<Dialog.Description>
-							Each event is posted to the address as JSON, signed in the
-							X-Photon-Signature header with a secret shown once, when it is
-							added.
+							{#if format === "photon"}
+								Each event is posted to the address as JSON, signed in the
+								X-Photon-Signature header with a secret shown once, when it is
+								added.
+							{:else}
+								Each event is posted as {words.webhook_formats[format]} takes a
+								message: the server's name over what happened. Use the address
+								it gives you, with its token.
+							{/if}
 						</Dialog.Description>
 					</Dialog.Header>
 					<Field.Group>
@@ -74,6 +88,15 @@ async function add(event: SubmitEvent) {
 								type="url"
 								required
 								placeholder="https://example.com/photon"
+							/>
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="webhook-format">Sent as</Field.Label>
+							<Choice
+								id="webhook-format"
+								options={formats}
+								bind:value={format}
+								class="w-full sm:w-64"
 							/>
 						</Field.Field>
 						<Field.Set>
@@ -106,6 +129,11 @@ async function add(event: SubmitEvent) {
 			>
 				<div class="grid min-w-0 gap-2">
 					<p class="text-ink truncate font-mono text-sm">{hook.url}</p>
+					{#if hook.format !== "photon"}
+						<p class="text-ink-3 text-xs">
+							Sent as {words.webhook_formats[hook.format]}
+						</p>
+					{/if}
 					<div class="flex flex-wrap gap-1.5">
 						{#each hook.events as kind (kind)}
 							<Badge variant="outline">{words.hookable[kind] ?? kind}</Badge>

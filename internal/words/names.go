@@ -26,6 +26,7 @@ func (w Words) StreamKind(v domain.StreamKind) string         { return label(str
 func (w Words) JobState(v domain.JobState) string             { return label(jobStates, v) }
 func (w Words) Acceleration(v domain.Acceleration) string     { return label(accelerations, v) }
 func (w Words) JobKind(v domain.JobKind) string               { return label(jobKinds, v) }
+func (w Words) WebhookFormat(v domain.WebhookFormat) string   { return label(webhookFormats, v) }
 
 func label[T ~string](names map[T]string, v T) string {
 	if n, ok := names[v]; ok {
@@ -54,6 +55,11 @@ var extraKinds = map[domain.ExtraKind]string{
 
 var importSources = map[domain.ImportSource]string{
 	domain.ImportPlex: "Plex", domain.ImportJellyfin: "Jellyfin", domain.ImportEmby: "Emby",
+}
+
+var webhookFormats = map[domain.WebhookFormat]string{
+	domain.WebhookPhoton: "Photon JSON, signed", domain.WebhookDiscord: "Discord", domain.WebhookSlack: "Slack",
+	domain.WebhookNtfy: "ntfy", domain.WebhookGotify: "Gotify",
 }
 
 var trackers = map[domain.Tracker]string{

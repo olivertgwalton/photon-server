@@ -503,6 +503,28 @@ test("a webhook's secret is shown once, to copy", async ({ page }) => {
 	await expect(page.getByText("No webhooks yet.")).toBeVisible();
 });
 
+test("a webhook is sent as a chat service takes a message, with no secret to keep", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/server/webhooks");
+	await page.getByRole("button", { name: "Add a webhook" }).click();
+	await page.getByLabel("Address").fill("https://discord.com/api/webhooks/1/t");
+	await page.getByRole("button", { name: "Sent as" }).click();
+	await page.getByRole("option", { name: "Discord" }).click();
+	await expect(
+		page.getByRole("dialog", { name: "Add a webhook" }),
+	).toContainText("posted as Discord takes a message");
+	await page.getByLabel("Titles are added").click();
+	await expectAccessible(page);
+	await page.getByRole("button", { name: "Add webhook" }).click();
+	await expect(page.getByText("Sent as Discord")).toBeVisible();
+	await expect(
+		page.getByRole("dialog", { name: "The webhook's secret" }),
+	).toHaveCount(0);
+	await page.getByRole("button", { name: /^Remove/ }).click();
+	await page.getByRole("button", { name: "Remove webhook" }).click();
+});
+
 test("an API key is shown once, to copy, and revoked", async ({ page }) => {
 	await logIn(page, "/settings/server/keys");
 	await page.getByRole("button", { name: "Make a key" }).click();

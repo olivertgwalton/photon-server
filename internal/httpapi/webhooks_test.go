@@ -19,8 +19,8 @@ type fakeWebhooks struct{ added []store.Webhook }
 
 func (f *fakeWebhooks) Webhooks(context.Context) ([]store.Webhook, error) { return f.added, nil }
 
-func (f *fakeWebhooks) AddWebhook(_ context.Context, url string, kinds []domain.EventKind, _ string) (store.Webhook, error) {
-	h := store.Webhook{ID: uuid.NewV7(), URL: url, Events: kinds, CreatedAt: time.Now()}
+func (f *fakeWebhooks) AddWebhook(_ context.Context, url string, format domain.WebhookFormat, kinds []domain.EventKind, _ string) (store.Webhook, error) {
+	h := store.Webhook{ID: uuid.NewV7(), URL: url, Format: format, Events: kinds, CreatedAt: time.Now()}
 	f.added = append(f.added, h)
 	return h, nil
 }
@@ -62,6 +62,8 @@ func TestAnAdminKeepsTheWebhooks(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://hooks.example", "events": []}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://hooks.example", "events": ["job.finished"]}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://hooks.example", "events": ["auth.signed_in", "auth.signed_in"]}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://hooks.example", "format": "telegram", "events": ["auth.signed_in"]}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://ntfy.sh/den", "format": "ntfy", "events": ["auth.signed_in"]}`, http.StatusCreated},
 		{goodToken, http.MethodPost, hook + "/test", "", http.StatusAccepted},
 		{goodToken, http.MethodPost, "/api/v1/admin/webhooks/" + uuid.NewV7().String() + "/test", "", http.StatusNotFound},
 	} {
@@ -70,7 +72,9 @@ func TestAnAdminKeepsTheWebhooks(t *testing.T) {
 		}
 	}
 	listed := do(goodToken, http.MethodGet, "/api/v1/admin/webhooks", "")
-	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"events":["playback.started","playback.paused"]`) || strings.Contains(listed.Body.String(), added.Secret) {
+	// One left without a format is sent photon's own JSON.
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"format":"photon","events":["playback.started","playback.paused"]`) ||
+		!strings.Contains(listed.Body.String(), `"format":"ntfy"`) || strings.Contains(listed.Body.String(), added.Secret) {
 		t.Errorf("listing: %d %s; want the webhook without its secret", listed.Code, listed.Body)
 	}
 	if rec := do(goodToken, http.MethodDelete, hook, ""); rec.Code != http.StatusNoContent {

@@ -28,10 +28,12 @@ type vocabularyJSON struct {
 	ImportSources map[domain.ImportSource]string           `json:"import_sources"`
 	ImportMisses  map[domain.ImportMiss]string             `json:"import_misses"`
 	Trackers      map[domain.Tracker]string                `json:"trackers"`
-	PlayMethods   map[domain.PlayMethod]string             `json:"play_methods"`
-	RatingSites   map[domain.RatingSite]string             `json:"rating_sites"`
-	Ranges        map[domain.Range]string                  `json:"ranges"`
-	Resolutions   map[domain.Resolution]string             `json:"resolutions"`
+	// WebhookFormats are how a webhook may be sent its events.
+	WebhookFormats map[domain.WebhookFormat]string `json:"webhook_formats"`
+	PlayMethods    map[domain.PlayMethod]string    `json:"play_methods"`
+	RatingSites    map[domain.RatingSite]string    `json:"rating_sites"`
+	Ranges         map[domain.Range]string         `json:"ranges"`
+	Resolutions    map[domain.Resolution]string    `json:"resolutions"`
 	// Kinds are the kinds of item, as a list of mixed titles heads each kind's: "Films".
 	Kinds           map[domain.ItemKind]string       `json:"kinds"`
 	LibraryKinds    map[domain.LibraryKind]string    `json:"library_kinds"`
@@ -75,6 +77,7 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 		ImportSources:   wordsFor(domain.ImportSources(), said.ImportSource),
 		ImportMisses:    wordsFor(domain.ImportMisses(), said.ImportMiss),
 		Trackers:        wordsFor(domain.Trackers(), said.Tracker),
+		WebhookFormats:  wordsFor(domain.WebhookFormats(), said.WebhookFormat),
 		PlayMethods:     wordsFor(domain.PlayMethods(), said.PlayMethod),
 		RatingSites:     wordsFor(domain.RatingSites(), said.RatingSite),
 		Ranges:          wordsFor(domain.Ranges(), said.Range),

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -16,20 +17,25 @@ import (
 
 type webhooks interface {
 	Webhooks(ctx context.Context) ([]store.Webhook, error)
-	AddWebhook(ctx context.Context, url string, kinds []domain.EventKind, secret string) (store.Webhook, error)
+	AddWebhook(ctx context.Context, url string, format domain.WebhookFormat, kinds []domain.EventKind, secret string) (store.Webhook, error)
 	RemoveWebhook(ctx context.Context, id uuid.UUID) error
 }
 
 type webhookJSON struct {
-	ID        uuid.UUID          `json:"id"`
-	URL       uri                `json:"url"`
-	Events    []domain.EventKind `json:"events"`
-	CreatedAt time.Time          `json:"created_at"`
+	ID  uuid.UUID `json:"id"`
+	URL uri       `json:"url"`
+	// Format is how its events are sent: photon's own signed JSON, or as a chat or push service
+	// takes a message.
+	Format    domain.WebhookFormat `json:"format"`
+	Events    []domain.EventKind   `json:"events"`
+	CreatedAt time.Time            `json:"created_at"`
 }
 
 type addWebhookJSON struct {
-	URL    uri                `json:"url"`
-	Events []domain.EventKind `json:"events"`
+	URL uri `json:"url"`
+	// Format is photon's own signed JSON where it is left out.
+	Format domain.WebhookFormat `json:"format,omitzero"`
+	Events []domain.EventKind   `json:"events"`
 }
 
 type addedWebhookJSON struct {
@@ -38,7 +44,7 @@ type addedWebhookJSON struct {
 }
 
 func webhookOf(w store.Webhook) webhookJSON {
-	return webhookJSON{ID: w.ID, URL: uri(w.URL), Events: nonNil(w.Events), CreatedAt: w.CreatedAt.UTC()}
+	return webhookJSON{ID: w.ID, URL: uri(w.URL), Format: w.Format, Events: nonNil(w.Events), CreatedAt: w.CreatedAt.UTC()}
 }
 
 // adminWebhooks lists the webhooks, never their secrets.
@@ -78,7 +84,7 @@ func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := rand.Text()
-	hook, err := a.svc.Webhooks.AddWebhook(r.Context(), string(req.URL), req.Events, secret)
+	hook, err := a.svc.Webhooks.AddWebhook(r.Context(), string(req.URL), cmp.Or(req.Format, domain.WebhookPhoton), req.Events, secret)
 	if err != nil {
 		a.internal(w, r, err)
 		return
