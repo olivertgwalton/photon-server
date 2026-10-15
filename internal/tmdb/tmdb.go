@@ -377,6 +377,68 @@ func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int
 	return out, nil
 }
 
+// groupKinds are TMDB's types of episode group, by their numbers.
+var groupKinds = map[int]domain.GroupKind{
+	1: domain.GroupAired, 2: domain.GroupAbsolute, 3: domain.GroupDVD, 4: domain.GroupDigital,
+	5: domain.GroupStoryArc, 6: domain.GroupProduction, 7: domain.GroupTV,
+}
+
+// EpisodeGroups answers the other orders TMDB has a show's episodes in, those of a type it does
+// not know left out.
+func (c *Client) EpisodeGroups(ctx context.Context, loc domain.Locale, show int) ([]domain.EpisodeGroup, error) {
+	var body struct {
+		Results []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Type     int    `json:"type"`
+			Groups   int    `json:"group_count"`
+			Episodes int    `json:"episode_count"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, loc, fmt.Sprintf("/tv/%d/episode_groups", show), nil, &body); err != nil {
+		return nil, err
+	}
+	out := []domain.EpisodeGroup{}
+	for _, r := range body.Results {
+		if kind, ok := groupKinds[r.Type]; ok {
+			out = append(out, domain.EpisodeGroup{ID: r.ID, Name: r.Name, Kind: kind, Seasons: r.Groups, Episodes: r.Episodes})
+		}
+	}
+	return out, nil
+}
+
+// Group answers a show's seasons as an episode group numbers them: each of its groups a season,
+// numbered by its order, so the one ordered 0 is the specials, and each episode in it numbered
+// from 1 in the group's order.
+func (c *Client) Group(ctx context.Context, loc domain.Locale, id string) (map[int]domain.SeasonMetadata, error) {
+	var body struct {
+		Groups []struct {
+			Name     string `json:"name"`
+			Order    int    `json:"order"`
+			Episodes []struct {
+				episode
+				Order int `json:"order"`
+			} `json:"episodes"`
+		} `json:"groups"`
+	}
+	if err := c.get(ctx, loc, "/tv/episode_group/"+url.PathEscape(id), nil, &body); err != nil {
+		return nil, err
+	}
+	out := make(map[int]domain.SeasonMetadata, len(body.Groups))
+	for _, g := range body.Groups {
+		s := domain.SeasonMetadata{Metadata: domain.Metadata{Title: g.Name}, Episodes: make(map[int]domain.Metadata, len(g.Episodes))}
+		for _, e := range g.Episodes {
+			s.Episodes[e.Order+1] = e.metadata()
+		}
+		// A group says no date of its own: it began with its first episode.
+		if first, ok := s.Episodes[1]; ok {
+			s.Metadata.ReleaseDate, s.Metadata.Year = first.ReleaseDate, first.Year
+		}
+		out[g.Order] = s
+	}
+	return out, nil
+}
+
 type episode struct {
 	Number     int      `json:"episode_number"`
 	Name       string   `json:"name"`
