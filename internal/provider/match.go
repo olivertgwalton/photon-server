@@ -14,7 +14,7 @@ import (
 )
 
 // Resolve finds a title's id on a provider: one it already carries, else one another provider's
-// id leads to, else a confident search result. Empty is no match.
+// id leads to, else the search result that best matches its name and year. Empty is no match.
 func Resolve(h Hints, own domain.Provider, others []domain.Provider,
 	find func(domain.Provider, string) ([]domain.Candidate, error),
 	search func(string, int) ([]domain.Candidate, error),
@@ -49,19 +49,47 @@ func Resolve(h Hints, own domain.Provider, others []domain.Provider,
 	return pick(found, h.Title, h.Year), nil
 }
 
-// pick takes the first result, in the provider's order, whose title or original title is the one asked
-// for and whose year is within one of the one asked for. Anything looser is left unmatched rather
-// than risk a wrong match.
+// How a search result is scored against the name and year asked for, as Jellyfin's TMDB provider
+// scores them: its title or original title the same, or the name asked for followed by more words;
+// its year within one, as release dates straddle a new year.
+const (
+	titleExact  = 8
+	titlePrefix = 4
+	yearNear    = 2
+)
+
+// pick takes the search result that best matches the name and year asked for, the provider's own
+// first where none scores higher, as Jellyfin does: a provider's search knows titles by names the
+// result does not carry, as TMDB's finds "Sousou no Frieren" by its romanised Japanese title.
 func pick(found []domain.Candidate, title string, year int) string {
+	if len(found) == 0 {
+		return ""
+	}
 	want := normalise(title)
+	best, bestScore := found[0], 0
 	for _, m := range found {
-		named := normalise(m.Title) == want || normalise(m.OriginalTitle) == want
-		dated := year == 0 || m.Year == 0 || abs(m.Year-year) <= 1
-		if named && dated {
-			return m.ID
+		score := max(scoreTitle(want, m.Title), scoreTitle(want, m.OriginalTitle))
+		if year != 0 && m.Year != 0 && abs(m.Year-year) <= 1 {
+			score += yearNear
+		}
+		// Strictly higher, so a tie keeps the provider's earlier result.
+		if score > bestScore {
+			best, bestScore = m, score
 		}
 	}
-	return ""
+	return best.ID
+}
+
+func scoreTitle(want, title string) int {
+	have := normalise(title)
+	switch {
+	case have == want:
+		return titleExact
+	// Whole words only, or "Wall" would half match "Wall Street".
+	case want != "" && strings.HasPrefix(have, want+" "):
+		return titlePrefix
+	}
+	return 0
 }
 
 // unmark is made per call: a chained transformer keeps state, so one shared by two identify jobs
