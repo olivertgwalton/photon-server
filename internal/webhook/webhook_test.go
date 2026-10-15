@@ -144,12 +144,14 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 				Method domain.PlayMethod `json:"method"`
 			} `json:"playback"`
 		} `json:"details"`
+		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(got.body, &body); err != nil {
 		t.Fatal(err)
 	}
 	if body.Event != domain.EventPlaybackStarted || body.Server != server || body.Profile.Name != "Oliver" ||
-		body.Profile.ID != oliver.ID || body.Details.Playback.Method != domain.PlayDirect || time.Since(body.At) > time.Minute {
+		body.Profile.ID != oliver.ID || body.Details.Playback.Method != domain.PlayDirect || time.Since(body.At) > time.Minute ||
+		!strings.HasPrefix(body.Text, "Oliver started") {
 		t.Errorf("body %s", got.body)
 	}
 

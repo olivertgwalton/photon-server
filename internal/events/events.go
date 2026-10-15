@@ -10,9 +10,12 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 const (
@@ -141,7 +144,12 @@ func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
 		Title   *title              `json:"title,omitzero"`
 		Library *named              `json:"library,omitzero"`
 		Details domain.EventDetails `json:"details"`
-	}{Event: e.Kind, At: e.At.UTC(), Server: Server{ID: h.server, Name: h.name()}, Details: e.Details}
+		// Text is what happened as a sentence, as the activity log says it.
+		Text string `json:"text"`
+	}{
+		Event: e.Kind, At: e.At.UTC(), Server: Server{ID: h.server, Name: h.name()}, Details: e.Details,
+		Text: words.In(language.English).Event(e, described(d)),
+	}
 	if body.Details == nil {
 		body.Details = domain.NoDetails{}
 	}
@@ -158,6 +166,19 @@ func (h *Hub) payload(ctx context.Context, e domain.Event) ([]byte, error) {
 		body.Library = &named{ID: e.Library, Name: *d.LibraryName}
 	}
 	return json.Marshal(body)
+}
+
+// described names an event's profile and library as a webhook is told them.
+type described store.Described
+
+func (d described) Profile(uuid.UUID) string { return deref(d.ProfileName) }
+func (d described) Library(uuid.UUID) string { return deref(d.LibraryName) }
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // Run hands this node's streams every node's events until ctx ends, then ends them.
