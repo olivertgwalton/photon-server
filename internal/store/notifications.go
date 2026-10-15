@@ -199,11 +199,15 @@ func (s *Store) ReadNotifications(ctx context.Context, profile uuid.UUID, throug
 
 // PushSubscription is a browser subscribed for a profile, and the language its messages are in.
 type PushSubscription struct {
-	ID       uuid.UUID
+	ID   uuid.UUID
+	Kind domain.PushKind
+	// Endpoint is a browser's push service address, or an Apple device's token.
 	Endpoint string
-	P256DH   []byte
-	Auth     []byte
-	Language string
+	// P256DH and Auth are a browser's keys; ApnsEnvironment an Apple device's push service.
+	P256DH          []byte
+	Auth            []byte
+	ApnsEnvironment *domain.APNsEnvironment
+	Language        string
 }
 
 // PushKey answers the server's VAPID key, keeping made as it unless it has one.
@@ -219,10 +223,13 @@ func (s *Store) PushKey(ctx context.Context, made []byte) ([]byte, error) {
 func (s *Store) Subscribe(ctx context.Context, profile uuid.UUID, sub PushSubscription) (PushSubscription, bool, error) {
 	var made bool
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO push_subscriptions (profile_id, endpoint, p256dh, auth, language) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (endpoint) DO UPDATE SET profile_id = excluded.profile_id, p256dh = excluded.p256dh,
-			auth = excluded.auth, language = excluded.language
-		RETURNING id, xmax = 0`, profile, sub.Endpoint, sub.P256DH, sub.Auth, sub.Language).Scan(&sub.ID, &made)
+		INSERT INTO push_subscriptions (profile_id, kind, endpoint, p256dh, auth, apns_environment, language)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (endpoint) DO UPDATE SET profile_id = excluded.profile_id, kind = excluded.kind,
+			p256dh = excluded.p256dh, auth = excluded.auth, apns_environment = excluded.apns_environment,
+			language = excluded.language
+		RETURNING id, xmax = 0`, profile, sub.Kind, sub.Endpoint, sub.P256DH, sub.Auth, sub.ApnsEnvironment, sub.Language,
+	).Scan(&sub.ID, &made)
 	if violates(err, foreignKeyViolation) {
 		return PushSubscription{}, false, ErrNotFound
 	}
@@ -232,7 +239,22 @@ func (s *Store) Subscribe(ctx context.Context, profile uuid.UUID, sub PushSubscr
 // PushSubscriptions answers the browsers subscribed for a profile, oldest first.
 func (s *Store) PushSubscriptions(ctx context.Context, profile uuid.UUID) ([]PushSubscription, error) {
 	return queryStructs[PushSubscription](ctx, s.pool, `
-		SELECT id, endpoint, p256dh, auth, language FROM push_subscriptions WHERE profile_id = $1 ORDER BY id`, profile)
+		SELECT id, kind, endpoint, p256dh, auth, apns_environment, language FROM push_subscriptions
+		WHERE profile_id = $1 ORDER BY id`, profile)
+}
+
+// PushRelayCredential answers what photon's push relay knows the server by, or none before it has
+// asked for one.
+func (s *Store) PushRelayCredential(ctx context.Context) (string, error) {
+	var credential *string
+	err := s.pool.QueryRow(ctx, `SELECT push_relay_credential FROM server`).Scan(&credential)
+	return deref(credential), err
+}
+
+// SetPushRelayCredential keeps what photon's push relay gave the server to be known by.
+func (s *Store) SetPushRelayCredential(ctx context.Context, credential string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE server SET push_relay_credential = $1`, credential)
+	return err
 }
 
 // Unsubscribe forgets one of a profile's browsers. ErrNotFound for none of its own.

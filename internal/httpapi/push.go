@@ -9,6 +9,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/webpush"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -89,7 +90,7 @@ func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sub, made, err := a.svc.Push.Subscribe(r.Context(), auth.SessionOf(r.Context()).Profile.ID, store.PushSubscription{
-		Endpoint: string(req.Endpoint), P256DH: p256dh, Auth: secret, Language: words.Readable(r).String(),
+		Kind: domain.PushWeb, Endpoint: string(req.Endpoint), P256DH: p256dh, Auth: secret, Language: words.Readable(r).String(),
 	})
 	if a.answered(w, r, err) {
 		return

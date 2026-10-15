@@ -215,12 +215,12 @@ func TestPush(t *testing.T) {
 		t.Errorf("pushes of a profile with no browser: %+v %v, want none", p, err)
 	}
 
-	sub, made, err := s.Subscribe(ctx, other.ID, PushSubscription{Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"})
+	sub, made, err := s.Subscribe(ctx, other.ID, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"})
 	if err != nil || !made {
 		t.Fatalf("subscribing: %v, made %v", err, made)
 	}
 	// The same browser subscribed again, for the fan, is the fan's from now.
-	if again, made, err := s.Subscribe(ctx, fan.ID, PushSubscription{Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{2}, Language: "fr"}); err != nil || made || again.ID != sub.ID {
+	if again, made, err := s.Subscribe(ctx, fan.ID, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{2}, Language: "fr"}); err != nil || made || again.ID != sub.ID {
 		t.Fatalf("subscribed again: %+v %v, made %v; want the same subscription", again, err, made)
 	}
 	if subs, err := s.PushSubscriptions(ctx, other.ID); err != nil || len(subs) != 0 {
@@ -246,6 +246,29 @@ func TestPush(t *testing.T) {
 	}
 	if p, err := s.Pushes(ctx, fan.ID); err != nil || len(p) != 0 {
 		t.Errorf("after pushing: %+v %v, want none left", p, err)
+	}
+
+	// An Apple device is its token and the push service that issued it, in place of a browser's keys.
+	production := domain.APNsProduction
+	phone := PushSubscription{Kind: domain.PushApple, Endpoint: "a1b2c3", ApnsEnvironment: &production, Language: "en"}
+	if _, _, err := s.Subscribe(ctx, fan.ID, phone); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Subscribe(ctx, fan.ID, PushSubscription{Kind: domain.PushApple, Endpoint: "d4e5", Language: "en"}); err == nil {
+		t.Error("an Apple device with no push service was kept")
+	}
+	subs, err := s.PushSubscriptions(ctx, fan.ID)
+	if err != nil || len(subs) != 2 || subs[1].Kind != domain.PushApple || subs[1].ApnsEnvironment == nil || *subs[1].ApnsEnvironment != production {
+		t.Errorf("the fan's devices: %+v %v, want its browser and its phone", subs, err)
+	}
+	if c, err := s.PushRelayCredential(ctx); err != nil || c != "" {
+		t.Errorf("a credential before one was asked for: %q %v", c, err)
+	}
+	if err := s.SetPushRelayCredential(ctx, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := s.PushRelayCredential(ctx); err != nil || c != "c1" {
+		t.Errorf("the credential kept: %q %v", c, err)
 	}
 
 	if err := s.Unsubscribe(ctx, other.ID, sub.ID); !errors.Is(err, ErrNotFound) {

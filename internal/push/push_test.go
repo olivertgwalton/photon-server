@@ -106,7 +106,7 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 	ctx := t.Context()
 	b := &browsers{answer: map[string]error{"https://push.example/ended": webpush.ErrGone}, got: map[string][]message{}}
 	for _, endpoint := range []string{"https://push.example/laptop", "https://push.example/ended"} {
-		sub := store.PushSubscription{Endpoint: endpoint, P256DH: []byte{4}, Auth: make([]byte, 16), Language: "en"}
+		sub := store.PushSubscription{Kind: domain.PushWeb, Endpoint: endpoint, P256DH: []byte{4}, Auth: make([]byte, 16), Language: "en"}
 		if _, _, err := st.Subscribe(ctx, fan, sub); err != nil {
 			t.Fatal(err)
 		}
