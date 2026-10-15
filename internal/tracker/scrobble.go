@@ -105,6 +105,10 @@ func (l *Links) scrobble(ctx context.Context, e domain.Event) error {
 		err := l.authorised(ctx, e.Profile, g, clientID, func(access string) error {
 			return l.services[g.Tracker].scrobble(ctx, clientID, access, a, p)
 		})
+		// A tracker keeping no plays is told what was watched by the history push.
+		if errors.Is(err, errNoPlays) {
+			continue
+		}
 		// A play told watched is no longer the history push's to tell, which would tell it twice.
 		if err == nil && a == actionStop && p.Progress == 100 {
 			err = l.st.ForgetTrackerWatched(ctx, e.Profile, g.Tracker, e.Item)

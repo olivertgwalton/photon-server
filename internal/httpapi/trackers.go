@@ -19,6 +19,7 @@ type trackerLinks interface {
 	Trackers(ctx context.Context, profile uuid.UUID) ([]tracker.Status, error)
 	Link(ctx context.Context, profile uuid.UUID, t domain.Tracker) (kv.TrackerLink, error)
 	Unlink(ctx context.Context, profile uuid.UUID, t domain.Tracker) error
+	Grant(ctx context.Context, profile uuid.UUID, t domain.Tracker, token string) error
 }
 
 type trackerClients interface {
@@ -49,7 +50,10 @@ type trackerCodeJSON struct {
 
 type profileTrackerJSON struct {
 	Tracker domain.Tracker `json:"tracker"`
-	State   tracker.State  `json:"state"`
+	// Flow is how an account is linked: by a code entered on the tracker's site, or by a token its
+	// site shows at VerificationURI, brought back.
+	Flow  tracker.LinkFlow `json:"flow"`
+	State tracker.State    `json:"state"`
 	// Username and LinkedAt are the account linked.
 	Username string    `json:"username,omitzero"`
 	LinkedAt time.Time `json:"linked_at,omitzero"`
@@ -107,7 +111,7 @@ func (a *API) ownTrackers(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]profileTrackerJSON, len(all))
 	for i, s := range all {
-		out[i] = profileTrackerJSON{Tracker: s.Tracker, State: s.State}
+		out[i] = profileTrackerJSON{Tracker: s.Tracker, Flow: s.Flow, State: s.State}
 		switch s.State {
 		case tracker.StateLinked:
 			out[i].Username, out[i].LinkedAt = s.Account.Username, s.Account.LinkedAt.UTC()
@@ -130,6 +134,35 @@ func (a *API) linkTracker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, trackerCodeOf(link))
+}
+
+type trackerTokenJSON struct {
+	Token string `json:"token"`
+}
+
+// maxToken bounds a token brought back; AniList's are about a thousand bytes.
+const maxToken = 4096
+
+// grantTracker links the profile's account on a tracker linked by token, by the token its site
+// showed the profile.
+func (a *API) grantTracker(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.pathTracker(w, r)
+	if !ok {
+		return
+	}
+	var req trackerTokenJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" || len(req.Token) > maxToken {
+		writeProblem(w, a.logger, codeInvalidBody, "token is the token the tracker's site showed")
+		return
+	}
+	if a.answered(w, r, a.svc.Trackers.Grant(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t, req.Token)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) unlinkTracker(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +210,11 @@ func (a *API) trackersRoutes() []route {
 			pattern: "POST /api/v1/profile/trackers/{tracker}/link", access: signedIn,
 			summary: "Ask a tracker for a code for the profile to enter there, in place of any before; tracker.changed says when it is linked or expires",
 			path:    []param{trackerParam}, status: http.StatusOK, reply: trackerCodeJSON{}, handle: a.linkTracker,
+		},
+		{
+			pattern: "PUT /api/v1/profile/trackers/{tracker}/token", access: signedIn,
+			summary: "Link the profile's account on a tracker linked by token, by the token its site showed",
+			path:    []param{trackerParam}, body: trackerTokenJSON{}, status: http.StatusNoContent, handle: a.grantTracker,
 		},
 		{
 			pattern: "DELETE /api/v1/profile/trackers/{tracker}", access: signedIn,

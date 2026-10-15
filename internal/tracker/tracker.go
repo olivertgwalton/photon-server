@@ -42,8 +42,26 @@ var (
 	errUnknownClient = errors.New("the tracker does not know the client id")
 )
 
+// LinkFlow is how a profile links its account on a tracker.
+type LinkFlow string
+
+const (
+	// LinkDevice is a code entered on the tracker's site, which the server asks after (RFC 8628).
+	LinkDevice LinkFlow = "device"
+	// LinkToken is a token the tracker's site shows once the profile signs in there, which the
+	// profile brings back.
+	LinkToken LinkFlow = "token"
+)
+
+func LinkFlows() []LinkFlow { return []LinkFlow{LinkDevice, LinkToken} }
+
+// errNoPlays is a tracker that keeps no plays, only what was watched, which the history push tells
+// it.
+var errNoPlays = errors.New("the tracker keeps no plays")
+
 // service is how a tracker is asked, through the app registered as clientID.
 type service interface {
+	flow() LinkFlow
 	code(ctx context.Context, clientID string) (kv.TrackerLink, error)
 	// token answers what the tracker granted once the code is entered, and errPending,
 	// errSlowDown or errGone until then.
@@ -73,6 +91,7 @@ func New(st *store.Store, k *kv.KV, raise func(context.Context, domain.Event), v
 		st: st, kv: k, raise: raise, log: log, plays: make(chan domain.Event, playsHeld),
 		services: map[domain.Tracker]service{
 			domain.TrackerTrakt: newTrakt(version), domain.TrackerSimkl: newSimkl(version), domain.TrackerMDBList: newMDBList(version),
+			domain.TrackerAniList: newAniList(st, k),
 		},
 	}
 }
@@ -96,6 +115,7 @@ func States() []State {
 // Status is a profile's account on a tracker, or the code it has to enter for one.
 type Status struct {
 	Tracker domain.Tracker
+	Flow    LinkFlow
 	State   State
 	// Account is the account linked.
 	Account domain.TrackerAccount
@@ -119,7 +139,7 @@ func (l *Links) Trackers(ctx context.Context, profile uuid.UUID) ([]Status, erro
 	}
 	out := make([]Status, 0, len(domain.Trackers()))
 	for _, t := range domain.Trackers() {
-		s := Status{Tracker: t, State: StateUnlinked}
+		s := Status{Tracker: t, Flow: l.services[t].flow(), State: StateUnlinked}
 		if a, ok := linked[t]; ok {
 			s.State, s.Account = StateLinked, a
 		} else if clients[t] == "" {
@@ -164,6 +184,32 @@ func (l *Links) Link(ctx context.Context, profile uuid.UUID, t domain.Tracker) (
 	}
 	link.DeviceCode = ""
 	return link, nil
+}
+
+// Grant keeps the account a token a tracker linked by token showed the profile is of.
+func (l *Links) Grant(ctx context.Context, profile uuid.UUID, t domain.Tracker, token string) error {
+	svc, ok := l.services[t].(interface {
+		pasted(token string) store.TrackerTokens
+	})
+	if !ok {
+		return fmt.Errorf("%w: %s is linked by the code it gives, not a token", ErrRefused, t)
+	}
+	clientID, err := l.clientID(ctx, t)
+	if err != nil {
+		return err
+	}
+	tok := svc.pasted(token)
+	username, err := l.services[t].username(ctx, clientID, tok.Access)
+	if refusal, ok := errors.AsType[*provider.Refusal](err); ok && refusal.Code < http.StatusInternalServerError {
+		return fmt.Errorf("%w: %s refused the token: the profile signs in again for a new one", ErrRefused, t)
+	}
+	if err == nil {
+		err = l.st.LinkTracker(ctx, profile, t, username, tok)
+	}
+	if err != nil {
+		return err
+	}
+	return l.end(ctx, kv.TrackerLink{Profile: profile, Tracker: t})
 }
 
 // Unlink forgets a profile's account on a tracker, or the code it was entering, and tells the

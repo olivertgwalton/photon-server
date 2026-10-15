@@ -63,7 +63,7 @@ var webhookFormats = map[domain.WebhookFormat]string{
 }
 
 var trackers = map[domain.Tracker]string{
-	domain.TrackerTrakt: "Trakt", domain.TrackerSimkl: "Simkl", domain.TrackerMDBList: "MDBList",
+	domain.TrackerTrakt: "Trakt", domain.TrackerSimkl: "Simkl", domain.TrackerMDBList: "MDBList", domain.TrackerAniList: "AniList",
 }
 
 var importMisses = map[domain.ImportMiss]string{

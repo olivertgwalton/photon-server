@@ -49,6 +49,9 @@ type watchedTitle struct {
 type watchedShow struct {
 	IDs     map[string]any  `json:"ids"`
 	Seasons []watchedSeason `json:"seasons"`
+	// order and numbering are how the show's episodes are numbered, which AniList places them by.
+	order     domain.EpisodeOrder
+	numbering domain.Provider
 }
 
 type watchedSeason struct {
@@ -153,7 +156,7 @@ func histories(changes []store.TrackerChange) (watched, unwatched history) {
 		}
 		show := slices.IndexFunc(h.Shows, func(s watchedShow) bool { return fmt.Sprint(s.IDs) == t.ids })
 		if show < 0 {
-			h.Shows, show = append(h.Shows, watchedShow{IDs: ids}), len(h.Shows)
+			h.Shows, show = append(h.Shows, watchedShow{IDs: ids, order: c.Order, numbering: c.Numbering}), len(h.Shows)
 		}
 		seasons := &h.Shows[show].Seasons
 		season := slices.IndexFunc(*seasons, func(s watchedSeason) bool { return s.Number == c.Season })

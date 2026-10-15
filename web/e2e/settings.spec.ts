@@ -246,6 +246,29 @@ test("a profile links its Trakt account by the code Trakt gives it", async ({
 	).toBeVisible();
 });
 
+test("a profile links its AniList account by the token AniList shows it", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/trackers");
+	await page.getByRole("button", { name: "Link AniList", exact: true }).click();
+	await expect(
+		page.getByRole("link", { name: "Open AniList" }),
+	).toHaveAttribute(
+		"href",
+		"https://anilist.co/api/v2/oauth/authorize?client_id=app&response_type=token",
+	);
+	await expectAccessible(page);
+
+	await page.getByLabel("AniList token").fill("an.old.token");
+	await page.getByRole("button", { name: "Link", exact: true }).click();
+	await expect(page.getByText("AniList refused the token")).toBeVisible();
+
+	await page.getByLabel("AniList token").fill("a.year.of.anime");
+	await page.getByRole("button", { name: "Link", exact: true }).click();
+	await expect(page.getByText("AniList is linked.")).toBeVisible();
+	await expect(page.getByText(/Linked as\s+ada/)).toBeVisible();
+});
+
 test("an admin sets up a tracker by its app's client id", async ({ page }) => {
 	await logIn(page, "/settings/server/trackers");
 	await expectAccessible(page);

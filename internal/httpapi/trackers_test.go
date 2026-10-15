@@ -34,11 +34,11 @@ func (f *fakeTrackers) SetTrackerClient(_ context.Context, t domain.Tracker, cli
 }
 
 func (f *fakeTrackers) Trackers(context.Context, uuid.UUID) ([]tracker.Status, error) {
-	trakt := tracker.Status{Tracker: domain.TrackerTrakt, State: tracker.StateUnlinked}
+	trakt := tracker.Status{Tracker: domain.TrackerTrakt, Flow: tracker.LinkDevice, State: tracker.StateUnlinked}
 	if f.linking {
 		trakt.State, trakt.Link = tracker.StateLinking, kv.TrackerLink{UserCode: "TRAKT123", VerificationURI: "https://trakt.tv/activate", VerificationURIComplete: "https://trakt.tv/activate/TRAKT123", Interval: 5 * time.Second, Expires: time.Now().Add(10 * time.Minute)}
 	}
-	return []tracker.Status{trakt, {Tracker: domain.TrackerSimkl, State: tracker.StateUnavailable}}, nil
+	return []tracker.Status{trakt, {Tracker: domain.TrackerSimkl, Flow: tracker.LinkDevice, State: tracker.StateUnavailable}}, nil
 }
 
 func (f *fakeTrackers) Link(_ context.Context, _ uuid.UUID, t domain.Tracker) (kv.TrackerLink, error) {
@@ -47,6 +47,13 @@ func (f *fakeTrackers) Link(_ context.Context, _ uuid.UUID, t domain.Tracker) (k
 	}
 	f.linking = true
 	return kv.TrackerLink{UserCode: "TRAKT123", VerificationURI: "https://trakt.tv/activate", VerificationURIComplete: "https://trakt.tv/activate/TRAKT123", Interval: 5 * time.Second, Expires: time.Now().Add(10 * time.Minute), DeviceCode: "secret"}, nil
+}
+
+func (f *fakeTrackers) Grant(_ context.Context, _ uuid.UUID, t domain.Tracker, token string) error {
+	if t != domain.TrackerAniList || token != "a.year.of.anime" {
+		return fmt.Errorf("%w: refused", tracker.ErrRefused)
+	}
+	return nil
 }
 
 func (f *fakeTrackers) Unlink(context.Context, uuid.UUID, domain.Tracker) error {
@@ -82,7 +89,10 @@ func TestAnAdminSetsUpATrackerAndAProfileLinksIt(t *testing.T) {
 		{memberToken, http.MethodPost, "/api/v1/profile/trackers/trakt/link", "", http.StatusOK, `"user_code":"TRAKT123"`},
 		{memberToken, http.MethodGet, "/api/v1/profile/trackers", "", http.StatusOK, `"state":"linking","code":{"user_code":"TRAKT123"`},
 		{memberToken, http.MethodDelete, "/api/v1/profile/trackers/trakt", "", http.StatusNoContent, ""},
-		{memberToken, http.MethodGet, "/api/v1/profile/trackers", "", http.StatusOK, `{"tracker":"trakt","state":"unlinked"}`},
+		{memberToken, http.MethodGet, "/api/v1/profile/trackers", "", http.StatusOK, `{"tracker":"trakt","flow":"device","state":"unlinked"}`},
+		{memberToken, http.MethodPut, "/api/v1/profile/trackers/anilist/token", `{"token": "  "}`, http.StatusBadRequest, "token"},
+		{memberToken, http.MethodPut, "/api/v1/profile/trackers/trakt/token", `{"token": "a.year.of.anime"}`, http.StatusConflict, "refused"},
+		{memberToken, http.MethodPut, "/api/v1/profile/trackers/anilist/token", `{"token": " a.year.of.anime\n"}`, http.StatusNoContent, ""},
 	} {
 		rec := do(tc.token, tc.method, tc.target, tc.body)
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.says) || strings.Contains(rec.Body.String(), "secret") {

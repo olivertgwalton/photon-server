@@ -30,6 +30,8 @@ func (c simkl) request(clientID string, r provider.Request) provider.Request {
 	return r
 }
 
+func (simkl) flow() LinkFlow { return LinkDevice }
+
 func (c simkl) code(ctx context.Context, clientID string) (kv.TrackerLink, error) {
 	var body deviceCode
 	err := c.api.Do(ctx, c.request(clientID, provider.Request{

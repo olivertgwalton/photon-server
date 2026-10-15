@@ -34,6 +34,8 @@ func (c mdblist) request(access string, r provider.Request) provider.Request {
 	return r
 }
 
+func (mdblist) flow() LinkFlow { return LinkDevice }
+
 func (c mdblist) code(ctx context.Context, clientID string) (kv.TrackerLink, error) {
 	var body deviceCode
 	err := c.api.Do(ctx, c.request("", provider.Request{

@@ -6386,6 +6386,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/trackers/{tracker}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Link the profile's account on a tracker linked by token, by the token its site showed */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The tracker. */
+                    tracker: components["schemas"]["Tracker"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackerToken"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profiles": {
         parameters: {
             query?: never;
@@ -8964,6 +9006,7 @@ export interface components {
         };
         ProfileTracker: {
             code?: components["schemas"]["TrackerCode"] | null;
+            flow: components["schemas"]["TrackerLinkFlow"];
             /** Format: date-time */
             linked_at?: string;
             state: components["schemas"]["TrackerState"];
@@ -9467,7 +9510,7 @@ export interface components {
         /** @enum {string} */
         TrackMemory: "remember" | "forget";
         /** @enum {string} */
-        Tracker: "trakt" | "simkl" | "mdblist";
+        Tracker: "trakt" | "simkl" | "mdblist" | "anilist";
         TrackerClient: {
             client_id: string;
             tracker: components["schemas"]["Tracker"];
@@ -9488,7 +9531,12 @@ export interface components {
             verification_uri_complete: string;
         };
         /** @enum {string} */
+        TrackerLinkFlow: "device" | "token";
+        /** @enum {string} */
         TrackerState: "unavailable" | "unlinked" | "linking" | "linked";
+        TrackerToken: {
+            token: string;
+        };
         /** @enum {string} */
         TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "video_profile_not_supported" | "video_level_not_supported" | "video_resolution_not_supported" | "video_bit_depth_not_supported" | "video_range_not_supported" | "audio_codec_not_supported" | "audio_channels_not_supported" | "bitrate_exceeds_limit" | "subtitle_codec_not_supported" | "parts_not_supported" | "direct_play_error";
         Transcodes: {
