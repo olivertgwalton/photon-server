@@ -37,6 +37,8 @@ type preferencesJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action"`
 	// ThemeMusic is whether a title's page plays its theme tune.
 	ThemeMusic domain.ThemeMusic `json:"theme_music"`
+	// Notify is what the profile is told of as it is added.
+	Notify domain.Notify `json:"notify"`
 	// Home is every row of the profile's home, in the order the home page draws them.
 	Home []homeSectionJSON `json:"home"`
 	// SavedAt is when they were last changed: absent while every one is its default.
@@ -56,6 +58,7 @@ type preferencesChangeJSON struct {
 	IntroAction       domain.SegmentAction `json:"intro_action,omitzero"`
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
 	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
+	Notify            domain.Notify        `json:"notify,omitzero"`
 	// Home is the rows in the order wanted, each once; any left out follow, shown.
 	Home []homeSectionChangeJSON `json:"home,omitzero"`
 }
@@ -79,7 +82,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		SubtitleLanguage: domain.TagOf(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
-		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,
+		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic, Notify: p.Notify,
 		Home: make([]homeSectionJSON, len(p.Home)),
 	}
 	for i, h := range p.Home {
@@ -135,6 +138,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.NextEpisode = cmp.Or(req.NextEpisode, p.NextEpisode)
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
 	p.ThemeMusic = cmp.Or(req.ThemeMusic, p.ThemeMusic)
+	p.Notify = cmp.Or(req.Notify, p.Notify)
 	if req.Home != nil {
 		seen := map[domain.HomeRow]bool{}
 		p.Home = make([]domain.HomeSection, len(req.Home))

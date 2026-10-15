@@ -131,6 +131,8 @@ type Services struct {
 	Preferences preferences
 	// Playlists are each profile's own.
 	Playlists playlists
+	// Notifications are each profile's of the films and episodes added that it follows.
+	Notifications notifications
 	// Collections are box sets, a provider's and an admin's.
 	Collections collections
 	// Providers are the metadata providers the server has, and ProviderSettings what an admin set
@@ -306,6 +308,7 @@ func (a *API) routes() []route {
 		a.resetRoutes(),
 		a.profilesRoutes(),
 		a.preferencesRoutes(),
+		a.notificationsRoutes(),
 		a.catalogueRoutes(),
 		a.avatarsRoutes(),
 		a.devicesRoutes(),

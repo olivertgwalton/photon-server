@@ -62,6 +62,7 @@ func eventsSocket() asSocket {
 	} {
 		profile[string(k)] = eventJSON{}
 	}
+	profile[string(domain.EventNotificationsChanged)] = inboxChangeJSON{}
 	server := map[string]any{"snapshot": snapshotJSON{}}
 	for _, k := range domain.EventKinds() {
 		server[string(k)] = eventJSON{}
@@ -90,6 +91,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeForbidden, "only an admin may")
 		return
 	}
+	said := words.Negotiate(w, r)
 	events, stop := a.svc.Events.Subscribe()
 	defer stop()
 	// Subscribed first, so nothing between what is going on and the socket is missed; what arrives
@@ -113,7 +115,6 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			a.internal(w, r, err)
 			return
 		}
-		said := words.Negotiate(w, r)
 		first = append(first, socketMessage{feedServer, "snapshot", now})
 		tell = func(e domain.Event) eventJSON {
 			out := eventOf(e)
@@ -161,7 +162,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			told, send, err := a.toldTo(ctx, profile, e)
+			told, send, err := a.toldTo(ctx, profile, said, e)
 			if err != nil {
 				// The client reconnects and asks again for what it shows.
 				a.logger.WarnContext(ctx, "events socket ended", slog.Any("err", err))
@@ -208,7 +209,7 @@ func (a *API) sendMessage(ctx context.Context, c *websocket.Conn, m socketMessag
 
 // toldTo answers an event as a profile is told it, and whether it is: its own state's changes,
 // and libraries and titles it may see.
-func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (eventJSON, bool, error) {
+func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e domain.Event) (any, bool, error) {
 	switch e.Kind {
 	case domain.EventUserDataChanged:
 		if e.Profile != profile {
@@ -231,6 +232,13 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, e domain.Event) (ev
 		return eventOf(e), true, nil
 	case domain.EventTrackerChanged:
 		return eventOf(e), e.Profile == profile, nil
+	case domain.EventNotificationsChanged:
+		d, _ := e.Details.(domain.NotificationsDetails)
+		if e.Profile != profile {
+			return nil, false, nil
+		}
+		change, err := a.inboxChange(ctx, profile, said, d)
+		return change, err == nil, err
 	case domain.EventScanProgress, domain.EventLibraryScanned:
 		ok, err := a.svc.Audience.HasLibrary(ctx, profile, e.Library)
 		return eventOf(e), ok, err
