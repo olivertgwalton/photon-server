@@ -9,7 +9,7 @@ test("the bell lists what was added that the profile follows, and reads it", asy
 	await bell.click();
 	const inbox = page.getByRole("dialog", { name: "Notifications" });
 	const show = inbox.getByRole("link", { name: /Small Show/ });
-	await expect(show).toHaveAttribute("href", "/titles/t-show");
+	await expect(show).toHaveAttribute("href", "/titles/t-show?notification=1");
 	await expect(show).toContainText("2 new episodes, the latest S1 E2 · Second");
 	await expectAccessible(page);
 
@@ -97,15 +97,65 @@ test("the bell takes what the server tells of, asking it for nothing", async ({
 	await expect(inbox.getByRole("link").first()).toContainText("Quiet Hours");
 	await expect(inbox.getByRole("link", { name: /Small Show/ })).toBeVisible();
 
-	// Read elsewhere, it is marked here as the server says.
+	// Opened elsewhere, it leaves here as the server says.
 	await page.request.post("/mock/emit", {
 		data: {
 			event: "notifications.changed",
-			data: { change: "read", read: [2], unread: 1 },
+			data: { change: "cleared", cleared: [2], unread: 1 },
 		},
 	});
+	await expect(inbox.getByRole("link", { name: /Quiet Hours/ })).toHaveCount(0);
 	await expect(
 		page.getByRole("button", { name: "Notifications: 1 unread" }),
 	).toBeVisible();
 	expect(asked).toBe(1);
+});
+
+test("clearing the bell empties it, here and on the server", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	const inbox = page.getByRole("dialog", { name: "Notifications" });
+	await inbox.getByRole("button", { name: "Clear all" }).click();
+	await expect(inbox.getByText("Nothing new")).toBeVisible();
+	await expect(inbox.getByRole("button", { name: "Clear all" })).toHaveCount(0);
+	await page.reload();
+	await page
+		.getByRole("button", { name: "Notifications", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Notifications" })
+			.getByText("Nothing new"),
+	).toBeVisible();
+});
+
+test("opening a notification clears it, here and on the server", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	await page
+		.getByRole("dialog", { name: "Notifications" })
+		.getByRole("link", { name: /Small Show/ })
+		.click();
+	await expect(page).toHaveURL(/\/titles\/t-show$/);
+	await page
+		.getByRole("button", { name: "Notifications", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Notifications" })
+			.getByText("Nothing new"),
+	).toBeVisible();
+});
+
+test("a page a push opened clears its notification", async ({ page }) => {
+	await logIn(page);
+	await page.goto("/titles/t-show?notification=1");
+	await expect(page).toHaveURL(/\/titles\/t-show$/);
+	await expect(
+		page.getByRole("button", { name: "Notifications", exact: true }),
+	).toBeVisible();
 });

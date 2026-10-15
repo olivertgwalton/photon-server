@@ -17,9 +17,18 @@ class Inbox {
 		this.unread = data.unread;
 	}
 
-	// Those added replace any of their ids, at the top; those read are marked.
+	// Those added replace any of their ids, at the top; those read are marked;
+	// those cleared, by id or added by `through`, leave.
 	apply(change: InboxChange) {
 		this.unread = change.unread;
+		if (change.change === "cleared") {
+			const ids = new Set(change.cleared);
+			const through = Date.parse(change.through ?? "");
+			this.notifications = this.notifications.filter(
+				(n) => !ids.has(n.id) && !(Date.parse(n.added_at) <= through),
+			);
+			return;
+		}
 		const added = change.notifications ?? [];
 		if (added.length) {
 			const ids = new Set(added.map((n) => n.id));
@@ -28,22 +37,43 @@ class Inbox {
 				...this.notifications.filter((n) => !ids.has(n.id)),
 			];
 		}
-		const read = new Set(change.read);
 		const through = change.through && Date.parse(change.through);
 		const now = new Date().toISOString();
 		for (const n of this.notifications) {
-			if (read.has(n.id) || (through && Date.parse(n.added_at) <= through))
-				n.read_at ??= now;
+			if (through && Date.parse(n.added_at) <= through) n.read_at ??= now;
 		}
 	}
 
-	// Read at once here; the server tells the profile's other devices.
-	read(n: Notification) {
-		if (n.read_at) return;
-		this.apply({ change: "read", read: [n.id], unread: this.unread - 1 });
-		client().PUT("/api/v1/profile/notifications/{id}/read", {
-			params: { path: { id: n.id } },
-		});
+	// Opened, so gone here at once; the server tells the profile's other
+	// devices. One not listed yet, as on a page a push opened, is asked for
+	// again once cleared, so a list loaded meanwhile does not bring it back.
+	async clear(id: number) {
+		const n = this.notifications.find((n) => n.id === id);
+		if (n) {
+			const unread = this.unread - (n.read_at ? 0 : 1);
+			this.apply({ change: "cleared", cleared: [id], unread });
+		}
+		const { error } = await client().DELETE(
+			"/api/v1/profile/notifications/{id}",
+			{ params: { path: { id } } },
+		);
+		if (error || !n) await this.load();
+	}
+
+	// Everything shown cleared from the inbox, here at once and then on the
+	// server, which tells the profile's other devices; one added since stays.
+	// A clear the server refused is undone by asking it again.
+	async clearAll() {
+		const through = this.notifications[0]?.added_at;
+		if (!through) return;
+		this.apply({ change: "cleared", through, unread: 0 });
+		const { error } = await client().PUT(
+			"/api/v1/profile/notifications/cleared",
+			{
+				body: { through },
+			},
+		);
+		if (error) await this.load();
 	}
 
 	// Everything shown read; one added since stays unread.

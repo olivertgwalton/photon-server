@@ -109,11 +109,11 @@ func TestNotify(t *testing.T) {
 	if only, err := s.Inbox(ctx, fan, []int64{got.Notifications[0].ID}); err != nil || len(only.Notifications) != 1 || only.Unread != 1 {
 		t.Errorf("the fan's one notification by its id: %+v %v", only, err)
 	}
-	if unread, err := s.ReadNotification(ctx, fan, got.Notifications[0].ID); err != nil || unread != 0 {
-		t.Fatalf("read: %d unread, %v; want none", unread, err)
+	if unread, err := s.ClearNotification(ctx, fan, got.Notifications[0].ID); err != nil || unread != 0 {
+		t.Fatalf("opened: %d unread, %v; want none", unread, err)
 	}
-	if _, err := s.ReadNotification(ctx, idle, got.Notifications[0].ID); !errors.Is(err, ErrNotFound) {
-		t.Errorf("reading another profile's notification: %v, want ErrNotFound", err)
+	if _, err := s.ClearNotification(ctx, idle, got.Notifications[0].ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("opening another profile's notification: %v, want ErrNotFound", err)
 	}
 	if err := s.MarkWatched(ctx, fan, episode(5), nil); err != nil {
 		t.Fatal(err)
@@ -123,8 +123,8 @@ func TestNotify(t *testing.T) {
 		t.Fatalf("episode 6 told %v, want the fan among them", told)
 	}
 	got = inbox(fan)
-	if len(got.Notifications) != 2 || got.Unread != 1 || got.Notifications[0].New != 1 || got.Notifications[0].Latest != episode(6) {
-		t.Fatalf("after reading: %+v, want a new unread one of episode 6 above the read one", got)
+	if len(got.Notifications) != 1 || got.Unread != 1 || got.Notifications[0].New != 1 || got.Notifications[0].Latest != episode(6) {
+		t.Fatalf("after opening: %+v, want a new unread one of episode 6, and the opened one gone", got)
 	}
 	if told := scan(0); slices.Contains(told, fan) {
 		t.Errorf("an episode before the furthest the fan watched told it")
@@ -133,6 +133,27 @@ func TestNotify(t *testing.T) {
 	prefs.QuietLibraries = nil
 	if prefs, err = s.SetPreferences(ctx, hushed, prefs); err != nil || len(prefs.QuietLibraries) != 0 {
 		t.Errorf("no library quiet: %v %v, want none", prefs.QuietLibraries, err)
+	}
+
+	// Cleared up to a moment, one added after it stays.
+	if _, err := s.ClearNotifications(ctx, fan, time.Unix(0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := inbox(fan); len(got.Notifications) == 0 {
+		t.Errorf("cleared up to before any was added: %+v, want them kept", got)
+	}
+	// Cleared, a notification leaves the inbox read, and what it told of is not told again.
+	if unread, err := s.ClearNotifications(ctx, fan, time.Now()); err != nil || unread != 0 {
+		t.Fatalf("cleared: %d unread, %v; want none", unread, err)
+	}
+	if got := inbox(fan); len(got.Notifications) != 0 || got.Unread != 0 {
+		t.Errorf("after clearing: %+v, want an empty inbox", got)
+	}
+	if _, err := s.Notify(ctx, tv.ID, time.Unix(0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := inbox(fan); len(got.Notifications) != 0 {
+		t.Errorf("cleared titles told again: %+v", got)
 	}
 
 	if unread, err := s.ReadNotifications(ctx, everything, time.Now()); err != nil || unread != 0 {

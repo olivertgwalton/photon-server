@@ -28,19 +28,21 @@ const (
 	// NotificationsAdded is notifications added, or gathering more of a show's episodes.
 	NotificationsAdded NotificationChange = "added"
 	NotificationsRead  NotificationChange = "read"
+	// NotificationsCleared is notifications cleared from the inbox, up to a moment.
+	NotificationsCleared NotificationChange = "cleared"
 )
 
 func NotificationChanges() []NotificationChange {
-	return []NotificationChange{NotificationsAdded, NotificationsRead}
+	return []NotificationChange{NotificationsAdded, NotificationsRead, NotificationsCleared}
 }
 
 // NotificationsDetails says which of a profile's notifications changed, so each of its devices
 // changes those alone.
 type NotificationsDetails struct {
 	Change NotificationChange `json:"change"`
-	// IDs are those added or gathering more, or those read.
+	// IDs are those added or gathering more, or those cleared.
 	IDs []int64 `json:"ids,omitzero"`
-	// Through is the added_at up to which every one was read.
+	// Through is the added_at up to which every one was read, or cleared.
 	Through time.Time `json:"through,omitzero"`
 	// Unread is how many are left unread after a read.
 	Unread int `json:"unread"`

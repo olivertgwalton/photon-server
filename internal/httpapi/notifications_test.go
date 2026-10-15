@@ -24,8 +24,14 @@ import (
 type fakeNotifications struct {
 	inbox   store.Inbox
 	cards   []store.Card
-	read    []int64
+	opened  []int64
 	through time.Time
+	cleared time.Time
+}
+
+func (f *fakeNotifications) ClearNotifications(_ context.Context, _ uuid.UUID, through time.Time) (int, error) {
+	f.cleared = through
+	return 0, nil
 }
 
 func (f *fakeNotifications) Inbox(_ context.Context, _ uuid.UUID, ids []int64) (store.Inbox, error) {
@@ -36,11 +42,11 @@ func (f *fakeNotifications) Inbox(_ context.Context, _ uuid.UUID, ids []int64) (
 		func(n domain.Notification) bool { return !slices.Contains(ids, n.ID) })}, nil
 }
 
-func (f *fakeNotifications) ReadNotification(_ context.Context, _ uuid.UUID, id int64) (int, error) {
+func (f *fakeNotifications) ClearNotification(_ context.Context, _ uuid.UUID, id int64) (int, error) {
 	if !slices.ContainsFunc(f.inbox.Notifications, func(n domain.Notification) bool { return n.ID == id }) {
 		return 0, store.ErrNotFound
 	}
-	f.read = append(f.read, id)
+	f.opened = append(f.opened, id)
 	return 1, nil
 }
 
@@ -104,11 +110,11 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 		t.Errorf("one whose title the profile no longer sees: %d, want 404", rec.Code)
 	}
 
-	if rec := call(http.MethodPut, "/api/v1/profile/notifications/3/read", ""); rec.Code != http.StatusNoContent || !slices.Equal(notes.read, []int64{3}) {
-		t.Errorf("reading one: %d, read %v", rec.Code, notes.read)
+	if rec := call(http.MethodDelete, "/api/v1/profile/notifications/3", ""); rec.Code != http.StatusNoContent || !slices.Equal(notes.opened, []int64{3}) {
+		t.Errorf("opening one: %d, cleared %v", rec.Code, notes.opened)
 	}
-	if rec := call(http.MethodPut, "/api/v1/profile/notifications/9/read", ""); rec.Code != http.StatusNotFound {
-		t.Errorf("reading one that is not there: %d, want 404", rec.Code)
+	if rec := call(http.MethodDelete, "/api/v1/profile/notifications/9", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("opening one that is not there: %d, want 404", rec.Code)
 	}
 	if rec := call(http.MethodPut, "/api/v1/profile/notifications/read", `{}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("reading all with no through: %d, want 400", rec.Code)
@@ -116,20 +122,36 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	if rec := call(http.MethodPut, "/api/v1/profile/notifications/read", `{"through":"2026-10-15T20:00:00Z"}`); rec.Code != http.StatusNoContent || !notes.through.Equal(added) {
 		t.Errorf("reading all: %d, through %v", rec.Code, notes.through)
 	}
-	// Each read is told to the profile's devices: which, and how many are left unread.
+	// Each is told to the profile's devices: which, and how many are left unread.
 	events.mu.Lock()
 	raised := slices.Clone(events.raised)
 	events.mu.Unlock()
 	if len(raised) != 2 || raised[0].Kind != domain.EventNotificationsChanged || raised[0].Profile != oliver.ID {
-		t.Fatalf("raised %+v, want notifications.changed to the profile for each read", raised)
+		t.Fatalf("raised %+v, want notifications.changed to the profile for each", raised)
 	}
 	said := words.In(language.English)
 	told, ok, err := api.toldTo(t.Context(), oliver.ID, said, raised[0])
-	if want := (inboxChangeJSON{Change: domain.NotificationsRead, Read: []int64{3}, Unread: 1}); err != nil || !ok || !reflect.DeepEqual(told, want) {
-		t.Errorf("one read, told: %+v %v %v, want %+v", told, ok, err, want)
+	if want := (inboxChangeJSON{Change: domain.NotificationsCleared, Cleared: []int64{3}, Unread: 1}); err != nil || !ok || !reflect.DeepEqual(told, want) {
+		t.Errorf("one opened, told: %+v %v %v, want %+v", told, ok, err, want)
 	}
 	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, raised[1]); err != nil || !ok || told.(inboxChangeJSON).Through == nil {
 		t.Errorf("all read, told: %+v %v, want the time up to which", told, err)
+	}
+
+	// Clearing goes back by the newest shown, and is told to the profile's devices.
+	if rec := call(http.MethodPut, "/api/v1/profile/notifications/cleared", `{}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("clearing with no through: %d, want 400", rec.Code)
+	}
+	if rec := call(http.MethodPut, "/api/v1/profile/notifications/cleared", `{"through":"2026-10-15T20:00:00.123456Z"}`); rec.Code != http.StatusNoContent ||
+		!notes.cleared.Equal(time.Date(2026, time.October, 15, 20, 0, 0, 123456000, time.UTC)) {
+		t.Errorf("clearing: %d, through %v", rec.Code, notes.cleared)
+	}
+	events.mu.Lock()
+	cleared := events.raised[len(events.raised)-1]
+	events.mu.Unlock()
+	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, cleared); err != nil || !ok ||
+		told.(inboxChangeJSON).Change != domain.NotificationsCleared || told.(inboxChangeJSON).Through == nil {
+		t.Errorf("cleared, told: %+v %v %v, want the moment it was cleared up to", told, ok, err)
 	}
 
 	// Titles added are told as the notifications they made, worded, so a device asks for nothing.

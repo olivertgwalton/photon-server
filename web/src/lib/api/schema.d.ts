@@ -5658,6 +5658,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/notifications/cleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InboxMarker"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/notifications/read": {
         parameters: {
             query?: never;
@@ -5676,7 +5715,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["ReadMarker"];
+                    "application/json": components["schemas"]["InboxMarker"];
                 };
             };
             responses: {
@@ -5731,22 +5770,8 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/profile/notifications/{id}/read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Mark one of the profile's notifications read */
-        put: {
+        /** Clear one of the profile's notifications from its inbox, read, as it is opened */
+        delete: {
             parameters: {
                 query?: never;
                 header?: never;
@@ -5768,8 +5793,6 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8118,11 +8141,15 @@ export interface components {
         };
         InboxChange: {
             change: components["schemas"]["NotificationChange"];
+            cleared?: number[];
             notifications?: components["schemas"]["Notification"][];
-            read?: number[];
             /** Format: date-time */
             through?: string | null;
             unread: number;
+        };
+        InboxMarker: {
+            /** Format: date-time */
+            through: string;
         };
         Info: {
             id: string;
@@ -8490,7 +8517,7 @@ export interface components {
             title: components["schemas"]["Card"];
         };
         /** @enum {string} */
-        NotificationChange: "added" | "read";
+        NotificationChange: "added" | "read" | "cleared";
         /** @enum {string} */
         Notify: "marked" | "all" | "none";
         NowPlaying: {
@@ -8939,10 +8966,6 @@ export interface components {
         Reach: "start" | "resumable" | "end";
         Reached: {
             reach: components["schemas"]["Reach"];
-        };
-        ReadMarker: {
-            /** Format: date-time */
-            through: string;
         };
         /** @enum {string} */
         Recheck: "hourly" | "at_sign_in";

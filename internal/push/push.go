@@ -50,7 +50,8 @@ type notification struct {
 	Lang  string `json:"lang"`
 	// Tag is the title the notification is of: a browser replaces the one it shows of the same.
 	Tag string `json:"tag"`
-	// Navigate is the page a click opens, against the web app's own address.
+	// Navigate is the page a click opens, against the web app's own address, naming the
+	// notification so the page clears it.
 	Navigate string `json:"navigate"`
 }
 
@@ -117,7 +118,7 @@ func sendWeb(ctx context.Context, browsers web, sub store.PushSubscription, push
 		}
 		payload, err := json.Marshal(message{WebPush: declarativePush, Notification: notification{
 			Title: title.Title, Body: said.Notification(p.New, latest), Lang: sub.Language,
-			Tag: p.Title.String(), Navigate: "/titles/" + p.Title.String(),
+			Tag: p.Title.String(), Navigate: "/titles/" + p.Title.String() + "?notification=" + strconv.FormatInt(p.ID, 10),
 		}})
 		if err != nil {
 			return err

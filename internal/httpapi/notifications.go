@@ -14,8 +14,9 @@ import (
 
 type notifications interface {
 	Inbox(ctx context.Context, profile uuid.UUID, ids []int64) (store.Inbox, error)
-	ReadNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error)
+	ClearNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error)
 	ReadNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
+	ClearNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 }
 
@@ -46,15 +47,16 @@ type inboxChangeJSON struct {
 	// Notifications are those added, or gathering more, as the inbox lists them: each replaces
 	// the one of its id, at the top.
 	Notifications []notificationJSON `json:"notifications,omitzero"`
-	// Read are the ids read, or Through the added_at up to which every one was.
-	Read    []int64    `json:"read,omitzero"`
+	// Cleared are the ids cleared, or Through the added_at up to which every one was read, or
+	// cleared.
+	Cleared []int64    `json:"cleared,omitzero"`
 	Through *time.Time `json:"through,omitzero"`
 	Unread  int        `json:"unread"`
 }
 
-// readMarkerJSON is how far the profile has read its notifications.
-type readMarkerJSON struct {
-	// Through is the added_at of the newest notification read; any added since stays unread.
+// inboxMarkerJSON is how far the profile has read its notifications, or cleared them.
+type inboxMarkerJSON struct {
+	// Through is the added_at of the newest notification shown; any added since stays as it is.
 	Through time.Time `json:"through"`
 }
 
@@ -124,9 +126,12 @@ func (a *API) notification(w http.ResponseWriter, r *http.Request) {
 }
 
 // inboxChange is a change of a profile's notifications as its feed tells it: those added, worded
-// for the reader, or which were read.
+// for the reader, or which were read or cleared.
 func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Words, d domain.NotificationsDetails) (inboxChangeJSON, error) {
 	out := inboxChangeJSON{Change: d.Change, Unread: d.Unread}
+	if !d.Through.IsZero() {
+		out.Through = &d.Through
+	}
 	switch d.Change {
 	case domain.NotificationsAdded:
 		in, err := a.svc.Notifications.Inbox(ctx, profile, d.IDs)
@@ -136,51 +141,53 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 		out.Unread = in.Unread
 		out.Notifications, err = a.notificationsOf(ctx, profile, said, in)
 		return out, err
+	case domain.NotificationsCleared:
+		out.Cleared = d.IDs
 	case domain.NotificationsRead:
-		out.Read = d.IDs
-		if !d.Through.IsZero() {
-			out.Through = &d.Through
-		}
 	}
 	return out, nil
 }
 
-// readNotification marks one of the profile's notifications read, on each of its devices.
-func (a *API) readNotification(w http.ResponseWriter, r *http.Request) {
+// clearNotification clears one of the profile's notifications as it is opened, on each of its
+// devices.
+func (a *API) clearNotification(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathNumber(w, r, "id")
 	if !ok {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	unread, err := a.svc.Notifications.ReadNotification(r.Context(), profile, int64(id))
+	unread, err := a.svc.Notifications.ClearNotification(r.Context(), profile, int64(id))
 	if a.answeredAs(w, r, err, "no such notification") {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
-		Change: domain.NotificationsRead, IDs: []int64{int64(id)}, Unread: unread,
+		Change: domain.NotificationsCleared, IDs: []int64{int64(id)}, Unread: unread,
 	}})
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// readNotifications marks the profile's notifications read, up to the newest it was shown.
-func (a *API) readNotifications(w http.ResponseWriter, r *http.Request) {
-	var req readMarkerJSON
-	if !a.decode(w, r, &req) {
-		return
+// marked moves a profile's marker on its notifications, up to the newest it was shown: read, or
+// cleared from its inbox, on each of its devices.
+func (a *API) marked(change domain.NotificationChange, mark func(notifications, context.Context, uuid.UUID, time.Time) (int, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req inboxMarkerJSON
+		if !a.decode(w, r, &req) {
+			return
+		}
+		if req.Through.IsZero() {
+			writeProblem(w, a.logger, codeInvalidBody, "through is the added_at of the newest notification shown")
+			return
+		}
+		profile := auth.SessionOf(r.Context()).Profile.ID
+		unread, err := mark(a.svc.Notifications, r.Context(), profile, req.Through)
+		if a.answered(w, r, err) {
+			return
+		}
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
+			Change: change, Through: req.Through, Unread: unread,
+		}})
+		w.WriteHeader(http.StatusNoContent)
 	}
-	if req.Through.IsZero() {
-		writeProblem(w, a.logger, codeInvalidBody, "through is the added_at of the newest notification read")
-		return
-	}
-	profile := auth.SessionOf(r.Context()).Profile.ID
-	unread, err := a.svc.Notifications.ReadNotifications(r.Context(), profile, req.Through)
-	if a.answered(w, r, err) {
-		return
-	}
-	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
-		Change: domain.NotificationsRead, Through: req.Through, Unread: unread,
-	}})
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) notificationsRoutes() []route {
@@ -198,15 +205,20 @@ func (a *API) notificationsRoutes() []route {
 			handle: a.notification,
 		},
 		{
-			pattern: "PUT /api/v1/profile/notifications/read", access: signedIn,
-			summary: "Mark the profile's notifications read, up to the newest it was shown",
-			body:    readMarkerJSON{}, status: http.StatusNoContent, handle: a.readNotifications,
+			pattern: "DELETE /api/v1/profile/notifications/{id}", access: signedIn,
+			summary: "Clear one of the profile's notifications from its inbox, read, as it is opened",
+			path:    []param{{"id", int64(0), "The notification."}},
+			status:  http.StatusNoContent, handle: a.clearNotification,
 		},
 		{
-			pattern: "PUT /api/v1/profile/notifications/{id}/read", access: signedIn,
-			summary: "Mark one of the profile's notifications read",
-			path:    []param{{"id", int64(0), "The notification."}},
-			status:  http.StatusNoContent, handle: a.readNotification,
+			pattern: "PUT /api/v1/profile/notifications/read", access: signedIn,
+			summary: "Mark the profile's notifications read, up to the newest it was shown",
+			body:    inboxMarkerJSON{}, status: http.StatusNoContent, handle: a.marked(domain.NotificationsRead, notifications.ReadNotifications),
+		},
+		{
+			pattern: "PUT /api/v1/profile/notifications/cleared", access: signedIn,
+			summary: "Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again",
+			body:    inboxMarkerJSON{}, status: http.StatusNoContent, handle: a.marked(domain.NotificationsCleared, notifications.ClearNotifications),
 		},
 	}
 }
