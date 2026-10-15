@@ -780,6 +780,13 @@ const vocabulary: Schemas["Vocabulary"] = {
 		"profile.removed": "Profiles removed",
 		"task.failed": "Failed tasks",
 	},
+	webhook_formats: {
+		photon: "Photon JSON, signed",
+		discord: "Discord",
+		slack: "Slack",
+		ntfy: "ntfy",
+		gotify: "Gotify",
+	},
 	hookable: {
 		"auth.sign_in_refused": "A sign-in is refused",
 		"auth.signed_in": "Someone signs in",

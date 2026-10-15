@@ -7324,6 +7324,7 @@ export interface components {
         };
         AddWebhook: {
             events: components["schemas"]["EventKind"][];
+            format?: components["schemas"]["WebhookFormat"];
             /** Format: uri */
             url: string;
         };
@@ -7331,6 +7332,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             events: components["schemas"]["EventKind"][];
+            format: components["schemas"]["WebhookFormat"];
             /** Format: uuid */
             id: string;
             secret: string;
@@ -9533,6 +9535,9 @@ export interface components {
             trackers: {
                 [key: string]: string;
             };
+            webhook_formats: {
+                [key: string]: string;
+            };
         };
         WallFilter: {
             certificates?: string[];
@@ -9559,11 +9564,14 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             events: components["schemas"]["EventKind"][];
+            format: components["schemas"]["WebhookFormat"];
             /** Format: uuid */
             id: string;
             /** Format: uri */
             url: string;
         };
+        /** @enum {string} */
+        WebhookFormat: "photon" | "discord" | "slack" | "ntfy" | "gotify";
         WebhookList: {
             items: components["schemas"]["Webhook"][];
         };
