@@ -56,3 +56,20 @@ class Inbox {
 }
 
 export const inbox = new Inbox();
+
+// This browser's push subscription, sent again as the app opens: one its
+// browser renewed with no page open to say so, as Firefox does, is pushed to
+// from then. The server answers one it has already as it was.
+export async function keepPushing() {
+	if (
+		typeof Notification === "undefined" ||
+		Notification.permission !== "granted"
+	)
+		return;
+	const reg = await navigator.serviceWorker.ready;
+	const sub = await reg.pushManager.getSubscription();
+	if (!sub) return;
+	await client().POST("/api/v1/profile/push-subscriptions", {
+		body: sub.toJSON() as components["schemas"]["Subscribe"],
+	});
+}

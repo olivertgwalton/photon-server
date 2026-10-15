@@ -9,12 +9,13 @@ import * as Empty from "#lib/components/ui/empty/index.js";
 import * as Item from "#lib/components/ui/item/index.js";
 import * as Popover from "#lib/components/ui/popover/index.js";
 import { ScrollArea } from "#lib/components/ui/scroll-area/index.js";
-import { inbox } from "#lib/notifications.svelte.js";
+import { inbox, keepPushing } from "#lib/notifications.svelte.js";
 
 // The films and episodes added that the profile follows, newest first, as
 // Plex's and Jellyfin's apps keep a bell beside the profile.
 $effect(() => {
 	inbox.load();
+	keepPushing();
 });
 
 let open = $state(false);

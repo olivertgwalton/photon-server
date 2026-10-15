@@ -1,6 +1,7 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
+import BellIcon from "@lucide/svelte/icons/bell";
 import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
@@ -38,6 +39,12 @@ const you: [string, string, Component, string][] = [
 	["/settings", "Profile", UserIcon, "avatar picture"],
 	["/settings/playback", "Playback", SlidersHorizontalIcon, ""],
 	["/settings/home", "Home", HouseIcon, "rows order hide"],
+	[
+		"/settings/notifications",
+		"Notifications",
+		BellIcon,
+		"new episodes push alerts bell",
+	],
 	["/settings/sign-in", "Sign-in", LogInIcon, "link account provider oidc"],
 	[
 		"/settings/devices",
