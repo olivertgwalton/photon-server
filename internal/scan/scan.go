@@ -585,6 +585,7 @@ func ids(n naming.IDs) map[domain.Provider]string {
 	out := map[domain.Provider]string{}
 	for p, v := range map[domain.Provider]string{
 		domain.ProviderTMDB: n.TMDB, domain.ProviderIMDb: n.IMDb, domain.ProviderTVDB: n.TVDB,
+		domain.ProviderAniDB: n.AniDB, domain.ProviderAniList: n.AniList,
 	} {
 		if v != "" {
 			out[p] = v

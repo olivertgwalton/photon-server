@@ -296,7 +296,10 @@ func downloadable(versions []store.VersionPage) *bool {
 
 // providerIDs names each provider's id as Jellyfin's providers name theirs.
 func providerIDs(ids map[domain.Provider]string) map[string]string {
-	names := map[domain.Provider]string{domain.ProviderTMDB: "Tmdb", domain.ProviderIMDb: "Imdb", domain.ProviderTVDB: "Tvdb"}
+	names := map[domain.Provider]string{
+		domain.ProviderTMDB: "Tmdb", domain.ProviderIMDb: "Imdb", domain.ProviderTVDB: "Tvdb",
+		domain.ProviderAniDB: "AniDB", domain.ProviderAniList: "AniList",
+	}
 	out := map[string]string{}
 	for p, v := range ids {
 		if name, ok := names[p]; ok {
@@ -318,7 +321,7 @@ var personKinds = map[domain.CreditKind]string{
 func (it *item) ratings(rs []domain.Rating) {
 	for _, r := range rs {
 		switch r.Site {
-		case domain.SiteTMDB, domain.SiteIMDb:
+		case domain.SiteTMDB, domain.SiteIMDb, domain.SiteAniList:
 			if it.CommunityRating == nil {
 				score := float64(int(r.Score)) / 10
 				it.CommunityRating = &score

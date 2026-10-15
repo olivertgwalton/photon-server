@@ -8081,7 +8081,7 @@ export interface components {
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles") | unknown;
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles" | "anilist") | unknown;
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
@@ -8979,7 +8979,7 @@ export interface components {
             /** Format: int64 */
             position_ms: number;
         };
-        Provider: string | ("tmdb" | "imdb" | "tvdb") | unknown;
+        Provider: string | ("tmdb" | "imdb" | "tvdb" | "anidb" | "anilist") | unknown;
         ProviderChange: {
             settings: {
                 [key: string]: string;
@@ -9015,7 +9015,7 @@ export interface components {
             votes?: number;
         };
         /** @enum {string} */
-        RatingSite: "imdb" | "tmdb" | "rotten_tomatoes" | "rotten_tomatoes_audience";
+        RatingSite: "imdb" | "tmdb" | "rotten_tomatoes" | "rotten_tomatoes_audience" | "anilist";
         /** @enum {string} */
         Reach: "start" | "resumable" | "end";
         Reached: {
@@ -9368,7 +9368,7 @@ export interface components {
             task: components["schemas"]["TaskKey"];
         };
         /** @enum {string} */
-        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles";
+        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles" | "refresh_anime_lists";
         TaskList: {
             items: components["schemas"]["Task"][];
         };

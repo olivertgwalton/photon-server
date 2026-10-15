@@ -69,10 +69,14 @@ const (
 	ProviderTMDB Provider = "tmdb"
 	ProviderIMDb Provider = "imdb"
 	ProviderTVDB Provider = "tvdb"
+	// ProviderAniDB and ProviderAniList are anime databases, which file each cour, film and OVA as
+	// an entry of its own.
+	ProviderAniDB   Provider = "anidb"
+	ProviderAniList Provider = "anilist"
 )
 
 func Providers() []Provider {
-	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB}
+	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB, ProviderAniDB, ProviderAniList}
 }
 
 // KeptList is a list kept on a provider, which a collection could follow.
@@ -254,4 +258,7 @@ type SeasonRequest struct {
 	Order   EpisodeOrder
 	// Group is the TMDB episode group a show in OrderGroup is numbered by.
 	Group string
+	// Numbering is the provider of TMDB and TheTVDB whose numbers the show's episodes are
+	// described by, which an anime database's entries are placed in the show by.
+	Numbering Provider
 }

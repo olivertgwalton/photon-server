@@ -16,14 +16,17 @@ type Name struct {
 }
 
 type IDs struct {
-	TMDB string
-	IMDb string
-	TVDB string
+	TMDB    string
+	IMDb    string
+	TVDB    string
+	AniDB   string
+	AniList string
 }
 
 var (
-	// Jellyfin's [tmdbid-603] and [tmdb=603], Plex's {tmdb-603}, in any bracket.
-	idTag      = regexp.MustCompile(`(?i)[\[({](tmdb|imdb|tvdb)(?:id)?[-=]\s*([^\])}]+?)\s*[\])}]`)
+	// Jellyfin's [tmdbid-603] and [tmdb=603], Plex's {tmdb-603}, in any bracket; Jellyfin's
+	// anime folders' [anidbid=69] and [anilistid=21] too.
+	idTag      = regexp.MustCompile(`(?i)[\[({](tmdb|imdb|tvdb|anidb|anilist)(?:id)?[-=]\s*([^\])}]+?)\s*[\])}]`)
 	editionTag = regexp.MustCompile(`(?i)\{edition-([^}]{1,32})\}`)
 	leadGroup  = regexp.MustCompile(`^\s*\[[^\]]+\]\s*`)
 	trailEpNum = regexp.MustCompile(`\s+-\s+\d+\s*$`)
@@ -46,6 +49,10 @@ func CleanName(stem string) Name {
 			n.IDs.IMDb = m[2]
 		case "tvdb":
 			n.IDs.TVDB = m[2]
+		case "anidb":
+			n.IDs.AniDB = m[2]
+		case "anilist":
+			n.IDs.AniList = m[2]
 		}
 		return " "
 	})

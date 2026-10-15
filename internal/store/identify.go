@@ -29,6 +29,9 @@ type Subject struct {
 	Group string
 	// Sources are what its library asks for metadata or pictures of any kind it holds.
 	Sources []domain.FieldSource
+	// Numbering is whichever of TMDB and TheTVDB its library ranks first for its episodes' words,
+	// whose numbers a show's episodes are described by; empty for neither.
+	Numbering domain.Provider
 	// Unmatched is an admin's unmatching it: no provider is asked about it until it is released,
 	// though an admin may search them to fix its match.
 	Unmatched bool
@@ -75,6 +78,16 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		`SELECT DISTINCT source FROM library_sources WHERE library_id = $1 AND enabled`, item.LibraryID)
 	if err != nil {
 		return Subject{}, false, err
+	}
+	numbering, err := queryColumn[domain.Provider](ctx, s.pool, `
+		SELECT source FROM library_sources
+		WHERE library_id = $1 AND item_kind = 'episode' AND fetcher = 'metadata' AND enabled AND source IN ('tmdb', 'tvdb')
+		ORDER BY position LIMIT 1`, item.LibraryID)
+	if err != nil {
+		return Subject{}, false, err
+	}
+	if len(numbering) == 1 {
+		sub.Numbering = numbering[0]
 	}
 	sub.IDs, err = queryMap[domain.Provider, string](ctx, s.pool, `SELECT provider, value FROM external_ids WHERE item_id = $1`, id)
 	if err != nil {

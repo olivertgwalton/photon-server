@@ -122,8 +122,8 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sub.Seasons) != 0 || sub.Order != domain.OrderAired {
-		t.Fatalf("matched: %+v; want nothing left to ask, in aired order", sub)
+	if len(sub.Seasons) != 0 || sub.Order != domain.OrderAired || sub.Numbering != domain.ProviderTVDB {
+		t.Fatalf("matched: %+v; want nothing left to ask, in aired order, numbered as TheTVDB, which the library ranks first", sub)
 	}
 	if err := s.SetEpisodeOrder(ctx, id, domain.OrderGroup, "5ad0df1cc3a36825ac00c087"); err != nil {
 		t.Fatal(err)

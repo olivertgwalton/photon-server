@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
+	"github.com/olivertgwalton/photon-server/internal/animelist"
 	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -413,6 +414,22 @@ func refreshCollectionsTask(st *store.Store) task.Task {
 
 // syncListsEvery is how often list collections read their lists again: Kometa's daily run.
 const syncListsEvery = 24 * time.Hour
+
+// animeListsTask keeps the anime lists as they are published. A list that cannot be read, or reads
+// short, leaves those kept as they were.
+func animeListsTask(st *store.Store) task.Task {
+	return task.Task{
+		Key:     domain.TaskRefreshAnimeLists,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: 24 * time.Hour},
+		Run: func(ctx context.Context, _ task.Start) error {
+			entries, err := animelist.Fetch(ctx)
+			if err != nil {
+				return err
+			}
+			return st.ReplaceAnimeEntries(ctx, entries)
+		},
+	}
+}
 
 // syncListsTask keeps every list collection's titles what its list holds. A list that cannot be
 // read leaves its collection as it was.
