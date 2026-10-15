@@ -21,18 +21,12 @@ import (
 // limit keeps every node together under AniList's 30 requests a minute.
 var limit = kv.Limit{Every: 2 * time.Second, Burst: 3}
 
-// lists are the anime lists, by which a title is found on AniList and its seasons placed.
-type lists interface {
-	AnimeShow(ctx context.Context, p domain.Provider, show int) ([]animelist.Entry, error)
-	AnimeEntry(ctx context.Context, p domain.Provider, id string) (animelist.Entry, bool, error)
-}
-
 type Client struct {
 	api   provider.Client
-	lists lists
+	lists animelist.Lists
 }
 
-func New(l lists, limits kv.Limiter) *Client {
+func New(l animelist.Lists, limits kv.Limiter) *Client {
 	return &Client{api: provider.Client{Name: "anilist", Base: "https://graphql.anilist.co", Limits: limits, Limit: limit}, lists: l}
 }
 
@@ -40,39 +34,17 @@ func (c *Client) Info() provider.Info {
 	return provider.Info{ID: domain.SourceAniList, Name: "AniList", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow}}
 }
 
-// Match finds a title on AniList by its AniList id, else by the entry the anime lists name for its
-// AniDB id, for a show its TheTVDB or TMDB id, or for a film its TMDB or IMDb id. A title the lists
-// do not name is not anime, and is not searched for.
+// Match finds a title on AniList by its AniList id, else by the entry the anime lists find it
+// opens with. A title the lists do not name is not anime, and is not searched for.
 func (c *Client) Match(ctx context.Context, _ domain.Locale, kind domain.ItemKind, h provider.Hints) (string, error) {
 	if id := h.IDs[domain.ProviderAniList]; id != "" {
 		return id, nil
 	}
-	tries := []domain.Provider{domain.ProviderAniDB, domain.ProviderTMDB, domain.ProviderIMDb}
-	if kind == domain.ItemShow {
-		for _, p := range []domain.Provider{domain.ProviderTVDB, domain.ProviderTMDB} {
-			show, err := strconv.Atoi(h.IDs[p])
-			if err != nil {
-				continue
-			}
-			entries, err := c.lists.AnimeShow(ctx, p, show)
-			if err != nil {
-				return "", err
-			}
-			if e, ok := animelist.Opening(entries, p); ok && e.AniList != 0 {
-				return strconv.Itoa(e.AniList), nil
-			}
-		}
-		tries = tries[:1]
+	e, ok, err := animelist.Find(ctx, c.lists, kind, h.IDs)
+	if err != nil || !ok || e.AniList == 0 {
+		return "", err
 	}
-	for _, p := range tries {
-		if id := h.IDs[p]; id != "" {
-			e, ok, err := c.lists.AnimeEntry(ctx, p, id)
-			if err != nil || ok && e.AniList != 0 {
-				return strconv.Itoa(e.AniList), err
-			}
-		}
-	}
-	return "", nil
+	return strconv.Itoa(e.AniList), nil
 }
 
 // Describe answers what AniList says of a title, by the entry matched, and of each season of a show
