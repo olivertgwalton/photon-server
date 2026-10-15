@@ -50,6 +50,8 @@ func TestCleanName(t *testing.T) {
 		{"The Matrix (1999) [imdbid-tt0133093]", Name{Title: "The Matrix", Year: 1999, IDs: IDs{IMDb: "tt0133093"}}},
 		{"The Matrix (1999) {tmdb-603}", Name{Title: "The Matrix", Year: 1999, IDs: IDs{TMDB: "603"}}},
 		{"Lost (2004) [tvdbid-73739]", Name{Title: "Lost", Year: 2004, IDs: IDs{TVDB: "73739"}}},
+		{"One Piece [anidbid=69]", Name{Title: "One Piece", IDs: IDs{AniDB: "69"}}},
+		{"Frieren (2023) [anilistid-154587]", Name{Title: "Frieren", Year: 2023, IDs: IDs{AniList: "154587"}}},
 		{"Blade Runner (1982) {edition-Final Cut} [tmdb=78]", Name{Title: "Blade Runner", Year: 1982, IDs: IDs{TMDB: "78"}, Edition: "Final Cut"}},
 	}
 	for _, tt := range tests {

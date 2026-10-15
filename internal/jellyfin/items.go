@@ -296,7 +296,10 @@ func downloadable(versions []store.VersionPage) *bool {
 
 // providerIDs names each provider's id as Jellyfin's providers name theirs.
 func providerIDs(ids map[domain.Provider]string) map[string]string {
-	names := map[domain.Provider]string{domain.ProviderTMDB: "Tmdb", domain.ProviderIMDb: "Imdb", domain.ProviderTVDB: "Tvdb"}
+	names := map[domain.Provider]string{
+		domain.ProviderTMDB: "Tmdb", domain.ProviderIMDb: "Imdb", domain.ProviderTVDB: "Tvdb",
+		domain.ProviderAniDB: "AniDB", domain.ProviderAniList: "AniList",
+	}
 	out := map[string]string{}
 	for p, v := range ids {
 		if name, ok := names[p]; ok {
