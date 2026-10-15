@@ -51,6 +51,7 @@ test("each site's score is printed on that site's own scale", () => {
 	expect(score("imdb", 78)).toBe("7.8");
 	expect(score("rotten_tomatoes", 93)).toBe("93%");
 	expect(score("anilist", 91)).toBe("91%");
+	expect(score("anidb", 84.3)).toBe("8.4");
 });
 
 test("rotten tomatoes is fresh or upright from 60%, rotten or spilled below", () => {

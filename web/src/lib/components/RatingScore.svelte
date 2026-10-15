@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { components } from "#lib/api/schema.js";
+import anidb from "#lib/assets/ratings/anidb.png";
 import anilist from "#lib/assets/ratings/anilist.svg";
 import imdb from "#lib/assets/ratings/imdb.svg";
 import popcornSpilled from "#lib/assets/ratings/popcorn-spilled.svg";
@@ -21,11 +22,12 @@ const marks: Record<RatingMark, string> = {
 	"popcorn-upright": popcornUpright,
 	"popcorn-spilled": popcornSpilled,
 	anilist,
+	anidb,
 };
 
 const mark = $derived(ratingMark(rating.site, rating.score));
 // The wordmarks sit at the numbers' height; the tomato, popcorn and AniList's
-// icon take the line's.
+// and AniDB's icons take the line's.
 const wordmark = $derived(mark === "imdb" || mark === "tmdb");
 </script>
 
