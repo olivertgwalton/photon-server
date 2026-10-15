@@ -109,7 +109,10 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	id := oneItem(t, s, "kind = 'show'").ID
 	// Matched as aired: the first file is titled as broadcast's first.
 	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{Title: "Firefly"},
-		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {Title: "The Train Job", Artwork: []domain.Artwork{{Kind: domain.ArtworkThumb, URL: "https://image.tmdb.org/t/p/original/train.jpg"}}}}}}); err != nil {
+		map[int]domain.SeasonMetadata{1: {Metadata: domain.Metadata{Title: "Season 1"}, Episodes: map[int]domain.Metadata{1: {
+			Title: "The Train Job", Artwork: []domain.Artwork{{Kind: domain.ArtworkThumb, URL: "https://image.tmdb.org/t/p/original/train.jpg"}},
+			Ratings: []domain.Rating{{Site: domain.SiteTMDB, Score: 74, Votes: 30}},
+		}}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Identified(ctx, id); err != nil {
@@ -128,6 +131,12 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 	sub, _, err = s.IdentifySubject(ctx, id)
 	if err != nil || sub.Order != domain.OrderDVD || len(sub.Seasons) != 1 {
 		t.Fatalf("renumbered: %+v, %v; want season 1 asked again, on DVD", sub, err)
+	}
+	// Until it is matched again, and for good should the new order have nothing of it, the first
+	// file is what it is called, with nothing of the aired first's.
+	unsaid, err := s.Title(ctx, uuid.UUID{}, oneItem(t, s, "kind = 'episode'").ID)
+	if err != nil || unsaid.Title == "The Train Job" || len(unsaid.Ratings) != 0 {
+		t.Fatalf("renumbered: %q rated %v, %v; want the file's name and no score", unsaid.Title, unsaid.Ratings, err)
 	}
 	if err := s.SaveIdentity(ctx, id, domain.SourceTVDB, domain.Metadata{Title: "Firefly"},
 		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "Serenity"}}}}); err != nil {

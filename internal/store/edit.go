@@ -218,28 +218,26 @@ func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.R
 }
 
 // SetEpisodeOrder renumbers a show's episodes in the order its files are numbered in: what any
-// provider said of its seasons and episodes stops standing, and every season is matched again.
-// The episodes keep their old titles until then.
+// provider said of its seasons and episodes under the old numbers is taken back, so an episode the
+// new order has nothing of is titled as its file again, and every season is matched again.
 func (s *Store) SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := affected(tx.Exec(ctx, `UPDATE items SET episode_order = $2 WHERE id = $1 AND kind = 'show'`, id, order)); err != nil {
 			return err
 		}
-		// What providers said under the old numbers: their claims, stills and credits. What files
-		// and NFOs say, and a reader's edits and chosen pictures, stand.
-		below := `SELECT s.id FROM items s WHERE s.parent_id = @show
-			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = @show`
-		for _, q := range []string{
-			`DELETE FROM item_fields WHERE item_id IN (` + below + `) AND source NOT IN ('file', 'nfo', 'user')`,
-			`DELETE FROM artwork WHERE item_id IN (` + below + `) AND source NOT IN ('file', 'user')`,
-			`DELETE FROM credits WHERE item_id IN (` + below + `) AND source <> 'nfo'`,
-			// Each episode is titled as its file again, so its season is asked about again.
-			`INSERT INTO item_fields (item_id, field, source) SELECT id, 'title', 'file' FROM items
-				WHERE kind = 'episode' AND id IN (` + below + `) ON CONFLICT (item_id, field) DO NOTHING`,
-		} {
-			if _, err := tx.Exec(ctx, q, pgx.NamedArgs{"show": id}); err != nil {
-				return err
-			}
+		below, err := queryColumn[uuid.UUID](ctx, tx, `
+			SELECT s.id FROM items s WHERE s.parent_id = $1 AND s.kind = 'season'
+			UNION SELECT e.id FROM items e JOIN items s ON s.id = e.parent_id WHERE s.parent_id = $1 AND e.kind = 'episode'`, id)
+		if err != nil {
+			return err
+		}
+		if err := unsay(ctx, tx, below); err != nil {
+			return err
+		}
+		// An episode titled by its NFO or an admin is asked about too, as one titled by its file.
+		if _, err := tx.Exec(ctx, `INSERT INTO item_fields (item_id, field, source) SELECT id, 'title', 'file' FROM items
+			WHERE kind = 'episode' AND id = ANY($1) ON CONFLICT (item_id, field) DO NOTHING`, below); err != nil {
+			return err
 		}
 		return enqueue(ctx, tx, domain.JobIdentify, id)
 	})
