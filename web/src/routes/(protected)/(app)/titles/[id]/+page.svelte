@@ -210,6 +210,15 @@ const links = $derived.by(() => {
 			href: `https://thetvdb.com/dereferrer/series/${ids.tvdb}`,
 		});
 	}
+	if (ids.anidb) {
+		out.push({ name: "AniDB", href: `https://anidb.net/anime/${ids.anidb}` });
+	}
+	if (ids.anilist) {
+		out.push({
+			name: "AniList",
+			href: `https://anilist.co/anime/${ids.anilist}`,
+		});
+	}
 	return out;
 });
 

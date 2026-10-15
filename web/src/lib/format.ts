@@ -104,7 +104,8 @@ export type RatingMark =
 	| "tomatometer-fresh"
 	| "tomatometer-rotten"
 	| "popcorn-upright"
-	| "popcorn-spilled";
+	| "popcorn-spilled"
+	| "anilist";
 
 export function ratingMark(
 	site: Schemas["RatingSite"],
@@ -113,6 +114,7 @@ export function ratingMark(
 	switch (site) {
 		case "imdb":
 		case "tmdb":
+		case "anilist":
 			return site;
 		case "rotten_tomatoes":
 			return value >= 60 ? "tomatometer-fresh" : "tomatometer-rotten";
@@ -121,8 +123,8 @@ export function ratingMark(
 	}
 }
 
-// A score as its site prints it: IMDb and TMDB out of ten, Rotten Tomatoes as a
-// percentage. The server keeps every score from 0 to 100.
+// A score as its site prints it: IMDb and TMDB out of ten, Rotten Tomatoes and
+// AniList as a percentage. The server keeps every score from 0 to 100.
 export function score(site: Schemas["RatingSite"], value: number): string {
 	switch (site) {
 		case "imdb":
@@ -130,6 +132,7 @@ export function score(site: Schemas["RatingSite"], value: number): string {
 			return (value / 10).toFixed(1);
 		case "rotten_tomatoes":
 		case "rotten_tomatoes_audience":
+		case "anilist":
 			return `${Math.round(value)}%`;
 	}
 }
