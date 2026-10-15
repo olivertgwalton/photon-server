@@ -5621,6 +5621,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the profile's notifications of the films and episodes added that it follows, newest first */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Inbox"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark the profile's notifications read, up to the newest it was shown */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReadMarker"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark one of the profile's notifications read */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The notification. */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/password": {
         parameters: {
             query?: never;
@@ -5778,6 +5892,114 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        trace?: never;
+    };
+    "/api/v1/profile/push-subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the browsers pushed the profile's notifications */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PushSubscriptionList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        /** Push the profile's notifications to a browser, by the subscription it made with the server's key; one subscribed already is the profile's from now */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Subscribe"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PushSubscription"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PushSubscription"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/push-subscriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop pushing the profile's notifications to a browser */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/profile/rows/{row}": {
@@ -6133,6 +6355,43 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The key a browser subscribes to the server's pushes with */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PushKey"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7653,7 +7912,7 @@ export interface components {
             title_id?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed" | "notifications.changed";
         EventPage: {
             items: components["schemas"]["Event"][];
             offset: number;
@@ -7809,6 +8068,18 @@ export interface components {
         ImportSource: "plex" | "jellyfin" | "emby";
         /** @enum {string} */
         ImportStatus: "queued" | "running" | "done" | "failed";
+        Inbox: {
+            items: components["schemas"]["Notification"][];
+            unread: number;
+        };
+        InboxChange: {
+            change: components["schemas"]["NotificationChange"];
+            notifications?: components["schemas"]["Notification"][];
+            read?: number[];
+            /** Format: date-time */
+            through?: string | null;
+            unread: number;
+        };
         Info: {
             id: string;
             name: string;
@@ -7827,7 +8098,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -8162,6 +8433,22 @@ export interface components {
             id: string;
             name: string;
         };
+        Notification: {
+            /** Format: date-time */
+            added_at: string;
+            /** Format: int64 */
+            id: number;
+            latest: components["schemas"]["Card"];
+            message: string;
+            new: number;
+            /** Format: date-time */
+            read_at?: string | null;
+            title: components["schemas"]["Card"];
+        };
+        /** @enum {string} */
+        NotificationChange: "added" | "read";
+        /** @enum {string} */
+        Notify: "marked" | "all" | "none";
         NowPlaying: {
             acceleration?: components["schemas"]["Acceleration"];
             audio?: components["schemas"]["PlaybackAudio"] | null;
@@ -8477,6 +8764,8 @@ export interface components {
             intro_action: components["schemas"]["SegmentAction"];
             max_bitrate_kbps: number;
             next_episode: components["schemas"]["NextEpisode"];
+            notify: components["schemas"]["Notify"];
+            quiet_libraries: string[];
             remember_audio: components["schemas"]["TrackMemory"];
             remember_subtitles: components["schemas"]["TrackMemory"];
             /** Format: date-time */
@@ -8493,6 +8782,8 @@ export interface components {
             intro_action?: components["schemas"]["SegmentAction"];
             max_bitrate_kbps?: number | null;
             next_episode?: components["schemas"]["NextEpisode"];
+            notify?: components["schemas"]["Notify"];
+            quiet_libraries?: string[] | null;
             remember_audio?: components["schemas"]["TrackMemory"];
             remember_subtitles?: components["schemas"]["TrackMemory"];
             subtitle_language?: string | null;
@@ -8571,6 +8862,18 @@ export interface components {
         };
         /** @enum {string} */
         Provisioning: "link" | "create";
+        PushKey: {
+            key: string;
+        };
+        PushSubscription: {
+            /** Format: uri */
+            endpoint: string;
+            /** Format: uuid */
+            id: string;
+        };
+        PushSubscriptionList: {
+            items: components["schemas"]["PushSubscription"][];
+        };
         /** @enum {string} */
         Range: "sdr" | "hlg" | "hdr10" | "hdr10plus" | "dv";
         RankedSource: {
@@ -8588,6 +8891,10 @@ export interface components {
         Reach: "start" | "resumable" | "end";
         Reached: {
             reach: components["schemas"]["Reach"];
+        };
+        ReadMarker: {
+            /** Format: date-time */
+            through: string;
         };
         /** @enum {string} */
         Recheck: "hourly" | "at_sign_in";
@@ -8858,6 +9165,14 @@ export interface components {
             subtitle_kind?: components["schemas"]["SubtitleKind"];
             title?: string;
             width?: number;
+        };
+        Subscribe: {
+            /** Format: uri */
+            endpoint: string;
+            keys: {
+                auth: string;
+                p256dh: string;
+            };
         };
         Subtitle: {
             codec: string;

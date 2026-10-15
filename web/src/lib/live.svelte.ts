@@ -2,6 +2,7 @@ import { invalidate, refreshAll } from "$app/navigation";
 import type { LiveStream } from "./admin/stream.svelte.js";
 import type { components } from "./api/schema.js";
 import { adminAffected, affected, type Change } from "./changes.js";
+import { inbox } from "./notifications.svelte.js";
 import { restoring } from "./restoring.svelte.js";
 
 // A scan sends a burst of changes; the pages reload once for the burst.
@@ -84,8 +85,14 @@ export function connectLive(server?: LiveStream): () => void {
 			}
 			switch (event) {
 				case "hello":
-					if (reconnected) refreshAll();
+					if (reconnected) {
+						refreshAll();
+						inbox.load();
+					}
 					reconnected = true;
+					break;
+				case "notifications.changed":
+					inbox.apply(data as components["schemas"]["InboxChange"]);
 					break;
 				case "restore.started":
 					restoring.on = true;

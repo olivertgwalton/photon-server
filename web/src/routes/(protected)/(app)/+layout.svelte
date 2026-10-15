@@ -3,6 +3,7 @@ import GaugeIcon from "@lucide/svelte/icons/gauge";
 import SearchIcon from "@lucide/svelte/icons/search";
 import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.js";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
+import NotificationMenu from "#lib/components/NotificationMenu.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
 import RestoringScreen from "#lib/components/RestoringScreen.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
@@ -80,6 +81,7 @@ $effect(() => connectLive(admin ? stream : undefined));
 					<GaugeIcon class="size-5" />
 				</a>
 			{/if}
+			<NotificationMenu />
 			<ProfileMenu profile={data.me} />
 		</header>
 		<main
