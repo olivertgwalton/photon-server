@@ -34,6 +34,8 @@ type Item struct {
 	Genres        []string
 	Studios       []string
 	EpisodeOrder  domain.EpisodeOrder
+	// EpisodeGroup is the TMDB episode group a show numbered in OrderGroup is numbered by.
+	EpisodeGroup *string
 }
 
 // LibrarySource is a source a library ranks for what it fetches of a kind of item; position 0 is

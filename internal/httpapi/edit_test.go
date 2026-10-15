@@ -27,6 +27,7 @@ type fakeEditing struct {
 	reset     []domain.Field
 	pinned    string
 	order     domain.EpisodeOrder
+	group     string
 	mode      domain.RefreshMode
 	analysed  uuid.UUID
 	unmatched uuid.UUID
@@ -62,11 +63,11 @@ func (f *fakeEditing) PinMatch(_ context.Context, id uuid.UUID, p domain.Provide
 	return nil
 }
 
-func (f *fakeEditing) SetEpisodeOrder(_ context.Context, id uuid.UUID, order domain.EpisodeOrder) error {
+func (f *fakeEditing) SetEpisodeOrder(_ context.Context, id uuid.UUID, order domain.EpisodeOrder, group string) error {
 	if id != films {
 		return store.ErrNotFound
 	}
-	f.order = order
+	f.order, f.group = order, group
 	return nil
 }
 
@@ -224,6 +225,9 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPost, base + "/split", "", http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd"}`, http.StatusAccepted, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "production"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "group"}`, http.StatusBadRequest, "group"},
+		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd", "group": "5ad0df1cc3a36825ac00c087"}`, http.StatusBadRequest, "group"},
+		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "group", "group": "5ad0df1cc3a36825ac00c087"}`, http.StatusAccepted, ""},
 		{memberToken, http.MethodPost, base + "/refresh", `{"mode": "all"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "images"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/refresh", `{"mode": "all"}`, http.StatusNotFound, ""},
@@ -259,7 +263,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderDVD || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || e.titles != domain.TitlesOriginal || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderGroup || e.group != "5ad0df1cc3a36825ac00c087" || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || e.titles != domain.TitlesOriginal || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
 		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}

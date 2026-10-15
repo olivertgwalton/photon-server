@@ -22,7 +22,7 @@ type editing interface {
 	EditMetadata(ctx context.Context, id uuid.UUID, m domain.Metadata) error
 	ResetEdits(ctx context.Context, id uuid.UUID, fields []domain.Field) error
 	PinMatch(ctx context.Context, id uuid.UUID, p domain.Provider, value string) error
-	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder) error
+	SetEpisodeOrder(ctx context.Context, id uuid.UUID, order domain.EpisodeOrder, group string) error
 	Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMode) error
 	AnalyseTitle(ctx context.Context, id uuid.UUID) error
 	Unmatch(ctx context.Context, id uuid.UUID) error
@@ -183,6 +183,8 @@ func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
 
 type setEpisodeOrderJSON struct {
 	Order domain.EpisodeOrder `json:"order"`
+	// Group is the TMDB episode group a show in the group order is numbered by, and only then.
+	Group string `json:"group,omitzero"`
 }
 
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
@@ -196,11 +198,11 @@ func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.Order == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd or absolute")
+	if req.Order == "" || (req.Order == domain.OrderGroup) != (req.Group != "") {
+		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd, absolute or group, and group names a TMDB episode group with group alone")
 		return
 	}
-	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order)
+	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order, req.Group)
 	if a.answeredAs(w, r, err, "no show has that id") {
 		return
 	}
