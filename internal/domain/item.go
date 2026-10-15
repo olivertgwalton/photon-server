@@ -258,4 +258,7 @@ type SeasonRequest struct {
 	Order   EpisodeOrder
 	// Group is the TMDB episode group a show in OrderGroup is numbered by.
 	Group string
+	// Numbering is the provider of TMDB and TheTVDB whose numbers the show's episodes are
+	// described by, which an anime database's entries are placed in the show by.
+	Numbering Provider
 }
