@@ -22,16 +22,40 @@ const shell = getShell();
 const api = client();
 const path = $derived({ params: { path: { id: data.title.id } } });
 
+// An episode group is chosen as "group:" and its id, beside the orders.
 function order(event: SubmitEvent) {
 	const asked = String(fields(event).get("order"));
+	const group = asked.startsWith("group:") ? asked.slice(6) : undefined;
 	return act(
 		api.PUT("/api/v1/admin/titles/{id}/episode-order", {
 			...path,
-			body: { order: asked as components["schemas"]["EpisodeOrder"] },
+			body: group
+				? { order: "group", group }
+				: { order: asked as components["schemas"]["EpisodeOrder"] },
 		}),
 		"Its episodes are being matched again in that order.",
 	);
 }
+
+const kinds: Record<components["schemas"]["GroupKind"], string> = {
+	aired: "Aired",
+	absolute: "Absolute",
+	dvd: "DVD",
+	digital: "Digital",
+	story_arc: "Story arcs",
+	production: "Production",
+	tv: "TV",
+};
+
+const orders = $derived([
+	{ value: "aired", label: "Aired" },
+	{ value: "dvd", label: "DVD" },
+	{ value: "absolute", label: "Absolute" },
+	...data.groups.map((g) => ({
+		value: `group:${g.id}`,
+		label: `${g.name} (${kinds[g.kind]}, ${g.seasons} ${g.seasons === 1 ? "season" : "seasons"})`,
+	})),
+]);
 
 const t = $derived(data.title);
 const matched = $derived(matchable(t.kind));
@@ -113,8 +137,8 @@ const name = $derived(fullTitle(t, t.show?.title));
 			<Card.Header>
 				<Card.Title><h2 class="heading">Episode order</h2></Card.Title>
 				<Card.Description>
-					The order its files are numbered in. Changing it matches every episode
-					again.
+					The order its files are numbered in, or one of the episode groups TMDB
+					has it in. Changing it matches every episode again.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
@@ -124,13 +148,11 @@ const name = $derived(fullTitle(t, t.show?.title));
 						<Choice
 							id="order"
 							name="order"
-							value={t.episode_order ?? "aired"}
-							options={[
-								{ value: "aired", label: "Aired" },
-								{ value: "dvd", label: "DVD" },
-								{ value: "absolute", label: "Absolute" },
-							]}
-							class="w-40"
+							value={t.episode_order === "group"
+								? `group:${t.episode_group}`
+								: (t.episode_order ?? "aired")}
+							options={orders}
+							class="w-72"
 						/>
 					</Field.Field>
 					<Button type="submit">Save order</Button>

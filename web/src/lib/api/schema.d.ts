@@ -2867,6 +2867,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/titles/{id}/episode-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the episode groups TMDB has a show in, to number its files by
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EpisodeGroupList"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/titles/{id}/episode-order": {
         parameters: {
             query?: never;
@@ -7959,8 +8001,18 @@ export interface components {
             thumb?: string;
             title: string;
         };
+        EpisodeGroup: {
+            episodes: number;
+            id: string;
+            kind: components["schemas"]["GroupKind"];
+            name: string;
+            seasons: number;
+        };
+        EpisodeGroupList: {
+            items: components["schemas"]["EpisodeGroup"][];
+        };
         /** @enum {string} */
-        EpisodeOrder: "aired" | "dvd" | "absolute";
+        EpisodeOrder: "aired" | "dvd" | "absolute" | "group";
         Event: {
             /** Format: date-time */
             at: string;
@@ -8068,6 +8120,8 @@ export interface components {
             /** Format: uuid */
             version_id: string;
         };
+        /** @enum {string} */
+        GroupKind: "aired" | "absolute" | "dvd" | "digital" | "story_arc" | "production" | "tv";
         /** @enum {string} */
         HEVCEncoding: "allow" | "deny";
         Hello: {
@@ -9109,6 +9163,7 @@ export interface components {
             name: string;
         };
         SetEpisodeOrder: {
+            group?: string;
             order: components["schemas"]["EpisodeOrder"];
         };
         Setting: {
@@ -9346,6 +9401,7 @@ export interface components {
             collections?: components["schemas"]["CollectionCard"][];
             credits?: components["schemas"]["CreditRef"][];
             episode_end?: number | null;
+            episode_group?: string;
             episode_number?: number | null;
             episode_order?: components["schemas"]["EpisodeOrder"];
             episodes?: components["schemas"]["EpisodeCard"][];

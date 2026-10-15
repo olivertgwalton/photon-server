@@ -10,5 +10,15 @@ export const load: PageLoad = async ({ fetch, params }) => {
 		need(api.GET("/api/v1/admin/providers")),
 		need(api.GET("/api/v1/admin/locales")),
 	]);
-	return { title, providers: providers.items, locales };
+	// A show TMDB has is numbered as one of its episode groups too, where it has
+	// any.
+	const groups =
+		title.kind === "show" && title.ids?.tmdb
+			? (
+					await api.GET("/api/v1/admin/titles/{id}/episode-groups", {
+						params: { path: { id: params.id } },
+					})
+				).data?.items
+			: undefined;
+	return { title, providers: providers.items, locales, groups: groups ?? [] };
 };
