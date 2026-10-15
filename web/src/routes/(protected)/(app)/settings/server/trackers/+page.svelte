@@ -18,7 +18,8 @@ const words = vocabulary();
 
 // Where an admin registers the server's app on each tracker, and what to
 // register: the device flow needs a client id and nothing else, but Trakt
-// takes a refresh only with the redirect URI the app has.
+// takes a refresh only with the redirect URI the app has. AniList has no
+// device flow: its PIN page shows a profile a token to paste.
 const register: Record<Tracker, { href: string; how: string }> = {
 	trakt: {
 		href: "https://app.trakt.tv/settings/apps",
@@ -31,6 +32,10 @@ const register: Record<Tracker, { href: string; how: string }> = {
 	mdblist: {
 		href: "https://mdblist.com/developer/",
 		how: "Create an app on MDBList of the type “Device Code App”, and copy its client id.",
+	},
+	anilist: {
+		href: "https://anilist.co/settings/developer",
+		how: "Create a client on AniList with the redirect URL https://anilist.co/api/v2/oauth/pin, which shows each profile its token to paste here, and copy its ID.",
 	},
 };
 

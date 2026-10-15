@@ -57,7 +57,7 @@ const you: [string, string, Component, string][] = [
 		"/settings/trackers",
 		"Trackers",
 		LinkIcon,
-		"trakt simkl scrobble link account",
+		"trakt simkl anilist scrobble link account",
 	],
 ];
 const server: [string, string, Component, string][] = [
@@ -131,7 +131,12 @@ const server: [string, string, Component, string][] = [
 		ImportIcon,
 		"plex jellyfin emby watch history watched migrate",
 	],
-	["/settings/server/trackers", "Trackers", LinkIcon, "trakt simkl client id"],
+	[
+		"/settings/server/trackers",
+		"Trackers",
+		LinkIcon,
+		"trakt simkl anilist client id",
+	],
 	[
 		"/settings/server/webhooks",
 		"Webhooks",

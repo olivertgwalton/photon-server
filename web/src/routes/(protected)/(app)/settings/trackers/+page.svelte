@@ -10,6 +10,8 @@ import PageHeader from "#lib/components/PageHeader.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
+import { Input } from "#lib/components/ui/input/index.js";
+import { fields, text } from "#lib/form.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { invalidate } from "$app/navigation";
 
@@ -24,6 +26,7 @@ const about: Record<Tracker, string> = {
 	trakt: "Keeps what you watch, rate and want to watch, across apps.",
 	simkl: "Keeps what you watch of films, shows and anime, across apps.",
 	mdblist: "Keeps what you watch beside your lists and ratings, across apps.",
+	anilist: "Keeps how far you are into each anime, as you watch it here.",
 };
 
 // When each code shown expires, by this browser's clock. The server asks the
@@ -54,6 +57,17 @@ function left(tracker: Tracker) {
 const path = (tracker: Tracker) => ({ params: { path: { tracker } } });
 const link = (tracker: Tracker) =>
 	act(api.POST("/api/v1/profile/trackers/{tracker}/link", path(tracker)));
+// A tracker linked by token shows the token on its own page once you sign in,
+// for you to bring back here.
+function grant(event: SubmitEvent, tracker: Tracker) {
+	return act(
+		api.PUT("/api/v1/profile/trackers/{tracker}/token", {
+			...path(tracker),
+			body: { token: text(fields(event), "token") },
+		}),
+		`${words.trackers[tracker] ?? tracker} is linked.`,
+	);
+}
 const unlink = (tracker: Tracker, said: string) =>
 	act(api.DELETE("/api/v1/profile/trackers/{tracker}", path(tracker)), said);
 </script>
@@ -91,6 +105,38 @@ const unlink = (tracker: Tracker, said: string) =>
 					<div>
 						<Button onclick={() => link(t.tracker)}>Link {name}</Button>
 					</div>
+				{:else if t.state === "linking" && t.code && t.flow === "token"}
+					<form
+						class="grid gap-3"
+						onsubmit={(event) => grant(event, t.tracker)}
+					>
+						<p class="text-sm">
+							Sign in on {name} and allow this server, then paste the token
+							{name}
+							shows you here.
+						</p>
+						<Input
+							name="token"
+							aria-label="{name} token"
+							autocomplete="off"
+							required
+						/>
+						<p class="text-ink-3 text-sm">Expires in {left(t.tracker)}</p>
+						<div class="flex flex-wrap gap-2">
+							<Button
+								href={t.code.verification_uri_complete}
+								target="_blank"
+								rel="noopener noreferrer"
+								variant="outline"
+							>
+								Open {name}
+							</Button>
+							<Button type="submit">Link</Button>
+							<Button variant="outline" onclick={() => unlink(t.tracker, "")}>
+								Cancel
+							</Button>
+						</div>
+					</form>
 				{:else if t.state === "linking" && t.code}
 					<div class="grid gap-3">
 						<p class="text-sm">

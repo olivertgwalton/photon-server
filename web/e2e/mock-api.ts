@@ -418,18 +418,33 @@ const tell = (event: string, data: object) => {
 };
 
 // Trakt is set up and Simkl and MDBList are not; a code asked for is entered once a test
-// says so.
+// says so. AniList is set up, and linked by the token its page shows.
 const trakt: Schemas["ProfileTracker"] = {
 	tracker: "trakt",
+	flow: "device",
+	state: "unlinked",
+};
+const aniList: Schemas["ProfileTracker"] = {
+	tracker: "anilist",
+	flow: "token",
 	state: "unlinked",
 };
 const trackers = (): Schemas["ProfileTrackerList"] => ({
 	items: [
 		trakt,
-		{ tracker: "simkl", state: "unavailable" },
-		{ tracker: "mdblist", state: "unavailable" },
+		{ tracker: "simkl", flow: "device", state: "unavailable" },
+		{ tracker: "mdblist", flow: "device", state: "unavailable" },
+		aniList,
 	],
 });
+const aniListPage: Schemas["TrackerCode"] = {
+	user_code: "",
+	verification_uri:
+		"https://anilist.co/api/v2/oauth/authorize?client_id=app&response_type=token",
+	verification_uri_complete:
+		"https://anilist.co/api/v2/oauth/authorize?client_id=app&response_type=token",
+	expires_in_ms: 900_000,
+};
 const traktCode: Schemas["TrackerCode"] = {
 	user_code: "TRAKT123",
 	verification_uri: "https://trakt.tv/activate",
@@ -657,6 +672,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		undated: "No date watched",
 	},
 	trackers: {
+		anilist: "AniList",
 		mdblist: "MDBList",
 		simkl: "Simkl",
 		trakt: "Trakt",
@@ -1708,6 +1724,26 @@ const server_ = Bun.serve<Socket>({
 			case "POST /api/v1/profile/trackers/trakt/link":
 				Object.assign(trakt, { state: "linking", code: traktCode });
 				return Response.json(traktCode);
+			case "POST /api/v1/profile/trackers/anilist/link":
+				Object.assign(aniList, { state: "linking", code: aniListPage });
+				return Response.json(aniListPage);
+			case "PUT /api/v1/profile/trackers/anilist/token": {
+				const { token } = (await request.json()) as Schemas["TrackerToken"];
+				if (token !== "a.year.of.anime") {
+					return problem(409, "conflict", "AniList refused the token");
+				}
+				Object.assign(aniList, {
+					state: "linked",
+					username: "ada",
+					linked_at: "2026-10-15T09:00:00Z",
+					code: undefined,
+				});
+				tell("tracker.changed", {
+					kind: "tracker.changed",
+					details: { tracker: "anilist" },
+				});
+				return none();
+			}
 			case "DELETE /api/v1/profile/trackers/trakt":
 				Object.assign(trakt, {
 					state: "unlinked",
