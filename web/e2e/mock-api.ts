@@ -1487,7 +1487,11 @@ const server_ = Bun.serve<Socket>({
 				});
 			case "POST /api/v1/profile/push-subscriptions": {
 				const { endpoint } = (await request.json()) as Schemas["Subscribe"];
-				const made = { id: crypto.randomUUID(), endpoint };
+				const made: Schemas["PushSubscription"] = {
+					id: crypto.randomUUID(),
+					kind: "web",
+					endpoint,
+				};
 				pushes.set(token as string, [
 					...(pushes.get(token as string) ?? []),
 					made,

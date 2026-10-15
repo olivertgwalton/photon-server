@@ -94,6 +94,26 @@ func TestABrowserSubscribesToItsProfilesNotifications(t *testing.T) {
 	if rec := call(http.MethodGet, "/api/v1/push-key", ""); !strings.Contains(rec.Body.String(), `"key":"BAEC"`) {
 		t.Errorf("the key: %d %s", rec.Code, rec.Body)
 	}
+	// An Apple device subscribes by its APNs token and the push service that issued it.
+	for _, bad := range []string{
+		`{"kind":"apple","token":"not hex","environment":"production"}`,
+		`{"kind":"apple","token":"a1b2"}`,
+		`{"kind":"apple","token":"a1b2","environment":"sandbox"}`,
+	} {
+		if rec := call(http.MethodPost, "/api/v1/profile/push-subscriptions", bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", bad, rec.Code)
+		}
+	}
+	rec = call(http.MethodPost, "/api/v1/profile/push-subscriptions", `{"kind":"apple","token":"A1B2C3","environment":"development"}`)
+	var phone pushSubscriptionJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &phone); rec.Code != http.StatusCreated || err != nil ||
+		phone.Kind != domain.PushApple || phone.Token != "a1b2c3" || phone.Endpoint != "" {
+		t.Errorf("an iPhone subscribing: %d %s", rec.Code, rec.Body)
+	}
+	if kept := push.subs[len(push.subs)-1]; kept.ApnsEnvironment == nil || *kept.ApnsEnvironment != domain.APNsDevelopment {
+		t.Errorf("kept %+v, want its APNs environment", kept)
+	}
+
 	if rec := call(http.MethodDelete, "/api/v1/profile/push-subscriptions/"+made.ID.String(), ""); rec.Code != http.StatusNoContent {
 		t.Errorf("unsubscribing: %d", rec.Code)
 	}

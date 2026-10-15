@@ -94,6 +94,16 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 		t.Errorf("the film's notification = %+v", n)
 	}
 
+	// An Apple device woken for one asks for it alone, worded.
+	rec = call(http.MethodGet, "/api/v1/profile/notifications/3", "")
+	var alone notificationJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &alone); rec.Code != http.StatusOK || err != nil || alone.ID != 3 || alone.Message == "" {
+		t.Errorf("one notification: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(http.MethodGet, "/api/v1/profile/notifications/2", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("one whose title the profile no longer sees: %d, want 404", rec.Code)
+	}
+
 	if rec := call(http.MethodPut, "/api/v1/profile/notifications/3/read", ""); rec.Code != http.StatusNoContent || !slices.Equal(notes.read, []int64{3}) {
 		t.Errorf("reading one: %d, read %v", rec.Code, notes.read)
 	}
