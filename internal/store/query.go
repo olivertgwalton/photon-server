@@ -14,7 +14,7 @@ import (
 // itemColumns are model.Item's, for a statement that reads whole items.
 const itemColumns = `id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
 	episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline, certificate,
-	release_date, genres, studios, episode_order, episode_group`
+	release_date, genres, studios, episode_order, episode_group, airs_before_season, airs_before_episode, airs_after_season`
 
 // itemColumnsOf is itemColumns read through alias, for a statement that joins items to others.
 func itemColumnsOf(alias string) string {

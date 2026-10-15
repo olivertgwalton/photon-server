@@ -56,6 +56,17 @@ func TestRead(t *testing.T) {
 			},
 		},
 		{
+			name: "special placed before an episode, as Jellyfin writes it",
+			nfo: `<episodedetails><title>Recap</title><season>0</season><episode>9</episode>
+				<airsbefore_season>3</airsbefore_season><airsbefore_episode>13</airsbefore_episode></episodedetails>`,
+			want: File{Metadata: domain.Metadata{Title: "Recap", AirsBeforeSeason: 3, AirsBeforeEpisode: 13}, Season: new(0), Episodes: []int{9}},
+		},
+		{
+			name: "special placed after a season, as Kodi writes it",
+			nfo:  `<episodedetails><title>OVA</title><season>0</season><episode>1</episode><displayafterseason>2</displayafterseason></episodedetails>`,
+			want: File{Metadata: domain.Metadata{Title: "OVA", AirsAfterSeason: 2}, Season: new(0), Episodes: []int{1}},
+		},
+		{
 			name: "episode with numbers Kodi does not know",
 			nfo:  `<episodedetails><title>Pilot</title><season>-1</season><episode>-1</episode></episodedetails>`,
 			want: File{Metadata: domain.Metadata{Title: "Pilot"}},

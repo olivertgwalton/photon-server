@@ -80,7 +80,10 @@ func unsay(ctx context.Context, tx pgx.Tx, scope []uuid.UUID) error {
 			release_date = CASE WHEN f.fields @> '{release_date}' THEN NULL ELSE i.release_date END,
 			year = CASE WHEN f.fields @> '{year}' THEN NULL ELSE i.year END,
 			genres = CASE WHEN f.fields @> '{genres}' THEN NULL ELSE i.genres END,
-			studios = CASE WHEN f.fields @> '{studios}' THEN NULL ELSE i.studios END
+			studios = CASE WHEN f.fields @> '{studios}' THEN NULL ELSE i.studios END,
+			airs_before_season = CASE WHEN f.fields @> '{airs_before_season}' THEN NULL ELSE i.airs_before_season END,
+			airs_before_episode = CASE WHEN f.fields @> '{airs_before_episode}' THEN NULL ELSE i.airs_before_episode END,
+			airs_after_season = CASE WHEN f.fields @> '{airs_after_season}' THEN NULL ELSE i.airs_after_season END
 		FROM (SELECT item_id, array_agg(field) AS fields FROM item_fields
 			WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources + ` GROUP BY item_id) f
 		WHERE i.id = f.item_id`,
