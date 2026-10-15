@@ -33,10 +33,12 @@ const (
 	JobImportHistory JobKind = "import_history"
 	// JobSegments asks the providers that time intros and credits of a film or an episode.
 	JobSegments JobKind = "segments"
+	// JobPush pushes a profile's notifications to the browsers subscribed for it.
+	JobPush JobKind = "push"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush}
 }
 
 type JobState string
@@ -94,7 +96,7 @@ func (j Job) About() (item, library uuid.UUID) {
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory:
+	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory, JobPush:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }

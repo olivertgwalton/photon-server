@@ -70,12 +70,16 @@ const notify = `
 		SELECT DISTINCT profile_id, title_id FROM fresh
 		ON CONFLICT (profile_id, title_id) WHERE read_at IS NULL DO UPDATE SET added_at = now()
 		RETURNING id, profile_id, title_id
+	), subscribed AS (
+		SELECT DISTINCT profile_id FROM push_subscriptions WHERE profile_id IN (SELECT profile_id FROM kept)
 	), told AS (
-		INSERT INTO notification_items (item_id, profile_id, notification_id)
-		SELECT f.item_id, f.profile_id, k.id FROM fresh f JOIN kept k USING (profile_id, title_id)
+		INSERT INTO notification_items (item_id, profile_id, notification_id, pushed)
+		SELECT f.item_id, f.profile_id, k.id, f.profile_id NOT IN (SELECT profile_id FROM subscribed)
+		FROM fresh f JOIN kept k USING (profile_id, title_id)
 		ON CONFLICT DO NOTHING
 	)
-	SELECT profile_id, array_agg(id) AS ids FROM kept GROUP BY profile_id`
+	SELECT profile_id, array_agg(id) AS ids, profile_id IN (SELECT profile_id FROM subscribed) AS push
+	FROM kept GROUP BY profile_id`
 
 // Told is a profile told of titles added, and its notifications added or gathering more.
 type Told struct {
@@ -83,10 +87,35 @@ type Told struct {
 	IDs       []int64
 }
 
+// pushSettle is how long a profile's push waits after its last notification: long enough for the
+// titles a scan found to be matched, so they are pushed by name, and for a run of scans to be
+// pushed once.
+const pushSettle = time.Minute
+
 // Notify tells each profile that cares of the films and episodes a scan of a library added since
-// it began, answering the profiles told.
+// it began, and queues a push to those with browsers subscribed, answering the profiles told.
 func (s *Store) Notify(ctx context.Context, library uuid.UUID, since time.Time) ([]Told, error) {
-	return queryStructs[Told](ctx, s.pool, notify, pgx.NamedArgs{"library": library, "since": since})
+	type row struct {
+		Told
+		Push bool
+	}
+	var out []Told
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := queryStructs[row](ctx, tx, notify, pgx.NamedArgs{"library": library, "since": since})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			out = append(out, r.Told)
+			if r.Push {
+				if err := enqueueAfter(ctx, tx, domain.JobPush, r.ProfileID, pushSettle); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	return out, err
 }
 
 // Inbox is a profile's notifications, newest first, and how many are unread.
@@ -166,4 +195,97 @@ func (s *Store) ReadNotifications(ctx context.Context, profile uuid.UUID, throug
 		return 0, err
 	}
 	return s.unread(ctx, profile)
+}
+
+// PushSubscription is a browser subscribed for a profile, and the language its messages are in.
+type PushSubscription struct {
+	ID       uuid.UUID
+	Endpoint string
+	P256DH   []byte
+	Auth     []byte
+	Language string
+}
+
+// PushKey answers the server's VAPID key, keeping made as it unless it has one.
+func (s *Store) PushKey(ctx context.Context, made []byte) ([]byte, error) {
+	var key []byte
+	err := s.pool.QueryRow(ctx, `UPDATE server SET push_key = coalesce(push_key, $1) RETURNING push_key`, made).Scan(&key)
+	return key, err
+}
+
+// Subscribe keeps a browser subscribed for a profile, answering whether it was not already; a
+// browser subscribed already, for this profile or another, is for this one from now. ErrNotFound for
+// no profile.
+func (s *Store) Subscribe(ctx context.Context, profile uuid.UUID, sub PushSubscription) (PushSubscription, bool, error) {
+	var made bool
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO push_subscriptions (profile_id, endpoint, p256dh, auth, language) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (endpoint) DO UPDATE SET profile_id = excluded.profile_id, p256dh = excluded.p256dh,
+			auth = excluded.auth, language = excluded.language
+		RETURNING id, xmax = 0`, profile, sub.Endpoint, sub.P256DH, sub.Auth, sub.Language).Scan(&sub.ID, &made)
+	if violates(err, foreignKeyViolation) {
+		return PushSubscription{}, false, ErrNotFound
+	}
+	return sub, made, err
+}
+
+// PushSubscriptions answers the browsers subscribed for a profile, oldest first.
+func (s *Store) PushSubscriptions(ctx context.Context, profile uuid.UUID) ([]PushSubscription, error) {
+	return queryStructs[PushSubscription](ctx, s.pool, `
+		SELECT id, endpoint, p256dh, auth, language FROM push_subscriptions WHERE profile_id = $1 ORDER BY id`, profile)
+}
+
+// Unsubscribe forgets one of a profile's browsers. ErrNotFound for none of its own.
+func (s *Store) Unsubscribe(ctx context.Context, profile, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM push_subscriptions WHERE id = $1 AND profile_id = $2`, id, profile)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+// Push is a notification with films or episodes not yet pushed, which Items are.
+type Push struct {
+	domain.Notification
+	Items []uuid.UUID
+}
+
+// Pushes answers a profile's notifications with films or episodes not yet pushed, newest first.
+func (s *Store) Pushes(ctx context.Context, profile uuid.UUID) ([]Push, error) {
+	type row struct {
+		ID      int64
+		TitleID uuid.UUID
+		Latest  *uuid.UUID
+		New     int
+		AddedAt time.Time
+		ReadAt  *time.Time
+		Items   []uuid.UUID
+	}
+	rows, err := queryStructs[row](ctx, s.pool, `
+		SELECT n.id, n.title_id, t.latest, t.new, n.added_at, n.read_at, u.items
+		FROM notifications n CROSS JOIN viewer($1) v`+told+`
+		CROSS JOIN LATERAL (
+			SELECT array_agg(item_id) AS items FROM notification_items WHERE notification_id = n.id AND NOT pushed
+		) u
+		WHERE n.profile_id = $1 AND u.items IS NOT NULL
+		ORDER BY n.added_at DESC, n.id DESC`, profile)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Push, len(rows))
+	for i, r := range rows {
+		out[i] = Push{ID: r.ID, Title: r.TitleID, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt, Items: r.Items}
+		if r.Latest != nil {
+			out[i].Latest = *r.Latest
+		}
+	}
+	return out, nil
+}
+
+// Pushed marks a profile's films and episodes pushed.
+func (s *Store) Pushed(ctx context.Context, profile uuid.UUID, items []uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE notification_items SET pushed = true WHERE profile_id = $1 AND item_id = ANY($2) AND NOT pushed`,
+		profile, items)
+	return err
 }

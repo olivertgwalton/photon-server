@@ -52,35 +52,7 @@ func TestNotify(t *testing.T) {
 	if err := s.SetAccess(ctx, kid, ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
-	}
-	var episodes []int
-	// scan saves the show with more episodes of its first season, as a scan finding them would, and
-	// tells who cares of them.
-	scan := func(more ...int) []uuid.UUID {
-		t.Helper()
-		since := time.Now()
-		episodes = append(episodes, more...)
-		var eps []Episode
-		for _, n := range episodes {
-			rel := fmt.Sprintf("Severance/S01E%02d.mkv", n)
-			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Copies: copies(rel)})
-		}
-		if _, err := s.SaveShowFolder(ctx, tv.ID, "Severance", fmt.Append(nil, episodes), Show{Title: "Severance", Folder: "Severance"}, eps, nil); err != nil {
-			t.Fatal(err)
-		}
-		told, err := s.Notify(ctx, tv.ID, since)
-		if err != nil {
-			t.Fatal(err)
-		}
-		profiles := make([]uuid.UUID, len(told))
-		for i, p := range told {
-			profiles[i] = p.ProfileID
-		}
-		slices.SortFunc(profiles, uuid.UUID.Compare)
-		return profiles
-	}
+	scan := showScans(t, s, tv.ID)
 	inbox := func(p uuid.UUID) Inbox {
 		t.Helper()
 		in, err := s.Inbox(ctx, p, nil)
@@ -154,7 +126,6 @@ func TestNotify(t *testing.T) {
 	if len(got.Notifications) != 2 || got.Unread != 1 || got.Notifications[0].New != 1 || got.Notifications[0].Latest != episode(6) {
 		t.Fatalf("after reading: %+v, want a new unread one of episode 6 above the read one", got)
 	}
-	episodes = append(episodes[:0], 1, 2, 3, 4, 5, 6)
 	if told := scan(0); slices.Contains(told, fan) {
 		t.Errorf("an episode before the furthest the fan watched told it")
 	}
@@ -169,5 +140,118 @@ func TestNotify(t *testing.T) {
 	}
 	if got := inbox(everything); got.Unread != 0 || len(got.Notifications) == 0 {
 		t.Errorf("everything read: %+v, want its notifications kept, none unread", got)
+	}
+}
+
+// showScans answers a scan of a library that saves its show with more episodes of its first season,
+// as a scan finding them would, and tells who cares of them.
+func showScans(t *testing.T, s *Store, lib uuid.UUID) func(more ...int) []uuid.UUID {
+	t.Helper()
+	copies := func(rel string) []Copy {
+		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	}
+	var episodes []int
+	return func(more ...int) []uuid.UUID {
+		t.Helper()
+		since := time.Now()
+		episodes = append(episodes, more...)
+		var eps []Episode
+		for _, n := range episodes {
+			rel := fmt.Sprintf("Severance/S01E%02d.mkv", n)
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Copies: copies(rel)})
+		}
+		if _, err := s.SaveShowFolder(t.Context(), lib, "Severance", fmt.Append(nil, episodes), Show{Title: "Severance", Folder: "Severance"}, eps, nil); err != nil {
+			t.Fatal(err)
+		}
+		told, err := s.Notify(t.Context(), lib, since)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profiles := make([]uuid.UUID, len(told))
+		for i, p := range told {
+			profiles[i] = p.ProfileID
+		}
+		slices.SortFunc(profiles, uuid.UUID.Compare)
+		return profiles
+	}
+}
+
+func TestPush(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fan, err := s.AddProfile(ctx, "Fan", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.AddProfile(ctx, "Other", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := s.PushKey(ctx, []byte("first"))
+	if err != nil || string(key) != "first" {
+		t.Fatalf("the first key: %q %v", key, err)
+	}
+	if key, err := s.PushKey(ctx, []byte("second")); err != nil || string(key) != "first" {
+		t.Errorf("another node's key: %q %v, want the first kept", key, err)
+	}
+
+	scan := showScans(t, s, tv.ID)
+	scan(1)
+	if err := s.Watchlist(ctx, fan.ID, oneItem(t, s, "kind = 'show'").ID); err != nil {
+		t.Fatal(err)
+	}
+	pushJobs := func() int {
+		return countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'push' AND subject = $1`, fan.ID)
+	}
+	scan(2)
+	if pushJobs() != 0 {
+		t.Error("a push was queued for a profile with no browser subscribed")
+	}
+	if p, err := s.Pushes(ctx, fan.ID); err != nil || len(p) != 0 {
+		t.Errorf("pushes of a profile with no browser: %+v %v, want none", p, err)
+	}
+
+	sub, made, err := s.Subscribe(ctx, other.ID, PushSubscription{Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"})
+	if err != nil || !made {
+		t.Fatalf("subscribing: %v, made %v", err, made)
+	}
+	// The same browser subscribed again, for the fan, is the fan's from now.
+	if again, made, err := s.Subscribe(ctx, fan.ID, PushSubscription{Endpoint: "https://push.example.com/a", P256DH: []byte{4}, Auth: []byte{2}, Language: "fr"}); err != nil || made || again.ID != sub.ID {
+		t.Fatalf("subscribed again: %+v %v, made %v; want the same subscription", again, err, made)
+	}
+	if subs, err := s.PushSubscriptions(ctx, other.ID); err != nil || len(subs) != 0 {
+		t.Errorf("the other's subscriptions: %+v %v, want none", subs, err)
+	}
+	if subs, err := s.PushSubscriptions(ctx, fan.ID); err != nil || len(subs) != 1 || subs[0].Language != "fr" || subs[0].Auth[0] != 2 {
+		t.Errorf("the fan's subscriptions: %+v %v", subs, err)
+	}
+
+	scan(3, 4)
+	if pushJobs() != 1 {
+		t.Fatal("no push queued for the subscribed fan")
+	}
+	pushes, err := s.Pushes(ctx, fan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pushes) != 1 || len(pushes[0].Items) != 2 || pushes[0].New != 3 {
+		t.Fatalf("pushes = %+v, want one notification of 3 new, episodes 3 and 4 not yet pushed", pushes)
+	}
+	if err := s.Pushed(ctx, fan.ID, pushes[0].Items); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := s.Pushes(ctx, fan.ID); err != nil || len(p) != 0 {
+		t.Errorf("after pushing: %+v %v, want none left", p, err)
+	}
+
+	if err := s.Unsubscribe(ctx, other.ID, sub.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unsubscribing another profile's browser: %v, want ErrNotFound", err)
+	}
+	if err := s.Unsubscribe(ctx, fan.ID, sub.ID); err != nil {
+		t.Error(err)
 	}
 }

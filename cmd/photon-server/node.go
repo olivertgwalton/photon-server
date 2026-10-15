@@ -47,6 +47,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/tracker"
 	"github.com/olivertgwalton/photon-server/internal/watch"
 	"github.com/olivertgwalton/photon-server/internal/webhook"
+	"github.com/olivertgwalton/photon-server/internal/webpush"
 )
 
 // node is a running node's parts, as serveNode wires them together: join makes those that stand
@@ -79,6 +80,7 @@ type node struct {
 	previews    *analysis.Previews
 	dumper      backup.Dumper
 	hub         *events.Hub
+	pusher      *webpush.Sender
 	restores    backup.Restores
 
 	gate      *jobs.Gate
@@ -213,6 +215,17 @@ func (n *node) wire(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	made, err := webpush.NewKey()
+	if err != nil {
+		return err
+	}
+	pushKey, err := st.PushKey(ctx, made)
+	if err != nil {
+		return err
+	}
+	if n.pusher, err = webpush.New(pushKey); err != nil {
+		return err
+	}
 	if n.reach, err = reach.New(ctx, st, n.hub.Subscribe, logger); err != nil {
 		return err
 	}
@@ -266,7 +279,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Notifications: st, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Notifications: st, Push: st, PushKey: n.pusher, People: st, PersonDescriber: n.providers, Editing: st, History: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, n.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    n.sent,
 		}),
@@ -295,6 +308,7 @@ func (n *node) workers() []*jobs.Worker {
 	matcher := jobs.NewWorker(st, logger, n.id, identifySlots, matching, hub, nil, n.finished)
 	notifier := jobs.NewWorker(st, logger, n.id, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
+		domain.JobPush:           webpush.Push(st, n.pusher),
 	}, hub, nil, n.finished)
 	importer := jobs.NewWorker(st, logger, n.id, importSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobImportHistory: n.imports.Run,
