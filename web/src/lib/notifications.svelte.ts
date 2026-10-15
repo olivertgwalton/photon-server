@@ -37,12 +37,10 @@ class Inbox {
 				...this.notifications.filter((n) => !ids.has(n.id)),
 			];
 		}
-		const read = new Set(change.read);
 		const through = change.through && Date.parse(change.through);
 		const now = new Date().toISOString();
 		for (const n of this.notifications) {
-			if (read.has(n.id) || (through && Date.parse(n.added_at) <= through))
-				n.read_at ??= now;
+			if (through && Date.parse(n.added_at) <= through) n.read_at ??= now;
 		}
 	}
 

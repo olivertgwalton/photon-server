@@ -47,9 +47,8 @@ type inboxChangeJSON struct {
 	// Notifications are those added, or gathering more, as the inbox lists them: each replaces
 	// the one of its id, at the top.
 	Notifications []notificationJSON `json:"notifications,omitzero"`
-	// Read are the ids read and Cleared those cleared, or Through the added_at up to which every
-	// one was read, or cleared.
-	Read    []int64    `json:"read,omitzero"`
+	// Cleared are the ids cleared, or Through the added_at up to which every one was read, or
+	// cleared.
 	Cleared []int64    `json:"cleared,omitzero"`
 	Through *time.Time `json:"through,omitzero"`
 	Unread  int        `json:"unread"`
@@ -127,9 +126,12 @@ func (a *API) notification(w http.ResponseWriter, r *http.Request) {
 }
 
 // inboxChange is a change of a profile's notifications as its feed tells it: those added, worded
-// for the reader, or which were read.
+// for the reader, or which were read or cleared.
 func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Words, d domain.NotificationsDetails) (inboxChangeJSON, error) {
 	out := inboxChangeJSON{Change: d.Change, Unread: d.Unread}
+	if !d.Through.IsZero() {
+		out.Through = &d.Through
+	}
 	switch d.Change {
 	case domain.NotificationsAdded:
 		in, err := a.svc.Notifications.Inbox(ctx, profile, d.IDs)
@@ -139,16 +141,9 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 		out.Unread = in.Unread
 		out.Notifications, err = a.notificationsOf(ctx, profile, said, in)
 		return out, err
-	case domain.NotificationsRead:
-		out.Read = d.IDs
-		if !d.Through.IsZero() {
-			out.Through = &d.Through
-		}
 	case domain.NotificationsCleared:
 		out.Cleared = d.IDs
-		if !d.Through.IsZero() {
-			out.Through = &d.Through
-		}
+	case domain.NotificationsRead:
 	}
 	return out, nil
 }

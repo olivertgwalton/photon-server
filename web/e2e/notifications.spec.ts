@@ -97,13 +97,14 @@ test("the bell takes what the server tells of, asking it for nothing", async ({
 	await expect(inbox.getByRole("link").first()).toContainText("Quiet Hours");
 	await expect(inbox.getByRole("link", { name: /Small Show/ })).toBeVisible();
 
-	// Read elsewhere, it is marked here as the server says.
+	// Opened elsewhere, it leaves here as the server says.
 	await page.request.post("/mock/emit", {
 		data: {
 			event: "notifications.changed",
-			data: { change: "read", read: [2], unread: 1 },
+			data: { change: "cleared", cleared: [2], unread: 1 },
 		},
 	});
+	await expect(inbox.getByRole("link", { name: /Quiet Hours/ })).toHaveCount(0);
 	await expect(
 		page.getByRole("button", { name: "Notifications: 1 unread" }),
 	).toBeVisible();

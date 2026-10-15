@@ -8143,7 +8143,6 @@ export interface components {
             change: components["schemas"]["NotificationChange"];
             cleared?: number[];
             notifications?: components["schemas"]["Notification"][];
-            read?: number[];
             /** Format: date-time */
             through?: string | null;
             unread: number;
