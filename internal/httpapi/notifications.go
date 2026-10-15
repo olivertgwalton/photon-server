@@ -14,7 +14,7 @@ import (
 
 type notifications interface {
 	Inbox(ctx context.Context, profile uuid.UUID, ids []int64) (store.Inbox, error)
-	ReadNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error)
+	ClearNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error)
 	ReadNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
 	ClearNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
@@ -47,8 +47,10 @@ type inboxChangeJSON struct {
 	// Notifications are those added, or gathering more, as the inbox lists them: each replaces
 	// the one of its id, at the top.
 	Notifications []notificationJSON `json:"notifications,omitzero"`
-	// Read are the ids read, or Through the added_at up to which every one was read, or cleared.
+	// Read are the ids read and Cleared those cleared, or Through the added_at up to which every
+	// one was read, or cleared.
 	Read    []int64    `json:"read,omitzero"`
+	Cleared []int64    `json:"cleared,omitzero"`
 	Through *time.Time `json:"through,omitzero"`
 	Unread  int        `json:"unread"`
 }
@@ -143,24 +145,28 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 			out.Through = &d.Through
 		}
 	case domain.NotificationsCleared:
-		out.Through = &d.Through
+		out.Cleared = d.IDs
+		if !d.Through.IsZero() {
+			out.Through = &d.Through
+		}
 	}
 	return out, nil
 }
 
-// readNotification marks one of the profile's notifications read, on each of its devices.
-func (a *API) readNotification(w http.ResponseWriter, r *http.Request) {
+// clearNotification clears one of the profile's notifications as it is opened, on each of its
+// devices.
+func (a *API) clearNotification(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathNumber(w, r, "id")
 	if !ok {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	unread, err := a.svc.Notifications.ReadNotification(r.Context(), profile, int64(id))
+	unread, err := a.svc.Notifications.ClearNotification(r.Context(), profile, int64(id))
 	if a.answeredAs(w, r, err, "no such notification") {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
-		Change: domain.NotificationsRead, IDs: []int64{int64(id)}, Unread: unread,
+		Change: domain.NotificationsCleared, IDs: []int64{int64(id)}, Unread: unread,
 	}})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -226,15 +232,15 @@ func (a *API) notificationsRoutes() []route {
 			handle: a.notification,
 		},
 		{
+			pattern: "DELETE /api/v1/profile/notifications/{id}", access: signedIn,
+			summary: "Clear one of the profile's notifications from its inbox, read, as it is opened",
+			path:    []param{{"id", int64(0), "The notification."}},
+			status:  http.StatusNoContent, handle: a.clearNotification,
+		},
+		{
 			pattern: "PUT /api/v1/profile/notifications/read", access: signedIn,
 			summary: "Mark the profile's notifications read, up to the newest it was shown",
 			body:    readMarkerJSON{}, status: http.StatusNoContent, handle: a.readNotifications,
-		},
-		{
-			pattern: "PUT /api/v1/profile/notifications/{id}/read", access: signedIn,
-			summary: "Mark one of the profile's notifications read",
-			path:    []param{{"id", int64(0), "The notification."}},
-			status:  http.StatusNoContent, handle: a.readNotification,
 		},
 	}
 }

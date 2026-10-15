@@ -10,12 +10,25 @@ import * as Item from "#lib/components/ui/item/index.js";
 import * as Popover from "#lib/components/ui/popover/index.js";
 import { ScrollArea } from "#lib/components/ui/scroll-area/index.js";
 import { inbox, keepPushing } from "#lib/notifications.svelte.js";
+import { afterNavigate, replaceState } from "$app/navigation";
+import { page } from "$app/state";
 
 // The films and episodes added that the profile follows, newest first, as
 // Plex's and Jellyfin's apps keep a bell beside the profile.
 $effect(() => {
 	inbox.load();
 	keepPushing();
+});
+
+// A notification is opened by a link naming it, from the bell or a push:
+// the page cleans the link, and the notification is cleared.
+afterNavigate(({ to }) => {
+	const opened = Number(to?.url.searchParams.get("notification"));
+	if (!to || !opened) return;
+	inbox.clear(opened);
+	const url = new URL(to.url.href);
+	url.searchParams.delete("notification");
+	replaceState(url, page.state);
 });
 
 let open = $state(false);
@@ -70,12 +83,9 @@ let open = $state(false);
 									props,
 								})}
 									<a
-										href="/titles/{n.title.id}"
+										href="/titles/{n.title.id}?notification={n.id}"
 										{...props}
-										onclick={() => {
-											inbox.read(n);
-											open = false;
-										}}
+										onclick={() => (open = false)}
 									>
 										<Item.Media
 											variant="image"

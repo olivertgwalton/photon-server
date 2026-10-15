@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 	}
 	// Declarative, so a browser that reads them shows it with no service worker.
 	if m := got[0]; m.WebPush != 8030 || m.Notification.Title != "Severance" || m.Notification.Tag != show.String() ||
-		m.Notification.Navigate != "/titles/"+show.String() || m.Notification.Body == "" || m.Notification.Lang != "en" {
+		!strings.HasPrefix(m.Notification.Navigate, "/titles/"+show.String()+"?notification=") || m.Notification.Body == "" || m.Notification.Lang != "en" {
 		t.Errorf("message = %+v", m)
 	}
 	// A phone is woken by the notification's id, which it asks the server to word, and told of the

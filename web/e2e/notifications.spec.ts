@@ -9,7 +9,7 @@ test("the bell lists what was added that the profile follows, and reads it", asy
 	await bell.click();
 	const inbox = page.getByRole("dialog", { name: "Notifications" });
 	const show = inbox.getByRole("link", { name: /Small Show/ });
-	await expect(show).toHaveAttribute("href", "/titles/t-show");
+	await expect(show).toHaveAttribute("href", "/titles/t-show?notification=1");
 	await expect(show).toContainText("2 new episodes, the latest S1 E2 · Second");
 	await expectAccessible(page);
 
@@ -127,5 +127,34 @@ test("clearing the bell empties it, here and on the server", async ({
 		page
 			.getByRole("dialog", { name: "Notifications" })
 			.getByText("Nothing new"),
+	).toBeVisible();
+});
+
+test("opening a notification clears it, here and on the server", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	await page
+		.getByRole("dialog", { name: "Notifications" })
+		.getByRole("link", { name: /Small Show/ })
+		.click();
+	await expect(page).toHaveURL(/\/titles\/t-show$/);
+	await page
+		.getByRole("button", { name: "Notifications", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Notifications" })
+			.getByText("Nothing new"),
+	).toBeVisible();
+});
+
+test("a page a push opened clears its notification", async ({ page }) => {
+	await logIn(page);
+	await page.goto("/titles/t-show?notification=1");
+	await expect(page).toHaveURL(/\/titles\/t-show$/);
+	await expect(
+		page.getByRole("button", { name: "Notifications", exact: true }),
 	).toBeVisible();
 });

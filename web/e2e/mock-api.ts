@@ -1478,8 +1478,13 @@ const server_ = Bun.serve<Socket>({
 				inbox.unread = 0;
 				return new Response(null, { status: 204 });
 			}
-			case "PUT /api/v1/profile/notifications/read":
-			case "PUT /api/v1/profile/notifications/1/read": {
+			case "DELETE /api/v1/profile/notifications/1": {
+				const inbox = inboxOf(token as string);
+				inbox.items = inbox.items.filter((n) => n.id !== 1);
+				inbox.unread = inbox.items.filter((n) => !n.read_at).length;
+				return new Response(null, { status: 204 });
+			}
+			case "PUT /api/v1/profile/notifications/read": {
 				const inbox = inboxOf(token as string);
 				for (const n of inbox.items) n.read_at ??= new Date().toISOString();
 				inbox.unread = 0;

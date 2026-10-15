@@ -40,7 +40,7 @@ func NotificationChanges() []NotificationChange {
 // changes those alone.
 type NotificationsDetails struct {
 	Change NotificationChange `json:"change"`
-	// IDs are those added or gathering more, or those read.
+	// IDs are those added or gathering more, or those cleared.
 	IDs []int64 `json:"ids,omitzero"`
 	// Through is the added_at up to which every one was read, or cleared.
 	Through time.Time `json:"through,omitzero"`

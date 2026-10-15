@@ -5753,22 +5753,8 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/profile/notifications/{id}/read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Mark one of the profile's notifications read */
-        put: {
+        /** Clear one of the profile's notifications from its inbox, read, as it is opened */
+        delete: {
             parameters: {
                 query?: never;
                 header?: never;
@@ -5790,8 +5776,6 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8140,6 +8124,7 @@ export interface components {
         };
         InboxChange: {
             change: components["schemas"]["NotificationChange"];
+            cleared?: number[];
             notifications?: components["schemas"]["Notification"][];
             read?: number[];
             /** Format: date-time */

@@ -171,11 +171,12 @@ func (s *Store) unread(ctx context.Context, profile uuid.UUID) (int, error) {
 	return n, err
 }
 
-// ReadNotification marks one of a profile's notifications read, answering how many are left
-// unread. ErrNotFound for none of its own.
-func (s *Store) ReadNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error) {
+// ClearNotification clears one of a profile's notifications from its inbox, read, as it is
+// opened, answering how many are left unread. ErrNotFound for none of its own.
+func (s *Store) ClearNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error) {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE notifications SET read_at = coalesce(read_at, now()) WHERE id = $1 AND profile_id = $2`, id, profile)
+		UPDATE notifications SET cleared_at = coalesce(cleared_at, now()), read_at = coalesce(read_at, now())
+		WHERE id = $1 AND profile_id = $2`, id, profile)
 	if err == nil && tag.RowsAffected() == 0 {
 		return 0, ErrNotFound
 	}
