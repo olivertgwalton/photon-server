@@ -37,16 +37,23 @@ var (
 // says so on the answer: its Content-Language, and that it varies by Accept-Language, so no cache
 // hands one reader's words to another.
 func Negotiate(w http.ResponseWriter, r *http.Request) Words {
+	tag := Readable(r)
+	h := w.Header()
+	h.Add("Vary", "Accept-Language")
+	h.Set("Content-Language", tag.String())
+	return In(tag)
+}
+
+// Readable is the language a request's reader reads names in, of those there are words for, by
+// the languages its Accept-Language prefers: kept, to word what it is sent later.
+func Readable(r *http.Request) language.Tag {
 	// A header that cannot be read prefers nothing, and is answered in English.
 	tags, _, err := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
 	if err != nil {
 		tags = nil
 	}
 	_, i, _ := matcher.Match(tags...)
-	h := w.Header()
-	h.Add("Vary", "Accept-Language")
-	h.Set("Content-Language", readable[i].String())
-	return In(readable[i])
+	return readable[i]
 }
 
 // In is the words of a reader of one language.

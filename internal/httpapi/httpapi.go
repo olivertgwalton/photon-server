@@ -133,6 +133,9 @@ type Services struct {
 	Playlists playlists
 	// Notifications are each profile's of the films and episodes added that it follows.
 	Notifications notifications
+	// Push are the browsers each profile's notifications are pushed to, subscribed with PushKey.
+	Push    pushSubscriptions
+	PushKey pushKey
 	// Collections are box sets, a provider's and an admin's.
 	Collections collections
 	// Providers are the metadata providers the server has, and ProviderSettings what an admin set
@@ -309,6 +312,7 @@ func (a *API) routes() []route {
 		a.profilesRoutes(),
 		a.preferencesRoutes(),
 		a.notificationsRoutes(),
+		a.pushRoutes(),
 		a.catalogueRoutes(),
 		a.avatarsRoutes(),
 		a.devicesRoutes(),
