@@ -70,19 +70,24 @@ type titlePageJSON struct {
 	TitleLanguage        domain.TitleLanguage `json:"title_language,omitzero"`
 	// QualifiedCertificate is Certificate with the country whose system rates it, where that is not
 	// the server's (GB:PG), as parental controls read it and an edit takes it.
-	QualifiedCertificate string            `json:"qualified_certificate,omitzero"`
-	AddedAt              time.Time         `json:"added_at"`
-	SeasonNumber         *int              `json:"season_number,omitzero"`
-	EpisodeNumber        *int              `json:"episode_number,omitzero"`
-	EpisodeEnd           *int              `json:"episode_end,omitzero"`
-	Show                 *titleRefJSON     `json:"show,omitzero"`
-	Season               *titleRefJSON     `json:"season,omitzero"`
-	Versions             []versionPageJSON `json:"versions,omitzero"`
-	Seasons              []seasonCardJSON  `json:"seasons,omitzero"`
-	Episodes             []episodeCardJSON `json:"episodes,omitzero"`
-	Extras               []extraCardJSON   `json:"extras,omitzero"`
-	Videos               []videoLinkJSON   `json:"videos,omitzero"`
-	State                titleStateJSON    `json:"state,omitzero"`
+	QualifiedCertificate string    `json:"qualified_certificate,omitzero"`
+	AddedAt              time.Time `json:"added_at"`
+	SeasonNumber         *int      `json:"season_number,omitzero"`
+	EpisodeNumber        *int      `json:"episode_number,omitzero"`
+	EpisodeEnd           *int      `json:"episode_end,omitzero"`
+	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among its
+	// show's seasons, which it is watched in.
+	AirsBeforeSeason  *int              `json:"airs_before_season,omitzero"`
+	AirsBeforeEpisode *int              `json:"airs_before_episode,omitzero"`
+	AirsAfterSeason   *int              `json:"airs_after_season,omitzero"`
+	Show              *titleRefJSON     `json:"show,omitzero"`
+	Season            *titleRefJSON     `json:"season,omitzero"`
+	Versions          []versionPageJSON `json:"versions,omitzero"`
+	Seasons           []seasonCardJSON  `json:"seasons,omitzero"`
+	Episodes          []episodeCardJSON `json:"episodes,omitzero"`
+	Extras            []extraCardJSON   `json:"extras,omitzero"`
+	Videos            []videoLinkJSON   `json:"videos,omitzero"`
+	State             titleStateJSON    `json:"state,omitzero"`
 	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}. Every picture a
 	// provider offers for it is an admin's to choose from at /api/v1/admin/titles/{id}/artwork/candidates.
 	Artwork    map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
@@ -292,7 +297,8 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
 		Origin:      p.Origin, Rule: p.Rule, List: p.List, LibraryIDs: p.Libraries, EpisodeOrder: p.EpisodeOrder, EpisodeGroup: p.EpisodeGroup,
 		MetadataLanguage: domain.LanguageTag(p.Locale.Language), CertificationCountry: domain.CountryCode(p.Locale.Country), TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
-		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd,
+		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd, AirsBeforeSeason: p.AirsBeforeSeason,
+		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
 		Seasons: each(p.Seasons, func(s store.SeasonCard) seasonCardJSON {

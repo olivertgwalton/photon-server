@@ -39,17 +39,22 @@ type editing interface {
 }
 
 type editJSON struct {
-	Title         string         `json:"title,omitzero"`
-	SortTitle     string         `json:"sort_title,omitzero"`
-	OriginalTitle string         `json:"original_title,omitzero"`
-	Overview      string         `json:"overview,omitzero"`
-	Tagline       string         `json:"tagline,omitzero"`
-	Certificate   string         `json:"certificate,omitzero"`
-	ReleaseDate   domain.Date    `json:"release_date,omitzero"`
-	Year          int            `json:"year,omitzero"`
-	Genres        []string       `json:"genres,omitzero"`
-	Studios       []string       `json:"studios,omitzero"`
-	Locked        []domain.Field `json:"locked,omitzero"`
+	Title         string      `json:"title,omitzero"`
+	SortTitle     string      `json:"sort_title,omitzero"`
+	OriginalTitle string      `json:"original_title,omitzero"`
+	Overview      string      `json:"overview,omitzero"`
+	Tagline       string      `json:"tagline,omitzero"`
+	Certificate   string      `json:"certificate,omitzero"`
+	ReleaseDate   domain.Date `json:"release_date,omitzero"`
+	Year          int         `json:"year,omitzero"`
+	Genres        []string    `json:"genres,omitzero"`
+	Studios       []string    `json:"studios,omitzero"`
+	// AirsBeforeSeason and AirsBeforeEpisode, or AirsAfterSeason, place a special in the season it
+	// aired in.
+	AirsBeforeSeason  int            `json:"airs_before_season,omitzero"`
+	AirsBeforeEpisode int            `json:"airs_before_episode,omitzero"`
+	AirsAfterSeason   int            `json:"airs_after_season,omitzero"`
+	Locked            []domain.Field `json:"locked,omitzero"`
 }
 
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
@@ -62,10 +67,15 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
+	if req.AirsBeforeSeason < 0 || req.AirsBeforeEpisode < 0 || req.AirsAfterSeason < 0 {
+		writeProblem(w, a.logger, codeInvalidBody, "a season or episode a special aired by is a number from 1")
+		return
+	}
 	m := domain.Metadata{
 		Title: req.Title, SortTitle: req.SortTitle, OriginalTitle: req.OriginalTitle, Overview: req.Overview,
 		Tagline: req.Tagline, Certificate: req.Certificate, Year: req.Year, Genres: req.Genres, Studios: req.Studios,
-		ReleaseDate: time.Time(req.ReleaseDate), Locked: req.Locked,
+		ReleaseDate: time.Time(req.ReleaseDate), AirsBeforeSeason: req.AirsBeforeSeason, AirsBeforeEpisode: req.AirsBeforeEpisode,
+		AirsAfterSeason: req.AirsAfterSeason, Locked: req.Locked,
 	}
 	if a.answered(w, r, a.svc.Editing.EditMetadata(r.Context(), id, m)) {
 		return

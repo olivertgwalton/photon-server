@@ -55,13 +55,16 @@ type TitlePage struct {
 	SeasonNumber  *int
 	EpisodeNumber *int
 	EpisodeEnd    *int
-	Show          *TitleRef
-	Season        *TitleRef
-	Versions      []VersionPage
-	Seasons       []SeasonCard
-	Episodes      []EpisodeCard
-	Extras        []ExtraCard
-	Videos        []VideoLink
+	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among the
+	// show's seasons.
+	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
+	Show                                                 *TitleRef
+	Season                                               *TitleRef
+	Versions                                             []VersionPage
+	Seasons                                              []SeasonCard
+	Episodes                                             []EpisodeCard
+	Extras                                               []ExtraCard
+	Videos                                               []VideoLink
 	// State is what the profile asking has made of it.
 	State TitleState
 	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}.
@@ -165,7 +168,8 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		Overview: deref(item.Overview), Tagline: deref(item.Tagline), Certificate: deref(item.Certificate),
 		Year: deref(item.Year), ReleaseDate: domain.Date(deref(item.ReleaseDate)), Genres: item.Genres, Studios: item.Studios,
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
-		EpisodeEnd: item.EpisodeEnd,
+		EpisodeEnd: item.EpisodeEnd, AirsBeforeSeason: item.AirsBeforeSeason, AirsBeforeEpisode: item.AirsBeforeEpisode,
+		AirsAfterSeason: item.AirsAfterSeason,
 	}
 	var credits, showCredits []CreditRef
 	g, gctx = errgroup.WithContext(ctx)
