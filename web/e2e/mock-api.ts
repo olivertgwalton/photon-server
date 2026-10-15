@@ -1472,10 +1472,13 @@ const server_ = Bun.serve<Socket>({
 				return new Response(null, { status: 204 });
 			case "GET /api/v1/profile/notifications":
 				return Response.json(inboxOf(token as string));
-			case "DELETE /api/v1/profile/notifications": {
+			case "PUT /api/v1/profile/notifications/cleared": {
+				const { through } = (await request.json()) as Schemas["InboxMarker"];
 				const inbox = inboxOf(token as string);
-				inbox.items = [];
-				inbox.unread = 0;
+				inbox.items = inbox.items.filter(
+					(n) => Date.parse(n.added_at) > Date.parse(through),
+				);
+				inbox.unread = inbox.items.filter((n) => !n.read_at).length;
 				return new Response(null, { status: 204 });
 			}
 			case "DELETE /api/v1/profile/notifications/1": {

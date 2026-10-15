@@ -135,6 +135,13 @@ func TestNotify(t *testing.T) {
 		t.Errorf("no library quiet: %v %v, want none", prefs.QuietLibraries, err)
 	}
 
+	// Cleared up to a moment, one added after it stays.
+	if _, err := s.ClearNotifications(ctx, fan, time.Unix(0, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := inbox(fan); len(got.Notifications) == 0 {
+		t.Errorf("cleared up to before any was added: %+v, want them kept", got)
+	}
 	// Cleared, a notification leaves the inbox read, and what it told of is not told again.
 	if unread, err := s.ClearNotifications(ctx, fan, time.Now()); err != nil || unread != 0 {
 		t.Fatalf("cleared: %d unread, %v; want none", unread, err)

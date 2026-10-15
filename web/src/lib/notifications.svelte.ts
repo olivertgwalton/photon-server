@@ -55,21 +55,27 @@ class Inbox {
 			const unread = this.unread - (n.read_at ? 0 : 1);
 			this.apply({ change: "cleared", cleared: [id], unread });
 		}
-		await client().DELETE("/api/v1/profile/notifications/{id}", {
-			params: { path: { id } },
-		});
-		if (!n) await this.load();
+		const { error } = await client().DELETE(
+			"/api/v1/profile/notifications/{id}",
+			{ params: { path: { id } } },
+		);
+		if (error || !n) await this.load();
 	}
 
 	// Everything shown cleared from the inbox, here at once and then on the
 	// server, which tells the profile's other devices; one added since stays.
-	clearAll() {
+	// A clear the server refused is undone by asking it again.
+	async clearAll() {
 		const through = this.notifications[0]?.added_at;
 		if (!through) return;
 		this.apply({ change: "cleared", through, unread: 0 });
-		client().DELETE("/api/v1/profile/notifications", {
-			params: { query: { through } },
-		});
+		const { error } = await client().PUT(
+			"/api/v1/profile/notifications/cleared",
+			{
+				body: { through },
+			},
+		);
+		if (error) await this.load();
 	}
 
 	// Everything shown read; one added since stays unread.

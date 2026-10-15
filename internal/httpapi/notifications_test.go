@@ -139,10 +139,10 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	}
 
 	// Clearing goes back by the newest shown, and is told to the profile's devices.
-	if rec := call(http.MethodDelete, "/api/v1/profile/notifications", ""); rec.Code != http.StatusBadRequest {
+	if rec := call(http.MethodPut, "/api/v1/profile/notifications/cleared", `{}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("clearing with no through: %d, want 400", rec.Code)
 	}
-	if rec := call(http.MethodDelete, "/api/v1/profile/notifications?through=2026-10-15T20:00:00.123456Z", ""); rec.Code != http.StatusNoContent ||
+	if rec := call(http.MethodPut, "/api/v1/profile/notifications/cleared", `{"through":"2026-10-15T20:00:00.123456Z"}`); rec.Code != http.StatusNoContent ||
 		!notes.cleared.Equal(time.Date(2026, time.October, 15, 20, 0, 0, 123456000, time.UTC)) {
 		t.Errorf("clearing: %d, through %v", rec.Code, notes.cleared)
 	}

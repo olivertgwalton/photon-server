@@ -5652,18 +5652,33 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile/notifications/cleared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         /** Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again */
-        delete: {
+        put: {
             parameters: {
-                query?: {
-                    /** @description The added_at of the newest notification shown; any added since stays. */
-                    through?: string;
-                };
+                query?: never;
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InboxMarker"];
+                };
+            };
             responses: {
                 /** @description No Content */
                 204: {
@@ -5675,6 +5690,8 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5698,7 +5715,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["ReadMarker"];
+                    "application/json": components["schemas"]["InboxMarker"];
                 };
             };
             responses: {
@@ -8131,6 +8148,10 @@ export interface components {
             through?: string | null;
             unread: number;
         };
+        InboxMarker: {
+            /** Format: date-time */
+            through: string;
+        };
         Info: {
             id: string;
             name: string;
@@ -8946,10 +8967,6 @@ export interface components {
         Reach: "start" | "resumable" | "end";
         Reached: {
             reach: components["schemas"]["Reach"];
-        };
-        ReadMarker: {
-            /** Format: date-time */
-            through: string;
         };
         /** @enum {string} */
         Recheck: "hourly" | "at_sign_in";
