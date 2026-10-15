@@ -22,6 +22,9 @@ import (
 // bare is a title with nothing on disk.
 var bare = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b0")
 
+// onePiece is a show TMDB has episode groups of.
+var onePiece = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000c0")
+
 type fakeEditing struct {
 	edited    domain.Metadata
 	reset     []domain.Field
@@ -176,6 +179,9 @@ func (f *fakeEditing) ForgetArtworkChoice(_ context.Context, id uuid.UUID, kind 
 }
 
 func (f *fakeEditing) IdentifySubject(_ context.Context, id uuid.UUID) (store.Subject, bool, error) {
+	if id == onePiece {
+		return store.Subject{Kind: domain.ItemShow, Title: "One Piece", IDs: map[domain.Provider]string{domain.ProviderTMDB: "37854"}}, true, nil
+	}
 	return store.Subject{Kind: domain.ItemMovie, Title: "heat", Year: 1995}, id == films, nil
 }
 
@@ -184,6 +190,13 @@ type filmSearch struct{}
 
 func (filmSearch) Info() provider.Info {
 	return provider.Info{ID: domain.SourceTMDB, Name: "TMDB", Kinds: []domain.ItemKind{domain.ItemMovie}}
+}
+
+func (filmSearch) EpisodeGroups(_ context.Context, _ domain.Locale, show int) ([]domain.EpisodeGroup, error) {
+	if show != 37854 {
+		return nil, provider.ErrNotFound
+	}
+	return []domain.EpisodeGroup{{ID: "5ad0df1cc3a36825ac00c087", Name: "Story Arc", Kind: domain.GroupStoryArc, Seasons: 55, Episodes: 1202}}, nil
 }
 
 func (filmSearch) Candidates(_ context.Context, _ domain.Locale, _ domain.ItemKind, title string, year int) ([]domain.Candidate, error) {
@@ -228,6 +241,9 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "group"}`, http.StatusBadRequest, "group"},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd", "group": "5ad0df1cc3a36825ac00c087"}`, http.StatusBadRequest, "group"},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "group", "group": "5ad0df1cc3a36825ac00c087"}`, http.StatusAccepted, ""},
+		{memberToken, http.MethodGet, "/api/v1/admin/titles/" + onePiece.String() + "/episode-groups", "", http.StatusForbidden, ""},
+		{goodToken, http.MethodGet, base + "/episode-groups", "", http.StatusNotFound, "no show"},
+		{goodToken, http.MethodGet, "/api/v1/admin/titles/" + onePiece.String() + "/episode-groups", "", http.StatusOK, `"kind":"story_arc"`},
 		{memberToken, http.MethodPost, base + "/refresh", `{"mode": "all"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, base + "/refresh", `{"mode": "images"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/refresh", `{"mode": "all"}`, http.StatusNotFound, ""},
