@@ -94,7 +94,10 @@ function stop() {
 	</div>
 	<div class="grid gap-3 p-4">
 		<div class="grid gap-1.5">
+			<!-- Moved on each second: an animated move ends snapped to a whole
+			     pixel, a step back before the next tick goes on. -->
 			<Progress
+				class="*:transition-none"
 				value={position}
 				max={Math.max(p.version.duration_ms, 1)}
 				aria-label="How far {p.profile.name} is through {name}"

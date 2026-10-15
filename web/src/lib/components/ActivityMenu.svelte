@@ -69,7 +69,9 @@ const running = $derived(working + state.playbacks.length);
 								{p.profile.name}
 								· {p.device.name}
 							</p>
+							<!-- Moved on each second, unanimated, as on the dashboard. -->
 							<Progress
+								class="*:transition-none"
 								value={positionAt(p, clock.now)}
 								max={Math.max(p.version.duration_ms, 1)}
 								aria-label="How far {p.profile.name} is through {name}"
