@@ -20,10 +20,10 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 	var audio, subtitles string
 	err := s.pool.QueryRow(ctx, `
 		SELECT audio_language, audio_track, subtitle_language, subtitle_mode, remember_audio, remember_subtitles,
-			max_bitrate_kbps, next_episode, intro_action, credits_action, theme_music, saved_at
+			max_bitrate_kbps, next_episode, intro_action, credits_action, theme_music, notify, saved_at
 		FROM profile_preferences WHERE profile_id = $1`, profile).Scan(
 		&audio, &out.AudioTrack, &subtitles, &out.SubtitleMode, &out.RememberAudio, &out.RememberSubtitles,
-		&out.MaxBitrateKbps, &out.NextEpisode, &out.IntroAction, &out.CreditsAction, &out.ThemeMusic, &out.SavedAt)
+		&out.MaxBitrateKbps, &out.NextEpisode, &out.IntroAction, &out.CreditsAction, &out.ThemeMusic, &out.Notify, &out.SavedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.DefaultPreferences(), nil
 	}
@@ -39,6 +39,15 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 	if err != nil {
 		return domain.Preferences{}, err
 	}
+	quiet, err := queryColumn[uuid.UUID](ctx, s.pool, `
+		SELECT library_id FROM quiet_libraries WHERE profile_id = $1 ORDER BY library_id`, profile)
+	if err != nil {
+		return domain.Preferences{}, err
+	}
+	// None quiet is as a profile that never chose.
+	if len(quiet) > 0 {
+		out.QuietLibraries = quiet
+	}
 	out.AudioLanguage, out.SubtitleLanguage = language.Make(audio), language.Make(subtitles)
 	out.Home = domain.ArrangeHome(home)
 	return out, nil
@@ -50,19 +59,30 @@ func (s *Store) SetPreferences(ctx context.Context, profile uuid.UUID, p domain.
 		_, err := tx.Exec(ctx, `
 			INSERT INTO profile_preferences (profile_id, audio_language, audio_track, subtitle_language, subtitle_mode,
 				remember_audio, remember_subtitles, max_bitrate_kbps, next_episode, intro_action, credits_action,
-				theme_music, saved_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+				theme_music, notify, saved_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
 			ON CONFLICT (profile_id) DO UPDATE SET
 				audio_language = excluded.audio_language, audio_track = excluded.audio_track,
 				subtitle_language = excluded.subtitle_language, subtitle_mode = excluded.subtitle_mode,
 				remember_audio = excluded.remember_audio, remember_subtitles = excluded.remember_subtitles,
 				max_bitrate_kbps = excluded.max_bitrate_kbps, next_episode = excluded.next_episode,
 				intro_action = excluded.intro_action, credits_action = excluded.credits_action,
-				theme_music = excluded.theme_music, saved_at = excluded.saved_at`,
+				theme_music = excluded.theme_music, notify = excluded.notify, saved_at = excluded.saved_at`,
 			profile, languageText(p.AudioLanguage), p.AudioTrack, languageText(p.SubtitleLanguage), p.SubtitleMode,
 			p.RememberAudio, p.RememberSubtitles, p.MaxBitrateKbps, p.NextEpisode, p.IntroAction, p.CreditsAction,
-			p.ThemeMusic)
+			p.ThemeMusic, p.Notify)
 		if err != nil {
+			return err
+		}
+		// A library that is no longer there is no longer quiet.
+		if _, err := tx.Exec(ctx, `
+			WITH kept AS (
+				INSERT INTO quiet_libraries (profile_id, library_id)
+				SELECT $1, id FROM libraries WHERE id = ANY($2)
+				ON CONFLICT DO NOTHING
+			)
+			DELETE FROM quiet_libraries WHERE profile_id = $1 AND NOT library_id = ANY(coalesce($2, '{}'::uuid[]))`,
+			profile, p.QuietLibraries); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM home_sections WHERE profile_id = $1`, profile); err != nil {

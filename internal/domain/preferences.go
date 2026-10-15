@@ -98,6 +98,9 @@ type Preferences struct {
 	IntroAction   SegmentAction
 	CreditsAction SegmentAction
 	ThemeMusic    ThemeMusic
+	Notify        Notify
+	// QuietLibraries are the libraries the profile is told nothing of.
+	QuietLibraries []uuid.UUID
 	// Home is every home row, in the order shown, hidden or not.
 	Home []HomeSection
 	// SavedAt is when they were last changed; zero for a profile that never has.
@@ -110,7 +113,7 @@ func DefaultPreferences() Preferences {
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
 		NextEpisode: NextEpisodePlay, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
-		ThemeMusic: ThemeMusicOff, Home: ArrangeHome(nil),
+		ThemeMusic: ThemeMusicOff, Notify: NotifyMarked, Home: ArrangeHome(nil),
 	}
 }
 

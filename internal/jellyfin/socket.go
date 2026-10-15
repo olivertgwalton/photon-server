@@ -182,7 +182,7 @@ func (a *API) told(ctx context.Context, session domain.Session, e domain.Event) 
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventJobsProgress, domain.EventWebhookTest, domain.EventMaintenanceChanged,
 		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged,
-		domain.EventRestoreStarted, domain.EventTrackerChanged:
+		domain.EventRestoreStarted, domain.EventTrackerChanged, domain.EventNotificationsChanged:
 	}
 	return message{}, false, nil
 }

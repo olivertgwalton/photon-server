@@ -84,6 +84,15 @@ func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger
 		}
 		if added > 0 {
 			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: domain.TitlesAddedDetails{Titles: added}})
+			told, err := st.Notify(ctx, lib.ID, started)
+			if err != nil {
+				logger.WarnContext(ctx, "profiles not told of titles added", slog.Any("err", err))
+			}
+			for _, t := range told {
+				hub.Raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
+					Change: domain.NotificationsAdded, IDs: t.IDs,
+				}})
+			}
 		}
 		// New titles have their subtitles fetched now, as Jellyfin fetches a new item's, not at the
 		// next daily run.
