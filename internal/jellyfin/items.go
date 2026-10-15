@@ -321,7 +321,7 @@ var personKinds = map[domain.CreditKind]string{
 func (it *item) ratings(rs []domain.Rating) {
 	for _, r := range rs {
 		switch r.Site {
-		case domain.SiteTMDB, domain.SiteIMDb:
+		case domain.SiteTMDB, domain.SiteIMDb, domain.SiteAniList:
 			if it.CommunityRating == nil {
 				score := float64(int(r.Score)) / 10
 				it.CommunityRating = &score

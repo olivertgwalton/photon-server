@@ -21,7 +21,7 @@ func ArtworkKinds() []ArtworkKind {
 // ArtworkSources are where pictures come from: an admin's choice of a provider's, files beside the
 // title, then the providers.
 func ArtworkSources() []FieldSource {
-	return []FieldSource{SourceUser, SourceFile, SourceTMDB, SourceTVDB, SourceOMDb}
+	return []FieldSource{SourceUser, SourceFile, SourceTMDB, SourceTVDB, SourceOMDb, SourceAniList}
 }
 
 // Picture is where one picture is: a file under Root, or a provider's URL.
