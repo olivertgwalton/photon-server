@@ -2,6 +2,7 @@ package animelist
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -95,4 +96,45 @@ func TestAFilmIsKnownByItsTMDBAndIMDbIDs(t *testing.T) {
 		}
 	}
 	t.Error("no Princess Mononoke")
+}
+
+func TestAnEntrysEpisodeIsPlacedInTheShow(t *testing.T) {
+	entries := read(t)
+	byID := map[int]Entry{}
+	for _, e := range entries {
+		byID[e.AniDB] = e
+	}
+	for _, tc := range []struct {
+		name    string
+		anidb   int
+		p       domain.Provider
+		order   domain.EpisodeOrder
+		special bool
+		ep      int
+		season  int
+		at      []int
+	}{
+		{"a second cour's first", 14444, domain.ProviderTVDB, domain.OrderAired, false, 1, 3, []int{13}},
+		{"a special listed one by one", 69, domain.ProviderTVDB, domain.OrderAired, true, 1, 0, []int{27}},
+		{"another special listed", 69, domain.ProviderTVDB, domain.OrderAired, true, 16, 0, []int{31}},
+		{"by a TMDB range", 69, domain.ProviderTMDB, domain.OrderAired, false, 62, 2, []int{1}},
+		{"by a TheTVDB range, as aired", 69, domain.ProviderTVDB, domain.OrderAired, false, 892, 21, []int{1}},
+		{"in the absolute order", 69, domain.ProviderTVDB, domain.OrderAbsolute, false, 892, Absolute, []int{892}},
+		{"a special, in the absolute order", 69, domain.ProviderTVDB, domain.OrderAbsolute, true, 1, 0, []int{27}},
+	} {
+		season, at, ok := byID[tc.anidb].At(tc.p, tc.order, tc.special, tc.ep)
+		if !ok || season != tc.season || !slices.Equal(at, tc.at) {
+			t.Errorf("%s: season %d %v, %v; want season %d %v", tc.name, season, at, ok, tc.season, tc.at)
+		}
+	}
+	if season, at, ok := byID[69].At(domain.ProviderTVDB, domain.OrderAired, true, 6); ok {
+		t.Errorf("a special the show has not: season %d %v", season, at)
+	}
+	var in []int
+	for _, e := range In(of(entries, domain.ProviderTVDB, 267440), domain.ProviderTVDB, 3) {
+		in = append(in, e.AniDB)
+	}
+	if !slices.Equal(in, []int{13241, 14444}) {
+		t.Errorf("Attack on Titan's season 3 holds %v; want both its cours", in)
+	}
 }
