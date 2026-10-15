@@ -17,9 +17,17 @@ class Inbox {
 		this.unread = data.unread;
 	}
 
-	// Those added replace any of their ids, at the top; those read are marked.
+	// Those added replace any of their ids, at the top; those read are marked;
+	// those cleared leave.
 	apply(change: InboxChange) {
 		this.unread = change.unread;
+		if (change.change === "cleared") {
+			const through = Date.parse(change.through ?? "");
+			this.notifications = this.notifications.filter(
+				(n) => Date.parse(n.added_at) > through,
+			);
+			return;
+		}
 		const added = change.notifications ?? [];
 		if (added.length) {
 			const ids = new Set(added.map((n) => n.id));
@@ -43,6 +51,17 @@ class Inbox {
 		this.apply({ change: "read", read: [n.id], unread: this.unread - 1 });
 		client().PUT("/api/v1/profile/notifications/{id}/read", {
 			params: { path: { id: n.id } },
+		});
+	}
+
+	// Everything shown cleared from the inbox, here at once and then on the
+	// server, which tells the profile's other devices; one added since stays.
+	clearAll() {
+		const through = this.notifications[0]?.added_at;
+		if (!through) return;
+		this.apply({ change: "cleared", through, unread: 0 });
+		client().DELETE("/api/v1/profile/notifications", {
+			params: { query: { through } },
 		});
 	}
 

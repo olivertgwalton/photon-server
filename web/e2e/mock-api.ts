@@ -1472,6 +1472,12 @@ const server_ = Bun.serve<Socket>({
 				return new Response(null, { status: 204 });
 			case "GET /api/v1/profile/notifications":
 				return Response.json(inboxOf(token as string));
+			case "DELETE /api/v1/profile/notifications": {
+				const inbox = inboxOf(token as string);
+				inbox.items = [];
+				inbox.unread = 0;
+				return new Response(null, { status: 204 });
+			}
 			case "PUT /api/v1/profile/notifications/read":
 			case "PUT /api/v1/profile/notifications/1/read": {
 				const inbox = inboxOf(token as string);

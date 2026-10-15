@@ -109,3 +109,23 @@ test("the bell takes what the server tells of, asking it for nothing", async ({
 	).toBeVisible();
 	expect(asked).toBe(1);
 });
+
+test("clearing the bell empties it, here and on the server", async ({
+	page,
+}) => {
+	await logIn(page);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	const inbox = page.getByRole("dialog", { name: "Notifications" });
+	await inbox.getByRole("button", { name: "Clear all" }).click();
+	await expect(inbox.getByText("Nothing new")).toBeVisible();
+	await expect(inbox.getByRole("button", { name: "Clear all" })).toHaveCount(0);
+	await page.reload();
+	await page
+		.getByRole("button", { name: "Notifications", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Notifications" })
+			.getByText("Nothing new"),
+	).toBeVisible();
+});

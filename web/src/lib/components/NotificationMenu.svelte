@@ -47,11 +47,18 @@ let open = $state(false);
 			<Popover.Title class="text-ink font-semibold"
 				>Notifications</Popover.Title
 			>
-			{#if inbox.unread}
-				<Button variant="link" size="sm" onclick={() => inbox.readAll()}>
-					Mark all read
-				</Button>
-			{/if}
+			<div class="flex items-center">
+				{#if inbox.unread}
+					<Button variant="link" size="sm" onclick={() => inbox.readAll()}>
+						Mark all read
+					</Button>
+				{/if}
+				{#if inbox.notifications.length}
+					<Button variant="link" size="sm" onclick={() => inbox.clearAll()}>
+						Clear all
+					</Button>
+				{/if}
+			</div>
 		</div>
 		{#if inbox.notifications.length}
 			<ScrollArea class="max-h-[60vh]">
