@@ -49,8 +49,8 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // Fetchable are the built-in sources a library may rank to fetch f for an item of a kind, as
 // Jellyfin lists only the providers that support a type: an NFO describes whatever it sits beside
 // but holds no pictures, TheTVDB knows only shows, MDBList rates films and shows alone, and OMDb
-// describes no season and has a poster only for a film or a show, and AniList knows no episode. A
-// plugin may be ranked for anything.
+// describes no season and has a poster only for a film or a show, AniList knows no episode, and
+// AniDB pictures no episode. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
@@ -69,6 +69,7 @@ func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 		if kind != ItemEpisode {
 			out = append(out, SourceAniList)
 		}
+		out = append(out, SourceAniDB)
 	case FetcherImages:
 		out = append(out, SourceTMDB)
 		if kind != ItemMovie {
@@ -78,7 +79,7 @@ func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 			out = append(out, SourceOMDb)
 		}
 		if kind != ItemEpisode {
-			out = append(out, SourceAniList)
+			out = append(out, SourceAniList, SourceAniDB)
 		}
 	}
 	return out

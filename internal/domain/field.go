@@ -88,16 +88,18 @@ const (
 	SourceOpenSubtitles FieldSource = "opensubtitles"
 	// SourceAniList describes anime, placed in a show's seasons by the anime lists.
 	SourceAniList FieldSource = "anilist"
+	// SourceAniDB describes anime and its episodes, placed in a show's seasons by the anime lists.
+	SourceAniDB FieldSource = "anidb"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files
 // say always ranks lowest, and a reader's own edit highest. A registered plugin is one too.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB}
 }
 
 // PluginPattern is a metadata plugin's source id: its slug after "plugin:", so none collides with

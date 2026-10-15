@@ -53,5 +53,5 @@ type Person struct {
 
 // CreditSources are the sources that give credits.
 func CreditSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceAniList}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceAniList, SourceAniDB}
 }

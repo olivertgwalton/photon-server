@@ -117,6 +117,42 @@ func Episode(entries []Entry, p domain.Provider, season, n int) (Place, bool) {
 	return best, found
 }
 
+// At answers where one of the entry's episodes falls in its show on p, numbered in order: the
+// season and the show's episodes it is; false for one the show has not. The entry's own list comes
+// first, then its ranges, then where it says its regular episodes fall, as Episode reads them
+// back. A show numbered in its absolute order keeps its specials, but none of its seasons.
+func (e Entry) At(p domain.Provider, order domain.EpisodeOrder, special bool, ep int) (int, []int, bool) {
+	maps := func(m Mapping) bool {
+		return m.Provider == p && m.Special == special && (order != domain.OrderAbsolute || m.Season == 0)
+	}
+	for _, m := range e.Mappings {
+		if at, listed := m.Episodes[ep]; maps(m) && listed {
+			return m.Season, at, len(at) > 0
+		}
+	}
+	for _, m := range e.Mappings {
+		if maps(m) && m.Range != nil && m.Range.holds(ep) {
+			return m.Season, []int{ep + m.Range.Offset}, true
+		}
+	}
+	if at := e.Placing(p); !special && at.Show != 0 {
+		return at.Season, []int{ep + at.Offset}, true
+	}
+	return 0, nil, false
+}
+
+// In answers the entries with episodes in a season of a show on p.
+func In(entries []Entry, p domain.Provider, season int) []Entry {
+	var out []Entry
+	for _, e := range entries {
+		if at := e.Placing(p); at.Show != 0 && at.Season == season ||
+			slices.ContainsFunc(e.Mappings, func(m Mapping) bool { return m.Provider == p && m.Season == season }) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // First answers the entry a season of a show opens with, as p numbers it: the one its first
 // episode is in.
 func First(entries []Entry, p domain.Provider, season int) (Entry, bool) {

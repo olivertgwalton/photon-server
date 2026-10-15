@@ -12,10 +12,12 @@ const (
 	SiteRottenTomatoesAudience RatingSite = "rotten_tomatoes_audience"
 	// SiteAniList is AniList's members' average score.
 	SiteAniList RatingSite = "anilist"
+	// SiteAniDB is AniDB's members' permanent rating.
+	SiteAniDB RatingSite = "anidb"
 )
 
 func RatingSites() []RatingSite {
-	return []RatingSite{SiteIMDb, SiteTMDB, SiteRottenTomatoes, SiteRottenTomatoesAudience, SiteAniList}
+	return []RatingSite{SiteIMDb, SiteTMDB, SiteRottenTomatoes, SiteRottenTomatoesAudience, SiteAniList, SiteAniDB}
 }
 
 // Rating is what a site's readers or critics make of a title, scored out of 100 whatever scale the
@@ -28,5 +30,5 @@ type Rating struct {
 
 // RatingSources are the sources that give ratings.
 func RatingSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB}
 }
