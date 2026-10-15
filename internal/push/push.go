@@ -6,12 +6,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 	"uuid"
 
 	"golang.org/x/text/language"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/jobs"
+	"github.com/olivertgwalton/photon-server/internal/pushrelay"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/webpush"
 	"github.com/olivertgwalton/photon-server/internal/words"
@@ -20,6 +23,11 @@ import (
 // web sends a message to a browser's push service.
 type web interface {
 	Send(ctx context.Context, sub webpush.Subscription, m webpush.Message) error
+}
+
+// apple wakes an Apple device, through photon's push relay.
+type apple interface {
+	Send(ctx context.Context, m pushrelay.Message) error
 }
 
 // pushTTL is how long a push service keeps a notification for a browser that is away: a day on, a
@@ -46,10 +54,11 @@ type notification struct {
 	Navigate string `json:"navigate"`
 }
 
-// Job is the job that pushes a profile's notifications not yet pushed to each browser subscribed
-// for it, in the browser's language. A browser that ended its subscription is forgotten; one that
-// fails has every browser sent again later, where each replaces what it shows of the same title.
-func Job(st *store.Store, browsers web) jobs.Handler {
+// Job is the job that pushes a profile's notifications not yet pushed to each device subscribed for
+// it: a browser in its language, an Apple device by the notification's id, which it asks the server
+// to word. A device that ended its subscription is forgotten; one that fails has every device sent
+// again later, where each replaces what it shows of the same title.
+func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 	return func(ctx context.Context, profile uuid.UUID) error {
 		pushes, err := st.Pushes(ctx, profile)
 		if err != nil || len(pushes) == 0 {
@@ -74,8 +83,14 @@ func Job(st *store.Store, browsers web) jobs.Handler {
 		}
 		var failed []error
 		for _, sub := range subs {
-			err := sendWeb(ctx, browsers, sub, pushes, byID)
-			if errors.Is(err, webpush.ErrGone) {
+			var err error
+			switch sub.Kind {
+			case domain.PushWeb:
+				err = sendWeb(ctx, browsers, sub, pushes, byID)
+			case domain.PushApple:
+				err = sendApple(ctx, devices, sub, pushes, byID)
+			}
+			if errors.Is(err, webpush.ErrGone) || errors.Is(err, pushrelay.ErrGone) {
 				// Unsubscribed on another device meanwhile is as good.
 				if err = st.Unsubscribe(ctx, profile, sub.ID); errors.Is(err, store.ErrNotFound) {
 					err = nil
@@ -109,6 +124,29 @@ func sendWeb(ctx context.Context, browsers web, sub store.PushSubscription, push
 		}
 		m := webpush.Message{Payload: payload, Topic: base64.RawURLEncoding.EncodeToString(p.Title[:]), TTL: pushTTL}
 		if err := browsers.Send(ctx, to, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sendApple wakes an Apple device for each notification unread that its profile still may see; the
+// device asks the server for each by its id, and shows what it is told.
+func sendApple(ctx context.Context, devices apple, sub store.PushSubscription, pushes []store.Push, cards map[uuid.UUID]store.Card) error {
+	if sub.ApnsEnvironment == nil {
+		return nil
+	}
+	for _, p := range pushes {
+		_, ok := cards[p.Title]
+		_, seen := cards[p.Latest]
+		if p.ReadAt != nil || !ok || !seen {
+			continue
+		}
+		m := pushrelay.Message{
+			Token: sub.Endpoint, Environment: *sub.ApnsEnvironment, Collapse: p.Title.String(),
+			Notification: strconv.FormatInt(p.ID, 10),
+		}
+		if err := devices.Send(ctx, m); err != nil {
 			return err
 		}
 	}

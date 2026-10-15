@@ -14,6 +14,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/pushrelay"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 	"github.com/olivertgwalton/photon-server/internal/webpush"
@@ -38,6 +39,24 @@ func (b *browsers) Send(_ context.Context, sub webpush.Subscription, m webpush.M
 		return err
 	}
 	b.got[sub.Endpoint] = append(b.got[sub.Endpoint], told)
+	return nil
+}
+
+// phones is photon's push relay: it answers each token's wake-ups with its error, and keeps those it
+// takes.
+type phones struct {
+	mu     sync.Mutex
+	answer map[string]error
+	got    map[string][]pushrelay.Message
+}
+
+func (p *phones) Send(_ context.Context, m pushrelay.Message) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.answer[m.Token]; err != nil {
+		return err
+	}
+	p.got[m.Token] = append(p.got[m.Token], m)
 	return nil
 }
 
@@ -111,9 +130,17 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	production := domain.APNsProduction
+	for _, token := range []string{"phone", "old-phone"} {
+		sub := store.PushSubscription{Kind: domain.PushApple, Endpoint: token, ApnsEnvironment: &production, Language: "en"}
+		if _, _, err := st.Subscribe(ctx, fan, sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := &phones{answer: map[string]error{"old-phone": pushrelay.ErrGone}, got: map[string][]pushrelay.Message{}}
 	scan(2, 3)
 
-	push := Job(st, b)
+	push := Job(st, b, p)
 	if err := push(ctx, fan); err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +153,15 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 		m.Notification.Navigate != "/titles/"+show.String() || m.Notification.Body == "" || m.Notification.Lang != "en" {
 		t.Errorf("message = %+v", m)
 	}
-	if subs, err := st.PushSubscriptions(ctx, fan); err != nil || len(subs) != 1 || subs[0].Endpoint != "https://push.example/laptop" {
-		t.Errorf("subscriptions after one ended: %+v %v, want the laptop's alone", subs, err)
+	// A phone is woken by the notification's id, which it asks the server to word, and told of the
+	// show once.
+	woken := p.got["phone"]
+	if len(woken) != 1 || woken[0].Collapse != show.String() || woken[0].Notification == "" || woken[0].Environment != production {
+		t.Errorf("the phone was sent %+v, want one wake-up of the show's notification", woken)
+	}
+	subs, err := st.PushSubscriptions(ctx, fan)
+	if err != nil || len(subs) != 2 || subs[0].Endpoint != "https://push.example/laptop" || subs[1].Endpoint != "phone" {
+		t.Errorf("subscriptions after two ended: %+v %v, want the laptop's and the phone's", subs, err)
 	}
 
 	// Pushed once, nothing is pushed again; a failing browser leaves its pushes to be tried again.
