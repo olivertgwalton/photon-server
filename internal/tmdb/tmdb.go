@@ -354,21 +354,11 @@ var videoKinds = map[string]domain.ExtraKind{
 
 func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int) (domain.SeasonMetadata, error) {
 	var s struct {
-		Name     string `json:"name"`
-		Overview string `json:"overview"`
-		AirDate  string `json:"air_date"`
-		Poster   string `json:"poster_path"`
-		Episodes []struct {
-			Number     int      `json:"episode_number"`
-			Name       string   `json:"name"`
-			Overview   string   `json:"overview"`
-			AirDate    string   `json:"air_date"`
-			Still      string   `json:"still_path"`
-			GuestStars []person `json:"guest_stars"`
-			Crew       []person `json:"crew"`
-			Score      float64  `json:"vote_average"`
-			Votes      int      `json:"vote_count"`
-		} `json:"episodes"`
+		Name     string    `json:"name"`
+		Overview string    `json:"overview"`
+		AirDate  string    `json:"air_date"`
+		Poster   string    `json:"poster_path"`
+		Episodes []episode `json:"episodes"`
 	}
 	if err := c.get(ctx, loc, fmt.Sprintf("/tv/%d/season/%d", show, number), nil, &s); err != nil {
 		return domain.SeasonMetadata{}, err
@@ -382,19 +372,34 @@ func (c *Client) Season(ctx context.Context, loc domain.Locale, show, number int
 		Episodes: make(map[int]domain.Metadata, len(s.Episodes)),
 	}
 	for _, e := range s.Episodes {
-		aired := provider.Date(e.AirDate)
-		out.Episodes[e.Number] = domain.Metadata{
-			Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
-			Artwork: picture(domain.ArtworkThumb, e.Still),
-			Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
-		}
-		if e.Votes > 0 {
-			m := out.Episodes[e.Number]
-			m.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: e.Score * 10, Votes: e.Votes}}
-			out.Episodes[e.Number] = m
-		}
+		out.Episodes[e.Number] = e.metadata()
 	}
 	return out, nil
+}
+
+type episode struct {
+	Number     int      `json:"episode_number"`
+	Name       string   `json:"name"`
+	Overview   string   `json:"overview"`
+	AirDate    string   `json:"air_date"`
+	Still      string   `json:"still_path"`
+	GuestStars []person `json:"guest_stars"`
+	Crew       []person `json:"crew"`
+	Score      float64  `json:"vote_average"`
+	Votes      int      `json:"vote_count"`
+}
+
+func (e episode) metadata() domain.Metadata {
+	aired := provider.Date(e.AirDate)
+	m := domain.Metadata{
+		Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
+		Artwork: picture(domain.ArtworkThumb, e.Still),
+		Credits: credits{Cast: e.GuestStars, Crew: e.Crew}.list(domain.CreditGuestStar),
+	}
+	if e.Votes > 0 {
+		m.Ratings = []domain.Rating{{Site: domain.SiteTMDB, Score: e.Score * 10, Votes: e.Votes}}
+	}
+	return m
 }
 
 // person is someone TMDB credits: in a film's cast with the character, in a show's with each role
