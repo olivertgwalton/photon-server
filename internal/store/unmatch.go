@@ -38,51 +38,14 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 		for _, stmt := range []string{
 			`UPDATE items SET unmatched_at = now() WHERE id = @item`,
 			`DELETE FROM external_ids WHERE item_id = ANY(@scope) AND source IN ('match', 'user')`,
-			`DELETE FROM artwork WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
-			`DELETE FROM ratings WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
 			`DELETE FROM remote_videos WHERE item_id = ANY(@scope)`,
-			`DELETE FROM credits WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
 			`DELETE FROM jobs WHERE kind = 'identify' AND subject = @item AND state = 'queued'`,
-			// A name a provider gave falls back to the file's; any other word of one's is unsaid.
-			`UPDATE items i SET
-				title = CASE WHEN f.fields @> '{title}' THEN i.scan_title ELSE i.title END,
-				original_title = CASE WHEN f.fields @> '{original_title}' THEN NULL ELSE i.original_title END,
-				overview = CASE WHEN f.fields @> '{overview}' THEN NULL ELSE i.overview END,
-				tagline = CASE WHEN f.fields @> '{tagline}' THEN NULL ELSE i.tagline END,
-				certificate = CASE WHEN f.fields @> '{certificate}' THEN NULL ELSE i.certificate END,
-				release_date = CASE WHEN f.fields @> '{release_date}' THEN NULL ELSE i.release_date END,
-				year = CASE WHEN f.fields @> '{year}' THEN NULL ELSE i.year END,
-				genres = CASE WHEN f.fields @> '{genres}' THEN NULL ELSE i.genres END,
-				studios = CASE WHEN f.fields @> '{studios}' THEN NULL ELSE i.studios END
-			FROM (SELECT item_id, array_agg(field) AS fields FROM item_fields
-				WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources + ` GROUP BY item_id) f
-			WHERE i.id = f.item_id`,
-			`UPDATE item_fields SET source = 'file', updated_at = now()
-			WHERE item_id = ANY(@scope) AND field = 'title' AND source NOT IN ` + ownSources,
-			`DELETE FROM item_fields WHERE item_id = ANY(@scope) AND field <> 'sort_title' AND source NOT IN ` + ownSources,
 		} {
 			if _, err := tx.Exec(ctx, stmt, pgx.NamedArgs{"scope": scope, "item": id}); err != nil {
 				return err
 			}
 		}
-		// A sort title follows its title as the scan sorts one.
-		type titled struct {
-			ItemID uuid.UUID
-			Title  string
-		}
-		resort, err := queryStructs[titled](ctx, tx, `
-			SELECT f.item_id, i.title FROM item_fields f JOIN items i ON i.id = f.item_id
-			WHERE f.item_id = ANY($1) AND f.field = 'sort_title' AND f.source NOT IN `+ownSources, scope)
-		if err != nil {
-			return err
-		}
-		for _, r := range resort {
-			if _, err := tx.Exec(ctx, `UPDATE items SET sort_title = $2 WHERE id = $1`, r.ItemID, sortTitle(r.Title)); err != nil {
-				return err
-			}
-		}
-		if _, err := tx.Exec(ctx, `UPDATE item_fields SET source = 'file', updated_at = now()
-			WHERE item_id = ANY($1) AND field = 'sort_title' AND source NOT IN `+ownSources, scope); err != nil {
+		if err := unsay(ctx, tx, scope); err != nil {
 			return err
 		}
 		for source := range groupingProviders {
@@ -98,6 +61,58 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 		}
 		return askScan(ctx, tx, *item.LibraryID, []string{item.Folder}, 0)
 	})
+}
+
+// unsay takes back what providers said of the items in scope: their pictures, scores and
+// credits go, a name one gave falls back to the file's, and any other word of one's is unsaid.
+// What files and NFOs say, and an admin's edits, stand.
+func unsay(ctx context.Context, tx pgx.Tx, scope []uuid.UUID) error {
+	for _, stmt := range []string{
+		`DELETE FROM artwork WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
+		`DELETE FROM ratings WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
+		`DELETE FROM credits WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
+		`UPDATE items i SET
+			title = CASE WHEN f.fields @> '{title}' THEN i.scan_title ELSE i.title END,
+			original_title = CASE WHEN f.fields @> '{original_title}' THEN NULL ELSE i.original_title END,
+			overview = CASE WHEN f.fields @> '{overview}' THEN NULL ELSE i.overview END,
+			tagline = CASE WHEN f.fields @> '{tagline}' THEN NULL ELSE i.tagline END,
+			certificate = CASE WHEN f.fields @> '{certificate}' THEN NULL ELSE i.certificate END,
+			release_date = CASE WHEN f.fields @> '{release_date}' THEN NULL ELSE i.release_date END,
+			year = CASE WHEN f.fields @> '{year}' THEN NULL ELSE i.year END,
+			genres = CASE WHEN f.fields @> '{genres}' THEN NULL ELSE i.genres END,
+			studios = CASE WHEN f.fields @> '{studios}' THEN NULL ELSE i.studios END
+		FROM (SELECT item_id, array_agg(field) AS fields FROM item_fields
+			WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources + ` GROUP BY item_id) f
+		WHERE i.id = f.item_id`,
+		`UPDATE item_fields SET source = 'file', updated_at = now()
+		WHERE item_id = ANY(@scope) AND field = 'title' AND source NOT IN ` + ownSources,
+		`DELETE FROM item_fields WHERE item_id = ANY(@scope) AND field <> 'sort_title' AND source NOT IN ` + ownSources,
+	} {
+		if _, err := tx.Exec(ctx, stmt, pgx.NamedArgs{"scope": scope}); err != nil {
+			return err
+		}
+	}
+	// A sort title follows its title as the scan sorts one.
+	type titled struct {
+		ItemID uuid.UUID
+		Title  string
+	}
+	resort, err := queryStructs[titled](ctx, tx, `
+		SELECT f.item_id, i.title FROM item_fields f JOIN items i ON i.id = f.item_id
+		WHERE f.item_id = ANY($1) AND f.field = 'sort_title' AND f.source NOT IN `+ownSources, scope)
+	if err != nil {
+		return err
+	}
+	for _, r := range resort {
+		if _, err := tx.Exec(ctx, `UPDATE items SET sort_title = $2 WHERE id = $1`, r.ItemID, sortTitle(r.Title)); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE item_fields SET source = 'file', updated_at = now()
+		WHERE item_id = ANY($1) AND field = 'sort_title' AND source NOT IN `+ownSources, scope); err != nil {
+		return err
+	}
+	return nil
 }
 
 // held answers whether an admin unmatched a film or show, which no provider is then asked about.
