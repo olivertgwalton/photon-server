@@ -17,14 +17,15 @@ import (
 type Webhook struct {
 	ID        uuid.UUID
 	URL       string
+	Format    domain.WebhookFormat
 	Events    []domain.EventKind
 	CreatedAt time.Time
 }
 
-func (s *Store) AddWebhook(ctx context.Context, url string, kinds []domain.EventKind, secret string) (Webhook, error) {
-	out := Webhook{URL: url, Events: kinds}
+func (s *Store) AddWebhook(ctx context.Context, url string, format domain.WebhookFormat, kinds []domain.EventKind, secret string) (Webhook, error) {
+	out := Webhook{URL: url, Format: format, Events: kinds}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `INSERT INTO webhooks (url, secret) VALUES ($1, $2) RETURNING id, created_at`, url, secret).
+		err := tx.QueryRow(ctx, `INSERT INTO webhooks (url, format, secret) VALUES ($1, $2, $3) RETURNING id, created_at`, url, format, secret).
 			Scan(&out.ID, &out.CreatedAt)
 		if err != nil {
 			return err
@@ -38,7 +39,7 @@ func (s *Store) AddWebhook(ctx context.Context, url string, kinds []domain.Event
 // Webhooks answers every webhook, the oldest first.
 func (s *Store) Webhooks(ctx context.Context) ([]Webhook, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT w.id, w.url, array(SELECT e.kind FROM webhook_events e WHERE e.webhook_id = w.id), w.created_at
+		SELECT w.id, w.url, w.format, array(SELECT e.kind FROM webhook_events e WHERE e.webhook_id = w.id), w.created_at
 		FROM webhooks w WHERE w.plugin IS NULL ORDER BY w.id`)
 	if err != nil {
 		return nil, err
@@ -120,6 +121,7 @@ func (s *Store) QueueDelivery(ctx context.Context, webhook uuid.UUID, kind domai
 // plugin it is to, where it is to one.
 type Delivery struct {
 	URL    string
+	Format domain.WebhookFormat
 	Secret string
 	Kind   domain.EventKind
 	Body   []byte
@@ -131,8 +133,8 @@ type Delivery struct {
 func (s *Store) Delivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
 	var d Delivery
 	err := s.pool.QueryRow(ctx, `
-		SELECT w.url, w.secret, d.kind, d.body, w.plugin FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
-		WHERE d.id = $1`, id).Scan(&d.URL, &d.Secret, &d.Kind, &d.Body, &d.Plugin)
+		SELECT w.url, w.format, w.secret, d.kind, d.body, w.plugin FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
+		WHERE d.id = $1`, id).Scan(&d.URL, &d.Format, &d.Secret, &d.Kind, &d.Body, &d.Plugin)
 	return d, found(err)
 }
 

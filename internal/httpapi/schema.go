@@ -61,6 +61,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ImportStatus]():        values(domain.ImportStatuses()),
 	reflect.TypeFor[domain.ImportMiss]():          values(domain.ImportMisses()),
 	reflect.TypeFor[domain.Tracker]():             values(domain.Trackers()),
+	reflect.TypeFor[domain.WebhookFormat]():       values(domain.WebhookFormats()),
 	reflect.TypeFor[tracker.State]():              values(tracker.States()),
 	reflect.TypeFor[domain.JobKind]():             values(domain.JobKinds()),
 	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),

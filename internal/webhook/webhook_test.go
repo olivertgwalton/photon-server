@@ -78,7 +78,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	srv := httptest.NewServer(rx)
 	defer srv.Close()
 	const secret = "s3cret"
-	hook, err := st.AddWebhook(ctx, srv.URL+"/hook?token=theirs", []domain.EventKind{domain.EventPlaybackStarted}, secret)
+	hook, err := st.AddWebhook(ctx, srv.URL+"/hook?token=theirs", domain.WebhookPhoton, []domain.EventKind{domain.EventPlaybackStarted}, secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 	rx := &receiver{t: t}
 	srv := httptest.NewServer(rx)
 	defer srv.Close()
-	if _, err := st.AddWebhook(ctx, srv.URL, []domain.EventKind{domain.EventPlaybackStarted}, "s"); err != nil {
+	if _, err := st.AddWebhook(ctx, srv.URL, domain.WebhookPhoton, []domain.EventKind{domain.EventPlaybackStarted}, "s"); err != nil {
 		t.Fatal(err)
 	}
 	hub.Raise(ctx, domain.Event{Kind: domain.EventPlaybackStarted, Item: episodes[0].ID, Library: tv.ID})
