@@ -39,6 +39,15 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 	if err != nil {
 		return domain.Preferences{}, err
 	}
+	quiet, err := queryColumn[uuid.UUID](ctx, s.pool, `
+		SELECT library_id FROM quiet_libraries WHERE profile_id = $1 ORDER BY library_id`, profile)
+	if err != nil {
+		return domain.Preferences{}, err
+	}
+	// None quiet is as a profile that never chose.
+	if len(quiet) > 0 {
+		out.QuietLibraries = quiet
+	}
 	out.AudioLanguage, out.SubtitleLanguage = language.Make(audio), language.Make(subtitles)
 	out.Home = domain.ArrangeHome(home)
 	return out, nil
@@ -63,6 +72,17 @@ func (s *Store) SetPreferences(ctx context.Context, profile uuid.UUID, p domain.
 			p.RememberAudio, p.RememberSubtitles, p.MaxBitrateKbps, p.NextEpisode, p.IntroAction, p.CreditsAction,
 			p.ThemeMusic, p.Notify)
 		if err != nil {
+			return err
+		}
+		// A library that is no longer there is no longer quiet.
+		if _, err := tx.Exec(ctx, `
+			WITH kept AS (
+				INSERT INTO quiet_libraries (profile_id, library_id)
+				SELECT $1, id FROM libraries WHERE id = ANY($2)
+				ON CONFLICT DO NOTHING
+			)
+			DELETE FROM quiet_libraries WHERE profile_id = $1 AND NOT library_id = ANY(coalesce($2, '{}'::uuid[]))`,
+			profile, p.QuietLibraries); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM home_sections WHERE profile_id = $1`, profile); err != nil {

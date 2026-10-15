@@ -39,6 +39,16 @@ func TestNotify(t *testing.T) {
 	}
 	fan, idle, everything, quiet, kid := profile("Fan", domain.NotifyMarked), profile("Idle", domain.NotifyMarked),
 		profile("Everything", domain.NotifyAll), profile("Quiet", domain.NotifyNone), profile("Kid", domain.NotifyAll)
+	// Hushed is told of everything but TV, and of a library that is no library.
+	hushed := profile("Hushed", domain.NotifyAll)
+	prefs, err := s.Preferences(ctx, hushed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs.QuietLibraries = []uuid.UUID{tv.ID, uuid.NewV7()}
+	if prefs, err = s.SetPreferences(ctx, hushed, prefs); err != nil || !slices.Equal(prefs.QuietLibraries, []uuid.UUID{tv.ID}) {
+		t.Fatalf("quiet libraries kept: %v %v, want TV alone", prefs.QuietLibraries, err)
+	}
 	if err := s.SetAccess(ctx, kid, ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +106,7 @@ func TestNotify(t *testing.T) {
 	if told := scan(3); !slices.Equal(told, want) {
 		t.Fatalf("a new episode told %v, want the fan and everything %v", told, want)
 	}
-	for _, p := range []uuid.UUID{idle, quiet, kid} {
+	for _, p := range []uuid.UUID{idle, quiet, kid, hushed} {
 		if in := inbox(p); len(in.Notifications) != 0 || in.Unread != 0 {
 			t.Errorf("profile %v told %+v; it marked nothing, wants nothing, or may not see the show", p, in)
 		}
@@ -147,6 +157,11 @@ func TestNotify(t *testing.T) {
 	episodes = append(episodes[:0], 1, 2, 3, 4, 5, 6)
 	if told := scan(0); slices.Contains(told, fan) {
 		t.Errorf("an episode before the furthest the fan watched told it")
+	}
+
+	prefs.QuietLibraries = nil
+	if prefs, err = s.SetPreferences(ctx, hushed, prefs); err != nil || len(prefs.QuietLibraries) != 0 {
+		t.Errorf("no library quiet: %v %v, want none", prefs.QuietLibraries, err)
 	}
 
 	if unread, err := s.ReadNotifications(ctx, everything, time.Now()); err != nil || unread != 0 {

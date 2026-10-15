@@ -63,6 +63,7 @@ const notify = `
 			AND NOT EXISTS (SELECT 1 FROM watch_state w
 				WHERE w.profile_id = p.id AND w.item_id = a.item_id AND w.watched_at IS NOT NULL)
 			AND sees(v, a.item)
+			AND NOT EXISTS (SELECT 1 FROM quiet_libraries q WHERE q.profile_id = p.id AND q.library_id = @library)
 			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = a.item_id AND n.profile_id = p.id)
 	), kept AS (
 		INSERT INTO notifications (profile_id, title_id)
