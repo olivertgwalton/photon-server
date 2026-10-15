@@ -7961,6 +7961,9 @@ export interface components {
         /** @enum {string} */
         DownloadState: "queued" | "converting" | "ready" | "failed";
         Edit: {
+            airs_after_season?: number;
+            airs_before_episode?: number;
+            airs_before_season?: number;
             certificate?: string;
             genres?: string[];
             locked?: components["schemas"]["Field"][];
@@ -8038,6 +8041,7 @@ export interface components {
             overview?: string;
             /** Format: date */
             release_date?: string;
+            season_number?: number | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
             thumb?: string;
@@ -8122,7 +8126,7 @@ export interface components {
             metadata: components["schemas"]["FieldSource"][];
         };
         /** @enum {string} */
-        Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios";
+        Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios" | "airs_before_season" | "airs_before_episode" | "airs_after_season";
         FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb") | unknown;
         Folder: {
             /** Format: int64 */
@@ -9433,6 +9437,9 @@ export interface components {
         TitlePage: {
             /** Format: date-time */
             added_at: string;
+            airs_after_season?: number | null;
+            airs_before_episode?: number | null;
+            airs_before_season?: number | null;
             artwork?: {
                 [key: string]: string[];
             };

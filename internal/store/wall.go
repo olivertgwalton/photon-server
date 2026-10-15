@@ -39,7 +39,10 @@ type Card struct {
 	SeasonNumber  *int
 	EpisodeNumber *int
 	EpisodeEnd    *int
-	Thumb         uuid.UUID
+	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among the
+	// show's seasons.
+	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
+	Thumb                                                uuid.UUID
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
 	Origin domain.CollectionOrigin
 	// What a showcase or a wall's hover says of it: its write-up, lettering, genres, certificate
@@ -307,6 +310,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 			DurationMS: lengths[r.ID].ms, VersionCount: lengths[r.ID].versions, Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
+			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}

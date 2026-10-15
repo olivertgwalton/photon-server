@@ -17,7 +17,13 @@ type Metadata struct {
 	Year          int
 	Genres        []string
 	Studios       []string
-	IDs           map[Provider]string
+	// AirsBeforeSeason and AirsBeforeEpisode are where a special aired among a show's episodes:
+	// before that episode of that season, or at the season's start where no episode is named; or
+	// AirsAfterSeason, at that season's end.
+	AirsBeforeSeason  int
+	AirsBeforeEpisode int
+	AirsAfterSeason   int
+	IDs               map[Provider]string
 	// Videos, Artwork and Ratings are kept per source, not per field.
 	Videos  []RemoteVideo
 	Artwork []Artwork
@@ -62,12 +68,18 @@ const (
 	FieldYear          Field = "year"
 	FieldGenres        Field = "genres"
 	FieldStudios       Field = "studios"
+	// FieldAirsBeforeSeason, FieldAirsBeforeEpisode and FieldAirsAfterSeason are where a special
+	// aired among a show's seasons.
+	FieldAirsBeforeSeason  Field = "airs_before_season"
+	FieldAirsBeforeEpisode Field = "airs_before_episode"
+	FieldAirsAfterSeason   Field = "airs_after_season"
 )
 
 func Fields() []Field {
 	return []Field{
 		FieldTitle, FieldSortTitle, FieldOriginalTitle, FieldOverview, FieldTagline,
 		FieldCertificate, FieldReleaseDate, FieldYear, FieldGenres, FieldStudios,
+		FieldAirsBeforeSeason, FieldAirsBeforeEpisode, FieldAirsAfterSeason,
 	}
 }
 

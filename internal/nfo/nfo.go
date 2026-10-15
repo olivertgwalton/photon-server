@@ -46,7 +46,14 @@ type document struct {
 	Season        string     `xml:"season"`
 	Episode       string     `xml:"episode"`
 	EpisodeEnd    string     `xml:"episodenumberend"`
-	NamedSeasons  []struct {
+	// Where a special aired, as Jellyfin writes it, or as Kodi does.
+	AirsBeforeSeason   string `xml:"airsbefore_season"`
+	DisplaySeason      string `xml:"displayseason"`
+	AirsBeforeEpisode  string `xml:"airsbefore_episode"`
+	DisplayEpisode     string `xml:"displayepisode"`
+	AirsAfterSeason    string `xml:"airsafter_season"`
+	DisplayAfterSeason string `xml:"displayafterseason"`
+	NamedSeasons       []struct {
 		Number string `xml:"number,attr"`
 		Name   string `xml:",chardata"`
 	} `xml:"namedseason"`
@@ -214,6 +221,14 @@ func (doc document) metadata() domain.Metadata {
 		m.Year = y
 	} else if !m.ReleaseDate.IsZero() {
 		m.Year = m.ReleaseDate.Year()
+	}
+	for at, tags := range map[*int][2]string{
+		&m.AirsBeforeSeason: {doc.AirsBeforeSeason, doc.DisplaySeason}, &m.AirsBeforeEpisode: {doc.AirsBeforeEpisode, doc.DisplayEpisode},
+		&m.AirsAfterSeason: {doc.AirsAfterSeason, doc.DisplayAfterSeason},
+	} {
+		if n, ok := number(cmp.Or(tags[0], tags[1])); ok {
+			*at = n
+		}
 	}
 	for _, g := range doc.Genres {
 		m.Genres = append(m.Genres, names(g, "/|")...)

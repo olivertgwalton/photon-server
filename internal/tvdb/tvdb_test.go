@@ -91,7 +91,8 @@ func fake(t *testing.T) (*Client, *int) {
 			reply(t, w, `{"data":{"episodes":[{"seasonNumber":1,"number":1,"name":"The Detail"}]},"links":{"next":null}}`)
 		case "/series/79126/episodes/default/eng?page=1":
 			reply(t, w, `{"data":{"episodes":[{"id":102,"seasonNumber":1,"number":2,"name":"The Detail"},
-				{"id":601,"seasonNumber":6,"number":1,"name":"Coming","aired":"2100-01-04"}]},"links":{"next":null}}`)
+				{"id":601,"seasonNumber":6,"number":1,"name":"Coming","aired":"2100-01-04"},
+				{"id":901,"seasonNumber":0,"number":1,"name":"The Game","airsBeforeSeason":2,"airsBeforeEpisode":3}]},"links":{"next":null}}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -144,6 +145,14 @@ func TestSeasonsReadEveryPage(t *testing.T) {
 	}
 	if _, ok := got[2]; strings.Join(titles, ", ") != "The Target, The Detail" || ok {
 		t.Errorf("seasons = %+v, want season 1 with both pages' episodes, and nothing of season 2", got)
+	}
+}
+
+func TestASpecialSaysWhereItAired(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{0}, Order: domain.OrderAired})
+	if special := got[0].Episodes[1]; err != nil || special.AirsBeforeSeason != 2 || special.AirsBeforeEpisode != 3 || special.AirsAfterSeason != 0 {
+		t.Errorf("the special: %+v, %v; want it before season 2's third episode", special, err)
 	}
 }
 

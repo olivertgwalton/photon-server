@@ -36,6 +36,11 @@ type Item struct {
 	EpisodeOrder  domain.EpisodeOrder
 	// EpisodeGroup is the TMDB episode group a show numbered in OrderGroup is numbered by.
 	EpisodeGroup *string
+	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among the
+	// show's seasons.
+	AirsBeforeSeason  *int
+	AirsBeforeEpisode *int
+	AirsAfterSeason   *int
 }
 
 // LibrarySource is a source a library ranks for what it fetches of a kind of item; position 0 is

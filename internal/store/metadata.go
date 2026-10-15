@@ -100,6 +100,9 @@ func (f *fields) apply(ctx context.Context, tx db, source domain.FieldSource, m 
 	set(domain.FieldYear, m.Year != 0, m.Year)
 	set(domain.FieldGenres, len(m.Genres) > 0, m.Genres)
 	set(domain.FieldStudios, len(m.Studios) > 0, m.Studios)
+	set(domain.FieldAirsBeforeSeason, m.AirsBeforeSeason != 0, m.AirsBeforeSeason)
+	set(domain.FieldAirsBeforeEpisode, m.AirsBeforeEpisode != 0, m.AirsBeforeEpisode)
+	set(domain.FieldAirsAfterSeason, m.AirsAfterSeason != 0, m.AirsAfterSeason)
 	if len(written) == 0 {
 		return nil
 	}

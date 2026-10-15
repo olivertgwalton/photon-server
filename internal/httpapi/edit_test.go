@@ -216,6 +216,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{memberToken, http.MethodPatch, base, `{"title": "Mine"}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPatch, base, `{"title": "Heat", "release_date": "1995-12-15", "locked": ["overview"]}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPatch, base, `{"release_date": "15/12/1995"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPatch, base, `{"airs_before_season": -1}`, http.StatusBadRequest, "aired"},
 		{goodToken, http.MethodPatch, base, `{"locked": ["colour"]}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodDelete, base + "/edits?field=title&field=overview", "", http.StatusAccepted, ""},
 		{goodToken, http.MethodGet, base + "/candidates?provider=tmdb", "", http.StatusOK, `"id":"949","title":"heat asked","year":1995,"poster"`},

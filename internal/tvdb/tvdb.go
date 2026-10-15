@@ -351,6 +351,10 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, asked d
 					Overview string `json:"overview"`
 					Aired    string `json:"aired"`
 					Image    string `json:"image"`
+					// Where a special aired among the seasons.
+					AirsBeforeSeason  int `json:"airsBeforeSeason"`
+					AirsBeforeEpisode int `json:"airsBeforeEpisode"`
+					AirsAfterSeason   int `json:"airsAfterSeason"`
 				} `json:"episodes"`
 			} `json:"data"`
 			Links struct {
@@ -386,6 +390,7 @@ func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, asked d
 			s.Episodes[e.Number] = domain.Metadata{
 				Title: e.Name, Overview: e.Overview, ReleaseDate: aired, Year: provider.Year(aired),
 				Artwork: picture(domain.ArtworkThumb, e.Image), Credits: people,
+				AirsBeforeSeason: e.AirsBeforeSeason, AirsBeforeEpisode: e.AirsBeforeEpisode, AirsAfterSeason: e.AirsAfterSeason,
 			}
 		}
 		more = page.Links.Next != ""
