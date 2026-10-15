@@ -30,10 +30,13 @@ const (
 	TaskSyncLists TaskKey = "sync_lists"
 	// TaskFetchSubtitles fetches the subtitles copies lack in the languages their libraries name.
 	TaskFetchSubtitles TaskKey = "fetch_subtitles"
+	// TaskRefreshAnimeLists reads the published anime lists again, which place anime entries in
+	// shows.
+	TaskRefreshAnimeLists TaskKey = "refresh_anime_lists"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists}
 }
 
 // Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
@@ -48,7 +51,7 @@ func (k TaskKey) Jobs() []JobKind {
 		return []JobKind{JobMarkers, JobSegments}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
-	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles:
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists:
 	}
 	return nil
 }

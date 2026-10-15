@@ -201,7 +201,7 @@ func (n *node) wire(ctx context.Context) error {
 	n.scheduler = task.NewScheduler(st, logger, n.id, n.hub.Raise, scanTask(st), sweepTask(st, logger), backupTask(n.dumper, n.hub, logger),
 		refreshTask(st, logger), sweepArtworkTask(st, n.pictures, logger), markersTask(st, n.tools, n.providers, window, logger),
 		previewsTask(st, n.previews, window, logger), sweepDownloadsTask(st, logger), pruneActivityTask(st, logger),
-		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger))
+		refreshCollectionsTask(st), syncListsTask(st, n.providers), fetchSubtitlesTask(fetcher, logger), animeListsTask(st))
 	n.trackers = tracker.New(st, n.cache, n.hub.Raise, version, n.logger)
 	n.imports = historyimport.New(st, n.logger)
 	// Fetched subtitles are written from Postgres into each node's cache as it opens them.
