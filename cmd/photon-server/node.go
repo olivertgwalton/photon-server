@@ -34,6 +34,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/push"
 	"github.com/olivertgwalton/photon-server/internal/reach"
 	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/scan"
@@ -308,7 +309,7 @@ func (n *node) workers() []*jobs.Worker {
 	matcher := jobs.NewWorker(st, logger, n.id, identifySlots, matching, hub, nil, n.finished)
 	notifier := jobs.NewWorker(st, logger, n.id, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
-		domain.JobPush:           webpush.Push(st, n.pusher),
+		domain.JobPush:           push.Job(st, n.pusher),
 	}, hub, nil, n.finished)
 	importer := jobs.NewWorker(st, logger, n.id, importSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobImportHistory: n.imports.Run,

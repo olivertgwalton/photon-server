@@ -1,4 +1,5 @@
-package webpush
+// Package push is the job that pushes a profile's notifications to the devices subscribed for it.
+package push
 
 import (
 	"context"
@@ -12,8 +13,14 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/webpush"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
+
+// web sends a message to a browser's push service.
+type web interface {
+	Send(ctx context.Context, sub webpush.Subscription, m webpush.Message) error
+}
 
 // pushTTL is how long a push service keeps a notification for a browser that is away: a day on, a
 // new episode is no longer news to be woken for, and the inbox has it.
@@ -39,10 +46,10 @@ type notification struct {
 	Navigate string `json:"navigate"`
 }
 
-// Push is the job that pushes a profile's notifications not yet pushed to each browser subscribed
+// Job is the job that pushes a profile's notifications not yet pushed to each browser subscribed
 // for it, in the browser's language. A browser that ended its subscription is forgotten; one that
 // fails has every browser sent again later, where each replaces what it shows of the same title.
-func Push(st *store.Store, s *Sender) jobs.Handler {
+func Job(st *store.Store, browsers web) jobs.Handler {
 	return func(ctx context.Context, profile uuid.UUID) error {
 		pushes, err := st.Pushes(ctx, profile)
 		if err != nil || len(pushes) == 0 {
@@ -67,8 +74,8 @@ func Push(st *store.Store, s *Sender) jobs.Handler {
 		}
 		var failed []error
 		for _, sub := range subs {
-			err := s.sendAll(ctx, sub, pushes, byID)
-			if errors.Is(err, ErrGone) {
+			err := sendWeb(ctx, browsers, sub, pushes, byID)
+			if errors.Is(err, webpush.ErrGone) {
 				// Unsubscribed on another device meanwhile is as good.
 				if err = st.Unsubscribe(ctx, profile, sub.ID); errors.Is(err, store.ErrNotFound) {
 					err = nil
@@ -83,10 +90,10 @@ func Push(st *store.Store, s *Sender) jobs.Handler {
 	}
 }
 
-// sendAll sends a browser the notifications unread that its profile still may see.
-func (s *Sender) sendAll(ctx context.Context, sub store.PushSubscription, pushes []store.Push, cards map[uuid.UUID]store.Card) error {
+// sendWeb sends a browser the notifications unread that its profile still may see.
+func sendWeb(ctx context.Context, browsers web, sub store.PushSubscription, pushes []store.Push, cards map[uuid.UUID]store.Card) error {
 	said := words.In(language.Make(sub.Language))
-	to := Subscription{Endpoint: sub.Endpoint, P256DH: sub.P256DH, Auth: sub.Auth}
+	to := webpush.Subscription{Endpoint: sub.Endpoint, P256DH: sub.P256DH, Auth: sub.Auth}
 	for _, p := range pushes {
 		title, ok := cards[p.Title]
 		latest, seen := cards[p.Latest]
@@ -100,8 +107,8 @@ func (s *Sender) sendAll(ctx context.Context, sub store.PushSubscription, pushes
 		if err != nil {
 			return err
 		}
-		m := Message{Payload: payload, Topic: base64.RawURLEncoding.EncodeToString(p.Title[:]), TTL: pushTTL}
-		if err := s.Send(ctx, to, m); err != nil {
+		m := webpush.Message{Payload: payload, Topic: base64.RawURLEncoding.EncodeToString(p.Title[:]), TTL: pushTTL}
+		if err := browsers.Send(ctx, to, m); err != nil {
 			return err
 		}
 	}
