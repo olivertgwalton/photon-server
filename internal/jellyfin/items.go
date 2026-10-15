@@ -46,6 +46,9 @@ type item struct {
 	IndexNumber             *int                `json:"IndexNumber,omitempty"`
 	IndexNumberEnd          *int                `json:"IndexNumberEnd,omitempty"`
 	ParentIndexNumber       *int                `json:"ParentIndexNumber,omitempty"`
+	AirsBeforeSeasonNumber  *int                `json:"AirsBeforeSeasonNumber,omitempty"`
+	AirsBeforeEpisodeNumber *int                `json:"AirsBeforeEpisodeNumber,omitempty"`
+	AirsAfterSeasonNumber   *int                `json:"AirsAfterSeasonNumber,omitempty"`
 	ProviderIDs             map[string]string   `json:"ProviderIds,omitempty"`
 	IsFolder                bool                `json:"IsFolder"`
 	ParentID                string              `json:"ParentId,omitempty"`
@@ -198,6 +201,7 @@ func (a *API) fromCard(c store.Card) item {
 	it.SeriesID, it.SeriesName = ref(c.Show)
 	it.SeasonID, it.SeasonName = ref(c.Season)
 	it.ParentIndexNumber, it.IndexNumber, it.IndexNumberEnd = c.SeasonNumber, c.EpisodeNumber, c.EpisodeEnd
+	it.AirsBeforeSeasonNumber, it.AirsBeforeEpisodeNumber, it.AirsAfterSeasonNumber = c.AirsBeforeSeason, c.AirsBeforeEpisode, c.AirsAfterSeason
 	if c.Kind == domain.ItemSeason {
 		// Jellyfin numbers a season by its own index, under its show.
 		it.ParentID, it.ParentIndexNumber, it.IndexNumber = it.SeriesID, nil, c.SeasonNumber

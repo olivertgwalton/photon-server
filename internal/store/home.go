@@ -24,7 +24,7 @@ var rowQueries = map[domain.HomeRow]string{
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))
 		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
-	// and specials aside, unless it is under way already and so in Continue Watching; the shows
+	// and the specials placed in no season aside, unless it is under way already and so in Continue Watching; the shows
 	// in the order that episode was last played.
 	domain.RowNextUp: `
 		WITH last AS (
@@ -33,7 +33,7 @@ var rowQueries = map[domain.HomeRow]string{
 			JOIN items e ON e.id = w.item_id AND e.kind = 'episode'
 			JOIN items season ON season.id = e.parent_id
 			JOIN items show ON show.id = season.parent_id
-			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND e.season_number > 0
+			WHERE w.profile_id = @profile AND w.watched_at IS NOT NULL AND ` + airedSeason("e") + ` > 0
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 			ORDER BY show.id, ` + episodeOrderBy("DESC") + `
 		)
@@ -42,7 +42,7 @@ var rowQueries = map[domain.HomeRow]string{
 			SELECT ` + itemColumnsOf("e") + ` FROM items season
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
 			LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-			WHERE season.parent_id = last.show_id AND season.kind = 'season' AND season.season_number > 0
+			WHERE season.parent_id = last.show_id AND season.kind = 'season' AND ` + airedSeason("e") + ` > 0
 				AND ` + episodeOrderOf("e") + ` > last.at AND w.watched_at IS NULL
 			ORDER BY ` + episodeOrderBy("ASC") + ` LIMIT 1
 		) next
@@ -191,8 +191,9 @@ func (s *Store) LibraryRow(ctx context.Context, profile uuid.UUID, row domain.Ho
 var ErrNoNext = errors.New("no episode follows")
 
 // nextQueries answer the episode to play next, in the show's order (its seasons and episodes as
-// its files number them, in whichever order it is set to) and, as the next up row, specials aside
-// unless the title is one of them. A show's episodes are visible to a profile as the show is.
+// its files number them, in whichever order it is set to, each special placed in the season it
+// aired in) and, as the next up row, the specials placed nowhere aside unless the title is one of
+// them. A show's episodes are visible to a profile as the show is.
 var nextQueries = map[domain.ItemKind]string{
 	// After an episode, the one after it, watched or not, as a player's Up Next.
 	domain.ItemEpisode: `
@@ -201,22 +202,25 @@ var nextQueries = map[domain.ItemKind]string{
 		JOIN items here ON here.id = @id
 		WHERE e.kind = 'episode' AND season.parent_id = (SELECT parent_id FROM items WHERE id = here.parent_id)
 			AND ` + episodeOrderOf("e") + ` > ` + episodeOrderOf("here") + `
-			AND (e.season_number > 0 OR here.season_number = 0)
+			AND (` + airedSeason("e") + ` > 0 OR ` + airedSeason("here") + ` = 0)
 		ORDER BY ` + episodeOrderBy("ASC") + ` LIMIT 1`,
 	// Of a show or a season, where the profile is: the episode under way, else the first unwatched
 	// after the furthest one watched, else the first.
-	domain.ItemShow:   resumeQuery,
-	domain.ItemSeason: resumeQuery,
+	domain.ItemShow: resume(`FROM items e JOIN items season ON season.id = e.parent_id
+		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
+		WHERE e.kind = 'episode' AND season.parent_id = @id AND `+airedSeason("e")+` > 0`, episodeOrderBy("ASC")),
+	domain.ItemSeason: resume(`FROM items here `+seasonEpisodes+`
+		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
+		WHERE here.id = @id`, seasonOrder()),
 }
 
-var resumeQuery = `
+// resume answers where the profile is among the episodes from reads, as e, in order.
+func resume(from, order string) string {
+	return `
 	WITH e AS (
 		SELECT e.id, coalesce(w.position_ms, 0) > 0 AS started, w.watched_at IS NOT NULL AS watched,
-			w.last_played_at, row_number() OVER (ORDER BY ` + episodeOrderBy("ASC") + `) AS n
-		FROM items e
-		JOIN items season ON season.id = e.parent_id
-		LEFT JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
-		WHERE e.kind = 'episode' AND (season.id = @id OR (season.parent_id = @id AND season.season_number > 0))
+			w.last_played_at, row_number() OVER (ORDER BY ` + order + `) AS n
+		` + from + `
 	), last AS (
 		SELECT max(n) AS n FROM e WHERE watched
 	)
@@ -225,6 +229,7 @@ var resumeQuery = `
 			CASE WHEN started THEN 0 WHEN NOT watched AND n > coalesce((SELECT n FROM last), 0) THEN 1 ELSE 2 END,
 			CASE WHEN started THEN last_played_at END DESC NULLS LAST, n
 		LIMIT 1)`
+}
 
 // Next answers the episode to play after a title, as a card: ErrNotFound for a title the profile
 // may not see, ErrNoNext where nothing follows.

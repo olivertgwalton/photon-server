@@ -25,14 +25,46 @@ func itemColumnsOf(alias string) string {
 	return strings.Join(cols, ", ")
 }
 
-// episodeOrder is the order a show's episodes play in, read through alias: by season and number, one
-// with no number after those with one, then by air date and title. Where specials go is each
-// statement's own choice.
+// episodeOrder is the order a show's episodes play in, read through alias: by the season each aired
+// in and its place there, one with no number after those with one, then by air date and title. A
+// special its source places, as Jellyfin's do, is in the season it aired in: before the episode
+// named, at the season's start where none is, or after its last; one placed nowhere is in the
+// specials. Where the specials go is each statement's own choice.
 func episodeOrder(alias string) []string {
 	return []string{
-		alias + ".season_number", alias + ".episode_number IS NULL", "coalesce(" + alias + ".episode_number, 0)",
+		airedSeason(alias), alias + ".episode_number IS NULL",
+		"CASE WHEN " + alias + ".airs_after_season IS NOT NULL THEN 32768 WHEN " + alias + ".airs_before_season IS NOT NULL THEN " +
+			"coalesce(" + alias + ".airs_before_episode, 1) - 0.5 ELSE coalesce(" + alias + ".episode_number, 0) END",
+		"coalesce(" + alias + ".episode_number, 0)",
 		alias + ".air_date IS NULL", "coalesce(" + alias + ".air_date, 'epoch')", alias + ".sort_title", alias + ".id",
 	}
+}
+
+// airedSeason is the season an episode is watched in, read through alias: the one a special aired
+// in, where its source places it, else its own.
+func airedSeason(alias string) string {
+	return "coalesce(" + alias + ".airs_after_season, " + alias + ".airs_before_season, " + alias + ".season_number)"
+}
+
+// seasonEpisodes joins to here, a season, its episodes as e as they are watched: its own and the
+// specials placed in it, read from it and the specials alone; or, of the specials, their own.
+const seasonEpisodes = `JOIN items s ON s.parent_id = here.parent_id AND s.kind = 'season'
+		AND (s.id = here.id OR s.season_number = 0 AND here.season_number > 0)
+	JOIN items e ON e.parent_id = s.id AND e.kind = 'episode' AND (s.id = here.id OR ` + `coalesce(e.airs_after_season, e.airs_before_season, e.season_number) = here.season_number)`
+
+// seasonOrder is the order of seasonEpisodes, ascending: as they are watched, or, of the specials,
+// as their files number them.
+func seasonOrder() string {
+	aired := episodeOrder("e")
+	filed := map[int]string{0: "e.season_number", 2: "coalesce(e.episode_number, 0)"}
+	keys := make([]string, len(aired))
+	for i, key := range aired {
+		keys[i] = key
+		if f, ok := filed[i]; ok {
+			keys[i] = "CASE WHEN here.season_number = 0 THEN " + f + " ELSE " + key + " END"
+		}
+	}
+	return strings.Join(keys, ", ")
 }
 
 // episodeOrderBy is episodeOrder, read through e, as columns to sort by, each in dir: a row of them

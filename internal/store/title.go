@@ -110,7 +110,9 @@ type SeasonCard struct {
 }
 
 type EpisodeCard struct {
-	ID         uuid.UUID
+	ID uuid.UUID
+	// Season is the season it is filed in: the specials', for a special placed in the season listed.
+	Season     *int
 	Number     *int
 	End        *int
 	Title      string
@@ -408,10 +410,16 @@ func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, er
 	if ok, err := s.visible(ctx, profile, of); err != nil || !ok {
 		return nil, cmp.Or(err, ErrNotFound)
 	}
-	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumnsOf("e")+` FROM items e JOIN items season ON season.id = e.parent_id
-		WHERE e.kind = 'episode' AND (season.id = $1 OR season.parent_id = $1)
-		ORDER BY `+episodeOrderBy("ASC"), of)
+	sql := `SELECT ` + itemColumnsOf("e") + ` FROM items e JOIN items season ON season.id = e.parent_id
+		WHERE e.kind = 'episode' AND season.parent_id = $1 ORDER BY ` + episodeOrderBy("ASC")
+	var kind domain.ItemKind
+	if err := s.pool.QueryRow(ctx, `SELECT kind FROM items WHERE id = $1`, of).Scan(&kind); err != nil {
+		return nil, found(err)
+	}
+	if kind == domain.ItemSeason {
+		sql = `SELECT ` + itemColumnsOf("e") + ` FROM items here ` + seasonEpisodes + ` WHERE here.id = $1 ORDER BY ` + seasonOrder()
+	}
+	rows, err := queryRows[model.Item](ctx, s.pool, sql, of)
 	if err != nil {
 		return nil, err
 	}
@@ -485,8 +493,8 @@ func (s *Store) seasons(ctx context.Context, profile, show uuid.UUID, alongside 
 
 func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]EpisodeCard, error) {
 	rows, err := queryRows[model.Item](ctx, s.pool, `
-		SELECT `+itemColumns+` FROM items e WHERE parent_id = $1 AND kind = 'episode'
-		ORDER BY `+episodeOrderBy("ASC"), season)
+		SELECT `+itemColumnsOf("e")+` FROM items here `+seasonEpisodes+` WHERE here.id = $1
+		ORDER BY `+seasonOrder(), season)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +525,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 			aired = r.AirDate
 		}
 		out[n] = EpisodeCard{
-			ID: r.ID, Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
+			ID: r.ID, Season: r.SeasonNumber, Number: r.EpisodeNumber, End: r.EpisodeEnd, Title: r.Title,
 			Overview: deref(r.Overview), Aired: domain.Date(deref(aired)), DurationMS: lengths[r.ID].ms,
 			Thumb: first(pictures[r.ID][domain.ArtworkThumb]), State: states[r.ID],
 		}

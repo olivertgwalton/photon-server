@@ -212,16 +212,19 @@ type seasonCardJSON struct {
 }
 
 type episodeCardJSON struct {
-	ID         uuid.UUID        `json:"id"`
-	Number     *int             `json:"episode_number,omitzero"`
-	End        *int             `json:"episode_end,omitzero"`
-	Title      string           `json:"title"`
-	Overview   string           `json:"overview,omitzero"`
-	Aired      domain.Date      `json:"release_date,omitzero"`
-	DurationMS int64            `json:"duration_ms,omitzero"`
-	Thumb      uuid.UUID        `json:"thumb,omitzero"`
-	State      titleStateJSON   `json:"state,omitzero"`
-	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
+	ID uuid.UUID `json:"id"`
+	// SeasonNumber is the season it is filed in: 0, the specials', for a special placed in the
+	// season listed.
+	SeasonNumber *int             `json:"season_number,omitzero"`
+	Number       *int             `json:"episode_number,omitzero"`
+	End          *int             `json:"episode_end,omitzero"`
+	Title        string           `json:"title"`
+	Overview     string           `json:"overview,omitzero"`
+	Aired        domain.Date      `json:"release_date,omitzero"`
+	DurationMS   int64            `json:"duration_ms,omitzero"`
+	Thumb        uuid.UUID        `json:"thumb,omitzero"`
+	State        titleStateJSON   `json:"state,omitzero"`
+	Blurhashes   store.Blurhashes `json:"blurhashes,omitzero"`
 }
 
 // extraCardJSON is a trailer or other extra, pictured by a still of its video where its previews
@@ -300,7 +303,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		}),
 		Episodes: each(p.Episodes, func(e store.EpisodeCard) episodeCardJSON {
 			return episodeCardJSON{
-				ID: e.ID, Number: e.Number, End: e.End, Title: e.Title, Overview: e.Overview, Aired: e.Aired,
+				ID: e.ID, SeasonNumber: e.Season, Number: e.Number, End: e.End, Title: e.Title, Overview: e.Overview, Aired: e.Aired,
 				DurationMS: e.DurationMS, Thumb: e.Thumb, State: titleStateJSON(e.State), Blurhashes: e.Blurhashes,
 			}
 		}),
