@@ -80,6 +80,7 @@ var ratingSites = map[domain.RatingSite]string{
 	domain.SiteIMDb: "IMDb", domain.SiteTMDB: "TMDB", domain.SiteRottenTomatoes: "Rotten Tomatoes",
 	domain.SiteRottenTomatoesAudience: "RT Audience",
 	domain.SiteAniList:                "AniList",
+	domain.SiteAniDB:                  "AniDB",
 }
 
 var ranges = map[domain.Range]string{

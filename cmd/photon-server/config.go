@@ -12,6 +12,7 @@ import (
 	"strings"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/anidb"
 	"github.com/olivertgwalton/photon-server/internal/anilist"
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -60,8 +61,8 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 	}
 }
 
-// metadataProviders runs TMDB before TheTVDB, AniList and OMDb, as its match may give them an id to
-// find a title by.
+// metadataProviders runs TMDB before TheTVDB, AniList, AniDB and OMDb, as its match may give them an
+// id to find a title by.
 func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
 	return provider.NewRegistry(plugins.Load,
 		tmdb.New(func(ctx context.Context) (map[string]string, error) {
@@ -71,6 +72,9 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 			return st.ProviderSettings(ctx, domain.SourceTVDB)
 		}, cache),
 		anilist.New(st, cache),
+		anidb.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceAniDB)
+		}, st, cache),
 		mdblist.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceMDBList)
 		}, cache),

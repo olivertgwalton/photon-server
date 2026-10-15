@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<anime id="14444" restricted="false">
+	<startdate>2019-04-29</startdate>
+	<titles>
+		<title xml:lang="x-jat" type="main">Shingeki no Kyojin (2019)</title>
+		<title xml:lang="en" type="official">Attack on Titan Season 3 Part 2</title>
+	</titles>
+	<episodes>
+		<episode id="210001">
+			<epno type="1">1</epno>
+			<airdate>2019-04-29</airdate>
+			<title xml:lang="en">The Town Where Everything Began</title>
+		</episode>
+	</episodes>
+</anime>

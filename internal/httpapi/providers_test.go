@@ -85,7 +85,7 @@ func TestAnAdminIsToldWhatEachKindOfLibraryRanksItsSourcesFor(t *testing.T) {
 	for _, want := range []string{
 		`{"kind":"movies","sources":[{"kind":"movie","metadata":[{"source":"nfo","enabled":true},{"source":"tmdb","enabled":true}],` +
 			`"images":[{"source":"tmdb","enabled":true}]}]`,
-		`{"kind":"season","metadata":["nfo","tmdb","tvdb","anilist"],"images":["tmdb","tvdb","anilist"]}`,
+		`{"kind":"season","metadata":["nfo","tmdb","tvdb","anilist","anidb"],"images":["tmdb","tvdb","anilist","anidb"]}`,
 	} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("%d %s\nwant %s", rec.Code, rec.Body, want)

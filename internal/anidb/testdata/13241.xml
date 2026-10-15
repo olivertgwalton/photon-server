@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<anime id="13241" restricted="false">
+	<type>TV Series</type>
+	<episodecount>12</episodecount>
+	<startdate>2018-07-23</startdate>
+	<enddate>2018-10-15</enddate>
+	<titles>
+		<title xml:lang="x-jat" type="main">Shingeki no Kyojin (2018)</title>
+		<title xml:lang="en" type="official">Attack on Titan Season 3</title>
+		<title xml:lang="ja" type="official">進撃の巨人 Season 3</title>
+	</titles>
+	<description>The third season of http://anidb.net/a9541 [Shingeki no Kyojin].
+[i]Source: Kodansha[/i]</description>
+	<ratings>
+		<permanent count="4380">8.43</permanent>
+	</ratings>
+	<picture>229587.jpg</picture>
+	<creators>
+		<name id="4231" type="Direction">Araki Tetsurou</name>
+		<name id="25812" type="Original Work">Isayama Hajime</name>
+		<name id="4" type="Animation Work">Wit Studio</name>
+	</creators>
+	<characters>
+		<character id="83291" type="main character in" update="2018-07-24">
+			<rating votes="3000">8.9</rating>
+			<name>Eren Yeager</name>
+			<seiyuu id="25212" picture="184503.jpg">Kaji Yuuki</seiyuu>
+		</character>
+	</characters>
+	<episodes>
+		<episode id="200001" update="2018-07-24">
+			<epno type="1">1</epno>
+			<length>25</length>
+			<airdate>2018-07-23</airdate>
+			<rating votes="20">8.12</rating>
+			<title xml:lang="ja">狼煙</title>
+			<title xml:lang="en">Smoke Signal</title>
+			<title xml:lang="x-jat">Noroshi</title>
+			<summary>http://anidb.net/ch83291 [Eren] and the Scouts make camp.</summary>
+		</episode>
+		<episode id="200012">
+			<epno type="1">12</epno>
+			<airdate>2018-10-15</airdate>
+			<title xml:lang="en">Night of the Battle to Retake the Wall</title>
+		</episode>
+		<episode id="200101">
+			<epno type="2">S1</epno>
+			<title xml:lang="en">Recap</title>
+		</episode>
+		<episode id="200201">
+			<epno type="3">C1</epno>
+			<title xml:lang="en">Opening</title>
+		</episode>
+	</episodes>
+</anime>
