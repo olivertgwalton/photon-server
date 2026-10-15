@@ -5652,7 +5652,29 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
+        /** Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again */
+        delete: {
+            parameters: {
+                query?: {
+                    /** @description The added_at of the newest notification shown; any added since stays. */
+                    through?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -8490,7 +8512,7 @@ export interface components {
             title: components["schemas"]["Card"];
         };
         /** @enum {string} */
-        NotificationChange: "added" | "read";
+        NotificationChange: "added" | "read" | "cleared";
         /** @enum {string} */
         Notify: "marked" | "all" | "none";
         NowPlaying: {

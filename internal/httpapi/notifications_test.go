@@ -26,6 +26,12 @@ type fakeNotifications struct {
 	cards   []store.Card
 	read    []int64
 	through time.Time
+	cleared time.Time
+}
+
+func (f *fakeNotifications) ClearNotifications(_ context.Context, _ uuid.UUID, through time.Time) (int, error) {
+	f.cleared = through
+	return 0, nil
 }
 
 func (f *fakeNotifications) Inbox(_ context.Context, _ uuid.UUID, ids []int64) (store.Inbox, error) {
@@ -130,6 +136,22 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	}
 	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, raised[1]); err != nil || !ok || told.(inboxChangeJSON).Through == nil {
 		t.Errorf("all read, told: %+v %v, want the time up to which", told, err)
+	}
+
+	// Clearing goes back by the newest shown, and is told to the profile's devices.
+	if rec := call(http.MethodDelete, "/api/v1/profile/notifications", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("clearing with no through: %d, want 400", rec.Code)
+	}
+	if rec := call(http.MethodDelete, "/api/v1/profile/notifications?through=2026-10-15T20:00:00.123456Z", ""); rec.Code != http.StatusNoContent ||
+		!notes.cleared.Equal(time.Date(2026, time.October, 15, 20, 0, 0, 123456000, time.UTC)) {
+		t.Errorf("clearing: %d, through %v", rec.Code, notes.cleared)
+	}
+	events.mu.Lock()
+	cleared := events.raised[len(events.raised)-1]
+	events.mu.Unlock()
+	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, cleared); err != nil || !ok ||
+		told.(inboxChangeJSON).Change != domain.NotificationsCleared || told.(inboxChangeJSON).Through == nil {
+		t.Errorf("cleared, told: %+v %v %v, want the moment it was cleared up to", told, ok, err)
 	}
 
 	// Titles added are told as the notifications they made, worded, so a device asks for nothing.

@@ -16,6 +16,7 @@ type notifications interface {
 	Inbox(ctx context.Context, profile uuid.UUID, ids []int64) (store.Inbox, error)
 	ReadNotification(ctx context.Context, profile uuid.UUID, id int64) (int, error)
 	ReadNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
+	ClearNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 }
 
@@ -46,7 +47,7 @@ type inboxChangeJSON struct {
 	// Notifications are those added, or gathering more, as the inbox lists them: each replaces
 	// the one of its id, at the top.
 	Notifications []notificationJSON `json:"notifications,omitzero"`
-	// Read are the ids read, or Through the added_at up to which every one was.
+	// Read are the ids read, or Through the added_at up to which every one was read, or cleared.
 	Read    []int64    `json:"read,omitzero"`
 	Through *time.Time `json:"through,omitzero"`
 	Unread  int        `json:"unread"`
@@ -141,6 +142,8 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 		if !d.Through.IsZero() {
 			out.Through = &d.Through
 		}
+	case domain.NotificationsCleared:
+		out.Through = &d.Through
 	}
 	return out, nil
 }
@@ -183,12 +186,37 @@ func (a *API) readNotifications(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// clearNotifications clears the profile's notifications from its inbox, up to the newest it was
+// shown, on each of its devices.
+func (a *API) clearNotifications(w http.ResponseWriter, r *http.Request) {
+	through, err := time.Parse(time.RFC3339Nano, r.URL.Query().Get("through"))
+	if err != nil {
+		writeProblem(w, a.logger, codeInvalidParameter, "through is the added_at of the newest notification shown")
+		return
+	}
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	unread, err := a.svc.Notifications.ClearNotifications(r.Context(), profile, through)
+	if a.answered(w, r, err) {
+		return
+	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
+		Change: domain.NotificationsCleared, Through: through, Unread: unread,
+	}})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *API) notificationsRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/profile/notifications", access: signedIn,
 			summary: "List the profile's notifications of the films and episodes added that it follows, newest first",
 			status:  http.StatusOK, reply: inboxJSON{}, handle: a.inbox,
+		},
+		{
+			pattern: "DELETE /api/v1/profile/notifications", access: signedIn,
+			summary: "Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again",
+			query:   []param{{"through", time.Time{}, "The added_at of the newest notification shown; any added since stays."}},
+			status:  http.StatusNoContent, handle: a.clearNotifications,
 		},
 		{
 			pattern: "GET /api/v1/profile/notifications/{id}", access: signedIn,

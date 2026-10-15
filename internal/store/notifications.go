@@ -147,7 +147,7 @@ func (s *Store) Inbox(ctx context.Context, profile uuid.UUID, ids []int64) (Inbo
 	rows, err := queryStructs[row](ctx, s.pool, `
 		SELECT n.id, n.title_id, t.latest, t.new, n.added_at, n.read_at
 		FROM notifications n CROSS JOIN viewer($1) v`+told+`
-		WHERE n.profile_id = $1 AND t.new > 0 AND ($3::bigint[] IS NULL OR n.id = ANY($3))
+		WHERE n.profile_id = $1 AND n.cleared_at IS NULL AND t.new > 0 AND ($3::bigint[] IS NULL OR n.id = ANY($3))
 		ORDER BY n.added_at DESC, n.id DESC LIMIT $2`, profile, inboxLength, ids)
 	if err != nil {
 		return Inbox{}, err
@@ -191,6 +191,19 @@ func (s *Store) ReadNotifications(ctx context.Context, profile uuid.UUID, throug
 	_, err := s.pool.Exec(ctx, `
 		UPDATE notifications SET read_at = now() WHERE profile_id = $1 AND read_at IS NULL AND added_at <= $2`,
 		profile, through)
+	if err != nil {
+		return 0, err
+	}
+	return s.unread(ctx, profile)
+}
+
+// ClearNotifications clears a profile's notifications added by a time from its inbox, read, so one
+// added after the inbox was shown stays; it answers how many are left unread. They are kept, so
+// nothing they told of is told again.
+func (s *Store) ClearNotifications(ctx context.Context, profile uuid.UUID, through time.Time) (int, error) {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE notifications SET cleared_at = now(), read_at = coalesce(read_at, now())
+		WHERE profile_id = $1 AND cleared_at IS NULL AND added_at <= $2`, profile, through)
 	if err != nil {
 		return 0, err
 	}
