@@ -33,6 +33,8 @@ func (c trakt) header(clientID string) http.Header {
 	return h
 }
 
+func (trakt) flow() LinkFlow { return LinkDevice }
+
 func (c trakt) code(ctx context.Context, clientID string) (kv.TrackerLink, error) {
 	var body deviceCode
 	err := c.auth.Do(ctx, provider.Request{

@@ -109,6 +109,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.Delivery]():            values(domain.Deliveries()),
 	reflect.TypeFor[domain.ThemeLookup]():         values(domain.ThemeLookups()),
 	reflect.TypeFor[domain.ThemeMusic]():          values(domain.ThemeMusics()),
+	reflect.TypeFor[tracker.LinkFlow]():           values(tracker.LinkFlows()),
 	reflect.TypeFor[domain.GroupKind]():           values(domain.GroupKinds()),
 	reflect.TypeFor[domain.Notify]():              values(domain.Notifies()),
 	reflect.TypeFor[domain.PushKind]():            values(domain.PushKinds()),
@@ -269,6 +270,7 @@ var renamed = map[reflect.Type]string{
 	reflect.TypeFor[playback.Profile](): "ClientProfile",
 	reflect.TypeFor[domain.HomeRow]():   "HomeRowKind",
 	reflect.TypeFor[tracker.State]():    "TrackerState",
+	reflect.TypeFor[tracker.LinkFlow](): "TrackerLinkFlow",
 }
 
 var (

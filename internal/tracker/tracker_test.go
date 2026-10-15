@@ -100,6 +100,7 @@ func (f *fakeTracker) serve() string {
 			if oauth {
 				app = fmt.Sprint(body["client_id"])
 			}
+		case domain.TrackerAniList:
 		}
 		named := r.Header.Get("User-Agent") == "Photon/1.2.3"
 		if f.tracker == domain.TrackerSimkl {
@@ -380,6 +381,8 @@ func (f *fakeTracker) at(base string) service {
 		return simkl{api: provider.Client{Name: "simkl", Base: base}, version: "1.2.3"}
 	case domain.TrackerMDBList:
 		return mdblist{api: provider.Client{Name: "mdblist", Base: base}, version: "1.2.3"}
+	// AniList links by token, not code, and is faked apart.
+	case domain.TrackerAniList:
 	}
 	panic(f.tracker)
 }
