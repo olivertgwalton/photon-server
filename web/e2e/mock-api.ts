@@ -1110,6 +1110,7 @@ const defaults: Schemas["Preferences"] = {
 	intro_action: "ask",
 	credits_action: "ask",
 	theme_music: "off",
+	notify: "marked",
 	home: [
 		"continue_watching",
 		"next_up",
@@ -1124,6 +1125,33 @@ const defaults: Schemas["Preferences"] = {
 	),
 };
 const preferences = new Map<string, Schemas["Preferences"]>();
+
+// token → its inbox and the browsers it pushes to, each sign-in's afresh: two
+// episodes of a show it follows, unread.
+const inboxes = new Map<string, Schemas["Inbox"]>();
+const inboxOf = (token: string): Schemas["Inbox"] => {
+	const kept = inboxes.get(token);
+	if (kept) return kept;
+	const fresh: Schemas["Inbox"] = {
+		unread: 1,
+		items: [
+			{
+				id: 1,
+				title: base("t-show", "show", "Small Show"),
+				latest: base("t-show-e2", "episode", "Second", {
+					season_number: 1,
+					episode_number: 2,
+				}),
+				new: 2,
+				message: "2 new episodes, the latest S1 E2 · Second",
+				added_at: "2026-10-15T20:00:00Z",
+			},
+		],
+	};
+	inboxes.set(token, fresh);
+	return fresh;
+};
+const pushes = new Map<string, Schemas["PushSubscription"][]>();
 // Each profile's library order, as the server keeps it.
 const libraryOrders = new Map<string, string[]>();
 
@@ -1434,6 +1462,30 @@ const server_ = Bun.serve<Socket>({
 			case "DELETE /api/v1/profile/pin":
 				kidsPIN = "";
 				return new Response(null, { status: 204 });
+			case "GET /api/v1/profile/notifications":
+				return Response.json(inboxOf(token as string));
+			case "PUT /api/v1/profile/notifications/read":
+			case "PUT /api/v1/profile/notifications/1/read": {
+				const inbox = inboxOf(token as string);
+				for (const n of inbox.items) n.read_at ??= new Date().toISOString();
+				inbox.unread = 0;
+				return new Response(null, { status: 204 });
+			}
+			case "GET /api/v1/push-key":
+				return Response.json({ key: "BAEC" } satisfies Schemas["PushKey"]);
+			case "GET /api/v1/profile/push-subscriptions":
+				return Response.json({
+					items: pushes.get(token as string) ?? [],
+				});
+			case "POST /api/v1/profile/push-subscriptions": {
+				const { endpoint } = (await request.json()) as Schemas["Subscribe"];
+				const made = { id: crypto.randomUUID(), endpoint };
+				pushes.set(token as string, [
+					...(pushes.get(token as string) ?? []),
+					made,
+				]);
+				return Response.json(made, { status: 201 });
+			}
 			case "GET /api/v1/profile/preferences":
 				return Response.json(preferences.get(token as string) ?? defaults);
 			case "PATCH /api/v1/profile/preferences": {
