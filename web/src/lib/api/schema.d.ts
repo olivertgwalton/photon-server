@@ -5697,6 +5697,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the profile's notifications, as an Apple device woken for it shows it */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The notification. */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Notification"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/notifications/{id}/read": {
         parameters: {
             query?: never;
@@ -5901,7 +5941,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the browsers pushed the profile's notifications */
+        /** List the browsers and Apple devices pushed the profile's notifications */
         get: {
             parameters: {
                 query?: never;
@@ -5924,7 +5964,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Push the profile's notifications to a browser, by the subscription it made with the server's key; one subscribed already is the profile's from now */
+        /** Push the profile's notifications to a browser, by the subscription it made with the server's key, or to an Apple device by its APNs token; one subscribed already is the profile's from now */
         post: {
             parameters: {
                 query?: never;
@@ -5975,7 +6015,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Stop pushing the profile's notifications to a browser */
+        /** Stop pushing the profile's notifications to a browser or an Apple device */
         delete: {
             parameters: {
                 query?: never;
@@ -7285,6 +7325,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        APNsEnvironment: "production" | "development";
         /** @enum {string} */
         Acceleration: "software" | "videotoolbox" | "vaapi" | "qsv" | "nvenc" | "amf";
         Access: {
@@ -8867,11 +8909,15 @@ export interface components {
         PushKey: {
             key: string;
         };
+        /** @enum {string} */
+        PushKind: "web" | "apple";
         PushSubscription: {
             /** Format: uri */
-            endpoint: string;
+            endpoint?: string;
             /** Format: uuid */
             id: string;
+            kind: components["schemas"]["PushKind"];
+            token?: string;
         };
         PushSubscriptionList: {
             items: components["schemas"]["PushSubscription"][];
@@ -9170,11 +9216,14 @@ export interface components {
         };
         Subscribe: {
             /** Format: uri */
-            endpoint: string;
-            keys: {
+            endpoint?: string;
+            environment?: components["schemas"]["APNsEnvironment"];
+            keys?: {
                 auth: string;
                 p256dh: string;
             };
+            kind?: components["schemas"]["PushKind"];
+            token?: string;
         };
         Subtitle: {
             codec: string;

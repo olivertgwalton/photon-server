@@ -101,6 +101,28 @@ func (a *API) inbox(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// notification answers one of the profile's notifications, as an Apple device woken for it by its
+// id asks to show it.
+func (a *API) notification(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathNumber(w, r, "id")
+	if !ok {
+		return
+	}
+	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
+	in, err := a.svc.Notifications.Inbox(ctx, profile, []int64{int64(id)})
+	if a.answered(w, r, err) {
+		return
+	}
+	shown, err := a.notificationsOf(ctx, profile, words.Negotiate(w, r), in)
+	switch {
+	case a.answered(w, r, err):
+	case len(shown) == 0:
+		writeProblem(w, a.logger, codeNotFound, "no such notification")
+	default:
+		writeJSON(w, a.logger, "application/json", http.StatusOK, shown[0])
+	}
+}
+
 // inboxChange is a change of a profile's notifications as its feed tells it: those added, worded
 // for the reader, or which were read.
 func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Words, d domain.NotificationsDetails) (inboxChangeJSON, error) {
@@ -167,6 +189,13 @@ func (a *API) notificationsRoutes() []route {
 			pattern: "GET /api/v1/profile/notifications", access: signedIn,
 			summary: "List the profile's notifications of the films and episodes added that it follows, newest first",
 			status:  http.StatusOK, reply: inboxJSON{}, handle: a.inbox,
+		},
+		{
+			pattern: "GET /api/v1/profile/notifications/{id}", access: signedIn,
+			summary: "One of the profile's notifications, as an Apple device woken for it shows it",
+			path:    []param{{"id", int64(0), "The notification."}},
+			status:  http.StatusOK, reply: notificationJSON{},
+			handle: a.notification,
 		},
 		{
 			pattern: "PUT /api/v1/profile/notifications/read", access: signedIn,
