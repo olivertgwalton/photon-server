@@ -589,7 +589,8 @@ const poster = $derived(art("poster"));
 			current={t.id}
 			caption={(i: number) =>
 				episodeLabel(
-					picked?.number ?? t.season_number,
+					// A special placed in the season is labelled as the special it is.
+					episodes[i].season_number ?? picked?.number ?? t.season_number,
 					episodes[i].episode_number,
 					episodes[i].episode_end,
 				)}

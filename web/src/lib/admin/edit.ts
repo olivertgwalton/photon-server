@@ -29,6 +29,13 @@ export function fieldsOf(t: Schemas["TitlePage"]): Record<Field, string> {
 		year: t.year ? String(t.year) : "",
 		genres: (t.genres ?? []).join(", "),
 		studios: (t.studios ?? []).join(", "),
+		airs_before_season: t.airs_before_season
+			? String(t.airs_before_season)
+			: "",
+		airs_before_episode: t.airs_before_episode
+			? String(t.airs_before_episode)
+			: "",
+		airs_after_season: t.airs_after_season ? String(t.airs_after_season) : "",
 	};
 }
 
@@ -56,7 +63,10 @@ export function editOf(
 		}
 		switch (field) {
 			case "year":
-				edit.year = Number(value);
+			case "airs_before_season":
+			case "airs_before_episode":
+			case "airs_after_season":
+				edit[field] = Number(value);
 				break;
 			case "genres":
 			case "studios":

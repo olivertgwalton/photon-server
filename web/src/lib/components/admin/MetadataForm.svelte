@@ -24,12 +24,14 @@ let { title }: { title: Schemas["TitlePage"] } = $props();
 
 const id = $props.id();
 
-const fields: {
+const all: {
 	key: Schemas["Field"];
 	label: string;
 	long?: boolean;
 	type?: string;
 	hint?: string;
+	// Where a special aired is an episode's alone.
+	episode?: boolean;
 }[] = [
 	{ key: "title", label: "Title" },
 	{
@@ -45,7 +47,30 @@ const fields: {
 	{ key: "year", label: "Year", type: "number" },
 	{ key: "genres", label: "Genres", hint: "Separated by commas." },
 	{ key: "studios", label: "Studios", hint: "Separated by commas." },
+	{
+		key: "airs_before_season",
+		label: "Airs before season",
+		type: "number",
+		hint: "A special is watched in this season: before the episode below, or at its start.",
+		episode: true,
+	},
+	{
+		key: "airs_before_episode",
+		label: "Airs before episode",
+		type: "number",
+		episode: true,
+	},
+	{
+		key: "airs_after_season",
+		label: "Airs after season",
+		type: "number",
+		hint: "A special is watched at the end of this season.",
+		episode: true,
+	},
 ];
+const fields = $derived(
+	all.filter((f) => !f.episode || title.kind === "episode"),
+);
 
 const values = $derived(fieldsOf(title));
 const path = $derived({ params: { path: { id: title.id } } });

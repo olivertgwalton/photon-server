@@ -84,3 +84,22 @@ test("markers are read row by row, and a part said to have none is kept", () => 
 	).toBe("Row 1 ends before it starts.");
 	expect(markersOf(form([]))).toEqual({ markers: [] });
 });
+
+test("a special is placed in a season by number", () => {
+	const special: components["schemas"]["TitlePage"] = {
+		...film,
+		kind: "episode",
+		title: "Recap",
+		season_number: 0,
+		airs_before_season: 2,
+	};
+	const f = as({
+		title: "Recap",
+		airs_before_season: "3",
+		airs_before_episode: "13",
+	});
+	expect(editOf(f, special)).toEqual({
+		airs_before_season: 3,
+		airs_before_episode: 13,
+	});
+});
