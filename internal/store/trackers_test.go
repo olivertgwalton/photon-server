@@ -215,7 +215,8 @@ func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 		if c[0].Kind != domain.ItemMovie || c[0].IDs[domain.ProviderTMDB] != "949" || c[0].WatchedAt == nil || !c[0].WatchedAt.Equal(watched) {
 			t.Errorf("%s's film: %+v", account.Tracker, c[0])
 		}
-		if c[1].Kind != domain.ItemEpisode || c[1].IDs[domain.ProviderTVDB] != "79126" || c[1].Season != 1 || c[1].Episode != 2 || c[1].WatchedAt == nil {
+		if c[1].Kind != domain.ItemEpisode || c[1].IDs[domain.ProviderTVDB] != "79126" || c[1].Season != 1 || c[1].Episode != 2 || c[1].WatchedAt == nil ||
+			c[1].Order != domain.OrderAired || c[1].Numbering != domain.ProviderTMDB {
 			t.Errorf("%s's episode watched: %+v", account.Tracker, c[1])
 		}
 		if c[2].Episode != 2 || c[2].WatchedAt != nil {

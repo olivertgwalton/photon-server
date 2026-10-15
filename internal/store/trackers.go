@@ -126,6 +126,10 @@ type TrackerChange struct {
 	// IDs are the film's, or the episode's show's.
 	IDs             map[domain.Provider]string
 	Season, Episode int
+	// Order and Numbering are how an episode's show is numbered: in what order, and by whose
+	// numbers, as it is described.
+	Order     domain.EpisodeOrder
+	Numbering domain.Provider
 	// WatchedAt is when it was watched; nil is unwatched.
 	WatchedAt *time.Time
 }
@@ -152,8 +156,9 @@ func (s *Store) ClaimTrackerChanges(ctx context.Context, settled time.Time, leas
 			RETURNING id, profile_id, tracker, item_id, watched_at)
 		SELECT c.id, c.profile_id, c.tracker, c.watched_at, i.kind,
 			CASE WHEN i.kind = 'episode' THEN CASE WHEN p.kind = 'season' THEN p.parent_id ELSE p.id END ELSE i.id END,
-			coalesce(i.season_number, 0), coalesce(i.episode_number, 0)
+			coalesce(i.season_number, 0), coalesce(i.episode_number, 0), coalesce(show.episode_order, 'aired'), i.library_id
 		FROM claimed c JOIN items i ON i.id = c.item_id LEFT JOIN items p ON p.id = i.parent_id
+		LEFT JOIN items show ON i.kind = 'episode' AND show.id = CASE WHEN p.kind = 'season' THEN p.parent_id ELSE p.id END
 		ORDER BY c.id`, settled, lease, limit)
 	if err != nil {
 		return nil, err
@@ -162,12 +167,13 @@ func (s *Store) ClaimTrackerChanges(ctx context.Context, settled time.Time, leas
 		id      int64
 		account TrackerChanges
 		owner   uuid.UUID
+		library uuid.UUID
 		change  TrackerChange
 	}
 	claimed, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (claimedRow, error) {
 		var r claimedRow
 		return r, row.Scan(&r.id, &r.account.Profile, &r.account.Tracker, &r.change.WatchedAt, &r.change.Kind,
-			&r.owner, &r.change.Season, &r.change.Episode)
+			&r.owner, &r.change.Season, &r.change.Episode, &r.change.Order, &r.library)
 	})
 	if err != nil || len(claimed) == 0 {
 		return nil, err
@@ -180,9 +186,20 @@ func (s *Store) ClaimTrackerChanges(ctx context.Context, settled time.Time, leas
 	if err != nil {
 		return nil, err
 	}
+	numbered := map[uuid.UUID]domain.Provider{}
 	var out []TrackerChanges
 	for _, r := range claimed {
 		r.change.IDs = ids[r.owner]
+		if r.change.Kind == domain.ItemEpisode {
+			n, ok := numbered[r.library]
+			if !ok {
+				if n, err = numbering(ctx, s.pool, r.library); err != nil {
+					return nil, err
+				}
+				numbered[r.library] = n
+			}
+			r.change.Numbering = n
+		}
 		i := slices.IndexFunc(out, func(a TrackerChanges) bool { return a.Profile == r.account.Profile && a.Tracker == r.account.Tracker })
 		if i < 0 {
 			out, i = append(out, r.account), len(out)
