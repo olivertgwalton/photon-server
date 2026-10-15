@@ -8,13 +8,14 @@ import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import * as Alert from "#lib/components/ui/alert/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
+import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
 
 type Notify = components["schemas"]["Notify"];
 
 let { data } = $props();
-let notify = $derived(data.prefs.notify);
+let prefs = $derived(data.prefs);
 let subscriptions = $derived(data.subscriptions);
 
 const notifyOptions: { value: Notify; label: string }[] = [
@@ -23,17 +24,24 @@ const notifyOptions: { value: Notify; label: string }[] = [
 	{ value: "none", label: "Nothing" },
 ];
 
-async function setNotify(v: Notify) {
+async function set(change: components["schemas"]["PreferencesChange"]) {
 	const { data: kept, error } = await client().PATCH(
 		"/api/v1/profile/preferences",
-		{ body: { notify: v } },
+		{ body: change },
 	);
 	if (error) {
 		toast.error(problemMessage(error));
 		return;
 	}
-	notify = kept.notify;
+	prefs = kept;
 	toast.success("Saved for every device.");
+}
+
+// A library is quiet once its box is cleared; one added later tells, as the
+// rest do.
+function hear(library: string, on: boolean) {
+	const quiet = prefs.quiet_libraries.filter((id) => id !== library);
+	set({ quiet_libraries: on ? quiet : [...quiet, library] });
 }
 
 // Whether this browser is pushed the profile's notifications. A browser
@@ -141,8 +149,8 @@ const others = $derived(
 					id="notify"
 					name="notify"
 					options={notifyOptions}
-					value={notify}
-					onchange={setNotify}
+					value={prefs.notify}
+					onchange={(v: Notify) => set({ notify: v })}
 					class="w-full sm:w-72"
 				/>
 				<Field.Description>
@@ -150,6 +158,25 @@ const others = $derived(
 					started. Episodes before the furthest you've watched aren't news.
 				</Field.Description>
 			</Field.Field>
+			{#if prefs.notify !== "none" && data.libraries.length > 1}
+				<Field.Set>
+					<Field.Legend variant="label">From</Field.Legend>
+					<div class="grid gap-2 sm:grid-cols-2">
+						{#each data.libraries as library (library.id)}
+							<Field.Field orientation="horizontal">
+								<Checkbox
+									id="hear-{library.id}"
+									checked={!prefs.quiet_libraries.includes(library.id)}
+									onCheckedChange={(on) => hear(library.id, on)}
+								/>
+								<Field.Label for="hear-{library.id}"
+									>{library.name}</Field.Label
+								>
+							</Field.Field>
+						{/each}
+					</div>
+				</Field.Set>
+			{/if}
 			<Field.Separator />
 			<Field.Field orientation="horizontal">
 				<Switch

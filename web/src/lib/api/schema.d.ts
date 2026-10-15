@@ -8765,6 +8765,7 @@ export interface components {
             max_bitrate_kbps: number;
             next_episode: components["schemas"]["NextEpisode"];
             notify: components["schemas"]["Notify"];
+            quiet_libraries: string[];
             remember_audio: components["schemas"]["TrackMemory"];
             remember_subtitles: components["schemas"]["TrackMemory"];
             /** Format: date-time */
@@ -8782,6 +8783,7 @@ export interface components {
             max_bitrate_kbps?: number | null;
             next_episode?: components["schemas"]["NextEpisode"];
             notify?: components["schemas"]["Notify"];
+            quiet_libraries?: string[] | null;
             remember_audio?: components["schemas"]["TrackMemory"];
             remember_subtitles?: components["schemas"]["TrackMemory"];
             subtitle_language?: string | null;

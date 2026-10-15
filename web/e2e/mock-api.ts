@@ -1111,6 +1111,7 @@ const defaults: Schemas["Preferences"] = {
 	credits_action: "ask",
 	theme_music: "off",
 	notify: "marked",
+	quiet_libraries: [],
 	home: [
 		"continue_watching",
 		"next_up",

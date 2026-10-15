@@ -36,6 +36,12 @@ test("a profile chooses what it is told of", async ({ page }) => {
 	await expect(page.getByRole("button", { name: "Tell me of" })).toContainText(
 		"Every new film and episode",
 	);
+	// A library cleared tells nothing, on every device.
+	await page.getByRole("checkbox", { name: "Films" }).click();
+	await expect(page.getByText("Saved for every device.").first()).toBeVisible();
+	await page.reload();
+	await expect(page.getByRole("checkbox", { name: "Films" })).not.toBeChecked();
+	await expect(page.getByRole("checkbox", { name: "Shows" })).toBeChecked();
 	// The test's page is plain http, where no browser takes pushes.
 	await expect(
 		page.getByRole("switch", { name: "Notify this browser" }),
