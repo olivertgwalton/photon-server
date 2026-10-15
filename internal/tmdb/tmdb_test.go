@@ -433,3 +433,29 @@ func TestAnEpisodeGroupNumbersAShowsSeasons(t *testing.T) {
 		t.Errorf("seasons = %+v, want the specials as season 0 and episode 892 numbered by its place in the run", seasons)
 	}
 }
+
+func TestAShowNumberedOtherwiseIsDescribedByAnEpisodeGroup(t *testing.T) {
+	details := "/tv/37854?append_to_response=content_ratings%2Cexternal_ids%2Cvideos%2Cimages%2Caggregate_credits&include_image_language=en%2Cnull&include_video_language=en%2Cnull&language=en-GB"
+	c := serve(t, map[string]string{
+		details: `{"id":37854,"name":"One Piece"}`,
+		"/tv/37854/episode_groups?language=en-GB": `{"results":[
+			{"id":"arcs","name":"Story Arc","type":5},
+			{"id":"absolute","name":"Absolute (No Specials)","type":2}]}`,
+		"/tv/episode_group/absolute?language=en-GB": `{"groups":[{"order":1,"episodes":[{"name":"The Land of Wano!","order":891}]}]}`,
+		"/tv/episode_group/arcs?language=en-GB": `{"groups":[
+			{"name":"Romance Dawn","order":1,"episodes":[{"name":"I'm Luffy!","order":0}]},
+			{"name":"Orange Town","order":2,"episodes":[{"name":"The Great Swordsman Appears!","order":0}]}]}`,
+	})
+	_, seasons, err := c.Describe(t.Context(), gb, domain.ItemShow, "37854", domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderAbsolute})
+	if err != nil || seasons[1].Episodes[892].Title != "The Land of Wano!" {
+		t.Errorf("absolute: %+v, %v; want the absolute group's numbers", seasons, err)
+	}
+	_, seasons, err = c.Describe(t.Context(), gb, domain.ItemShow, "37854", domain.SeasonRequest{Numbers: []int{2}, Order: domain.OrderGroup, Group: "arcs"})
+	if err != nil || len(seasons) != 1 || seasons[2].Metadata.Title != "Orange Town" {
+		t.Errorf("story arcs: %+v, %v; want the second arc alone, as asked", seasons, err)
+	}
+	_, seasons, err = c.Describe(t.Context(), gb, domain.ItemShow, "37854", domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderDVD})
+	if err != nil || len(seasons) != 0 {
+		t.Errorf("on DVD: %+v, %v; want nothing said of a show TMDB has no DVD order of", seasons, err)
+	}
+}

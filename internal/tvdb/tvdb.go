@@ -325,9 +325,13 @@ var seasonTypes = map[domain.EpisodeOrder]string{domain.OrderAired: "default", d
 
 // Seasons answers what TVDB says about the episodes of the seasons asked about, numbered in the
 // order asked, and about every episode yet to air. Of every season, those not numbered are
-// described without their guests and crew, which are an episode's own request each.
+// described without their guests and crew, which are an episode's own request each. A show
+// numbered by a TMDB episode group is numbered in no order of TVDB's, and is said nothing of.
 func (c *Client) Seasons(ctx context.Context, loc domain.Locale, id int, asked domain.SeasonRequest) (map[int]domain.SeasonMetadata, error) {
 	seasons, order := asked.Numbers, asked.Order
+	if order == domain.OrderGroup {
+		return map[int]domain.SeasonMetadata{}, nil
+	}
 	lang := languageOf(loc)
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	out := map[int]domain.SeasonMetadata{}

@@ -167,6 +167,14 @@ func TestSeasonsAreNumberedInTheOrderAsked(t *testing.T) {
 	}
 }
 
+func TestAShowNumberedByATMDBGroupIsSaidNothingOf(t *testing.T) {
+	c, _ := fake(t)
+	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderGroup, Group: "arcs"})
+	if err != nil || len(got) != 0 {
+		t.Errorf("grouped: %+v, %v; want nothing, as no TVDB order numbers it", got, err)
+	}
+}
+
 func TestAnEpisodeCreditsItsGuestsAndCrew(t *testing.T) {
 	c, _ := fake(t)
 	got, err := c.Seasons(t.Context(), gb, 79126, domain.SeasonRequest{Numbers: []int{1}, Order: domain.OrderAired})

@@ -114,7 +114,7 @@ func (c *client) Match(ctx context.Context, loc domain.Locale, kind domain.ItemK
 
 func (c *client) Describe(ctx context.Context, loc domain.Locale, kind domain.ItemKind, id string, seasons domain.SeasonRequest) (domain.Metadata, map[int]domain.SeasonMetadata, error) {
 	out, err := post[pluginv1.DescribeResponse](ctx, c, domain.CapabilityDescribe, "describe", func(s pluginv1.Settings) pluginv1.DescribeRequest {
-		return pluginv1.DescribeRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), ID: id, Seasons: seasons.Numbers, Order: string(seasons.Order), SeasonScope: string(seasons.Scope)}
+		return pluginv1.DescribeRequest{Settings: s, Locale: sentLocale(loc), Kind: string(kind), ID: id, Seasons: seasons.Numbers, Order: string(seasons.Order), EpisodeGroup: seasons.Group, SeasonScope: string(seasons.Scope)}
 	})
 	if err != nil {
 		return domain.Metadata{}, nil, err
