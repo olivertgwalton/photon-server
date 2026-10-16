@@ -58,7 +58,7 @@ docker compose start server
 ### Several servers
 
 Several servers can share one PostgreSQL and Valkey; see [docs/05-playback/04-several-servers.md](docs/05-playback/04-several-servers.md).
-Plugins are described in [docs/06-integrations/02-write-a-plugin.md](docs/06-integrations/02-write-a-plugin.md).
+Plugins are described in [docs/08-reference/06-write-a-plugin.md](docs/08-reference/06-write-a-plugin.md).
 
 ## Develop
 

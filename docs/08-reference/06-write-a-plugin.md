@@ -11,7 +11,7 @@ library can take metadata from it, ranked where the admin puts it, or play the s
 for the titles of a list.
 
 This page is the protocol, for a plugin's author. Registering a plugin, setting it up, ranking it
-in a library and removing it are the admin's, in [Install and manage plugins](01-plugins.md).
+in a library and removing it are the admin's, in [Install and manage plugins](../06-integrations/01-plugins.md).
 
 This is protocol version **1**.
 
@@ -106,9 +106,9 @@ than none.
 Say what is known of the title matched. For a show, `seasons` are the seasons the server wants,
 numbered in `order` (`aired`, `dvd`, `absolute`, or `group` as the TMDB episode group whose id is
 `episode_group` numbers them); describe those you have, and none in an order you cannot number
-them in. A `season_scope` of
-`every`, which a show in a remote library has no files to number seasons by is asked with, wants
-every season you have; `numbered`, or none, wants those in `seasons`.
+them in. A `season_scope` of `every`, which a show in a remote library has no files to number
+seasons by is asked with, wants every season you have; `numbered`, or none, wants those in
+`seasons`.
 
 ```json
 {
@@ -418,4 +418,4 @@ otherwise (a field renamed, removed or newly required, a changed meaning) is a n
 
 A [Stremio addon](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs) is registered as a
 plugin too, and speaks Stremio's own protocol rather than this one: its catalogs are lists and its
-streams are copies a remote library plays. See [Stremio addons](03-stremio.md).
+streams are copies a remote library plays. See [Stremio addons](../06-integrations/03-stremio.md).

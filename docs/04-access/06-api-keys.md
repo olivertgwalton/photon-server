@@ -1,70 +1,48 @@
 ---
 title: "API keys"
-summary: "Make a token for a script or another server, use it, and revoke it."
+summary: "Make a key for a script or another program, and cancel it when it is no longer needed."
 ---
 
-An API key lets a script or another program, such as Sonarr or a home automation, reach the server
-without signing in as a device. Only an admin makes, lists and revokes them, under
-Settings › Server › API keys.
+An API key lets a script or another program talk to photon-server without signing in. Use one for a
+program such as Sonarr, a home automation, or a script of your own.
 
-## What a key is
-
-- A key **acts as the admin who made it**, with whatever role that profile has when the key is used:
-  where the profile stops being an admin, its keys can do only what it may do now.
-- A key **never lapses** on its own, unlike a device, whose session ends after 90 days unused. It
-  works until it is revoked, or until the profile that made it is removed.
-- **Changing the password leaves keys working**, as Jellyfin's do: a key is not the password, and
-  revoking one is its own act.
-- The server keeps **only a hash** of a key, so the key itself is shown once, when it is made.
-
-A key, like a device's token, starts `pst_`, so a secret scanner can find one that leaked.
+Only an admin can make, see and cancel keys, under Settings › Server › API keys.
 
 ## Make a key
 
 1. Open Settings › Server › API keys and choose **Make a key**.
-2. Say **What it is for**, up to 64 characters, such as `Sonarr`.
-3. Choose **Make key**, and copy the key it shows. It is not shown again.
+2. In **What it is for**, type something that reminds you where it is used, such as `Sonarr`.
+3. Choose **Make key**.
+4. Copy the key it shows, and paste it into the other program.
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/keys \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "Sonarr"}'
-```
+![The new API key window, showing a key to copy](../images/access-api-key-made.webp)
 
-```json
-{"id": "…", "token": "pst_…"}
-```
+> **Important:** The key is shown only once. The server doesn't keep a readable copy, so if you lose
+> it, make a new one.
 
-To make the first key with `curl` you need an admin's token. Signing in as a device answers one:
+Every key starts `pst_`. That makes it easy for tools that look for leaked passwords to spot one.
 
-```sh
-curl -X POST https://photon.example/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"method": "password", "name": "Alex", "password": "…", "device": "Laptop", "client": "curl"}'
-```
+## What a key can do
 
-That token is a device's, listed under Settings › Devices, and lapses after 90 days unused; a key
-does not.
+- A key can do whatever the admin who made it can do. If that profile later stops being an admin,
+  the key can only do what the profile can do now.
+- A key never runs out by itself. It works until you cancel it, or until the profile that made it
+  is removed.
+- Changing your password doesn't stop your keys working.
 
-## Use a key
+For how a program sends the key, and everything it can ask the server, see the
+[API reference](../08-reference/03-api.md).
 
-Send it as a bearer token in the `Authorization` header, on every request:
+## See and cancel keys
 
-```sh
-curl https://photon.example/api/v1/admin/libraries -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+Settings › Server › API keys lists every key: what it is for, which admin made it, when, and when it
+was last used. Last used is updated at most once an hour, so it may be up to an hour behind.
 
-photon's API never reads a token from the query string, where it would land in logs. Every route and
-who may call it is in the [API reference](../08-reference/03-api.md).
+To cancel a key, choose **Revoke** on its row, then **Revoke key**. Anything using it stops working
+at once.
 
-## List and revoke keys
+## Good to know
 
-Settings › Server › API keys lists every key: what it is for, the admin who made it, when, and when
-it was last used. Last used is written at most once an hour, so it is right to within the hour.
-
-**Revoke** a key, and whatever uses it is refused from then on.
-
-```sh
-curl -X DELETE https://photon.example/api/v1/admin/keys/$KEY \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+- An API key isn't a device, so it isn't listed under Settings › Devices.
+- A plugin that talks to the server uses a key you made for it. Removing the plugin doesn't cancel
+  that key: revoke it here.

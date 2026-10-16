@@ -3,104 +3,97 @@ title: "Home and browsing"
 summary: "Home's rows, a library's titles and how to narrow them, collections, and the pages of a title and a person."
 ---
 
-This page walks through what you see between logging in and pressing Play: Home, a library, its
-genres, studios and collections, a title's page and a person's.
+This page covers what you see before you press Play: Home, a library, a title's page and a
+person's page.
 
 ## Home
 
-Home is a stack of rows, each drawn as soon as the server answers it. A row's name is a button
-that opens all of it; the arrows at the end of the line scroll it a screen at a time, and Left and
-Right step from card to card once one has focus.
+![Home, showing Continue Watching and Recently Added rows](../images/web-app-home.webp)
 
-| Row | What it holds |
+Home is a set of rows. Choose a row's name to see everything in it. The arrows at the end of a row
+scroll it a screen at a time. With the keyboard, Left and Right move from card to card.
+
+| Row | What it shows |
 | --- | --- |
-| Continue Watching | Films and episodes you stopped part way, the most recent first. |
-| Next Up | For each show under way, the episode after the furthest one you watched, specials aside, unless you have started it already, when it is in Continue Watching instead. |
-| Watchlist | What you put on your watchlist, the latest first. |
-| Favourites | Your favourites, the latest first. |
-| Recently Added in `{library}` | One row for each film or show library: films by when they were added, shows by their newest episode. |
-| Recently Released in `{library}` | Films and shows out in the last year, a show by when its newest episode aired; nothing yet to come. |
-| Top Rated in `{library}` | The films and shows you have not begun, by IMDb rating, leaving out ratings with fewer than 1,000 votes. |
+| Continue Watching | Films and episodes you stopped part way through, most recent first. |
+| Next Up | The next episode of each show you are watching. |
+| Watchlist | Titles you have saved to watch, newest first. |
+| Favourites | Titles you have marked as favourites, newest first. |
+| Recently Added | One row for each film or show library, newest first. |
+| Recently Released | Films and shows out in the last year, in each library. |
+| Top Rated | Films and shows you have not started, best rated first, in each library. |
 
-Every row is shown until you hide it, in the order above until you move it: see
-[Home rows](06-your-settings.md#home-rows). A row with nothing in it is not drawn. A server with no
-titles yet says "Nothing to watch yet" until a library has been scanned.
-
-A title held in several libraries is listed once on your own rows (Continue Watching, Next Up,
-Watchlist, Favourites). The library rows are each library's own, so such a title is in each one's
-row.
-
-To read a row from the API:
-
-```sh
-curl https://photon.example/api/v1/profile/rows/continue_watching?limit=20 \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-A library's row is `GET /api/v1/libraries/{id}/rows/{row}`.
+You can hide rows and change their order in [Home rows](06-your-settings.md#home-rows). A row with
+nothing in it is not shown. A new server says **Nothing to watch yet** until a library has been
+scanned.
 
 ## A card and its menu
 
-Every title is a card: a poster, or a still for an episode or a row about where you are. A card
-shows a tick once you have watched it, the number of episodes left on a show or season you have
-started, a heart for a favourite, and a bar for how far you got.
+![A card's menu open on Home](../images/web-app-card-menu.webp)
 
-The **⋯** button on a card (shown on hover, and always on a touch screen) opens what can be done
-to a title without opening it:
+Every title is a card: a poster, or a still picture for an episode. A card shows:
 
-- **Play** or **Resume**, **Play from the beginning**, and **Play version…** where there are
-  several copies.
-- **Mark as watched** or **Mark as unwatched**. A show or season is marked episode by episode.
-- **Add to favourites**, **Add to watchlist**, **Add to playlist…**.
-- **Download…**, **Find subtitles…** and **Share…**, which copies the title's link (or opens your
-  device's share sheet). Whoever opens it logs in first.
-- **Remove from Continue Watching**, which forgets where you stopped and keeps whether you watched
+- a tick once you have watched it
+- how many episodes are left on a show you have started
+- a heart if it is a favourite
+- a bar showing how far you got
+
+The **⋯** button on a card shows what you can do without opening the title. It appears when you
+point at the card, and is always there on a touch screen.
+
+- **Play** or **Resume**, **Play from the beginning**, and **Play version…** if there is more than
+  one version of the file.
+- **Mark as watched** or **Mark as unwatched**.
+- **Add to favourites**, **Add to watchlist** and **Add to playlist…**.
+- **Download…** and **Find subtitles…**.
+- **Share…**, which copies a link to the title. Whoever opens it logs in first.
+- **Remove from Continue Watching**, which forgets where you stopped but keeps whether you watched
   it.
-- **Go to** the episode's season and show.
+- **Go to** an episode's season or show.
 
-An admin sees more entries below these, for editing and matching the title: those are covered in
+An admin sees more items for fixing a title's details. See
 [fixing a match](../03-library/05-fix-a-match.md).
 
 ## A library
 
-![A film library](../images/films.webp)
+![A film library, showing posters with the bar of controls above them](../images/web-app-library.webp)
 
-A library opens on its **Titles**, with tabs beside it for **Collections**, **Genres** and
-**Studios** (**Networks** for a show library) where it has any.
+A library opens on its **Titles**. Tabs beside it show its **Collections**, **Genres** and
+**Studios** (or **Networks** for shows), if it has any.
 
-The bar over the wall holds:
+The bar above the titles holds:
 
-- **Show**, on a show library (**Shows** or **Episodes**) or a mixed one (**All**, **Films**,
-  **Shows**, **Episodes**).
-- How many titles the wall holds.
+- **Show**, on a library with shows: choose **Shows** or **Episodes** (and **Films** or **All** in a
+  mixed library).
+- How many titles there are.
 - **Filter** and the sort menu.
-- **Show as**: **Posters**, **Stills** or **List**. This browser remembers the choice for each
-  library.
+- **Show as**: **Posters**, **Stills** or **List**. Your browser remembers this for each library.
 
-In title order, a bar of letters beside the wall jumps to a letter; **#** is anything before A. A
-letter with nothing under it is drawn but cannot be chosen, so the bar does not move.
+When sorted by title, a strip of letters beside the titles jumps to that letter. **#** is anything
+before A.
 
 ### Filter
 
-**Filter** lists only what the library has values for:
+![The Filter menu open on a film library](../images/web-app-library-filter.webp)
+
+**Filter** only offers what the library has.
 
 | Filter | What it narrows to |
 | --- | --- |
-| Status | Watched, Unwatched, In progress, Favourites, Watchlist. A show is watched when every episode is. |
+| Status | Watched, Unwatched, In progress, Favourites or Watchlist. |
 | Genre | The library's genres. |
 | Year | Release years. |
 | Certificate | Age ratings. |
 | Studio | Studios and networks. |
-| Resolution | SD, 720p, 1080p, 4K, of a copy on disk. |
-| Dynamic range | SDR, HLG, HDR10, HDR10+, Dolby Vision. |
-| Minimum rating | Any, or a score of 50 to 90 out of 100 or more, by the site under **Rated by** where the library has more than one. |
+| Resolution | SD, 720p, 1080p or 4K. |
+| Dynamic range | SDR, or a kind of HDR (high dynamic range: brighter, richer picture). |
+| Minimum rating | A score out of 100, from a rating site you pick under **Rated by**. |
 
-Within one filter a title matches any value you tick; across filters it must match every one. An
-episode is narrowed by its show's genres, studios and certificate. **Clear filters** takes the
-filters off and keeps the sort.
+Ticking two genres shows titles in either. Using two filters shows titles that match both.
+**Clear filters** removes them all.
 
-The filters live in the page's address, so a narrowed wall can be bookmarked or passed on, and Back
-leaves the library rather than undoing a filter.
+The filters are part of the page's address, so you can bookmark a filtered library or send it to
+someone.
 
 ### Sort
 
@@ -109,86 +102,62 @@ leaves the library rather than undoing a filter.
 | Title | A to Z, Z to A |
 | Date added | Oldest first, Newest first |
 | Release date | Oldest first, Newest first |
-| Rating | Lowest first, Highest first, by the site you choose under **Rated by** |
+| Rating | Lowest first, Highest first |
 | Runtime | Shortest first, Longest first |
 | Last played | Longest ago, Most recent |
 
-Title is A to Z by default; every other sort starts newest or highest first. A title with no value
-to sort by comes last either way. **Rating** is offered only where the library's titles have
-ratings.
-
-The same wall from the API, here unwatched comedies, newest first:
-
-```sh
-curl "https://photon.example/api/v1/libraries/$LIBRARY/titles?genre=Comedy&mark=unwatched&sort=added&order=desc" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-An admin also sees **Save as a smart collection** on a narrowed or sorted wall; see
-[collections](../03-library/07-collections.md).
+Titles are A to Z at first. Titles with nothing to sort by come last.
 
 ### Genres, studios and collections
 
-**Genres** and **Studios** (or **Networks**) list the library's values; choosing one opens the wall
-filtered to it. **Collections** is the library's box sets. **Collections** in the sidebar is every
-collection on the server, in no one library, shown wherever there is at least one.
+Choose a genre or studio to see the library's titles filtered to it. **Collections** in a library
+shows its box sets. **Collections** in the sidebar shows every collection on the server.
 
-The library's menu in the sidebar (**⋯** beside its name) has **Reorder**: drag each library by
-its grip, or move it with the up and down arrow keys, then **Done**. The order is your profile's,
-on every device:
+To change the order of your libraries in the sidebar:
 
-```sh
-curl -X PUT https://photon.example/api/v1/profile/library-order \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"library_ids": ["…", "…"]}'
-```
+1. Choose **⋯** beside a library's name, then **Reorder**.
+2. Drag each library by its grip, or use the up and down arrow keys.
+3. Choose **Done**. The new order is used on all your devices.
 
 ## A title's page
 
-![A film's page](../images/film.webp)
+![A film's page, with Play, Version, Audio and Subtitles under the description](../images/web-app-title.webp)
 
-A film's page leads with its backdrop and lettering, then what it is: year, certificate, running
-time and **Ends at** the time it would finish if you started now, its genres, every site's score,
-its tagline and its write-up.
+A film's page shows its picture and title, then its year, age rating, running time, and **Ends at**:
+the time it would finish if you started now. Below that are its genres, its scores from rating
+sites, and a description.
 
-Under them are the actions:
+The buttons under them:
 
 - **Play**, or **Resume from** where you stopped, and **From the beginning**.
-- **Shuffle**, on a show or collection, and on an episode for its show.
-- **Trailer**, where the title has one among its extras.
+- **Shuffle**, on a show or a collection.
+- **Trailer**, if the title has one.
 - The tick, heart and bookmark: watched, favourite and watchlist.
 - **⋯**: **Add to playlist…**, **Download…**, **Find subtitles…** and **Media info**, which lists
-  each copy's file and every track in it.
-- A button to stop the theme music, while one plays (see
-  [Play theme music](06-your-settings.md#playback)).
+  the file and every track in it.
 
-Where the title has several copies, or several audio or subtitle tracks, **Version**, **Audio** and
-**Subtitles** choose what Play plays. A choice with one answer is not offered. What you leave alone
-is the server's choice for your profile, by your [playback settings](06-your-settings.md#playback).
+If there is a choice, **Version**, **Audio** and **Subtitles** pick what Play plays. If you leave
+them alone, your [playback settings](06-your-settings.md#playback) decide.
 
-Below come, where the title has them: **Cast & crew**, **Extras**, the **Collections** it is in,
-**More like this**, and **Details** (original title, **Directed by**, **Written by**, studios or
-networks, and links to IMDb, TMDB and TheTVDB under **Elsewhere**). A row with more than it shows
-opens the whole of it from its name.
+Further down, where the title has them: **Cast & crew**, **Extras**, the **Collections** it is in,
+**More like this**, and **Details**, with links to sites such as IMDb under **Elsewhere**.
 
-![A show's page](../images/show.webp)
+### Shows and episodes
 
-A show's page plays the episode you are at: **Play S1 E3**, or **Resume S1 E3** once you have started it. Its **Seasons** row
-says how many episodes of each you have watched. A season has no page of its own: it opens on the
-episode you are at in it, else its first. An episode's page shows its season as a row, with the
-season's name as a menu to pick another, and takes its links, extras, collections and **More like
-this** from its show.
+A show's page plays the episode you are up to: **Play S1 E3**, or **Resume S1 E3** once you have
+started it. The **Seasons** row shows how many episodes of each season you have watched. Choosing
+a season opens the episode you are up to in it.
 
-A collection's page lists the titles it holds, and **Shuffle** plays its films and episodes in a
-random order.
+An episode's page lists the rest of its season. Choose the season's name to switch to another.
 
-A title in a library that fetches from elsewhere (a [Stremio addon](../06-integrations/03-stremio.md),
-say) may say it is **Being fetched**: it plays once its provider has it.
+A collection's page lists the titles in it. **Shuffle** plays them in a random order.
+
+> **Note:** A title in a library that fetches from elsewhere, such as a
+> [Stremio addon](../06-integrations/03-stremio.md), may say **Being fetched**. It plays once it
+> has arrived.
 
 ## A person's page
 
-A cast or crew card opens the person: their photograph, when and where they were born and died,
-their biography, and a **Browse** link for each library that opens it filtered to them. Their work
-follows in rows: **Acting**, **Directing**, **Creating**, **Writing**, **Producing** and **Music**.
-A title is listed once, under the first of those they did on it, with the year and their part or
-job beneath it.
+Choose someone under **Cast & crew** to open their page: their photograph, when and where they were
+born, and their biography. **Browse** opens a library filtered to them. Their work follows in rows:
+**Acting**, **Directing**, **Creating**, **Writing**, **Producing** and **Music**.

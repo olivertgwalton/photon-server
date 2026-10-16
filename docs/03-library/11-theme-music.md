@@ -1,37 +1,43 @@
 ---
 title: "Theme music"
-summary: "Theme tunes from files beside your titles or from ThemerrDB, and how a page plays them."
+summary: "Play a film's or show's theme tune quietly on its page, from files beside your titles or downloaded from ThemerrDB."
 ---
 
-A film or a show can have a theme tune that plays quietly under its page, as Plex and Jellyfin
-play one. The server finds it in the title's folder, or, where a library asks for it, downloads
-the one ThemerrDB lists for the title. This page covers both, and how a profile turns it on.
+A film or show can have a theme tune that plays quietly while you look at its page. photon-server
+finds theme tunes saved in the title's folder. It can also download them for you from ThemerrDB, a
+community list of theme tunes.
+
+Theme music is off until a profile turns it on.
+
+## Turn theme music on
+
+1. Open Settings › **Playback**.
+2. Turn on **Play theme music**.
+
+![Settings › Playback, with Play theme music turned on](../images/library-play-theme-music.webp)
+
+Now, when you open a film's or show's page, its theme plays once, quietly. A season's or an
+episode's page plays its show's theme. This is a setting for your profile, so others on the same
+server choose for themselves.
 
 ## Choose where a library's themes come from
 
-Theme music is in a library's settings, at Settings › Server › Libraries, the library, **More
-settings**.
+1. Open Settings › Server › **Libraries** and choose the library.
+2. Open **More settings** and find **Theme music**.
+3. Choose one, then save.
+
+![A library's More settings, showing the Theme music choices](../images/library-theme-music-setting.webp)
 
 | Setting | What it does |
 | --- | --- |
-| Theme music | **Local files only** plays the files beside a title (the default). **Local files and ThemerrDB's** does too, and downloads ThemerrDB's for a film or show with no file of its own. **None** plays no theme, whatever is beside the title. |
+| Theme music | **Local files only** (the default) plays theme files saved beside your titles. **Local files and ThemerrDB's** does the same, and downloads a theme for any film or show without one. **None** plays no theme music for this library. |
 
-```sh
-curl -X PATCH https://photon.example/api/v1/admin/libraries/$LIBRARY \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"themes": "themerr"}'
-```
+## Add theme files yourself
 
-`themes` is `local`, `themerr` or `off`.
+Put a sound file in the title's own folder, the film's or the show's:
 
-## Theme files beside a title
-
-A theme is a sound file in the title's own folder, a film's or a show's, found as the library is
-scanned:
-
-- A file named `theme`, such as `theme.mp3`, beside the title.
-- Any sound file in a `theme-music` folder beside it, played in order.
+- A file named `theme`, such as `theme.mp3`.
+- Or any sound files in a `theme-music` folder. They play after a `theme` file, in order.
 
 ```text
 Films/Heat (1995)/
@@ -44,65 +50,38 @@ Shows/Severance/
   Season 01/
 ```
 
-The formats read are AAC, FLAC, M4A, MP3, Ogg (`.oga`, `.ogg`, `.opus`), WAV and WMA. A season's
-and an episode's page play their show's theme. A title with a file of its own never has
-ThemerrDB's: the file is what you chose.
+The common sound file types work, including MP3, M4A, AAC, FLAC, Ogg, Opus, WAV and WMA. The file
+is found the next time the library is scanned.
 
-## Themes from ThemerrDB
+A title with its own theme file never gets one from ThemerrDB. Your file is what you chose.
 
-ThemerrDB is a community list of YouTube links to films' and shows' themes, which Jellyfin's
-Themerr plugin reads. Under **Local files and ThemerrDB's**, the server looks a title up by its
-TMDB id, or a film by its IMDb id where TMDB's finds nothing, and downloads the sound of the link
-with yt-dlp, kept as AAC, which browsers and Apple's players both play. A title must be matched
-for this (see [fix a title's match](05-fix-a-match.md)).
+## Download themes from ThemerrDB
 
-It needs yt-dlp. The Docker image has it; a native install finds it beside the server or on
-`PATH`. Settings › Server › Dashboard says under **yt-dlp** which the server found, and so does
-`yt_dlp` in `GET /api/v1/admin/server`. Choosing ThemerrDB's on a server without it is refused.
-In a server of several nodes, one without yt-dlp leaves the downloads to one that has it (see
-[several servers](../05-playback/04-several-servers.md)).
+ThemerrDB lists a YouTube link to the theme of many films and shows. With **Local files and
+ThemerrDB's** chosen, photon-server looks each title up and downloads the sound from its link.
 
-### When themes are fetched
+- When you choose it, photon-server looks for a theme for every film and show in the library.
+- Each new title is looked up as it is added, and each title again whenever its details are
+  refreshed, so themes added to ThemerrDB later are found.
+- A title must be recognised first, because the lookup uses its TMDB or IMDb entry (see
+  [fix a title's match](05-fix-a-match.md)).
 
-- Choosing ThemerrDB's for a library asks for a theme for every film and show in it.
-- Each time a title is matched, as it is added and whenever its metadata is refreshed, it is
-  asked for again, so a theme ThemerrDB has listed or changed since is found. A link fetched
-  before is not downloaded again.
+> **Important:** Downloading needs yt-dlp, a tool that downloads from YouTube. The Docker image
+> has it. Settings › Server › **Dashboard** shows **yt-dlp** and whether your server found it.
+> Without it, you cannot choose ThemerrDB's.
 
-Each title's fetch is a job, **Fetch a theme tune**, in Settings › Server › Jobs.
+photon-server downloads from YouTube at most once every 10 seconds, so it is not mistaken for a
+bot. Filling a large library for the first time takes a while. You can follow each download at
+Settings › Server › **Jobs**, as **Fetch a theme tune**.
 
-### What is left out, and for how long
+## Good to know
 
-- A title ThemerrDB lists no theme for is not asked about again for a day, as Themerr keeps
-  ThemerrDB's answers.
-- A video YouTube will not give (removed, private, blocked by its rights holder, behind an age
-  gate) is not tried again for 7 days, and the server log says why. ThemerrDB replaces a dead link
-  with another, which is tried at once.
+- If ThemerrDB has no theme for a title, it is not asked again for a day.
+- If a YouTube video cannot be downloaded (removed, private, blocked or age-restricted), it is not
+  tried again for 7 days. The server log says why. If ThemerrDB replaces the link, the new one is
+  tried straight away.
 - A theme larger than 32 MiB is not kept.
-- Only YouTube links are followed.
-
-Every node together fetches from YouTube at most once every 10 seconds, so the server is not taken
-for a bot, which YouTube stops. A library being filled for the first time takes a while for that.
-
-Downloaded themes are kept with the server's artwork (see [storage](../07-maintain/05-storage.md)).
-
-## Play themes
-
-A theme plays only for a profile that asks for it. At Settings › Playback, turn on **Play theme
-music**: a film's or show's theme then plays quietly, once, while you look at its page. It is off
-by default.
-
-```sh
-curl -X PATCH https://photon.example/api/v1/profile/preferences \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"theme_music": "play"}'
-```
-
-A title's page names its themes, in order, as `themes`. Each is at `/api/v1/themes/{id}`, served
-in byte ranges to anyone, signed in or not, so a player that sends no headers of its own can play
-it. A theme's id changes whenever its file does, so a client may keep one for good.
-
-```sh
-curl -o theme.m4a https://photon.example/api/v1/themes/$THEME
-```
+- Downloaded themes are stored with the server's artwork (see
+  [storage](../07-maintain/05-storage.md)).
+- If you run several servers together, a server without yt-dlp leaves the downloads to one that
+  has it (see [several servers](../05-playback/04-several-servers.md)).

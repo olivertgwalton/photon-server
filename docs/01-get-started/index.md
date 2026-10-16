@@ -3,53 +3,53 @@ title: "Get started"
 summary: "What photon-server is, what it needs, and how to install it, set it up and sign in from your apps."
 ---
 
-photon-server is a media server for films and television, written in Go and open source under the
-GPL-3.0. You point it at folders of films and shows; it matches each title with TMDB and TheTVDB,
-fetches its pictures, ratings, subtitles and theme music, and serves the library to a web app it
-carries and to [Photon](05-connect-apps.md#photon) on iPhone, iPad, Mac, Apple TV and Apple
-Vision Pro. This section takes you from nothing to a server you are watching from.
+photon-server is a media server for your films and TV shows. You point it at the folders where
+they live. It recognises each title, fetches its poster, description, ratings and subtitles, and
+lets you watch from a browser or from [Photon](05-connect-apps.md#photon) on iPhone, iPad, Mac,
+Apple TV and Apple Vision Pro. It is free and open source.
+
+## New here? Start with the quick start
+
+[Quick start](00-quick-start.md) takes about 15 minutes. It goes from nothing to watching a film
+on your Apple TV, with a link to the full page at each step. Come back to the pages below when you
+want more detail.
 
 ## What it does
 
-- **Keeps a library of films and shows**: scanned from folders, or from your own NFO files, and
-  kept up to date as files arrive. A library can also be streamed by a provider, such as a
-  Stremio addon.
-- **Plays each file the way the device can.** It sends a file as it is where the device plays it, copies
-  its video into another container where only that differs, and transcodes it, on a GPU where
-  there is one, where nothing else will do. HDR and Dolby Vision are kept where the device shows
-  them.
-- **Makes downloads** for watching offline, converted on the server to fit the device.
-- **Knows each person**: a profile each, with its own watch history, favourites, watchlist,
-  playlists and Home, signed in by password, single sign-on or a code on a TV, and switched to
-  with a PIN.
-- **Speaks Jellyfin's API**, so apps made for Jellyfin, such as Infuse and Swiftfin, play from it
-  too.
-- **Connects outwards**: plugins, Stremio addons, Trakt and Simkl, webhooks, notifications, and
-  importing watch history from Plex, Jellyfin and Emby.
-- **Runs as one server or several** sharing one database, with backups, scheduled tasks and
-  Prometheus metrics.
+- **Keeps your library tidy.** It reads your folders, matches each film and episode, and notices
+  new files as they arrive.
+- **Plays on any device.** When a device can play a file as it is, photon-server sends it
+  unchanged. When it can't, the server converts it as it plays (this is called transcoding), using
+  your graphics card if you have one. HDR (the brighter, richer picture on newer TVs) is kept
+  wherever the screen can show it.
+- **Makes downloads** you can watch offline, sized to fit the device.
+- **Knows each person.** Everyone in the household gets a profile with their own history,
+  favourites, watchlist and Home page. A TV signs in with a short code, and a profile can be
+  locked with a PIN.
+- **Works with Jellyfin apps** too, such as Infuse and Swiftfin.
+- **Connects to other services**, such as Trakt, Simkl and AniList, and can import your watch
+  history from Plex, Jellyfin and Emby.
 
 ## What it is not
 
-- **Not a music, photo or live TV server.** A library holds films, shows, or both.
-- **Not a service.** It runs on your machine, and your profiles, history and settings are in your
-  own PostgreSQL. There is no account to make anywhere else.
-- **Not a downloader.** It plays what is in your folders, or what a provider you add streams; it
-  does not search for or fetch media.
+- **Not for music, photos or live TV.** A library holds films, shows, or both.
+- **Not an online service.** It runs on your own machine. Your profiles and history stay there,
+  and there is no account to make anywhere else.
+- **Not a downloader.** It plays what is already in your folders. It does not search for or fetch
+  films.
 
-## The path through this section
+## The full path
 
-1. [Requirements](01-requirements.md): the platforms it runs on, PostgreSQL and Valkey, and the
-   ports and disk it uses.
+1. [Requirements](01-requirements.md): what kind of machine it runs on, and what it needs.
 2. Install it, one of two ways:
-   - [Install with Docker](02-install-docker.md): one Compose file running the server, PostgreSQL
-     and Valkey. The way to run it from boot.
-   - [Install natively](03-install-natively.md): the Flatpak for Linux, the Mac app, or an archive
-     for Linux, macOS or Windows, including running it as a Windows service.
-3. [Set up a new server](04-first-run.md): create the admin, name the server, add your first
-   libraries and say how it is reached from outside.
+   - [Install with Docker](02-install-docker.md): the way to keep it running on a home server, a
+     NAS or a PC that is always on.
+   - [Install natively](03-install-natively.md): the Mac app, the Linux desktop app, or a download
+     for Linux, macOS or Windows.
+3. [Set up a new server](04-first-run.md): create your admin profile, name the server and add your
+   first libraries.
 4. [Connect Photon and other apps](05-connect-apps.md): sign in from a browser, from Photon, from
-   an Apple TV with a code, and from Jellyfin apps.
+   an Apple TV, and from Jellyfin apps.
 
-From there, [Build your library](../03-library/index.md) covers naming files and tuning libraries,
-and [Give people access](../04-access/index.md) adds the rest of the household.
+After that, [Build your library](../03-library/index.md) covers naming your files and tuning your
+libraries, and [Give people access](../04-access/index.md) adds the rest of the household.

@@ -1,111 +1,113 @@
 ---
 title: "Reach your server from outside"
-summary: "Serve HTTPS with your own certificate or behind a reverse proxy, set the public address, say which networks are home, and limit streams sent away from it."
+summary: "Give the server a secure address, put it behind a reverse proxy if you use one, say which networks are home, and limit how much a stream away from home uses."
 ---
 
-At home, apps reach photon-server at its own address on port 8640. To reach it from anywhere else,
-you put it at an address the internet can reach, over HTTPS, either with a certificate the server
-serves itself or behind a reverse proxy that holds the certificate. Everything on this page is under
-Settings › Server › Network, and every node of the server takes up a change at once.
+At home, apps reach photon-server at its own address on port 8640, such as
+`http://192.168.1.10:8640`. To watch away from home, the server needs an address the internet can
+reach, and it should be a secure one.
 
-## Settings › Server › Network
+A secure address starts `https://`. **HTTPS** means everything between the device and the server
+is encrypted, so passwords and what you watch can't be read on the way. HTTPS needs a
+**certificate**: a small file that proves the address belongs to you. You get one free from
+services such as Let's Encrypt.
+
+There are two ways to set this up:
+
+- **The server serves HTTPS itself.** You give it a certificate. Choose this if photon-server is
+  the only thing you expose.
+- **A reverse proxy serves HTTPS.** A reverse proxy is a program such as Caddy, nginx or Traefik
+  that sits in front of your services, holds the certificate, and passes visits on to them. Choose
+  this if you already run one.
+
+Everything on this page is under Settings › Server › Network. Choose **Save** at the foot of the
+page after a change. It takes effect at once, with nothing to restart.
+
+![Settings › Server › Network, showing Secure connections, Reaching the server and Remote streams](../images/access-network.webp)
+
+## The settings
 
 | Setting | What it does |
 |---|---|
-| Secure connections | **Required**, **Preferred** or **Disabled** (the default). |
-| Certificate | The path, on the server, of a PEM certificate chain. Required and Preferred need it. |
-| Key | The path of the certificate's key. |
-| Public address | Where people reach the server from outside, such as `https://photon.example.com`. Empty by default. |
-| Trusted proxies | Reverse proxies whose `X-Forwarded-For` says who a device is, as prefixes or addresses. None by default. |
-| Discovery | **On** (the default) answers apps looking for a server on the local network. |
-| Jellyfin apps | Whether apps made for Jellyfin can sign in, and on which **Port**. See [Use Jellyfin apps](05-jellyfin-apps.md). |
-| Local networks | The networks whose devices are at home, as prefixes or addresses. Empty, every private network is. |
-| Limit (Mbps) | The most a stream to a device outside the local networks is sent at. 0, the default, is no limit. |
+| Secure connections | **Disabled** (the default), **Preferred** or **Required**. Whether the server itself serves HTTPS. |
+| Certificate | Where the certificate file is on the server. Needed for Preferred and Required. |
+| Key | Where the certificate's private key file is on the server. |
+| Public address | The address people use to reach the server from outside, such as `https://photon.example.com`. Empty by default. |
+| Trusted proxies | The address of your reverse proxy, if you use one. Empty by default. |
+| Discovery | **On** by default. Lets apps on your home network find the server by themselves. |
+| Jellyfin apps | Lets apps made for Jellyfin sign in. See [Use Jellyfin apps](05-jellyfin-apps.md). |
+| Local networks | Which networks count as home. Empty by default, meaning every private home network. |
+| Limit (Mbps) | The most a stream to a device away from home may use. 0 by default, meaning no limit. |
 
-```sh
-curl https://photon.example/api/v1/admin/network -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+## Serve HTTPS from the server
 
-`PUT` to the same address replaces every setting at once, so send back what you read with your
-change in it.
+1. Get a certificate for the server's address. Tools such as certbot, Caddy and Tailscale make the
+   two files you need: the certificate and its key.
+2. Put both files where the server can read them. With Docker, mount them into the container.
+3. Under Settings › Server › Network, type their paths in **Certificate** and **Key**.
+4. Set **Secure connections** to **Preferred** or **Required**, and choose **Save**.
 
-## Serve HTTPS from the server itself
+If the server can't read the files, it tells you and saves nothing.
 
-The server answers HTTPS and plain HTTP on the same port, 8640, as Plex's does: it tells them apart
-by a connection's first byte.
+What the three choices mean:
 
-1. Get a certificate for the server's name: certbot, Caddy or Tailscale write a PEM chain and key
-   that work as they are.
-2. Make the two files readable by the server at the same paths on every node: in Docker, mount
-   them into the container.
-3. Under Settings › Server › Network, set **Certificate** and **Key** to their paths, and
-   **Secure connections** to **Preferred** or **Required**. The server refuses to save a
-   certificate and key it cannot read.
+- **Disabled**: plain `http://` only.
+- **Preferred**: both `https://` and `http://` work, on the same port.
+- **Required**: a browser that arrives on `http://` is sent to `https://` at your **Public
+  address**. Scripts on the server's own machine can still use `http://`.
 
-**Preferred** answers both HTTPS and plain HTTP. **Required** sends a browser that comes over plain
-HTTP to HTTPS at the **Public address**, but one on the server's own machine, so a script there
-keeps working; with no HTTPS public address set, a plain request is refused instead. **Disabled**
-answers plain HTTP alone.
-
-The server reads the files again every minute, so a certificate renewed in place is served within a
-minute with nothing restarted. A file caught half-written leaves the node serving the certificate
-it had.
+> **Tip:** When your certificate is renewed, the server picks up the new one within a minute. You
+> don't need to restart anything.
 
 ## Serve HTTPS behind a reverse proxy
 
-Behind a proxy that holds the certificate, such as Caddy, nginx or Traefik, leave **Secure
-connections** disabled, and:
+1. Set up the server first, from its own address on your home network. First-time setup only works
+   from there, not through a proxy.
+2. Leave **Secure connections** at **Disabled**. The proxy handles HTTPS.
+3. Point the proxy at the server's port 8640. Make sure it passes WebSocket connections through:
+   the web app keeps one open to update pages live.
+4. Have the proxy send the `X-Forwarded-For` and `X-Forwarded-Proto` headers. These tell the server
+   who the visitor really is and whether they came over HTTPS.
+5. Add the proxy's address to **Trusted proxies**. If the proxy runs in Docker, `172.16.0.0/12`
+   covers Docker's usual networks.
 
-1. Point the proxy at the server's port 8640, passing WebSocket upgrades through: the web app keeps
-   one open at `/api/v1/events`.
-2. Have the proxy send `X-Forwarded-For` and `X-Forwarded-Proto`.
-3. Add the proxy's address, or the network it is on, to **Trusted proxies**: `172.16.0.0/12` covers
-   Docker's default networks.
-
-Without a trusted proxy the server believes no `X-Forwarded-For`, so every device behind the proxy
-looks like the proxy, and is counted local if the proxy is. A client cannot name its own address by
-sending the header: it is believed only from a trusted proxy, and only back to the first hop that is
-not one. `X-Forwarded-Proto: https` from a trusted proxy is how the server knows a browser came over
-HTTPS, which decides whether its sign-in cookie is marked secure.
-
-Set the server up from its own address before you put a proxy in front of it: the
-[first-run setup](../01-get-started/04-first-run.md) is open only to a device on the local network
-reaching the server directly.
+> **Important:** Without step 5, every visitor looks to the server as though they were the proxy.
+> If the proxy is on your home network, everyone counts as at home, and the remote limit below never
+> applies.
 
 ## The public address
 
-**Public address** is where people reach the web app from outside, over `http` or `https`. The
-server uses it:
+**Public address** is the address people use to reach the web app from outside your home. Fill it
+in once you have one. The server uses it:
 
-- as the address a television shows to [pair](03-pair-a-tv.md) at, so a phone away from home
-  reaches it;
-- for [single sign-on](02-single-sign-on.md), which needs one: the provider sends browsers back to
-  it;
-- to send plain HTTP to HTTPS where secure connections are required.
+- as the address a television shows when you [sign it in with a code](03-pair-a-tv.md), so you can
+  approve it from a phone that isn't on your Wi-Fi;
+- for [single sign-on](02-single-sign-on.md), which needs it;
+- to send browsers from `http://` to `https://` when **Secure connections** is **Required**.
 
-Left empty, each device is answered at the address it used.
+## Home networks and the remote limit
 
-## Local networks and the remote limit
+The server treats a device as **at home** when it is on one of your **Local networks**. Left
+empty, every private home network counts, such as addresses starting `192.168.` or `10.`.
 
-A device is **local** when its address is in **Local networks**, or on the server's own machine.
-Left empty, every private network is local: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, their
-IPv6 equivalent and link-local addresses. Tailscale's `100.64.0.0/10` is not private, so add it to
-treat a tailnet as home; adding any network replaces the private ones, so list your home network
-beside it.
+Being at home matters in three places:
 
-Being local matters in three places:
+- **Limit (Mbps)** applies only to devices away from home. A video above the limit is converted to
+  fit as it plays, so watching away from home doesn't use all your upload speed. The picture keeps
+  the size the app asked for. See [transcoding](../05-playback/01-transcoding.md).
+- A forgotten password can only be [reset](01-profiles.md#a-forgotten-password) from home.
+- [First-time setup](../01-get-started/04-first-run.md) only works from home.
 
-- **Limit (Mbps)** applies only to devices that are not local. Above it the video is encoded to fit,
-  as Jellyfin's internet streaming bitrate limit does, so playing away from home leaves your upload
-  room; the picture keeps the size the app asks for. See [transcoding](../05-playback/01-transcoding.md).
-- A forgotten password is [reset](01-profiles.md#a-forgotten-password) only from a local device.
-- The [first-run setup](../01-get-started/04-first-run.md) is open only to a local device.
+> **Tip:** Tailscale addresses (starting `100.`) don't count as home on their own. To treat your
+> tailnet as home, add `100.64.0.0/10` to **Local networks**, and add your home network beside it,
+> such as `192.168.1.0/24`. Once you list any network, only the ones you list count.
 
-## Discovery
+## Good to know
 
-With **Discovery** on, the server answers apps on the local network that broadcast
-"who is PhotonServer?" on UDP port 8640, with its name and the address to reach it at, over HTTPS
-where it serves HTTPS. It answers only askers on a private network, since an answer is several times
-the size of the question and answering anyone could lend the server to an amplification attack.
-In Docker, a broadcast reaches the container only on host networking; elsewhere, give apps the
-address yourself.
+- **Discovery** helps Photon find the server on your home network. It doesn't work with the
+  standard Docker setup in [Install with Docker](../01-get-started/02-install-docker.md), so type
+  the server's address into the app instead.
+- If the certificate file changes while it is being written, the server keeps using the old one
+  until the new one is complete.
+- The server only believes a device's address from **Trusted proxies**, so nobody can pretend to
+  be at home by sending the header themselves.

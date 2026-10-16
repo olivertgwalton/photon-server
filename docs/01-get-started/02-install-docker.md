@@ -1,36 +1,31 @@
 ---
 title: "Install with Docker"
-summary: "Run photon-server, PostgreSQL and Valkey together from one Compose file."
+summary: "Run photon-server and everything it needs from one file, on a Linux machine, a NAS, or a Windows PC."
 ---
 
-Docker Compose is the way to run photon-server from boot on a Linux machine, a NAS or a Windows
-PC. One file runs the server beside the PostgreSQL 18 and Valkey 9 it keeps its state in, and you
-end with a server answering on port 8640, ready to [set up](04-first-run.md). To run it without
-Docker, see [Install natively](03-install-natively.md).
+Docker is a free tool that runs apps in their own sealed-off space, with everything they need
+packed in. It is the best way to keep photon-server running all the time on a home server, a NAS
+or a Windows PC. You write one file, type one command, and the server starts every time the
+machine does.
 
-## The image
+By the end of this page, the server is running and ready to [set up](04-first-run.md). To run it
+without Docker, see [Install natively](03-install-natively.md).
 
-The image is `ghcr.io/olivertgwalton/photon-server`, for amd64 and arm64. It carries the server,
-its web app, Jellyfin's web app for the [Jellyfin API](../04-access/05-jellyfin-apps.md),
-jellyfin-ffmpeg, yt-dlp, the PostgreSQL 18 client tools it backs up with, the GPU drivers
-jellyfin-ffmpeg loads, and the fonts styled subtitles are drawn in.
+## Before you start
 
-Its tags:
+Install [Docker](https://docs.docker.com/get-docker/) on the machine. On Windows and macOS, that
+means Docker Desktop.
 
-- `main`, the newest build of the main branch, which the Compose file below uses unless told
-  otherwise.
-- A release's version, without its `v`, and `latest`, the newest release.
-- A commit's full hash, for each build of the main branch.
-
-To follow releases instead of the main branch, set `PHOTON_IMAGE` in `.env`:
-
-```sh
-PHOTON_IMAGE=ghcr.io/olivertgwalton/photon-server:latest
-```
+You also need to know which folder holds your films and shows, such as `/srv/media`.
 
 ## Write the Compose file
 
-Make a folder for the server and save this in it as `compose.yml`:
+A Compose file is a list of what Docker should run. This one runs photon-server, plus the
+database and the small store it keeps its information in (see [Requirements](01-requirements.md)).
+
+1. Make a folder for the server, such as `photon`.
+2. Save the text below in it as `compose.yml`. Copy it exactly; you do not need to change anything
+   in it.
 
 ```yaml compose.yml
 name: photon
@@ -122,24 +117,11 @@ volumes:
   backups:
 ```
 
-What it runs:
-
-- **server**, photon-server itself, on port 8640. It reads your media read-only under `/media`,
-  keeps its cache (pictures, previews, transcodes and converted downloads) in the `cache` volume and its
-  database dumps in `backups`.
-- **migrate**, which brings the database up to the image's version and exits. The server starts
-  only once it has finished, so a new image never runs against an old schema.
-- **db**, PostgreSQL 18.
-- **valkey**, Valkey 9, holding what is live: sessions, playbacks, the jobs queue and what the
-  server's nodes tell each other. Its user may touch only keys under `photon:`.
-
-Stopping the server lets the streams it is serving play to their end, up to two hours, so nobody's
-film is cut off by an update. Stop it a second time to stop it at once.
+The lines starting with `#` are notes and do nothing.
 
 ## Set the passwords and the media folder
 
-Save this beside `compose.yml` as `.env`, with two passwords of your own and the folder holding
-your libraries:
+In the same folder, save a file called `.env` with this in it:
 
 ```sh
 POSTGRES_PASSWORD=
@@ -147,62 +129,71 @@ VALKEY_PASSWORD=
 MEDIA_DIR=/srv/media
 ```
 
-Use letters and digits only in the two passwords: they go into the addresses the server reaches
-PostgreSQL and Valkey at, where other characters would need escaping.
+1. After `POSTGRES_PASSWORD=` and `VALKEY_PASSWORD=`, type two passwords of your own. Use letters
+   and digits only. You never need to type them anywhere else: they protect the server's database.
+2. After `MEDIA_DIR=`, type the folder that holds your films and shows.
 
-Everything under `MEDIA_DIR` appears in the container under `/media`. A library is added at its
-path inside the container, so `/srv/media/Films` on the host is `/media/Films` when you
-[add a library](../03-library/02-libraries.md).
+> **Important:** Inside Docker, your media folder is called `/media`. So when you
+> [add a library](../03-library/02-libraries.md), a folder at `/srv/media/Films` on your machine is
+> `/media/Films`.
+
+The server can only read your media. It never changes or deletes your files.
 
 ## Start it
+
+Open a terminal in the folder and type:
 
 ```sh
 docker compose up -d
 ```
 
-The first start pulls the images, makes the database and migrates it. Check it is up:
+This starts everything and leaves it running in the background. The first time, Docker downloads
+what it needs and prepares the database, which can take a few minutes.
 
-```sh
-curl -i http://localhost:8640/health
-```
+Then, on a device on the same home network, open the server's address followed by `:8640` in a
+browser, such as `http://192.168.1.20:8640`. You will see the **Set up** page. Carry on with
+[Set up a new server](04-first-run.md).
 
-`204 No Content` means the server reaches PostgreSQL and Valkey. Then open `http://<server>:8640`
-from a device on the same network and [set the server up](04-first-run.md). Setup is open only to
-a device on the server's local network reaching it directly, so do it before you put a reverse
-proxy in front.
+> **Important:** Set the server up from your home network, at this address. Setup will not open
+> through a reverse proxy (a separate program that forwards web traffic to the server), so add one
+> afterwards if you want one.
 
-To read the server's log, which is JSON, one line an event:
+To see what the server is doing, type:
 
 ```sh
 docker compose logs -f server
 ```
 
+Press Ctrl+C to stop reading. The server keeps running.
+
 ## Publish other ports
 
-The Compose file publishes 8640 over TCP, which is all the web app and Photon need. Two things
-need more.
+The Compose file opens port 8640, which is all the web app and Photon need. Two things work
+differently:
 
-- **Jellyfin apps.** Turned on under Settings › Server › Network › Jellyfin apps, the server
-  answers Jellyfin's API on a port of its own, 8096 by default. Publish it under `server:`, as
-  `ports: ["8640:8640", "8096:8096"]`. See [Use Jellyfin apps](../04-access/05-jellyfin-apps.md).
-- **Discovery.** Apps find a server on the network by broadcasting on UDP 8640. A broadcast does
-  not reach a container on Docker's own network, so apps there do not list the server: give them
-  its address instead, as [Connect Photon and other apps](05-connect-apps.md) describes.
+- **Jellyfin apps.** If you turn on Settings › Server › Network › **Jellyfin apps**, the server
+  also listens on port 8096. In `compose.yml`, change the line `ports: ["8640:8640"]` to
+  `ports: ["8640:8640", "8096:8096"]`, then run `docker compose up -d` again. See
+  [Use Jellyfin apps](../04-access/05-jellyfin-apps.md).
+- **Finding the server on the network.** Photon usually lists servers on your network by itself.
+  Docker blocks this, so a server run from this file is not listed. Type its address in Photon
+  instead, as [Connect Photon and other apps](05-connect-apps.md#add-the-server) describes.
 
 ## Hardware transcoding
 
-For an Intel or AMD GPU, pass its devices to the server, under `server:`:
+When a device cannot play a file as it is, the server converts it as it plays (transcoding). A
+graphics card does this much faster than the processor. Docker hides the graphics card from the
+server until you pass it in.
+
+For Intel or AMD graphics, add this line under `server:` in `compose.yml`, lined up with `ports:`:
 
 ```yaml
     devices: [/dev/dri:/dev/dri]
 ```
 
-The server starts as root only to join the groups that own those devices, then runs as its own
-user, 10001, so no host's `render` group id needs looking up.
-
-For an NVIDIA GPU, install the
+For an NVIDIA card, first install the
 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-on the host, then add under `server:`:
+on the machine, then add this under `server:`:
 
 ```yaml
     deploy:
@@ -216,31 +207,37 @@ on the host, then add under `server:`:
               capabilities: [gpu, compute, utility, video, graphics]
 ```
 
-As it starts, the server tries NVENC, then Quick Sync and VAAPI on each render device, and encodes
-on the first that encodes a test picture, or in software where none does. Its log says which
-(`"msg":"encoding video"`), and so does Settings › Server › Dashboard.
-[Transcoding and hardware encoders](../05-playback/01-transcoding.md) covers choosing one yourself.
+Run `docker compose up -d` again. The server tests the card as it starts and uses it if it works.
+Settings › Server › **Dashboard** shows which one it chose. See
+[Transcoding and hardware encoders](../05-playback/01-transcoding.md).
 
 ## Update
 
-Pull the new image and recreate the server; `migrate` runs first on its own:
+To move to the newest version, type:
 
 ```sh
 docker compose pull && docker compose up -d
 ```
 
-See [Update photon-server](../07-maintain/02-updating.md) for what to check before and after.
+The first command downloads the new version. The second restarts the server on it, and updates the
+database first. See [Update photon-server](../07-maintain/02-updating.md) for what to check before
+and after.
 
-## Several servers
+## Good to know
 
-Each machine running a server sets `PHOTON_HOSTNAME` in its `.env` to a name of its own, which
-Settings › Server › Dashboard shows; it is `photon` where unset. See
-[Run several servers](../05-playback/04-several-servers.md).
+- **Stopping is gentle.** When you stop or update the server, anyone watching keeps watching until
+  their film or episode ends, for up to two hours. Stop it a second time to stop it at once.
+- **Releases instead of the newest build.** The Compose file runs the newest build of photon-server.
+  To get only finished releases, add this line to `.env`:
 
-## Windows and macOS
+  ```sh
+  PHOTON_IMAGE=ghcr.io/olivertgwalton/photon-server:latest
+  ```
 
-Docker Desktop runs the same file on Windows and on a Mac. On a Mac it encodes in software, as a
-container cannot reach VideoToolbox; the [Mac app](03-install-natively.md#macos-the-mac-app) encodes on it.
-
-Every variable the Compose file reads is listed in the
-[Docker Compose reference](../08-reference/02-docker-compose.md).
+- **Windows and macOS.** Docker Desktop runs the same file. On a Mac, Docker cannot reach Apple's
+  video hardware, so it converts video on the processor. The
+  [Mac app](03-install-natively.md#macos-the-mac-app) uses the hardware.
+- **Several servers.** If you run photon-server on more than one machine, give each a name of its
+  own with `PHOTON_HOSTNAME=` in its `.env`. See [Run several servers](../05-playback/04-several-servers.md).
+- Every setting `.env` can hold is listed in the
+  [Docker Compose reference](../08-reference/02-docker-compose.md).

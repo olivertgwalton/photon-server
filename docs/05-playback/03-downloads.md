@@ -1,63 +1,62 @@
 ---
 title: "Downloads and conversions"
-summary: "How a film or episode is kept on a device, as its own file or converted down to a size, and how the server makes and clears conversions."
+summary: "Keep a film or episode on a device, as it is or made smaller, and how long the server keeps it ready."
 ---
 
-Anyone signed in can download a film or an episode to keep on a device: the file as it is, or a smaller copy the server converts for a phone or a slow connection. This page covers asking for one, how the server makes conversions without getting in the way of playback, and how long they are kept.
+Anyone signed in can download a film or an episode to watch later on a device. You can take the file as it is, or ask the server to make a smaller version for a phone or a slow connection.
 
 ## Download a title
 
-In the web app, choose **Download…** from a film's or an episode's menu. The dialog offers:
+1. Open the menu of a film or an episode and choose **Download…**.
+2. Under **Quality**, choose how big it may be.
+3. If the title is split across several files, choose all of them or one under **Files**. Each file is a download of its own.
+4. Choose **Download**. It appears under **Downloads** in the sidebar.
 
-| Quality | What is asked for |
+![The Download dialog, with the five qualities listed and 1080p, 8 Mbps chosen](../images/playback-download-dialog.webp)
+
+| Quality | What you get |
 |---|---|
 | Original | The file as it is. |
-| 1080p, 20 Mbps | No wider than 1920, no more than 20 Mbps. |
-| 1080p, 8 Mbps | No wider than 1920, no more than 8 Mbps. |
-| 720p, 4 Mbps | No wider than 1280, no more than 4 Mbps. |
-| 480p, 1.5 Mbps | No wider than 854, no more than 1.5 Mbps. |
+| 1080p, 20 Mbps | No wider than 1920 pixels, at most 20 Mbps. |
+| 1080p, 8 Mbps | No wider than 1920 pixels, at most 8 Mbps. |
+| 720p, 4 Mbps | No wider than 1280 pixels, at most 4 Mbps. |
+| 480p, 1.5 Mbps | No wider than 854 pixels, at most 1.5 Mbps. |
 
-A copy in several files is downloaded a file at a time: the dialog's **Files** offers all of them, each a download of its own, or one part.
+## Fetch it
 
-The download then appears under **Downloads** in the sidebar, as Waiting, Converting (with how far it has got), Ready or Failed. **Save** fetches a ready one, and the cross removes it.
+The **Downloads** page lists each download with its state: **Waiting**, **Converting** (with a progress bar), **Ready**, or **Failed** with the reason.
 
-## The file as it is, or a conversion
+1. Open **Downloads** in the sidebar.
+2. When a download is ready, choose **Save**. Your browser saves the file.
+3. To remove a download, choose the cross beside it.
 
-A copy already within the quality asked for, no more than its bitrate and no wider, is its own file: the download is ready at once and costs the server nothing. A copy whose bitrate is not known is taken as 40 Mbps, so it is its own file only at Original.
+![The Downloads page, with two downloads ready to save](../images/playback-downloads-page.webp)
 
-Any other copy is converted, into one MP4 with its index at the front so a player can start it before it has all of it:
+Removing a download only forgets it on the server. A file you have already saved stays on your device.
 
-- **Video** is HEVC where the device says it plays HEVC and the server encodes it, otherwise H.264, within the bitrate and width. HEVC keeps HDR10 or HLG where the device says it shows it; anything else is tone mapped to SDR, as a transcode is (see [HDR and Dolby Vision](02-hdr.md)). The web app names no codecs, so its conversions are H.264 in SDR, which every device plays.
-- **Audio** is AAC, within its share of the bitrate.
+## The file as it is, or a smaller one
 
-A conversion is made once for every profile and device that asks for the same file at the same bitrate, width, codec and range, and asking again for a download you already have answers the same one.
+If the file is already within the quality you chose, you get it as it is. It is ready at once and costs the server nothing.
 
-```sh
-curl -X POST https://photon.example/api/v1/downloads \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"title_id": "0190a3c2-…", "max_bitrate_kbps": 8000, "max_width": 1920,
-       "video_codecs": ["hevc", "h264"], "video_ranges": ["sdr", "hdr10"]}'
-```
+Otherwise, the server converts it into a single MP4 file. Downloads from the web app come out in the older, widely supported H.264 format, as an ordinary (SDR) picture. Photon can ask for the newer HEVC format, which keeps HDR where the device shows it.
 
-The answer is `201` for a new download and `200` for one you already had. A copy in several files needs `part_id` to say which. `GET /api/v1/downloads` lists the device's downloads, or with `scope=profile` the profile's on every device. A ready download carries `url`, a signed address good for 24 hours, served in byte ranges so a download manager can resume it.
+If several people ask for the same film at the same quality, the server converts it once and they share it.
 
-## How the server makes conversions
+## How the server fits conversions in
 
-Each conversion is a job, **Convert for download**, which you can follow on Settings › Server › Jobs. A server makes one conversion at a time, so a playback is never starved of the processor, and each holds one of its transcode slots (see [transcoding](01-transcoding.md#how-many-videos-are-encoded-at-once)) while no playback needs it:
+- It converts one download at a time, so films being watched never go short.
+- A conversion uses one of the server's [transcode slots](01-transcoding.md#how-many-at-once), but only while nobody watching needs it. If someone starts a film that needs the slot, the conversion stops, and starts again from the beginning when a slot is free.
+- Conversions don't wait for the night or for nothing to be playing. Someone is waiting for each one.
+- You can follow each one on Settings › Server › Jobs, as **Convert for download**.
 
-- A playback that needs a slot takes the conversion's. The conversion stops and starts again from the beginning once a slot is free. The dashboard shows conversions apart: "3 of 8 transcoding · 1 for downloads".
-- Conversions do not wait for nothing to be playing, or for the maintenance window: someone is waiting on each, and one held back by every evening's viewing would not be ready for days.
-- A node set to serve only, or drained, makes none; another node does. See [several servers](04-several-servers.md).
-- A conversion whose FFmpeg gets no further for 5 minutes, as on a network mount that stopped answering, fails. One FFmpeg cannot make is marked Failed with its reason and not tried again until someone asks for it again.
-
-The converted file is kept in the cache folder of the node that made it, under `downloads`. Any node serves it, fetching it from the node that holds it; while that node is not running, the file cannot be fetched.
+> **Note:** If a conversion makes no progress for 5 minutes, such as when a network drive stops responding, it fails. A failed download is not tried again until someone asks for it again.
 
 ## How long downloads are kept
 
-A download stays for 7 days once it is ready, or once its conversion failed, unless it is removed first: a week covers a device away or switched off before it fetches. The scheduled task **Clear old downloads** forgets those past their time every hour, and the conversions no download needs; each node removes the files of those every 10 minutes. Removing a download stops its conversion and removes its file where no other download needs it.
+The server keeps a download ready for **7 days** after it finishes, or after it fails. That gives a device that is away or switched off time to fetch it. After that it is forgotten and its file removed, unless someone removed it sooner.
 
-```sh
-curl -X DELETE https://photon.example/api/v1/downloads/0190a3c2-… -H "Authorization: Bearer $TOKEN"
-```
+## Good to know
 
-Removing a download only forgets it on the server: a file already saved on a device stays there.
+- If the server doesn't know a file's quality, it treats it as 40 Mbps, so it is sent as it is only at Original.
+- The link to a ready download works for 24 hours at a time, and a download manager can resume it if it is interrupted.
+- With several servers, a converted file is kept on the server that made it. If that server is switched off, the file can't be fetched until it is back.

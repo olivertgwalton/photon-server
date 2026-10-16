@@ -1,80 +1,66 @@
 ---
 title: "Storage"
-summary: "Where photon-server keeps artwork, avatars, theme tunes and previews, on each server's disk or in an S3-compatible bucket, and how to move them."
+summary: "Where photon-server keeps artwork, avatars, theme tunes and previews: on its own disk or in a shared storage bucket."
 ---
 
-Besides its database, photon-server keeps files of its own: the artwork it fetches and you upload, profiles' avatars, theme tunes, and the chapter images and seek previews it makes. Settings › Server › Storage chooses where. A server on its own keeps them on its own disk; several servers can share them in a bucket. This page covers both, the cache folder around them, and moving from one to the other.
+Besides its database, photon-server keeps files of its own: the artwork it fetches and you upload, profile avatars, theme tunes, and the chapter pictures and scrubbing previews it makes. Settings › Server › Storage chooses where they go.
+
+- **Each server's own disk** is the default, and right for almost everyone.
+- **An S3-compatible bucket** is online storage, such as Amazon S3 or a self-hosted MinIO. It is useful when you [run several servers](../05-playback/04-several-servers.md), so they share one set of pictures.
+
+![Settings › Server › Storage, with Kept on set to Each server's own disk](../images/maintain-storage.webp)
 
 ## The cache folder
 
-Every server has a cache folder, `photon-server` in the system's cache folder: `/var/cache/photon-server` in the Docker image (the compose file keeps it in the `cache` volume), `~/.cache/photon-server` on Linux, `~/Library/Caches/photon-server` on a Mac and `%LOCALAPPDATA%\photon-server` on Windows. Settings › Server › Dashboard shows it as **Cache**, with the space free.
+Every server has a cache folder. Settings › Server › Dashboard shows where, as **Cache**, with the space free.
 
-It holds:
+| Install | Cache folder |
+|---|---|
+| Docker | The `cache` volume |
+| Linux | `~/.cache/photon-server` |
+| Mac | `~/Library/Caches/photon-server` |
+| Windows | `%LOCALAPPDATA%\photon-server` |
 
-- `artwork` and `previews`, where artwork, avatars, theme tunes and previews are kept on disk.
-- `hls`, the segments of the streams the server is making now, about a minute behind each player and up to a minute ahead. A new transcode needs 2 GiB free here. The folder is emptied as the server starts.
-- `downloads`, the conversions made for [downloads](../05-playback/03-downloads.md) while one needs them.
-- `subtitles` and `fetched-subtitles`, subtitles read out of files, and copies of those fetched from providers, which the database keeps, forgotten once no one has read them lately.
-- `node`, the server's id among the nodes. A server given an empty cache folder joins as a new node.
+Besides artwork and previews, it holds the video the server is converting right now, downloads converted for devices, and subtitles. Starting a new transcode needs 2 GB free in it.
 
-Only `artwork` and `previews` move to a bucket; the rest stays on each server's disk, as it is that server's own work.
+> **Important:** Pictures you uploaded and profile avatars are only in the cache folder (or the bucket), not in the database's [backups](01-backups.md). Back up the cache folder's `artwork` folder with the rest of the machine.
 
-## Each server's own disk
+## Use a storage bucket
 
-**Kept on: Each server's own disk** is the default. Each server keeps what it fetches, uploads and makes in its own cache folder. With several servers, each fetches every picture itself and makes its own previews, and an avatar uploaded through one is kept on that one; a bucket shares them.
+1. Create a bucket at your storage provider, and an access key that can add, read, list and delete files in it.
+2. Open Settings › Server › Storage and set **Kept on** to **An S3-compatible bucket**.
+3. Fill in the bucket's details (see the table below).
+4. Choose **Check**. The server tries adding, reading, listing and removing a small test file, and says what failed if anything does.
+5. Choose **Save**. The server checks again first, and won't save a bucket that fails.
 
-Pictures uploaded and avatars are only here, not in the database's [backups](01-backups.md): back the folder's `artwork` up with the machine.
-
-## An S3-compatible bucket
-
-**Kept on: An S3-compatible bucket** keeps artwork and previews in one bucket every server shares: Amazon S3, or any store that speaks its API.
-
-1. Make a bucket, and credentials that may put, read, list and delete objects in it.
-2. Open Settings › Server › Storage and set **Kept on** to An S3-compatible bucket.
-3. Fill in the bucket, and choose **Check**. The server puts a small object in the bucket, reads it back, lists it and removes it, and says what failed if any of that does.
-4. Choose **Save**. Saving checks the bucket again first, and is refused if the check fails.
+![Settings › Server › Storage with An S3-compatible bucket chosen and its fields shown](../images/maintain-storage-bucket.webp)
 
 | Setting | What it does |
 |---|---|
-| Address | The store's address, such as `https://s3.example.com` or `http://minio:9000`. Empty for Amazon S3. |
+| Address | The storage provider's address, such as `https://s3.example.com` or `http://minio:9000`. Leave empty for Amazon S3. |
 | Name | The bucket's name. Required. |
-| Folder | Where in the bucket to keep things. Empty for its root. |
-| Region | The bucket's region. Empty to ask the store. |
-| Access key, Secret key | What signs each request: both or neither. With neither, the server signs with its own AWS credentials, from its shared credentials file or instance role. The secret key is never shown again once saved; leave it empty to keep it. |
-| Clients load pictures from | **This server**, the default: every picture goes through the server. **The bucket directly**: clients are sent to the bucket, sparing the server sending them, where they can reach it. |
-| Address clients reach it at | With The bucket directly, where clients reach the store, where that differs from Address, as for a store inside Docker reached by clients at another name. Empty for Address. |
+| Folder | A folder inside the bucket to use. Empty for the top. |
+| Region | The bucket's region. Empty to ask the provider. |
+| Access key, Secret key | The key the server signs in with: both or neither. The secret key is never shown again once saved; leave it empty to keep it. |
+| Clients load pictures from | **This server**, the default: every picture goes through the server. **The bucket directly**: apps fetch pictures from the bucket, which saves the server's upload, if they can reach it. |
+| Address clients reach it at | With **The bucket directly**, the address apps use to reach the bucket, if it differs from **Address**. |
 
-Amazon S3 and Google Cloud Storage are addressed by the bucket's name in the host; every other store by its name in the path.
+With **The bucket directly**, the page tests a picture from your browser after saving. It says "This browser loads pictures from the bucket", or that it can't, and at which address. If it can't, set **Address clients reach it at**, or go back to **This server**.
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/storage \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"kind": "bucket", "bucket": {"endpoint": "https://s3.example.com", "name": "photon",
-       "access_key": "…", "secret_key": "…", "delivery": "proxy"}}'
-```
+## Moving between the disk and a bucket
 
-`POST /api/v1/admin/storage/check` with the same body checks a bucket without choosing it.
+When you change **Kept on**, the server moves what it has:
 
-### Sending clients to the bucket
+1. It starts saving new files in both places, and reading from the old one.
+2. It copies what the old place holds. The page shows progress, such as "1,204 of 5,880", then Copied.
+3. Once every copy is done, it uses only the new place.
 
-With **The bucket directly**, a client asking for a picture, a theme tune or a preview is redirected to a link to it in the bucket, signed for an hour. Only pictures, sounds and videos are sent there, as their bytes said when they were put; anything that could run a script in a browser, a page or an SVG, still comes from the server.
+You can't change anything else on the page while a move runs. **Cancel move** stops it, and everything stays where it is now.
 
-Once saved, the page tries a picture in the bucket from your browser, and says "This browser loads pictures from the bucket", or that it cannot, and at which address. Where it cannot, set **Address clients reach it at**, or go back to This server.
+Changing only the keys, or how apps load pictures, for the same bucket is not a move. It takes effect at once.
 
-## Move between the disk and a bucket
+## Good to know
 
-Choosing another place moves what is kept there:
-
-1. Every server starts writing to both places at once, and reading from the old one.
-2. Each server copies what its own disk holds, or, from one bucket to another, one server copies the bucket. The page shows each copy's progress: "1,204 of 5,880", then Copied.
-3. Once every copy is done, every server keeps everything in the new place.
-
-Nothing else can be chosen while a move runs. **Cancel move** stops it: every server goes on keeping things where they are now, and what was copied stays where it was copied to.
-
-```sh
-curl -X DELETE https://photon.example/api/v1/admin/storage/move -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-A move waits on every server that is running, since each copies its own disk. Changing only the credentials or how clients are sent, for the same bucket and folder, is not a move: every server takes it up at once.
-
-A server that cannot reach where things are kept when it starts refuses to start, and its log says why. One already running that loses the bucket goes on trying; each server reads the setting again every minute.
+- With several servers, a move waits for every running server, as each copies its own disk.
+- A server that can't reach its storage when it starts won't start, and its log says why. One that loses the bucket while running keeps trying.
+- With no access key, the server uses its own AWS credentials, from its shared credentials file or the machine's role.

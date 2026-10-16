@@ -1,164 +1,129 @@
 ---
-title: "Collections and the lists they follow"
-summary: "Box sets made by TMDB, by hand, by a library's filters, or from a list kept on TMDB, MDBList or a plugin."
+title: "Collections"
+summary: "Group titles into box sets: made for you from TMDB, put together by hand, saved from a library's filters, or kept in step with a list on TMDB or MDBList."
 ---
 
-A collection is a box set of titles. It belongs to no library: it is listed in the Collections
-view of its own, and among the collections of every library whose titles it holds. This page
-covers the four kinds, how each is made and kept up to date, and what an admin can change.
+A collection is a box set of titles, such as every Bond film or your Christmas favourites. A
+collection can hold titles from any of your libraries. You find collections under **Collections**
+in the sidebar, and in each library that holds some of their titles.
 
-Every profile sees a collection's titles as it may see them, so a profile limited to some
-libraries or certificates finds only those of a collection's titles it is allowed. A collection
-with no poster of its own is drawn from its titles' posters: the one, or a mosaic of the first
-four, as Plex draws one.
+Everyone sees only the titles of a collection they are allowed to see. A profile limited to some
+libraries or age ratings finds only those titles in it.
+
+A collection with no poster of its own uses its titles' posters: one poster, or a grid of the
+first four.
 
 ## The four kinds
 
-| Kind | Made by | Its titles |
+| Kind | Who makes it | What it holds |
 | --- | --- | --- |
-| From TMDB | The server, as it matches films | The films TMDB names part of the box set, earliest released first |
-| Made here | An admin, by hand | Films, shows, seasons and episodes of any library, in the order given |
-| Smart | An admin, from a library's filters | What the filters find, found again as the library changes |
-| From a list | An admin, from a list kept on a provider | The titles of the list the chosen libraries hold, in the list's order |
+| From TMDB | photon-server, as it recognises your films | The films TMDB lists as part of the set, oldest first |
+| Made here | You, by hand | Any films, shows, seasons or episodes, in the order you choose |
+| Smart | You, from a library's filters | Whatever those filters find, updated as your library changes |
+| From a list | You, from a list on TMDB, MDBList or a plugin | The titles on the list that you have, in the list's order |
 
-Settings › Server › Collections lists every collection with a badge for its kind, and opens each
-one.
+All your collections are listed at Settings › Server › **Collections**, each with a badge saying
+which kind it is. Choose one to open it.
+
+![Settings › Server › Collections, with the New collection form and several collections listed](../images/library-collections-list.webp)
 
 ## Collections from TMDB
 
-As TMDB matches a film it names the box set the film belongs to, and the server puts the film in
-that collection, making the collection the first time. A film TMDB stops naming part of a set
-leaves it at the next match.
+TMDB is the online film database photon-server uses to recognise your films. When it says a film
+belongs to a set, photon-server adds the film to that collection, and makes the collection if it
+is new. A collection from TMDB only shows once it holds two of your films.
 
-A collection from TMDB is shown once it holds two titles: a box set of one is no set. It follows
-TMDB, so its titles are not edited here. You can rename it or choose its artwork, as for any
-title (see [fix a title's match and edit its details](05-fix-a-match.md)).
+You cannot change which titles are in it, because it follows TMDB. You can rename it or change its
+artwork, as for any title (see [fix a title's match and edit its details](05-fix-a-match.md)).
 
 ## Make a collection by hand
 
-1. Open Settings › Server › Collections.
-2. Type a name under **New collection**, leave **Titles** at **By hand**, and choose **Make it**.
-3. On the collection's page, use **Add titles** to find a film, show, season or episode, and
-   **Add** each one.
-4. Move titles with their arrows, take one out with its cross, and choose **Save the order**.
-   Added titles are kept only once the order is saved.
+1. Open Settings › Server › **Collections**.
+2. Type a name under **New collection**.
+3. Leave **Titles** at **By hand**, and choose **Make it**. The collection's page opens.
+4. Use **Add titles** to search for a film, show or episode, and choose **Add** beside each one.
+5. Put them in order with the arrows. Remove one with its cross.
+6. Choose **Save the order**. Nothing you added is kept until you do.
 
-A title can also be put in one from its own page: the title's More menu (⋯) › Admin › **Add to
-collection…** lists the collections made here and can make a new one. An extra or another
-collection cannot be put in a collection.
+![A collection's page at Settings › Server › Collections, listing the titles it holds](../images/library-collection-by-hand.webp)
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/collections \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Christmas films"}'
-```
-
-`POST /api/v1/admin/collections/{id}/members` adds titles at the end, each given once and left
-where it is if already there; `PUT` on the same path replaces them all, in the order given.
-
-```sh
-curl -X PUT https://photon.example/api/v1/admin/collections/$COLLECTION/members \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"item_ids": ["0199…", "0199…"]}'
-```
+You can also add a title from its own page. Open the title's **⋯** menu and choose
+**Add to collection…** under **Admin**. This is how you add a season. From here you can pick an
+existing collection or make a new one.
 
 ## Save a library's filters as a smart collection
 
-A smart collection is a filtered library wall kept by name, as Plex's are.
+A smart collection remembers a set of filters, such as "comedies from the last two years, newest
+first". It fills itself with whatever matches.
 
-1. Open a library and narrow it with its filters, its sort, or both.
-2. Choose **Save as a smart collection**, give it a name, and choose **Save**.
+1. Open a library from the sidebar.
+2. Narrow it with its filters, its sort, or both.
+3. Choose **Save as a smart collection**.
+4. Give it a name and choose **Save**.
 
-It holds what those filters find, in that order, and the server finds them again after each scan
-of the library and every 15 minutes, so a title matched, refreshed or edited since is caught.
-To change the filters, open the collection's page, choose **Change its filters**, adjust the wall
-it opens, and choose **Save to the collection**.
+![A library narrowed by its filters, with the Save as a smart collection dialog open](../images/library-smart-collection.webp)
 
-A smart collection is the same for everyone, so its filters cannot read one profile's marks
-(watched, unwatched and the like) or sort by when it was played, and a wall showing only one kind
-of a library's items, such as its episodes, cannot be saved. The web app hides the button for
-those.
+photon-server checks the filters again after each scan of the library and every 15 minutes, so
+new and changed titles are picked up.
 
-The rule is the wall's filter: `genres`, `years`, `certificates`, `studios`, `resolutions`,
-`ranges`, `people`, `starts_with`, and `min_rating` out of 100 on `rating_site` (IMDb where none is
-named). `sort` is `title`, `added`, `released`, `rating` or `runtime`, in title order where none is
-given. `limit` keeps only the first so many, and is set through the API alone.
+To change the filters later:
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/collections \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Recent comedies",
-    "library_ids": ["0198…"],
-    "rule": {"filter": {"genres": ["Comedy"], "years": [2025, 2026]}, "sort": "released", "order": "desc", "limit": 50}
-  }'
-```
+1. Open the collection at Settings › Server › **Collections**.
+2. Choose **Change its filters**. The library opens with those filters set.
+3. Adjust them and choose **Save to the collection**.
 
-`PUT /api/v1/admin/collections/{id}/rule` replaces the rule and finds its titles again at once.
+> **Note:** A smart collection is the same for everyone, so it cannot use filters that differ
+> from one profile to the next, such as watched or unwatched. When the filters you have chosen
+> cannot be saved, the button does not appear.
 
 ## Follow a list
 
-A list collection holds the titles of a list kept elsewhere that your libraries have, as Kometa's
-list builders do. It reads the list again every day.
+A list collection holds the titles from a list kept somewhere else, such as TMDB's top-rated
+films, that you have in your libraries. photon-server reads the list again every day.
 
-1. Open Settings › Server › Collections.
+1. Open Settings › Server › **Collections**.
 2. Type a name under **New collection**.
 3. Set **Titles** to **A TMDB list**, **An MDBList list**, or a plugin's catalog.
-4. Type the list under **List**, and choose where its titles are looked for under **Found in**:
-   **Every library**, or one.
-5. Choose **Make it**.
+4. Type the list under **List** (see below).
+5. Under **Found in**, choose **Every library** or one library.
+6. Choose **Make it**.
 
-Or choose **Browse lists** to pick one: TMDB's charts and MDBList's best liked lists, or those a
-search names. A list picked there is looked for in every library and named as the list is.
+![The New collection form with Titles set to A TMDB list, showing the List and Found in fields](../images/library-collection-from-list.webp)
 
-What **List** takes:
+What to type under **List**:
 
-- **TMDB**: a list's number, such as `8136`, or one of TMDB's charts by its path, such as
-  `movie/top_rated` or `trending/tv/week`. Of a chart, its first 100 titles are read.
-- **MDBList**: `user/list`, or the list's id. MDBList also mirrors lists from Trakt and IMDb. It
-  needs its API key set under Settings › Server › Metadata.
-- **A plugin's catalog**: the id the plugin gives it, such as a Stremio addon's catalog (see
+- **TMDB**: the list's number, such as `8136`, or one of TMDB's charts, such as `movie/top_rated`
+  or `trending/tv/week`. For a chart, the first 100 titles are used.
+- **MDBList**: `user/list`, or the list's id. MDBList also copies lists from Trakt and IMDb. It
+  needs your MDBList API key at Settings › Server › **Metadata**.
+- **A plugin's catalog**: the name the plugin gives it, such as a Stremio addon's catalog (see
   [Stremio addons](../06-integrations/03-stremio.md)).
 
-Each title of the list is looked for by its TMDB id, then its IMDb id, among the films or shows
-of the libraries chosen, and is kept once, where the list first has it. The collection's page
-says how many of the list's titles are in none of those libraries; they are counted rather than
-shown.
+If you would rather pick than type, choose **Browse lists**. It shows TMDB's charts and popular
+MDBList lists, and you can search for others. A list picked there is looked for in every library.
 
-The scheduled task **Sync list collections** reads every list again daily. A list that cannot be
-read leaves its collection as it was, so a provider being down never empties one. **Sync now** on
-the collection's page reads it at once.
+![The Browse lists dialog showing TMDB charts and MDBList lists](../images/library-browse-lists.webp)
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/collections \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Top rated films", "library_ids": ["0198…"], "list": {"source": "tmdb", "id": "movie/top_rated"}}'
-```
+The collection's page says how many titles on the list you do not have. Those are counted but not
+shown. To read the list again straight away, choose **Sync now** on the collection's page.
 
-`GET /api/v1/admin/lists?source=mdblist&query=oscars` answers the lists a provider offers, and
-`POST /api/v1/admin/collections/{id}/sync` reads one collection's list now.
+> **Tip:** If TMDB or MDBList cannot be reached, the collection stays as it was. It is never
+> emptied because a website is down.
 
 ## Remove a collection
 
-On the collection's page, choose **Remove this collection**. Its titles stay in their libraries.
-A collection made here, smart or from a list can be removed; one from TMDB cannot, as it follows
-TMDB, which alone changes it.
+On the collection's page, choose **Remove this collection**. The titles in it stay in your
+libraries. You can remove collections you made, smart collections and list collections. A
+collection from TMDB cannot be removed, because it follows TMDB.
 
-```sh
-curl -X DELETE https://photon.example/api/v1/admin/collections/$COLLECTION \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+## Good to know
 
-## Scheduled tasks
+Two scheduled tasks keep collections up to date. You can run either straight away from Settings ›
+Server › **Scheduled tasks** (see [scheduled tasks and jobs](../07-maintain/04-tasks-and-jobs.md)).
 
-| Task | When | What it does |
+| Task | When it runs | What it does |
 | --- | --- | --- |
-| Refresh smart collections | Every 15 minutes, and after each scan for that library | Finds every smart collection's titles again |
+| Refresh smart collections | Every 15 minutes, and after each library scan | Finds each smart collection's titles again |
 | Sync list collections | Every day | Reads each list collection's list again |
 
-Both can be run at once from Settings › Server › Scheduled tasks (see
-[scheduled tasks and jobs](../07-maintain/04-tasks-and-jobs.md)).
+A collection cannot hold an extra (such as a trailer) or another collection.

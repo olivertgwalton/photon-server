@@ -1,153 +1,122 @@
 ---
 title: "Set up a new server"
-summary: "Create the first admin, name the server, add libraries and say how it is reached from outside."
+summary: "Create your admin profile, name the server, add your first libraries and choose how it is reached away from home."
 ---
 
-A new photon-server has no profiles, and nobody can sign in until someone sets it up. Setup is four
-short steps in the web app: you create the admin profile, name the server, add your first
-libraries, and say how the server is reached from away from home. You end signed in as the admin,
-with your libraries scanning.
+A new photon-server has no profiles, so nobody can sign in yet. Setup fixes that in four short
+steps in the web app. You create your own admin profile, name the server, add your first
+libraries, and choose how it is reached away from home. At the end you are signed in, and your
+libraries are scanning.
+
+Almost everything you choose here can be changed later in Settings.
 
 ## Before you start
 
-Open `http://<server>:8640` in a browser on a device on the server's own network, at the server's
-own address, such as `http://192.168.1.20:8640`, or `http://localhost:8640` on the server itself.
-A server not yet set up sends you to its setup page.
+On a device on the same home network as the server, open a browser and go to the server's address
+followed by `:8640`. For example, `http://192.168.1.20:8640`, or `http://localhost:8640` on the
+server itself. A server that is not set up yet shows its **Set up** page.
 
-Setup is open only:
+> **Important:** Setup only opens from your home network, at the server's own address. This stops
+> a stranger on the internet from finding your new server and claiming it first. It also will not
+> open through a reverse proxy (a separate program that forwards web traffic to the server), so
+> set the server up first and add the proxy afterwards.
 
-- **while the server has no profile.** Once the admin exists, setup never opens again; the setup
-  page sends you to the sign-in page.
-- **to a device on the server's local network.** That is the machine itself and the private
-  networks (`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`, IPv6's `fc00::/7`, and link-local
-  addresses), or the
-  networks set under Settings › Server › Network › Local networks once there is someone to set
-  them. Whoever reached a new server first from the internet could otherwise claim it, which is
-  why Plex's claiming works the same way.
-- **not through a reverse proxy.** A new server trusts no proxy, so a request through one is
-  never taken as local, whatever address the proxy forwards. Set the server up at its own address,
-  then add the proxy under Settings › Server › Network › Trusted proxies.
+If you open setup from anywhere else, the page says so and offers nothing to fill in. Once the
+admin profile exists, setup never opens again.
 
-Opened from anywhere else, the page says so, and offers nothing to fill in.
+## 1. Create the admin
 
-## Create the admin
+The first page is **Set up**. This makes your own profile, with the admin role, which lets you
+change the server's settings.
 
-The first page is **Set up**, followed by the server's name.
+![The Set up page, with Name, Password and Confirm password filled in](../images/get-started-create-admin.webp)
 
-| Field | What it does |
-| --- | --- |
-| Name | The admin profile's name, which you sign in with. Up to 64 characters. |
-| Password | At least 8 characters. |
-| Confirm password | The password again. It is asked twice because no one else can reset it yet. |
+1. In **Name**, type the name you will sign in with.
+2. In **Password**, type a password of at least 8 characters.
+3. Type it again in **Confirm password**. Nobody else can reset it yet, so it is worth getting
+   right.
+4. Select **Create admin**.
 
-Select **Create admin**. The server makes the profile with the admin role, signs this browser in
-as it, and moves on. From here on the rest of setup is an admin's pages, so each can be left and
-come back to later in Settings.
+You are signed in, and the next step opens.
 
-From the API, ask first whether this client may set the server up:
+## 2. Name the server
 
-```sh
-curl http://192.168.1.20:8640/api/v1/setup
-```
-
-```json
-{ "state": "open" }
-```
-
-`open` means it may; `local_only` means the server is still to be set up, from its local network;
-`done` means it has been. Then create the admin, naming the device signing in:
-
-```sh
-curl -X POST http://192.168.1.20:8640/api/v1/setup \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Alex", "password": "<password>", "device": "Laptop", "client": "curl"}'
-```
-
-The answer carries a `token` for that device, which every admin request after it sends as
-`Authorization: Bearer`.
-
-## Name the server
-
-**Name the server** sets what apps and the sign-in page call it, and the language titles are
-described in.
+**Name the server** has three settings. All three can be changed later under
+Settings › Server › **General**.
 
 | Setting | What it does |
 | --- | --- |
-| Name | What apps and the sign-in page call this server. Until you set one, it is the host name of the machine it runs on: `photon` in the Compose file. |
-| Metadata language | What titles are described in, where a library asks in no language of its own. `en-US` on a new server. |
-| Certification country | Whose age ratings titles are matched with. A rating already found keeps the country it came from. The United States on a new server. |
+| Name | What apps and the sign-in page call this server, such as Home. Until you set one, it is the name of the machine it runs on. |
+| Metadata language | The language titles are described in. US English (`en-US`) at first. |
+| Certification country | Which country's age ratings titles show. The United States at first. |
 
-Select **Next**. All three can be changed later under Settings › Server › General.
+Select **Next**.
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/server \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Home", "metadata_language": "en-GB", "certification_country": "GB"}'
-```
+## 3. Add your libraries
 
-## Add your libraries
+A library is a folder of films, of shows, or of both. **Add your libraries** adds them one at a
+time.
 
-**Add your libraries** adds a folder of films or of shows at a time. For each:
+![Add your libraries, with the folder picker open](../images/get-started-add-libraries.webp)
 
-| Field | What it does |
-| --- | --- |
-| Name | The library's name, as Home and the Libraries page show it. |
-| Holds | Films, Shows, or Films and shows. Fixed once the library is added. |
-| Its media | Files in a folder, or Streamed by a provider. A new server has no provider that streams, so it is Files in a folder. |
-| Folder | A folder on the server, chosen from its own folders. Everything under it is scanned. |
+1. In **Name**, type what the library is called on Home, such as Films.
+2. Under **Holds**, choose **Films**, **Shows** or **Films and shows**. You cannot change this
+   later.
+3. Leave **Its media** at **Files in a folder**.
+4. Next to **Folder**, select **Browse…**, find the folder and select **Choose this folder**.
+5. Select **Add and scan**.
 
-The form has more settings, each with a sensible default, described in
-[Add and manage libraries](../03-library/02-libraries.md). Before you add one, put your files in
-the shapes the scanner reads: see [Prepare folders and name files](../03-library/01-name-your-files.md).
+The library is listed above the form and the server starts scanning it. The form clears, ready for
+the next one. When you have added them all, select **Next**. To add them later instead, select
+**Skip for now**, then go to Settings › Server › **Libraries**.
 
-The folder is the server's path, not yours. In Docker it is the path inside the container, such as
-`/media/Films` for the `Films` folder in `MEDIA_DIR`.
+> **Tip:** The folder is the path on the server, not on your device. If you installed with Docker,
+> your media folder is `/media`, so your films might be in `/media/Films`.
 
-Select **Add and scan**. The library is listed above the form, its scan starts at once, and the
-form is ready for the next. Select **Next** when you have added them all, or **Skip for now** to add
-them later under Settings › Server › Libraries.
+The form has more settings, which you can leave alone for now. See
+[Add and manage libraries](../03-library/02-libraries.md). For the best matches, name your files the
+way the server expects: see [Prepare folders and name files](../03-library/01-name-your-files.md).
 
-Titles are matched with TMDB and TheTVDB without any key of your own. To add ratings from OMDb or
-MDBList, or subtitles from OpenSubtitles, add their keys afterwards under Settings › Server ›
-Metadata: see [Metadata providers and artwork](../03-library/03-metadata.md).
+Titles are matched with TMDB and TheTVDB, two free film and TV databases, without any account of
+your own. You can add more sources of ratings and subtitles later. See
+[Metadata providers and artwork](../03-library/03-metadata.md).
 
-## Watching away from home
+## 4. Watching away from home
 
-**Watching away from home** asks two things. Both can be left for later under
-Settings › Server › Network.
+**Watching away from home** has two settings. Both are under Settings › Server › **Network** later.
 
 | Setting | What it does |
 | --- | --- |
-| Public address | Where people reach the server from outside, such as `https://photon.example.com`, as a TV's sign-in link names it. Left empty, each device is answered at the address it used. |
-| Remote streaming limit (Mbps) | The most a stream to a device away from home is sent at, so it leaves your upload room. 0, the default, is no limit. |
+| Public address | The address people use to reach the server from outside your home, such as `https://photon.example.com`. Leave it empty if you have not set this up. |
+| Remote streaming limit (Mbps) | The fastest the server sends video to someone away from home, so your internet upload is not used up. 0 means no limit, which is the default. |
 
-Select **Next**, or **Skip for now** to leave both as they are. The rest of what reaching the
-server from outside takes, port forwarding, HTTPS and a reverse proxy, is in
-[Reach your server from outside](../04-access/04-remote-access.md).
+Select **Next**, or **Skip for now** to leave both empty. Making the server reachable from outside
+takes more than this setting. See [Reach your server from outside](../04-access/04-remote-access.md).
 
 ## Done
 
-The last page says the server is set up and its libraries are being scanned; titles appear as they
-are matched. Select **Start watching** to go to Home.
+The last page says the server is set up and its libraries are being scanned. Titles appear on Home
+as they are matched. Select **Start watching**.
 
-Then:
+![The final setup page, with the Start watching button](../images/get-started-setup-done.webp)
 
-- Add the rest of the household under Settings › Profiles: see
+What to do next:
+
+- Add the rest of the household under Settings › **Profiles**. See
   [Profiles, passwords, PINs and roles](../04-access/01-profiles.md).
-- Sign in from Photon and other apps: see [Connect Photon and other apps](05-connect-apps.md).
-- Check that backups are made where you expect: see [Back up and restore](../07-maintain/01-backups.md).
+- Sign in from your phone, TV and other devices. See
+  [Connect Photon and other apps](05-connect-apps.md).
+- Check that backups are being made. See [Back up and restore](../07-maintain/01-backups.md).
 
-## A forgotten admin password
+## Good to know
 
-Where there is no other admin to set it for you, the server resets it itself. On the sign-in page,
-from a device on the server's local network, select **Forgot your password?**, give the profile's
-name and select **Get a code**. The server writes a reset code to its log, which only whoever runs
-the server can read:
-
-```sh
-docker compose logs server
-```
-
-The code lasts 30 minutes. Entering it with a new password and selecting **Reset password** signs
-the profile out of every device. See [Profiles, passwords, PINs and roles](../04-access/01-profiles.md).
+- **Forgotten admin password.** If there is no other admin to reset it, the server can do it
+  itself. On the sign-in page, from your home network, select **Forgot your password?**, type the
+  profile's name and select **Get a code**. The server writes a code into its log, which only the
+  person who runs the server can read. With Docker, read it with `docker compose logs server`.
+  Type the code and a new password, and select **Reset password**. The code lasts 30 minutes, and
+  the profile is signed out on every device. See
+  [Profiles, passwords, PINs and roles](../04-access/01-profiles.md#a-forgotten-password).
+- **Home network.** Setup counts the server itself and the usual private home addresses as your
+  home network. Once you are an admin, you can add others under Settings › Server › Network ›
+  **Local networks**, and a reverse proxy under **Trusted proxies**.

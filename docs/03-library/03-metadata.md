@@ -1,160 +1,139 @@
 ---
 title: "Metadata providers and artwork"
-summary: "The providers photon-server matches and describes titles with, their keys, and how a library ranks them for descriptions, ratings and pictures."
+summary: "The online services photon-server gets descriptions, ratings and pictures from, which need a key, and how to choose between them."
 ---
 
-A file's name says what a title is; a metadata provider says the rest: its write-up, cast, genres,
-certificate, ratings and pictures. This page covers the providers photon-server has built in, the
-keys they take, how a library chooses and ranks them, and how a title is matched to one.
+A file's name tells photon-server what a title is. A **metadata provider** tells it everything
+else. A provider is an online service that knows a film's or show's title, year, description,
+cast, age rating, scores and pictures. This page covers which providers photon-server uses, which
+need a key, and how each library chooses between them.
 
 ## The providers
 
-| Provider | Describes | Gives |
+| Provider | Covers | What you get from it |
 | --- | --- | --- |
-| **TMDB** | Films and shows | Names, write-ups, dates, genres, studios, certificates, cast and crew, box sets, trailers and other videos, its users' score, posters, backdrops, logos and episode stills. Its charts are lists a collection can follow. |
-| **TheTVDB** | Shows | The same for shows, seasons and episodes, numbered as aired, as on the DVDs, or absolutely. |
-| **MDBList** | Films and shows | Ratings: IMDb's, TMDB's, and Rotten Tomatoes' critics and audience. Its lists are lists a collection can follow. |
-| **The Open Movie Database** | Films and shows | Names, plots, certificates, genres, a poster, episodes' names and plots, and IMDb's and Rotten Tomatoes' scores. |
+| **TMDB** | Films and shows | Descriptions, cast and crew, genres, age ratings, posters, backgrounds, logos, episode stills and trailers. The default for everything. |
+| **TheTVDB** | Shows | Descriptions and pictures for shows, seasons and episodes, including DVD and absolute numbering, and where specials aired. |
+| **MDBList** | Films and shows | Scores: IMDb, TMDB and Rotten Tomatoes. |
+| **The Open Movie Database** (OMDb) | Films and shows | Descriptions, a poster, and IMDb and Rotten Tomatoes scores. |
+| **AniList** | Anime | Descriptions, voice cast, studios, scores and pictures. |
+| **AniDB** | Anime | Descriptions, voice cast, scores, a poster, and episode names. |
 
-OpenSubtitles is listed beside them and finds subtitles only: see [subtitles](10-subtitles.md).
-A plugin or a Stremio addon you register is a provider like these, with what its manifest says it
-does: see [plugins](../06-integrations/01-plugins.md).
+TMDB is all most people need. Add the others for Rotten Tomatoes scores, for anime, or for shows
+whose episodes TMDB numbers differently from your files.
 
-## Set a provider's keys
+**OpenSubtitles** is listed with them, but it only finds subtitles: see
+[subtitles](10-subtitles.md). Plugins and Stremio addons you add appear here too: see
+[plugins](../06-integrations/01-plugins.md).
 
-Providers are at Settings › Server › Metadata. Each card says what the provider describes, what it
-can do, and **Ready** or **Needs settings**.
+## Set up a provider's key
 
-| Provider | Setting | What it does |
-| --- | --- | --- |
-| TMDB | **API read access token** | Optional. photon-server ships with the project's own token, as Jellyfin ships its key, so matching works without an account; your own replaces it. |
-| TheTVDB | **API key** | Optional. The project's own key is used where none is set. |
-| TheTVDB | **Subscriber PIN** | For a key subscribers pay for, the subscriber's PIN. |
-| MDBList | **API key** (required) | Each server uses its own free key from [MDBList](https://mdblist.com/preferences/). |
-| The Open Movie Database | **API key** (required) | Each server uses its own key from [OMDb](https://www.omdbapi.com/apikey.aspx). |
+Some providers need a key: a code from their website that lets photon-server use them.
 
-A secret is never shown again once saved: its field reads "Set; type to replace it", and
-**Clear API key** (or the setting's own name) removes it. TMDB's token is its "API Read Access Token" on
-[its API settings](https://www.themoviedb.org/settings/api), not the shorter API key.
+1. Open Settings › Server › Metadata.
+2. Find the provider's card. It says **Ready** or **Needs settings**.
+3. Type the key in its field and choose **Save**.
 
-A provider that needs its settings and is still asked by a library is listed under **Needs
-attention** on Settings › Server until it has them. Until then it is passed over: the next source
-is asked and no title fails.
+![Settings › Server › Metadata, listing the providers and their settings](../images/library-metadata-providers.webp)
 
-```sh
-curl -X PATCH https://photon.example/api/v1/admin/providers/mdblist \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"settings": {"api_key": "your-key"}}'
-```
+| Provider | Needs a key? |
+| --- | --- |
+| TMDB | No. photon-server comes with its own. You can enter your own **API read access token** from [TMDB's API settings](https://www.themoviedb.org/settings/api); use the long "API Read Access Token", not the shorter API key. |
+| TheTVDB | No. photon-server comes with its own. If you pay for a TheTVDB subscription, you can enter your **API key** and **Subscriber PIN**. |
+| MDBList | Yes, a free **API key** from [MDBList](https://mdblist.com/preferences/). |
+| OMDb | Yes, an **API key** from [OMDb](https://www.omdbapi.com/apikey.aspx). |
+| AniList | No. |
+| AniDB | Yes. Register a client with your AniDB account, then enter its name and version under **Client name, as registered with AniDB** and **Client version, as registered with AniDB**. |
 
-The setting keys are TMDB's `token`, TheTVDB's `key` and `pin`, and MDBList's and OMDb's
-`api_key`; `""` clears one. `GET /api/v1/admin/providers` lists every provider, what is set and
-whether it is ready.
+A saved key is never shown again. Its field reads "Set; type to replace it", and its **Clear** button (such as
+**Clear API key**) removes it.
 
-## How a library ranks its sources
+> **Note:** If a library uses a provider that still needs its key, it is listed under **Needs
+> attention** on Settings › Server. Until then the server skips it and uses the next provider.
 
-Each library ranks, in its settings, where it takes each kind of item's metadata and pictures
-from: **Metadata downloaders** and **Image fetchers**, once for films and, in a library of shows,
-once each for shows, seasons and episodes. Tick a source to ask it, and order them most trusted
-first.
+## Choose where a library's details come from
 
-A value is written by the highest-ranked source that gives one: a lower source fills only what
-those above it left empty. A list, such as genres, is taken whole from one source, so two
-providers' genres never stand side by side. Beyond the ranking:
+Each library has two ordered lists in its settings, at Settings › Server › Libraries:
 
-- What you write on a title outranks every source, and stays through every refresh (see
-  [edit details](05-fix-a-match.md#edit-its-details)).
-- What the file and folder names say ranks lowest: a title is called by its file only until a
-  source names it.
-- A source left unticked keeps its place but is not asked.
+- **Metadata downloaders**: where descriptions, cast and scores come from.
+- **Image fetchers**: where posters and other pictures come from.
 
-A new library asks **Nfo**, the [NFO files](04-nfo.md) beside your media, then **TMDB** for
-metadata, and **TMDB** for pictures. Each source can be ranked only for what it holds:
+There is a pair of lists for each kind of item the library holds: films, or shows, seasons and
+episodes.
 
-| Source | Metadata of | Pictures of |
-| --- | --- | --- |
-| Nfo | everything | nothing |
-| TMDB | everything | everything |
-| TheTVDB | shows, seasons, episodes | shows, seasons, episodes |
-| MDBList | films and shows | nothing |
-| The Open Movie Database | everything but seasons | films and shows |
+![A library's Metadata downloaders and Image fetchers, with TMDB ticked](../images/library-sources-ranking.webp)
 
-So to describe a show's episodes from TheTVDB rather than TMDB, tick TheTVDB under **Metadata
-downloaders (Episodes)** and move it above TMDB. Changing a ranking identifies every title in the
-library again.
+1. Tick a provider to use it.
+2. Move it up or down. The one at the top is trusted most.
+3. Choose **Save**.
 
-```sh
-curl -X PATCH https://photon.example/api/v1/admin/libraries/$LIBRARY \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"sources": [{"kind": "episode", "metadata": [
-        {"source": "nfo", "enabled": true},
-        {"source": "tvdb", "enabled": true},
-        {"source": "tmdb", "enabled": true}]}]}'
-```
+The top provider fills in everything it can. Lower ones only fill the gaps it leaves. A new library
+uses **Nfo** (description files beside your media, see [NFO files](04-nfo.md)) and then **TMDB**
+for details, and **TMDB** for pictures.
 
-A kind or a list left out of `sources` is left as it is. A plugin is ranked by its source id,
-`plugin:` and its slug.
+For example, to take a show's episode names from TheTVDB instead of TMDB, tick **TheTVDB** under
+**Metadata downloaders (Episodes)** and move it above TMDB.
+
+> **Note:** Changing either list looks up every title in the library again.
+
+Anything you edit on a title yourself always wins, and stays through every refresh: see
+[edit its details](05-fix-a-match.md#edit-its-details).
 
 ## How a title is matched
 
-When a scan finds a new film or show, the server asks each provider the library ranks, in turn,
-to match it:
+When the server finds a new film or show, it looks it up in this order:
 
-1. **By an id it already carries**: from its folder or file name (`[tmdbid-949]`), or its NFO.
-2. **By another provider's id**: TMDB finds a title by its IMDb or TheTVDB id, TheTVDB by its IMDb
-   or TMDB id. TMDB is asked first, so the ids it gives lead TheTVDB and OMDb to the same title.
-3. **By a search** for the name and year. A result is taken only where its title, or original
-   title, is the one asked for, ignoring case, accents and punctuation, and its year is within
-   one of the one asked for. With no result at all, the name is searched again without its year,
-   as a folder's year is often one of several release dates.
+1. **By an ID it already has**, from its folder name or an NFO file.
+2. **By another site's ID.** Once TMDB has found a title, the other providers use the IDs TMDB
+   gives to find the same one.
+3. **By searching** for its name and year, and taking the closest result. If nothing turns up, it
+   searches again without the year.
 
-A title with no confident match is left as its files and NFO describe it, rather than risk a wrong
-match, and the log says "no confident match". Fix it by hand: see
-[fix a match](05-fix-a-match.md). OMDb is asked by IMDb id alone, as Jellyfin asks it, so it says
-nothing of a title no other source found an IMDb id for.
-
-A provider that cannot be reached, or lacks a setting it needs, is passed over and the next one
-asked.
+If nothing matches, the title keeps the name from its file. If the wrong title was picked, see
+[fix a match](05-fix-a-match.md).
 
 ## Ratings
 
-A title's ratings come from every source the library asks for its metadata that gives them: TMDB
-its own users' score, MDBList IMDb's, TMDB's and Rotten Tomatoes', OMDb IMDb's and Rotten
-Tomatoes'. Where two give the same site's, the one ranked higher stands. To show Rotten Tomatoes
-on cards, tick MDBList or OMDb for films' and shows' metadata. A rater that fails, as one past its
-daily allowance does, is noted in the log and the title is described all the same.
+Scores come from every provider a library uses for details. To show Rotten Tomatoes scores, tick
+**MDBList** or **The Open Movie Database** under the library's **Metadata downloaders**.
 
 ## Pictures
 
-A title's pictures of each kind are ranked:
+For each kind of picture, the server uses, in order:
 
-1. The one you chose (see [choose artwork](05-fix-a-match.md#choose-artwork)).
-2. Files beside the title (see [pictures beside a title](01-name-your-files.md#pictures-beside-a-title)).
-3. The providers the library asks for pictures, in its order.
+1. One you chose yourself (see [choose artwork](05-fix-a-match.md#choose-artwork)).
+2. A file beside the title (see
+   [pictures beside a title](01-name-your-files.md#pictures-beside-a-title)).
+3. The library's **Image fetchers**, top first.
 
-The library's **Pictures** setting chooses among a provider's own: **In its language first** takes
-posters and logos in the library's language, else English, else with no words on them, and
-backdrops with no words first; **The most liked, any language** takes the provider's favourites.
-
-Pictures are fetched into the server's picture cache and served from there at the size each
-client asks.
-
-## Languages and certificates
-
-A library asks its providers in its **Metadata language** and takes certificates of its
-**Certification country**; **Server default** and **Automatic** follow Settings › Server ›
-General. **Titles** set to **As first named** keeps each film's and show's original title. A title
-can take a language of its own over its library's: see
-[a title's own language](05-fix-a-match.md#a-titles-own-language).
+The library's **Pictures** setting decides between a provider's own: posters in your language
+first, or the most popular in any language.
 
 ## Seasons and episodes
 
-TMDB numbers a show's episodes as they aired. A show whose files are numbered as on the DVDs, or
-absolutely, is described without its seasons by TMDB: set its
-[episode order](05-fix-a-match.md#episode-order) and rank TheTVDB for its seasons and episodes,
-which numbers them in any of the three orders.
+TMDB and TheTVDB number episodes in the order they aired. If your files follow DVD order, or one
+running number, set the show's [episode order](05-fix-a-match.md#episode-order). TheTVDB handles
+both well.
 
-A show with an episode announced to air is matched again every 7 days, whatever its library's
-**Refresh metadata** says, so its calendar keeps up with its dates.
+TheTVDB, and NFO files, can say when a special aired. The server then also lists that special in
+the season it aired in, in the right place, so you can watch it in order.
+
+A show with an upcoming episode is looked up again every week, so its calendar stays current.
+
+## Anime
+
+AniList and AniDB treat each season or film of an anime as a separate entry, where TMDB and
+TheTVDB treat it as one show with seasons. photon-server keeps the show-with-seasons shape and uses
+published anime lists to fit the AniList and AniDB entries into it. It refreshes those lists daily.
+
+AniList and AniDB don't search. They find a title through the IDs TMDB or TheTVDB give, so keep
+TMDB or TheTVDB above them in the library's lists.
+
+## Good to know
+
+- **Languages.** A library's **Metadata language** and **Certification country** decide the
+  language of descriptions and whose age ratings are shown.
+- **AniDB is strict about how often it is asked.** photon-server waits between requests and keeps
+  each answer for a day, so it is not blocked.
+- **OMDb looks titles up only by IMDb ID**, so it adds nothing to a title no other provider found.
+- **A provider that is down** is skipped, and the next one in the list is used.

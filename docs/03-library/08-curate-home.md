@@ -1,109 +1,74 @@
 ---
-title: "Curate Home"
-summary: "What Home's rows hold, how each profile orders and hides them, and what an admin shapes for everyone."
+title: "Arrange Home"
+summary: "What each row on Home shows, how to reorder and hide rows for your profile, and what an admin's choices change."
 ---
 
-Home is a page of rows. Each profile arranges its own: which rows it shows, and in what order,
-kept on the server so every device the profile signs in on draws the same Home. This page says
-what each row holds, how a profile arranges them, and what an admin decides that reaches every
-profile's Home.
+Home is the first page you see: a page of rows of titles. Each profile arranges its own Home,
+choosing which rows show and in what order. The arrangement is kept on the server, so it is the
+same on every device you sign in on, in the web app and in Photon.
+
+![Home with Continue Watching, Next Up and Recently Added rows](../images/library-home.webp)
 
 ## The rows
 
-There are eight. Four are the profile's own; the other four are made once for each library of
-the kinds they suit, as Plex's library rows are, and headed with the library's name.
+There are eight kinds of row. Four are about you. The other four are made once for each library
+they suit, and named after it, such as "Recently Added in Films".
 
-| Row | Made for | What it holds |
-| --- | --- | --- |
-| Continue Watching | The profile | Films and episodes stopped part way, the most recently played first |
-| Next Up | The profile | For each show under way, the episode after the furthest one watched, specials aside; shows in the order last played |
-| Watchlist | The profile | What the profile put on its watchlist, the latest first |
-| Favourites | The profile | What the profile marked a favourite, the latest first |
-| Recently Added Films | Each film or mixed library: "Recently Added in Films" | Films, the last added first |
-| Recently Added Shows | Each show or mixed library: "Recently Added in Shows" | Shows, by their newest episode added |
-| Recently Released | Every library: "Recently Released in Films" | Films released, and shows with an episode aired, in the past year, the newest first; nothing yet to come |
-| Top Rated | Every library: "Top Rated in Films" | Films and shows the profile has not begun, by their IMDb rating, leaving out a rating with fewer than 1,000 votes |
+| Row | What it shows |
+| --- | --- |
+| Continue Watching | Films and episodes you stopped part way through, the most recent first |
+| Next Up | For each show you are watching, the next episode, with the shows you played most recently first |
+| Watchlist | What you added to your watchlist, newest first |
+| Favourites | What you marked as a favourite, newest first |
+| Recently Added Films | One for each library of films: the newest films |
+| Recently Added Shows | One for each library of shows: shows with newly added episodes |
+| Recently Released | One for each library: films released, and shows with an episode aired, in the past year |
+| Top Rated | One for each library: films and shows you have not started, by their IMDb rating |
 
-A few rules hold for every row:
+A few things are true of every row:
 
-- The web app draws 20 titles of a row. A library's row is no more than its newest or best;
-  a profile's own row is paged through to its end.
-- A row holds only what the profile may see, so a profile limited to some libraries or
-  certificates gets rows of those alone.
-- A title held in two libraries appears once in the profile's own rows, and once in each
-  library's row.
-- An episode under way is in Continue Watching, so Next Up leaves it out.
+- Home shows 20 titles in a row. Choose the row's heading to open it on a page of its own.
+- A row only shows what your profile is allowed to see.
+- An episode you are part way through is in Continue Watching, so Next Up leaves it out.
+- Top Rated leaves out ratings based on fewer than 1,000 votes.
 
-## The order a profile sees
+## Arrange your Home
 
-A new profile sees all eight rows, in the order of the table above. No row starts hidden.
+1. Open Settings › **Home**. You will see every row, in the order Home shows them.
+2. Drag a row by its grip, or move it with its arrows.
+3. Turn a row's switch off to hide it.
 
-The library rows follow the profile's order of its libraries: a profile that puts Shows above
-Films in the sidebar gets "Recently Added in Shows" first wherever the Recently Added rows sit.
-The order is changed from a library's menu in the sidebar, **Reorder**, then dragging, or with
-`PUT /api/v1/profile/library-order`.
+![Settings › Home, listing the rows with their grips, arrows and switches](../images/library-settings-home.webp)
 
-## Arrange a profile's Home
+Each change is saved straight away. A new profile starts with all eight rows showing, in the
+order of the table above. See [your settings](../02-web-app/06-your-settings.md) for your other
+settings.
 
-Each profile arranges its own Home at Settings › Home:
+### Change the order of library rows
 
-1. Drag a row by its grip, or move it with its arrows.
-2. Turn a row's switch off to hide it. A hidden row is not drawn, nor asked for.
+Library rows follow the order of your libraries in the sidebar. If you put Shows above Films, then
+"Recently Added in Shows" comes before "Recently Added in Films".
 
-Each change is kept at once. Every Photon app and the web app read the same arrangement, so it
-follows the profile to every device. See [your settings](../02-web-app/06-your-settings.md) for
-the rest of a profile's own settings.
+1. In the sidebar, open a library's menu and choose **Reorder**.
+2. Drag the libraries into the order you want.
 
-The arrangement is the `home` of the profile's preferences, every row in the order drawn with
-whether it is `shown` or `hidden`. A change sends the rows in the order wanted; any left out
-follow, shown.
+## What an admin changes
 
-```sh
-curl -X PATCH https://photon.example/api/v1/profile/preferences \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"home": [
-    {"row": "continue_watching", "visibility": "shown"},
-    {"row": "recently_added_shows", "visibility": "shown"},
-    {"row": "next_up", "visibility": "shown"},
-    {"row": "top_rated_unwatched", "visibility": "hidden"}
-  ]}'
-```
+An admin cannot arrange another profile's Home. Some admin choices still change what appears on
+it:
 
-The rows are `continue_watching`, `next_up`, `watchlist`, `favourites`, `recently_added_films`,
-`recently_added_shows`, `recently_released` and `top_rated_unwatched`. The preferences answer
-`library_kinds` beside each library row: the kinds of library it is made once for each of.
+- **Which libraries a profile can see.** A library a profile cannot open has no rows on its Home.
+  Set this on the profile (see [profiles](../04-access/01-profiles.md)).
+- **What a library holds.** A library of films has no Recently Added Shows row. See
+  [add and manage libraries](02-libraries.md).
+- **Ratings.** Top Rated uses IMDb ratings. A library whose titles have none has an empty Top
+  Rated row. See [metadata providers and artwork](03-metadata.md).
+- **The library's name.** Library rows are named after it.
 
-A row the server gains in a later version is shown at the foot of a Home arranged before it, so
-an arrangement never hides something new by accident.
+## Good to know
 
-## Read a row
-
-A client asks for each row on its own, so one slow row holds up no other:
-
-- A profile's row: `GET /api/v1/profile/rows/{row}`, a page of it.
-- A library's row: `GET /api/v1/libraries/{id}/rows/{row}`, its first 20, or `limit` of them.
-
-```sh
-curl "https://photon.example/api/v1/libraries/$LIBRARY/rows/recently_added_films?limit=20" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-## What an admin shapes
-
-An admin does not arrange another profile's Home; each profile keeps its own. What an admin
-decides reaches every Home all the same:
-
-- **Which libraries a profile sees.** A library a profile cannot open has no rows on its Home,
-  and its titles are in none of the profile's rows. Set this on the profile (see
-  [profiles](../04-access/01-profiles.md)).
-- **What kind of library it is.** A library's kind decides which rows it gets: a
-  film library has no Recently Added Shows row. See [add and manage libraries](02-libraries.md).
-- **The ratings Top Rated reads.** It reads IMDb's rating, so a library whose titles have none
-  from the metadata providers has an empty Top Rated row. See
-  [metadata providers and artwork](03-metadata.md).
-- **The library's name.** Library rows are headed with it.
-
-Collections and playlists are not Home rows. A collection is reached from the Collections view
-and from each library it holds titles of (see
-[collections and the lists they follow](07-collections.md)).
+- A title in two libraries shows once in your own rows, and once in each library's rows.
+- If a later version of photon-server adds a new kind of row, it appears at the bottom of your
+  Home, so nothing new is hidden by accident.
+- Collections and playlists are not Home rows. Find collections under **Collections** in the
+  sidebar (see [collections](07-collections.md)).

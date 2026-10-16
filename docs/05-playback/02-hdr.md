@@ -1,68 +1,49 @@
 ---
 title: "HDR and Dolby Vision"
-summary: "How photon-server sends HDR10, HDR10+, HLG and Dolby Vision to screens that show them, and tone maps them for screens that do not."
+summary: "What happens to an HDR film on a screen that shows HDR, and on one that doesn't."
 ---
 
-An HDR copy reaches a screen that shows its HDR untouched, and a screen that does not as SDR. In between, the server does the least it can: it falls back to a range the screen does show, takes Dolby Vision down to the layer beneath it, or converts it, before it encodes anything. This page says what happens in each case, so a transcode on the dashboard reads as intended.
+**HDR** (high dynamic range) is a picture with brighter highlights, deeper shadows and richer colour than an ordinary picture, which is called SDR. **Dolby Vision** is Dolby's own kind of HDR, which adds instructions for each scene on how bright it should be.
 
-## What the server knows of a copy
+Your films may be in any of these: HDR10, HDR10+, HLG, Dolby Vision, or ordinary SDR. Your screens may show some of them or none. photon-server reads which kind each film is when it scans your library, and the app you watch on tells it which kinds your screen shows.
 
-As a library is scanned, ffprobe reads each video stream's range:
+## On a screen that shows HDR
 
-- **HDR10**: PQ, with static metadata.
-- **HDR10+**: PQ with dynamic metadata on its frames, which carries an HDR10 picture.
-- **HLG**.
-- **Dolby Vision**: its profile, and what its base layer is without it (HDR10, SDR, HLG, an Ultra HD Blu-ray's HDR10 for profile 7, or nothing alone for profile 5).
-- **SDR**: everything else.
+The film plays as it is, in HDR, with nothing converted.
 
-Each player says which ranges it shows for each codec, and for Dolby Vision which profiles. The web app asks the browser and the screen: it claims HDR only where the screen is in HDR (`dynamic-range: high`) and the browser decodes a 10-bit codec with PQ or HLG, and claims Dolby Vision profiles 5 and 8 only where the browser decodes them, as Safari does. On an SDR screen it claims SDR alone, so an HDR copy is tone mapped for it.
+If the screen shows HDR but not the film's exact kind, the server sends the closest kind it does show, still without converting the picture:
 
-## A screen that shows the range
+- An **HDR10+** film is shown as HDR10.
+- A **Dolby Vision** film is shown as the HDR10, HLG or SDR picture underneath it. Most Dolby Vision films have one.
 
-A copy whose range the screen shows plays as it is. So does one whose range falls back to one the screen shows:
+Only when none of this works is the film converted, with the reason **HDR** on the dashboard.
 
-- **HDR10+** to a screen that shows HDR10: it shows the HDR10 underneath.
-- **Dolby Vision** to a player that does not list the profile but shows the base layer: HDR10 for profiles 7 and 8.1, HLG for 8.4, SDR for 8.2. Profile 5 has no base layer to fall back to.
+Sometimes a film has to be converted for another reason, such as its size. If the app plays the newer HEVC format and the screen shows HDR, the server keeps the HDR as it converts. A converted film is never sent as Dolby Vision, only as HDR10 or HLG.
 
-Where the copy goes through HLS anyway, for its container, its audio or the bitrate, its Dolby Vision is copied in one of three ways:
+## On a screen that doesn't
 
-- **Kept**, where the player shows the profile, tagged as Dolby Vision HEVC (`dvh1`), as Apple's players need it.
-- **Converted from profile 7 to 8.1**, where the player shows profile 8 but not 7: the dual-layer Blu-ray stream loses its enhancement layer and each frame's metadata (its RPU) is rewritten as 8.1, as dovi_tool does. This needs fragmented MP4 segments.
-- **Stripped**, where the player shows only the base layer: the Dolby Vision metadata is removed and the base layer sent alone.
+The server converts the film as it plays and turns the HDR into an ordinary picture, adjusting the brightness so it looks right. This is called **tone mapping**. It happens on your graphics card where you have one.
 
-MPEG-TS segments carry no Dolby Vision, so over them a player is sent the base layer where it shows that, and an encode otherwise.
+## What the web app shows
 
-Only when none of this reaches the screen is the video encoded, with the reason **HDR**.
+The web app asks your browser and your screen. It shows HDR only when your screen is in HDR mode and the browser can play it. On an ordinary screen, it asks for SDR, so HDR films are tone mapped for it. Safari can also play some Dolby Vision.
 
-## A screen that does not
+> **Tip:** If HDR films look grey and washed out in the web app, check that your display is set to HDR in your computer's display settings.
 
-Encoded video keeps HDR where it can and is tone mapped where it cannot:
+## See what a film is doing
 
-| Source | Encoded for a player that shows the range in 10-bit HEVC | Otherwise |
-|---|---|---|
-| HDR10 | HEVC Main 10, HDR10 | SDR, tone mapped |
-| HDR10+ | HEVC Main 10, HDR10 | SDR, tone mapped |
-| HLG | HEVC Main 10, HLG | SDR, tone mapped |
-| Dolby Vision, HDR10 or Blu-ray base layer | HEVC Main 10, HDR10 | SDR, tone mapped |
-| Dolby Vision, HLG base layer | HEVC Main 10, HLG | SDR, tone mapped |
-| Dolby Vision 5 | SDR, tone mapped | SDR, tone mapped |
+Settings › Server › Dashboard shows each film's picture as it is and as it is sent. For example:
 
-HDR is kept only in HEVC, where the server encodes HEVC and the player both plays HEVC Main 10 and shows the range; H.264 is always SDR. Kept HDR carries the source's colours and mastering metadata. Encoded video never carries Dolby Vision: its metadata describes the original picture, not the encode.
+- `hevc 3840×2160 HDR10 → h264 1920×1080 8 Mbps tone mapped`: converted to an ordinary picture.
+- `HDR10 → hevc … HDR10`: converted, with HDR kept.
+- **Direct stream** or **Direct play** with no arrow: the HDR went as it is.
 
-Tone mapping uses the BT.2390 curve and happens on the encoder where it can:
+![A play under Now playing whose picture reads HDR10, then an arrow, then tone mapped](../images/playback-hdr-tone-mapped.webp)
 
-| Encoder | Tone mapped with |
-|---|---|
-| VideoToolbox | `tonemap_videotoolbox` |
-| NVENC | `tonemap_cuda` |
-| VA-API | `tonemap_vaapi` |
-| Quick Sync | `vpp_qsv`'s own tone mapping |
-| Software and AMF | `tonemapx`, on the processor |
+If an HDR film looks washed out or too dark, the app has said the screen shows a kind of HDR it doesn't, or the other way round. See [troubleshooting](../08-reference/05-troubleshooting.md).
 
-Each server checks at start that its encoder tone maps a test picture, and keeps HDR in 10 bits where it encodes HEVC, before it takes that encoder (see [transcoding](01-transcoding.md#what-the-server-encodes-on)).
+## Good to know
 
-## See what a play is doing
-
-Settings › Server › Dashboard shows each play's video as it is and as it is sent, such as `hevc 3840×2160 HDR10 → h264 1920×1080 8 Mbps tone mapped`, or `HDR10 → hevc … HDR10` where HDR is kept. Direct stream with no arrow means the HDR went as it is.
-
-If an HDR title looks washed out or too dark on a screen, the player has claimed a range the screen does not show, or the reverse; in the web app, check that the display is in HDR mode, as the web app claims HDR only for a screen that is. See [troubleshooting](../08-reference/05-troubleshooting.md).
+- Dolby Vision profile 5 has no ordinary picture underneath it, so on a screen without Dolby Vision it is always converted.
+- Dolby Vision from a Blu-ray (profile 7) can be changed to the kind streaming devices play (profile 8.1) without converting the picture, where the app asks for it.
+- Each server checks at start that its graphics hardware can tone map before it uses it.

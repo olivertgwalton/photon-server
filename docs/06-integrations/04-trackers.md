@@ -1,141 +1,101 @@
 ---
 title: "Sync with trackers"
-summary: "Tell Trakt, Simkl, MDBList and AniList what each profile watches, through an app you register on each."
+summary: "Send what each person watches to their Trakt, Simkl, MDBList or AniList account."
 ---
 
-A tracker is a service that keeps what someone watches across every app they use. photon-server
-speaks to four: **Trakt**, **Simkl**, **MDBList** and **AniList**. An admin registers an app on
-each tracker the household uses and gives the server its client id; each profile then links its
-own account, and from then on the server tells that account what the profile plays and marks
-watched.
+A tracker is a website that keeps a record of everything you watch, from every app you use.
+photon-server works with four: **Trakt**, **Simkl**, **MDBList** and **AniList**.
 
-The server tells trackers; it does not read them. What a profile watched before it linked an
-account stays where it is: to bring history in from another server, see
-[Import watch history](07-import-history.md).
+Setting one up takes two parts:
 
-## Set up a tracker
+1. An admin connects the server to the tracker, once.
+2. Each person links their own account.
 
-Each tracker signs accounts in through an app registered on it, and the server needs only that
-app's client id. Open Settings › Server › Trackers, follow the link on the tracker's card, and
-register the app as the card says:
+From then on, the server tells each linked account what that person plays and marks as watched.
+
+The server only sends to trackers. It doesn't read your history back from them. To bring in
+history from another media server, see [Import watch history](07-import-history.md).
+
+## Connect the server to a tracker (admins)
+
+Each tracker needs you to register an "app" on its website, which gives you a **client id**: a code
+that tells the tracker which app is asking. You do this once for the whole household.
+
+1. Open Settings › Server › Trackers.
+2. Follow the link on the tracker's card, and register an app there as the table below says.
+3. Copy the app's client id.
+4. Paste it into **Client id** on the card, and choose **Save**. The card then says **Set up**.
+
+![Settings › Server › Trackers, with Trakt set up](../images/integrations-trackers-server.webp)
 
 | Tracker | What to register |
 |---|---|
-| Trakt | An app at [Trakt's apps](https://app.trakt.tv/settings/apps) with the redirect URI `urn:ietf:wg:oauth:2.0:oob`. Trakt asks for one, and refreshes an account's access only with it. |
+| Trakt | A new app at [Trakt's apps page](https://app.trakt.tv/settings/apps). For the redirect URI, type `urn:ietf:wg:oauth:2.0:oob`. |
 | Simkl | An **AUTH V2** app at [Simkl's developer settings](https://simkl.com/settings/developer/), of the type "TV, devices & command line". |
 | MDBList | An app at [MDBList's developer page](https://mdblist.com/developer/), of the type "Device Code App". |
-| AniList | A client at [AniList's developer settings](https://anilist.co/settings/developer) with the redirect URL `https://anilist.co/api/v2/oauth/pin`, which shows each profile its token to paste. Copy its **ID**. |
+| AniList | A client at [AniList's developer settings](https://anilist.co/settings/developer). For the redirect URL, type `https://anilist.co/api/v2/oauth/pin`. Copy its **ID**. |
 
-Paste the client id under **Client id** and choose **Save**. The card then says **Set up**.
+You don't need a client secret for any of them.
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/trackers/trakt \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"client_id": "…"}'
-```
-
-No client secret is asked for: Trakt, Simkl and MDBList sign a device in by a code (RFC 8628's
-device flow), which needs the client id alone, and AniList shows its token on its own page.
-
-MDBList as a tracker is apart from MDBList as a metadata provider: the provider, under Settings ›
-Server › Metadata, takes an API key for ratings and lists, and the tracker takes an app's client id
-for each profile's account.
-
-### Take a tracker away
-
-Empty the **Client id** and save. No profile can link that tracker from then on. Accounts already
-linked stay linked, but the server tells them nothing until a client id is set again.
+> **Note:** MDBList as a tracker is separate from MDBList under Settings › Server › Metadata. That
+> one uses an API key for ratings and lists. This one uses an app's client id to link people's
+> accounts.
 
 ## Link your account
 
-Each profile links its own account, under Settings › Trackers. A tracker no admin has set up says
-so there, and an admin sees a link to Settings › Server › Trackers.
+Each person links their own account under Settings › Trackers. If no admin has set the tracker
+up yet, the page says so.
 
 ### Trakt, Simkl and MDBList
 
 1. Choose **Link Trakt**, **Link Simkl** or **Link MDBList**.
-2. The card shows a code and the address to enter it at, and how long it has left. Choose
-   **Open Trakt** (or the tracker's name) to open its page with the code filled in, or enter the
-   code there yourself, and allow the server.
-3. The card changes to **Linked as** your name on the tracker, on every device the profile is
-   signed in on, as soon as the tracker says the code was entered.
+2. The card shows a code. Choose **Open Trakt** (or the tracker's name) to open the tracker's page
+   with the code filled in. Or go there yourself and type the code.
+3. Sign in to the tracker and allow photon-server.
+4. Back in photon-server, the card changes to **Linked as** and your name on the tracker.
 
-The server asks the tracker after the code as often as the tracker allows, slowing down when it is
-asked to. **Cancel** stops linking. A code that expires or is refused ends the link, and the card
-offers to link again.
+**Cancel** stops linking. If the code runs out, the card offers to try again.
 
-```sh
-curl -X POST https://photon.example/api/v1/profile/trackers/trakt/link \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-A tracker that does not know the client id refuses the link: "… refused the client id: an admin
-checks it is the id of an app registered there". A profile that has linked an account on a tracker
-already is refused until it unlinks it.
+![Settings › Trackers, showing a code to enter on Trakt](../images/integrations-trackers-link.webp)
 
 ### AniList
 
-AniList has no device flow, so linking it is a token you bring back.
+AniList works a little differently: it gives you a code to paste back.
 
-1. Choose **Link AniList**, then **Open AniList** to sign in there and allow the server.
-2. AniList shows a token. Paste it into the card and choose **Link**.
+1. Choose **Link AniList**, then **Open AniList**.
+2. Sign in to AniList and allow photon-server.
+3. AniList shows a long token. Copy it.
+4. Paste it into the card and choose **Link**.
 
-The card waits 15 minutes for the token. AniList's token lasts a year and is never refreshed: when
-it ends, the account is unlinked and you link it again.
-
-```sh
-curl -X PUT https://photon.example/api/v1/profile/trackers/anilist/token \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"token": "…"}'
-```
+You have 15 minutes to paste it. AniList's link lasts a year. After that, it is unlinked and you
+link it again.
 
 ### Unlink
 
-Choose **Unlink** and confirm. The server forgets the account and asks the tracker to forget what
-it granted the server. What the tracker already keeps stays there. AniList's grants are revoked on
-AniList's own site alone, so revoke the app there too.
+Choose **Unlink** and confirm. The server forgets your account. What the tracker has already
+recorded stays there.
 
-## What the server tells a tracker
+For AniList, also remove photon-server from your AniList account's settings.
 
-**Plays.** As a profile's play starts, pauses, resumes and stops, the server tells each tracker it
-linked, with how far through the title the player is. Trakt, Simkl and MDBList count a title
-watched from 80% through, and keep where a play stopped short of that. A play the server itself
-counts watched is told as complete, whatever share of it that was, as a film's credits may begin
-before a tracker's 80%. AniList keeps no plays and is told only what was watched.
+## What the server sends
 
-**Watched marks.** Marking a title watched, or unwatched, is pushed to each linked account as
-well: the server waits two minutes, so the play that marked it is told first and nothing is counted
-twice, then sends what changed. Removals go before additions, so a push cut short and sent again
-never adds a watch twice. A change made before the account was linked is not pushed.
+- **Plays.** When you start, pause, resume or stop a title, each linked tracker is told how far
+  through you are. Trakt, Simkl and MDBList count a title as watched from 80% of the way through.
+  If photon-server counts it watched sooner, for example when a film's credits start early, the
+  tracker is told it was watched.
+- **Watched marks.** Marking a title watched or unwatched by hand is sent too, about two minutes
+  later.
+- **AniList** only keeps how far through each show you are. It is moved forward to the furthest
+  episode you've watched, but never back.
 
-AniList is told how far into each entry the account is: the server moves an entry on to the
-furthest episode watched, and completes it at its last, but never moves one back, so marking an
-episode unwatched leaves AniList as it is. It finds an anime's entry for an episode through the
-published anime lists, which the scheduled task **Refresh the anime lists** reads again.
+Titles are matched by their TMDB, TheTVDB and IMDb ids, the codes those sites give each title.
+A title the server knows by none of them isn't sent.
 
-**How a title is found.** A film is told by its TMDB, TheTVDB and IMDb ids, and an episode by its
-show's ids and its season and episode numbers, which every tracker matches. A title the server knows
-by none of those ids, or an episode with no number, is not told.
+## Good to know
 
-### Tokens
-
-The server refreshes an account's access a day before it expires, and once more if a tracker
-refuses it early. A tracker that refuses a refresh for good, because its user revoked the app or the
-grant lapsed unused, unlinks the account, and the profile's Trackers page offers to link it again.
-
-### When a tracker is slow
-
-Plays are told one at a time by the node the play is on. That node holds up to 256 waiting to be
-told; past that it drops the newest and logs "a play was not told to trackers: too many are
-waiting". A watched mark that could not be pushed is tried again by any node five minutes later.
-Failures are logged with the tracker's name: "could not tell a tracker of a play", "could not tell
-a tracker what was watched".
-
-| Route | |
-|---|---|
-| `GET /api/v1/admin/trackers` | each tracker and its client id |
-| `PUT /api/v1/admin/trackers/{tracker}` | set a tracker's client id, or empty it |
-| `GET /api/v1/profile/trackers` | the profile's account on each, or the code it is entering |
-| `POST /api/v1/profile/trackers/{tracker}/link` | ask for a code, or AniList's page |
-| `PUT /api/v1/profile/trackers/{tracker}/token` | link AniList by its token |
-| `DELETE /api/v1/profile/trackers/{tracker}` | unlink, or stop linking |
+- Only what you watch after linking is sent. Earlier history stays where it is.
+- To stop everyone using a tracker, an admin empties its **Client id** and saves. Linked accounts
+  stay linked but are sent nothing until a client id is set again.
+- If a tracker stops accepting the server, for example because you removed the app on the
+  tracker's site, the account is unlinked and the Trackers page offers to link it again.
+- A profile can link one account on each tracker.

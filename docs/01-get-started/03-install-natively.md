@@ -1,117 +1,98 @@
 ---
 title: "Install natively"
-summary: "Run photon-server without Docker: the Flatpak for Linux, the Mac app, or a release archive on Linux, macOS or Windows."
+summary: "Run photon-server without Docker: the Mac app, the Linux desktop app, or a download for Linux, macOS or Windows."
 ---
 
-Each [release](https://github.com/olivertgwalton/photon-server/releases) carries three ways to run
-photon-server outside a container. Pick the one that fits the machine, and you end with a server
-answering on port 8640, ready to [set up](04-first-run.md).
+If you would rather not use [Docker](02-install-docker.md), there are three other ways to run
+photon-server. All of them are on the
+[releases page](https://github.com/olivertgwalton/photon-server/releases). By the end, the server
+is running and ready to [set up](04-first-run.md).
 
-| Download | For | Brings its own database |
+| Choose | If you have | It runs the database for you |
 | --- | --- | --- |
-| `photon-server_<version>_linux_amd64.flatpak`, `…_linux_arm64.flatpak` | A Linux desktop | Yes |
-| `photon-server_<version>_darwin_arm64.dmg` | A Mac with Apple silicon, macOS 13 or later | Yes |
-| `photon-server_<version>_linux_amd64.tar.gz`, `…_linux_arm64.tar.gz` | A Linux server | No |
-| `photon-server_<version>_darwin_amd64.tar.gz`, `…_darwin_arm64.tar.gz` | A Mac, Intel or Apple silicon | No |
-| `photon-server_<version>_windows_amd64.zip` | Windows | No |
+| The Mac app (the `.dmg`) | A Mac with Apple silicon, macOS 13 or later | Yes |
+| The Linux desktop app (the `.flatpak`) | A Linux desktop | Yes |
+| A download (the `.tar.gz` or `.zip`) | Linux, macOS or Windows, and you are comfortable running a database yourself | No |
 
-Every one carries the server, its web app, Jellyfin's web app, and the ffmpeg, ffprobe and yt-dlp
-it runs (jellyfin-ffmpeg's portable build). The Flatpak and the Mac app also carry PostgreSQL 18
-and Valkey 9 and start them for you; an archive uses a PostgreSQL and a Valkey you run, as
-[Requirements](01-requirements.md) describes.
+Pick the file that matches your machine: `arm64` for Apple silicon and other ARM machines, `amd64`
+for Intel and AMD.
 
-The Flatpak and the Mac app run while you are logged in. For a server that runs from boot, use
-[Docker](02-install-docker.md), an archive under your service manager, or the Windows service
-below.
+> **Note:** The Mac app and the Linux desktop app run only while you are logged in. For a server
+> that runs from the moment the machine starts, use Docker, or a download set up as a service.
+
+## macOS: the Mac app
+
+1. Open the `.dmg` file.
+2. Drag **Photon** into Applications.
+3. Open Photon from Applications.
+
+Photon appears in the menu bar at the top of the screen, not in the Dock. The first time, it
+prepares its database, which takes a moment. When the menu says **Running**, choose **Open Photon**
+and your browser opens the **Set up** page.
+
+
+| Menu item | What it does |
+| --- | --- |
+| Running, Starting… or Stopped | What the server is doing. If it stopped, the reason is shown. |
+| Open Photon | Opens the web app in your browser. |
+| Start at Login | Opens Photon whenever you log in to the Mac. Off at first. |
+| Show Logs | Opens the folder of log files, useful when something goes wrong. |
+| Quit Photon | Stops the server. |
+
+The Mac app uses the Mac's own video hardware to convert video.
 
 ## Linux: the Flatpak
 
-Install the release's Flatpak for your machine, `amd64` or `arm64`. It fetches its runtime,
-`org.freedesktop.Platform` 26.08, from Flathub:
+Flatpak is a common way to install desktop apps on Linux. Install the file you downloaded:
 
 ```sh
 flatpak install --user ./photon-server_<version>_linux_amd64.flatpak
 ```
 
-Open Photon from your applications, or run:
+This installs it for your user, and downloads the shared parts it needs from Flathub. Then open
+**Photon** from your applications, or type:
 
 ```sh
 flatpak run io.github.olivertgwalton.Photon
 ```
 
-The first time, it makes its database in `~/.var/app/io.github.olivertgwalton.Photon/data/photon`.
-Each time, it starts PostgreSQL, Valkey and the server, migrates the database and opens the web
-app in your browser. PostgreSQL and Valkey listen only on sockets inside the app's own runtime
-folder, so neither has a password or a port. Their logs are in that folder's `logs`:
-`postgres.log` and `valkey.log`. The server's own log goes wherever `flatpak run`'s output does.
+Each time it opens, it starts the server and opens the web app in your browser.
 
-It reads libraries anywhere on the machine, a home folder, `/mnt`, `/media` or `/srv`, and writes
-to none of them. It encodes on the GPU where the Flatpak runtime's drivers reach it.
+It can read libraries anywhere on the machine, such as your home folder, `/mnt`, `/media` or
+`/srv`, and never changes them. It uses your graphics card to convert video where it can.
 
-Run from a terminal, Ctrl+C stops the server, Valkey and PostgreSQL together; otherwise, ask the
-launcher inside the sandbox:
+If you started it from a terminal, press Ctrl+C there to stop it. Otherwise, type:
 
 ```sh
 pkill -TERM -f '/app/bin/photon$'
 ```
 
-Stopped this way, the server stops at once rather than playing its streams to their end. A
-database made by another PostgreSQL major version is refused rather than started.
-
-## macOS: the Mac app
-
-On a Mac with Apple silicon, open the release's DMG and drag Photon to Applications. The app is
-signed and notarised.
-
-Photon runs in the menu bar. The first time it opens, it makes its database in
-`~/Library/Application Support/Photon`. Each time, it starts PostgreSQL, Valkey and the server,
-which listen only on sockets in that folder, and migrates the database. Its menu:
-
-| Item | What it does |
-| --- | --- |
-| Running, Starting… or Stopped | What the server is doing, with the reason where it stopped. |
-| Open Photon | Opens `http://localhost:8640` in your browser, once the server is running. |
-| Start at Login | Opens Photon when you log in to the Mac. Off by default. |
-| Show Logs | Shows `~/Library/Logs/Photon`: `photon-server.log`, `postgres.log` and `valkey.log`. |
-| Quit Photon | Stops the server at once, then Valkey and PostgreSQL. |
-
-The app encodes on VideoToolbox. The server keeps its cache in `~/Library/Caches/photon-server`
-and its database dumps in `~/Library/Application Support/photon-server/backups`.
-
 ## The archives
 
-An archive is laid out as an install is, and the server finds its web app and tools from where
-its binary is, so keep the layout:
-
-```text
-photon-server/
-  bin/          photon-server, ffmpeg, ffprobe, yt-dlp
-  share/photon-server/web
-  share/photon-server/jellyfin-web
-```
-
-The server looks for ffmpeg, ffprobe, yt-dlp, `pg_dump`, `pg_restore` and `psql` beside itself
-first, then on the `PATH`.
+A download is the server on its own. You install and run the database (PostgreSQL 18) and the
+small store beside it (Valkey 9) yourself, as [Requirements](01-requirements.md) describes. Unpack
+the download anywhere, but keep its folders as they are: the server finds its web app and tools
+by where they sit.
 
 ### Prepare the database
 
-Make PostgreSQL 18 a user and a database of their own:
+1. Install PostgreSQL 18, and make it a user and a database for photon-server:
 
-```sh
-createuser --pwprompt photon
-createdb --owner photon photon
-```
+   ```sh
+   createuser --pwprompt photon
+   createdb --owner photon photon
+   ```
 
-Put the PostgreSQL client tools, `pg_dump`, `pg_restore` and `psql`, on the server's `PATH`, no
-older than the PostgreSQL they reach. Without them the server runs, but neither makes nor restores
-[backups](../07-maintain/01-backups.md).
+   The first command makes a user called `photon` and asks you for its password. The second makes
+   a database of the same name, owned by that user.
 
-Install Valkey 9; where a distribution's own is older, take it from
-[valkey.io](https://valkey.io/download/).
+2. Make sure PostgreSQL's tools (`pg_dump`, `pg_restore` and `psql`) can be found on the machine's
+   path. Without them, the server runs but cannot make or restore
+   [backups](../07-maintain/01-backups.md).
+3. Install Valkey 9. If your system only offers an older version, get it from
+   [valkey.io](https://valkey.io/download/).
 
 ### Start it on Linux or macOS
-
-Unpack the archive anywhere, set the two addresses, migrate, and start it:
 
 ```sh
 tar -xzf photon-server_<version>_linux_amd64.tar.gz
@@ -121,39 +102,48 @@ photon-server/bin/photon-server migrate
 photon-server/bin/photon-server
 ```
 
-Run `migrate` after every update, before the server starts: the server does not migrate on its
-own. Every setting and subcommand is in [Configuration](../08-reference/01-configuration.md).
+In order, these lines:
 
-On macOS, Homebrew's `postgresql@18` and `valkey` serve. The archive's binaries are not signed, as
-the DMG's are, so clear the download's quarantine before the first run:
+1. Unpack the download.
+2. Tell the server where the database is, with the password you chose above.
+3. Tell the server where Valkey is.
+4. Prepare the database for this version of the server.
+5. Start the server.
+
+> **Important:** Run the `migrate` line again after every update, before you start the server. It
+> does not do this on its own.
+
+On macOS, Homebrew's `postgresql@18` and `valkey` work. The download is not signed by Apple, so
+before the first run, tell macOS to allow it:
 
 ```sh
 xattr -dr com.apple.quarantine photon-server
 ```
 
-Under a service manager such as systemd, have it restart the server when it exits with status 75
-(see [Restarts after a restore](#restarts-after-a-restore)), and give a stop up to two hours: a
-stopping server plays its streams to their end first, and a second stop signal stops it at once.
+To keep the server running from boot, run it under your system's service manager, such as systemd.
+See **Good to know** below for two things to set.
 
 ### Start it on Windows
 
-Valkey has no Windows build, so on Windows the simplest server is
-[Docker Desktop](02-install-docker.md) with the same Compose file. The archive is for those who
-run PostgreSQL on Windows and Valkey in WSL or Docker.
+Valkey does not run on Windows by itself, so on Windows it is usually easier to use
+[Docker Desktop](02-install-docker.md). The download suits you if you already run PostgreSQL on
+Windows and can run Valkey in WSL (Windows' built-in Linux) or Docker.
 
-Unpack the archive, set `PHOTON_DATABASE_URL` and `PHOTON_VALKEY_URL` as environment variables,
-run `bin\photon-server.exe migrate`, then `bin\photon-server.exe`.
+1. Unpack the download.
+2. Set `PHOTON_DATABASE_URL` and `PHOTON_VALKEY_URL` as environment variables, as in the Linux
+   example above.
+3. Run `bin\photon-server.exe migrate` to prepare the database.
+4. Run `bin\photon-server.exe` to start the server.
 
-PostgreSQL's installer does not put its tools on the `PATH`. Add its `bin` folder, such as
-`C:\Program Files\PostgreSQL\18\bin`, or the server neither backs up nor restores.
+PostgreSQL's Windows installer does not make its tools findable. Add its `bin` folder, such as
+`C:\Program Files\PostgreSQL\18\bin`, to your path, or the server cannot make backups.
 
-The server encodes on an NVIDIA GPU (NVENC), an Intel one (Quick Sync) or an AMD one (AMF),
-whichever first encodes a test picture, or in software.
+The server uses an NVIDIA, Intel or AMD graphics card to convert video where it can.
 
 ### Run it as a Windows service
 
-The server runs under Windows' service manager as it is. From an administrator's PowerShell, with
-the archive unpacked in `C:\photon-server` and the database migrated as above:
+A service starts with Windows, before anyone logs in. Open PowerShell as an administrator. With the
+download unpacked in `C:\photon-server` and the database prepared as above, type:
 
 ```powershell
 sc.exe create photon-server binPath= "C:\photon-server\bin\photon-server.exe" start= auto
@@ -164,16 +154,25 @@ sc.exe failureflag photon-server 1
 sc.exe start photon-server
 ```
 
-It runs as Local System, which must be able to read
-the libraries, and the PostgreSQL tools must be on the system's `PATH`, not only yours. It keeps
-its cache, its database dumps and its log, `photon-server.log`, in
-`C:\Windows\System32\config\systemprofile\AppData\Local\photon-server`; the log is never rotated.
+In order, these make the service and start it with Windows, tell it where the database and Valkey
+are, have Windows restart it if it stops unexpectedly, and start it now.
 
-Stopping the service lets the streams it serves play to their end, up to two hours; a shutdown of
-the machine stops it at once. The failure actions start it again after a restore.
+The service runs as Windows' own system account, so that account must be able to read your
+libraries, and PostgreSQL's tools must be on the system's path, not only yours. Its log file,
+`photon-server.log`, is in `C:\Windows\System32\config\systemprofile\AppData\Local\photon-server`.
+That file is never trimmed, so check its size now and then.
 
-## Restarts after a restore
+## Good to know
 
-A server stopped to restore a backup exits with status 75 (`EX_TEMPFAIL`), to be started again on
-the restored database. The Flatpak, the Mac app, the Windows service above and the Compose file
-all do. Anything else that runs the server must restart it on that status, or on any failure.
+- **Stopping is gentle.** On a download or the Windows service, stopping the server lets anyone
+  watching finish their film or episode, for up to two hours. Stop it a second time to stop it at
+  once. The Mac app, and the Linux desktop app stopped with the command above, stop at once.
+- **Restarts after a restore.** When you restore a backup, the server stops itself so it can be
+  started again on the restored database. Docker, both apps and the Windows service above do this
+  for you. If you use systemd or another service manager, have it restart the server whenever it
+  stops with an error, and give it up to two hours to stop.
+- **Where the files are.** The Mac app keeps its database in
+  `~/Library/Application Support/Photon` and its logs in `~/Library/Logs/Photon`. The Linux
+  desktop app keeps its database in `~/.var/app/io.github.olivertgwalton.Photon/data/photon`.
+- Every setting and command the server understands is in
+  [Configuration](../08-reference/01-configuration.md).

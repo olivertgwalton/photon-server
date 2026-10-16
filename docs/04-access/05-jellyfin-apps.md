@@ -1,92 +1,106 @@
 ---
 title: "Use Jellyfin apps"
-summary: "Let Infuse, Swiftfin, Findroid and Jellyfin's own apps sign in to photon-server on a port of their own."
+summary: "Let Infuse, Swiftfin, Findroid and Jellyfin's own apps sign in to photon-server."
 ---
 
-photon-server can answer Jellyfin's API as well as its own, so the apps made for Jellyfin can use
-it: Infuse, Swiftfin, Findroid and Jellyfin's own apps, and the TV apps for LG and Samsung, which
-load Jellyfin's web app from the server. It answers as Jellyfin 12.2, on a port of its own, and
-underneath it is the same server: the same profiles, the same access, the same progress, favourites
-and playlists, and the same decision on how each copy plays.
+photon-server can pretend to be a Jellyfin server, so apps made for Jellyfin can use it too:
+Infuse, Swiftfin, Findroid, Jellyfin's own apps, and the Jellyfin apps for LG and Samsung TVs.
+
+It is still the same server underneath. People sign in with the same profiles, see the same
+libraries, and keep the same progress, favourites and playlists, whichever app they use.
 
 ## Turn it on
 
 1. Open Settings › Server › Network.
 2. Under **Jellyfin apps**, set **Jellyfin apps** to **On**. It is off by default.
-3. Leave **Port** at 8096, Jellyfin's own, where its apps look first, or choose another from 1 to
-   65535. It cannot be 8640, the port photon's own API is served on.
-4. Save. Every node starts listening on the port at once.
+3. Leave **Port** at 8096. That is Jellyfin's usual port, and where its apps look first. You can
+   choose another, but not 8640, which photon-server already uses.
+4. Choose **Save**.
 
-```sh
-curl https://photon.example/api/v1/admin/network -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+![Settings › Server › Network, with Jellyfin apps turned on](../images/access-jellyfin-apps.webp)
 
-The answer's `jellyfin` and `jellyfin_port` are these settings; change them with a `PUT` of the
-whole network, as [Reach your server from outside](04-remote-access.md) describes. Where the node
-answering cannot listen on the port, because another program holds it, Settings › Server › Network
-says why under **Port**, and the answer carries it as `jellyfin_error`. The node tries again every
-minute.
+If another program is already using the port, the page says so under **Port**. The server keeps
+trying every minute.
 
-In Docker, publish the port too, beside 8640, under `server:` in `compose.yml`:
+### With Docker
+
+Docker also has to open the port. In `compose.yml`, add it beside 8640 under `server:`:
 
 ```yaml
     ports: ["8640:8640", "8096:8096"]
 ```
 
-The Docker image and the release archives carry Jellyfin's web app, which the server serves at
-`/web/` on that port, as Jellyfin does; opening the port's root in a browser goes there.
+Then run `docker compose up -d` again.
 
 ## Add the server in an app
 
-In the app, add a server at `http://<server>:8096`, or `https://` where the server has a
-certificate (see below). The app shows the server by the **Name** under Settings › Server ›
-General.
+1. In the Jellyfin app, choose to add a server.
+2. Type the address yourself, such as `http://192.168.1.10:8096`. Use `https://` if the server has
+   a certificate (see [Reach your server from outside](04-remote-access.md)). Jellyfin apps can't
+   find photon-server on the network by themselves.
+3. Sign in with a profile's name and password.
 
-Jellyfin apps look for servers on the local network by asking on UDP port 7359, which photon-server
-does not answer, so type the address.
+The app shows the server under its **Name** from Settings › Server › General. It asks for a name
+and password rather than showing a row of faces, because the server doesn't list its profiles to
+anyone who asks.
 
-Sign in with a profile's name and password. The server lists no profiles to whoever asks, so the
-app shows its form for a name and password rather than a row of faces. A sign-in here is checked,
-limited and logged as one in the web app is: the same attempts per address and per name, the same
-entry in the [activity log](07-devices-and-playback.md#the-activity-log).
+You can also open the port's address in a web browser to use Jellyfin's own web app.
 
 ## Quick Connect
 
-Quick Connect is Jellyfin's name for [pairing](03-pair-a-tv.md), and is always on. The app shows a
-six-digit code, since that is all Jellyfin's apps take; approve it under Settings › Link a device in
-the web app, or under Quick Connect in a Jellyfin app already signed in. The app signs in as the
-profile that approved it.
+Quick Connect is Jellyfin's way of [signing in with a code](03-pair-a-tv.md). It is always on.
 
-A profile made by a [sign-in provider](02-single-sign-on.md) has no password until it sets one, so
-Quick Connect is how it signs in to a Jellyfin app.
+1. In the app, choose to sign in with Quick Connect. It shows a six-digit code.
+2. On a device that is already signed in, open Settings › Link a device in the web app.
+3. Type the code and choose **Link**.
 
-## HTTPS
+The app signs in as whoever approved it.
 
-The Jellyfin port is served as photon's own port is: with a certificate set under
-Settings › Server › Network, it answers HTTPS beside plain HTTP, with the same certificate. Secure
-connections **Required** sends plain HTTP to HTTPS on photon's own port only; the Jellyfin port
-still answers plain HTTP. Behind a reverse proxy, give the Jellyfin port a site of its own, and the
-**Trusted proxies** setting applies to it as well.
+> **Tip:** A profile made by a [sign-in service](02-single-sign-on.md) has no password at first.
+> Quick Connect is how it signs in to a Jellyfin app.
 
-**Limit (Mbps)**, the remote stream limit, applies to Jellyfin apps outside the local networks too.
+## What playing is like
 
-## What a Jellyfin app can and cannot do
+Titles play the same way they do in Photon. When the app can play a file as it is, the server sends
+it unchanged. When it can't, the server converts it as it plays (this is called transcoding). The
+app starts with the sound and subtitles it asked for.
 
-A Jellyfin app browses, searches, plays, downloads a title's file as it is, marks titles watched
-and favourite, keeps playlists, and shows a title's chapters, trickplay pictures, intro and credits
-markers and theme music.
+Things you might notice:
 
-Some of Jellyfin is not there, deliberately:
+- **A title that fails to start, then plays.** Some TVs say they can play a file and then can't.
+  Jellyfin's web app then asks again, and the server converts the file instead. On the dashboard,
+  the play shows **Playback failed** as the reason it was converted.
+- **Subtitles.** Styled and picture subtitles are shown by the app itself, as Jellyfin shows them.
+  A subtitle the app can't show at all is drawn into the picture instead (this is called burning
+  in).
+- **Links saved as `.strm` files** play in Infuse too.
 
-- **No profile is a Jellyfin administrator**, admins included, since an app would offer Jellyfin's
-  dashboard, which is not served. Run the server from photon's own web app.
-- **Live TV, SyncPlay, sharing and deleting** are turned off, so apps do not offer them: photon
-  has no part of them.
-- **Intros** before a title are never played.
-- **A person is opened by id, not by name**, since two people here may share a name.
+The remote speed limit under Settings › Server › Network applies to Jellyfin apps away from home,
+as it does to Photon.
+
+## What a Jellyfin app can do
+
+A Jellyfin app can browse, search, play, download a title's file, mark titles watched and
+favourite, and keep playlists. It shows chapters, scrubbing previews, intro and credits skipping,
+and theme music.
+
+Some parts of Jellyfin are left out on purpose:
+
+- **No profile is a Jellyfin admin**, not even an admin. Jellyfin's dashboard isn't there: you run
+  the server from photon-server's own web app.
+- **Live TV, SyncPlay, sharing and deleting** are turned off, so the apps don't offer them.
+- **Intros** (trailers before a film) are never played.
 
 ## Signing a Jellyfin app out
 
-A Jellyfin app holds a token like any other device, and is listed under Settings › Devices by the
-device name and app it gave. Sign it out there, or from the app. See
-[Signed-in devices](07-devices-and-playback.md).
+A Jellyfin app appears under Settings › Devices with every other device, by the name it gave.
+Sign it out there, or from the app itself. See [Signed-in devices](07-devices-and-playback.md).
+
+## Good to know
+
+- With a certificate set, the Jellyfin port serves `https://` too, with the same certificate.
+  **Required** only redirects photon-server's own port: the Jellyfin port still answers `http://`.
+- Behind a reverse proxy, give the Jellyfin port its own site. **Trusted proxies** applies to it as
+  well.
+- Wrong passwords in a Jellyfin app count towards the same limits as in the web app, and appear in
+  the [activity log](07-devices-and-playback.md#the-activity-log).

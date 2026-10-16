@@ -3,63 +3,72 @@ title: "Use the web app"
 summary: "What photon-server's own web app does for someone watching, and where each part of it is."
 ---
 
-photon-server serves its own web app at its address, the same port as the API: open
-`https://photon.example` in a browser and log in. Everything a household does from a sofa is here:
-browsing the libraries, searching, keeping a watchlist, favourites and playlists, playing in the
-browser, and choosing how you play. This section is for someone watching; running the server is in
-the sections after it.
+photon-server comes with its own web app. Open the server's address in a browser, such as
+`https://photon.example`, and log in. From there you can browse your libraries, search, keep a
+watchlist, favourites and playlists, watch in the browser, and choose how things play.
 
-![Home in the web app](../images/home.webp)
+This section is for someone watching. Running the server is covered in the sections after it.
 
 ## Logging in
 
-The log-in page asks for your profile's **Name** and **Password**. Where an admin has set up a
-sign-in provider, it offers **Continue with** that provider above them (see
-[single sign-on](../04-access/02-single-sign-on.md)).
+![The log-in page, asking for a name and password](../images/web-app-login.webp)
 
-**Forgot your password?** leads to **Reset your password**. Ask for a code from a device on the
-server's own network: the server writes it to its log, not to an email, so whoever runs the server
-reads it to you. The code works for a limited time, and resetting with it signs out every device
-signed in as you.
+1. Type your profile's **Name** and **Password**.
+2. Choose **Log in**. You will see **Who's watching?** if your household has more than one
+   profile.
+3. Choose your profile. Another person's profile asks for its PIN or password first.
 
-After logging in, a household with several profiles chooses one on **Who's watching?**. A profile
-other than the one you are watching as asks for its PIN or password first. Switch later from your
-picture at the top right, **Switch profile**. Profiles, PINs and roles are in
-[profiles](../04-access/01-profiles.md).
+If your household uses a shared sign-in, such as a company or family account, the page also offers
+**Continue with** that service. See [single sign-on](../04-access/02-single-sign-on.md).
+
+To change profile later, choose your picture at the top right, then **Switch profile**.
+
+### If you forget your password
+
+1. Choose **Forgot your password?**. You will see **Reset your password**.
+2. Type your **Name** and choose **Get a code**. You must do this from a device on the same home
+   network as the server.
+3. The code is not emailed. It is written to the server's log, so ask whoever runs the server to
+   read it to you.
+4. Type the **Code**, your **New password** and **Confirm password**, then choose **Reset
+   password**.
+
+The code only works for a short time. Resetting your password signs you out on every device.
 
 ## Finding your way around
 
-The sidebar holds:
+![Home, with the sidebar on the left and search at the top](../images/web-app-home.webp)
+
+The sidebar on the left holds:
 
 - **Home** and **Calendar**.
-- **Libraries**: each library an admin has given you, then **Collections** where the server has
-  any.
+- **Libraries**: each library you have been given, then **Collections** if the server has any.
 - **Watchlist**, **Favourites**, **Playlists**, **History** and **Downloads**.
-- **Plugins**: pages a plugin adds, where any does (see [plugins](../06-integrations/01-plugins.md)).
-- **Settings**, at the foot.
+- **Plugins**, if a plugin adds pages of its own. See [plugins](../06-integrations/01-plugins.md).
+- **Settings**, at the bottom.
 
-The search field is at the top of every page. Your picture at the top right opens a menu with
-**Switch profile**, **Settings**, **Link a device** and **Log out**. An admin also sees the server's
-activity and a **Server dashboard** button there, which belong to the admin sections.
+Along the top of every page:
 
-What a profile sees is set by an admin: which libraries, and which titles in them. The web app only
-ever shows what your profile may see. Your own rows on Home, search and the calendar list a title
-held in two libraries once.
+- The search field. See [search](02-search.md).
+- The bell, which holds your [notifications](06-your-settings.md#notifications).
+- Your picture, which opens **Switch profile**, **Settings**, **Link a device** and **Log out**.
 
-The web app keeps up by itself. While it is open, the server tells it what changes (a title added,
-a mark set on another device, a playlist changed) and the pages showing it are read again, so there
-is nothing to refresh.
+An admin also sees a **Server dashboard** button and the server's activity. Those are covered in
+the admin sections.
+
+You only ever see the libraries and titles an admin has given your profile. If the same title is in
+two of your libraries, Home, search and the calendar show it once.
+
+The web app keeps itself up to date. If a title is added, or you mark something watched on another
+device, the page changes by itself. There is no need to refresh.
 
 ## Pages
 
-- [Home and browsing](01-home-and-browsing.md): Home's rows, a library's titles, filters and sorts,
-  genres, studios, collections, a title's page and a person's.
-- [Search](02-search.md): what a search finds and how it ranks it.
+- [Home and browsing](01-home-and-browsing.md): Home, a library, filters and sorting, a title's
+  page and a person's.
+- [Search](02-search.md): finding a title or a person.
 - [Your lists](03-your-lists.md): the watchlist, favourites, history and the calendar.
 - [Playlists](04-playlists.md): making, ordering and playing playlists.
-- [Watching](05-watching.md): the player, tracks, subtitles, skipping, and downloads.
-- [Your settings](06-your-settings.md): your profile, playback, Home's rows, devices, linking a TV,
-  sign-in and trackers.
-
-Everything the web app does goes through the API, which any other app can use with a token: see
-the [API reference](../08-reference/03-api.md).
+- [Watching](05-watching.md): the player, subtitles, skipping, casting and downloads.
+- [Your settings](06-your-settings.md): your profile, playback, Home's rows, notifications,
+  devices, linking a TV, sign-in and trackers.

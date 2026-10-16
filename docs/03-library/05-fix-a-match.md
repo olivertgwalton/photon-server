@@ -1,186 +1,144 @@
 ---
 title: "Fix a title's match and edit its details"
-summary: "Match a title to the right film or show by hand, edit and hold its fields, choose its pictures, set its episode order and language, and refresh it."
+summary: "Correct a film or show matched to the wrong title, edit its details, choose its pictures, and set its episode order."
 ---
 
-The scanner matches most titles by their names alone. When it matches one to the wrong film, finds
-no match, or a provider describes it in a way you would rather not show, this page puts it right.
-Everything here is for an admin.
+photon-server matches most titles from their file names alone. Now and then it picks the wrong
+film, such as a remake instead of the original, or finds nothing at all. This page shows how to put
+that right, and how to change a title's details and pictures. Everything here is for admins.
 
 ## Where to find it
 
-Each title's **More** menu, the button on its card and on its page, holds what an admin can do to
-it: **Edit…**, **Fix match…**, **Unmatch**, **Split apart…**, **Choose artwork…**, **Refresh
-metadata…**, **Analyse**, **Manage…** and **Delete…**, as far as each applies to the title.
-**Edit…**, **Fix match…** and **Choose artwork…** open one dialog with **Details**, **Match** and
-**Artwork** tabs. **Manage…** opens the title's own page under Settings › Server, with everything
-below on one page, with its [markers](09-markers-and-previews.md) beside them.
+As an admin, you can fix a title from two places:
 
-A title's id, which every call below takes, is the last part of its page's address:
-`/titles/0199…`.
+- **Its card**, anywhere in a library, on Home or in search. Its **⋯** button opens a menu with
+  **Edit…**, **Fix match…**, **Unmatch**, **Choose artwork…**, **Refresh metadata…** and
+  **Manage…**, depending on the title.
+- **Its page.** The **More** button (three dots) has an **Admin** part with **Edit metadata**,
+  **Identify**, **Edit artwork** and **Edit markers**. Each opens that part of the title's
+  Manage page.
 
-## Fix a match
+![A film's card in a library with its ⋯ menu open, showing Edit…, Fix match… and Manage…](../images/library-title-menu.webp)
 
-1. Open **Fix match…** on the film or show. The **Match** tab says what it is matched to now, by
-   each provider's id, or "Not matched to any provider".
-2. Choose the **Provider** to search, change the **Name** and **Year** if the file's are wrong, and
-   choose **Search**.
-3. Each result shows its poster, name, year and write-up, to tell like-named titles apart. Choose
-   **Select** beside the right one.
+**Edit…**, **Fix match…** and **Choose artwork…** open the same dialog, with **Details**,
+**Match** and **Artwork** tabs. **Manage…** opens the title's own settings page, with everything on
+this page in one place.
 
-The title is matched again to that provider's title, and its details follow in a moment. The id
-you choose outranks any the file name or NFO gives, and the ids the old match led to are dropped,
-so every other provider finds the title again by the new one. Only a film or a show is matched; a
-season or an episode follows its show.
+## Fix a wrongly matched film
 
-Only providers that search and are ready are offered: TMDB for films and shows, TheTVDB for
-shows, and plugins that search.
+Say your copy of 1917 (2019) shows up with the poster and description of a different film with
+the same name.
 
-```sh
-curl "https://photon.example/api/v1/admin/titles/$TITLE/candidates?provider=tmdb&title=Heat&year=1995" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+1. Find the film's card in its library, choose its **⋯** button, then **Fix match…**. The dialog
+   opens on the **Match** tab.
+2. Choose the **Provider** to search. TMDB is right for most films.
+3. Check the **Name** and **Year**. Correct them if your file name had them wrong.
+4. Choose **Search**. A list of results appears, each with its poster, name, year and
+   description, so you can tell films with the same name apart.
+5. Choose **Select** beside the right one.
 
-curl -X PUT https://photon.example/api/v1/admin/titles/$TITLE/match \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"provider": "tmdb", "id": "949"}'
-```
+![The Fix match dialog, listing search results for 1917 with a Select button beside each](../images/library-fix-match-dialog.webp)
 
-`provider` in the match is `tmdb`, `imdb`, `tvdb` or a plugin's source id, so a title can be
-pinned to an IMDb id you already know without searching.
+You will see "Matched. Its details follow in a moment." The title's description, cast and pictures
+update shortly after.
 
-To have the scanner match a title right from the start, put the id in its folder's name: see
-[naming the match yourself](01-name-your-files.md#naming-the-match-yourself).
+The match you choose sticks. It wins over any ID in the folder name or an NFO file, and later
+refreshes keep it. For a show, fix the show itself; its seasons and episodes follow.
+
+> **Tip:** To get a title right from the start, put its ID in the folder name: see
+> [naming the match yourself](01-name-your-files.md#naming-the-match-yourself).
+
+### From the Manage page
+
+**Manage…** shows the same search in its **Match** card. The card also tells you what the title is
+matched to now, such as "Matched to tmdb 949", or "Not matched to any provider."
+
+![A film's Manage page, showing the Refresh and Match cards](../images/library-manage-title.webp)
 
 ### Unmatch
 
-**Unmatch** takes a film or show off its providers: it keeps what its files and NFO say until its
-match is fixed or it is refreshed. Use it for a home video or a recording no provider knows,
-rather than leave it matched to a stranger's film.
-
-```sh
-curl -X DELETE https://photon.example/api/v1/admin/titles/$TITLE/match \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+**Unmatch** takes a title off every provider, and it keeps only what its file name and any NFO say.
+Use it for home videos or recordings that no provider knows, rather than leave them showing a
+stranger's film.
 
 ## Edit its details
 
-The **Details** tab edits a title's **Title**, **Sort title**, **Original title**, **Tagline**,
-**Overview**, **Certificate**, **Released**, **Year**, **Genres** and **Studios** (genres and
-studios separated by commas). Seasons, episodes and extras are edited the same way.
+The **Details** tab lets you change a title's **Title**, **Sort title**, **Original title**,
+**Tagline**, **Overview**, **Certificate**, **Released**, **Year**, **Genres** and **Studios**.
+Separate genres and studios with commas. Seasons, episodes and extras can be edited the same way.
 
-- What you write outranks every source and lasts through every refresh.
-- **Hold** beside a field keeps it as it is now without writing it: no source changes it, as a
-  locked field in Jellyfin.
-- **Give back** returns a field to its sources at the title's next match, and **Give every field
-  back** returns them all.
-- A field cannot be emptied, only given back. **Sort title** sorts by the title where it is empty.
+![The Details tab of the edit dialog for a film](../images/library-edit-details.webp)
 
-```sh
-curl -X PATCH https://photon.example/api/v1/admin/titles/$TITLE \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"sort_title": "Godfather 2", "locked": ["genres"]}'
+- **What you type wins** over every provider, and stays through every refresh.
+- **Hold** beside a field keeps its current value without you retyping it. No provider will change
+  it.
+- **Give back** hands a field back to the providers. **Give every field back** does it for all of
+  them.
 
-curl -X DELETE "https://photon.example/api/v1/admin/titles/$TITLE/edits?field=sort_title" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+To blank out a field, give it back rather than emptying it. An empty **Sort title** sorts by the
+title.
 
-The fields are `title`, `sort_title`, `original_title`, `overview`, `tagline`, `certificate`,
-`release_date`, `year`, `genres` and `studios`. `DELETE …/edits` with no `field` gives back every
-one.
+An episode has three more fields: **Airs before season**, **Airs before episode** and **Airs after
+season**. Use them to place a special in the season it aired in, so it plays in order there.
 
 ## Choose artwork
 
 The **Artwork** tab has a tab for each kind of picture: **Poster**, **Backdrop**, **Still**,
-**Logo** and **Banner**. Each lists the pictures every provider has of that kind, with its source,
-language and size; choose one to use it over every source. **Give the poster back to the sources**
-(or the kind shown) undoes the choice.
+**Logo** and **Banner**. Each shows every picture the providers have, with where it came from and
+its size. Choose one to use it.
 
-To use a picture of your own, put it beside the title, named as
-[pictures beside a title](01-name-your-files.md#pictures-beside-a-title) says. A file beside the
-title is used before any provider's, and the next scan of its folder finds it.
+To undo your choice, choose **Give the poster back to the sources** (or the backdrop, and so on).
 
-```sh
-curl "https://photon.example/api/v1/admin/titles/$TITLE/artwork/candidates?kind=poster" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-curl -X PUT https://photon.example/api/v1/admin/titles/$TITLE/artwork/poster \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"id": "0199…"}'
-```
+To use a picture of your own, put it beside the title's file, named as
+[pictures beside a title](01-name-your-files.md#pictures-beside-a-title) describes. The server
+finds it at the next scan.
 
 ## A title's own language
 
-A film or show can be described in a language other than its library's: the **Language** card on
-its Manage page, or under **Details** in the dialog. **Metadata language**, **Certification
-country** and **Title** (**In its language** or **As first named**) each default to **Its
-library's**. **Save language** describes the title again in them, its seasons and episodes with it.
-So one film in a library described in English can be described in Japanese.
+A single film or show can be described in a different language from the rest of its library. Use
+the **Language** card on its **Manage…** page. Set **Metadata language**, **Certification
+country** and **Title**, then choose **Save language**. Each starts at **Its library's**.
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/titles/$TITLE/locale \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"metadata_language": "ja", "certification_country": "", "title_language": "original"}'
-```
-
-`""` is the library's own.
+For example, one Japanese film in an English library can show its Japanese title and description.
 
 ## Episode order
 
-A show's files may be numbered as the episodes aired, as on the DVDs, or absolutely, counting
-every episode from the first as anime often is. The **Episode order** card on the show's Manage
-page sets which: **Numbered as** **Aired** (the default), **DVD** or **Absolute**, then **Save
-order**.
+Episodes can be numbered three ways:
 
-Changing it drops what any provider said of the show's seasons and episodes and matches every one
-again in the new order; the episodes keep their old titles until then. What files and NFOs say, and
-your edits and chosen pictures, stand. TMDB numbers only as aired, so for DVD or absolute order
-rank TheTVDB for the library's seasons and episodes (see
-[seasons and episodes](03-metadata.md#seasons-and-episodes)).
+- **Aired**: in the order they were broadcast. This is the default.
+- **DVD**: as they appear on the DVDs.
+- **Absolute**: one running number from the first episode, as anime often is.
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/titles/$SHOW/episode-order \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"order": "absolute"}'
-```
+If a show's episodes look muddled, its files probably follow a different order. Open the show's
+**Manage…** page, find the **Episode order** card, choose the right one under **Numbered as**, and
+choose **Save order**. The show's seasons and episodes are then looked up again in that order.
+
+The list may also offer TMDB's **episode groups**: other orders TMDB's editors have made for the
+show, such as story arcs. Choose one if your files follow it.
 
 ## Split a film apart
 
-A film the scanner read as several versions of one, when they are different films, is split with
-**Split apart…**. The copy that plays first stays; each other becomes a film of its own, named as
-its file is and matched afresh, and stays so through every scan, unlike Plex's. It is offered on a
-film with more than one copy.
-
-```sh
-curl -X POST https://photon.example/api/v1/admin/titles/$TITLE/split \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+Sometimes the server treats two different films as two versions of one, because their files share
+a folder and a name. **Split apart…** fixes this. The first version stays; each other one becomes a
+film of its own and is matched afresh. It stays separate through later scans.
 
 ## Refresh a title
 
-**Refresh metadata…** asks a title's providers about it again now, without waiting for its
-library's schedule. **Refresh missing metadata** updates the title and fills in any season or
-episode with no details yet; **Refresh all metadata** fetches everything again, every season and
-episode of a show included. Your edits, held fields and chosen artwork are kept either way. A
-season or an episode is refreshed as its show.
+**Refresh metadata…** looks a title up again now, rather than waiting for the library's schedule.
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/titles/$TITLE/refresh \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"mode": "all"}'
-```
+- **Refresh missing metadata** updates the title and fills in any season or episode with no
+  details yet.
+- **Refresh all metadata** fetches everything again.
 
-**Analyse** is a different thing: it reads the title's files again, as Plex's Analyze does, and
-remakes what is made from them, such as its keyframes, previews and markers.
+Your edits, held fields and chosen pictures are kept either way.
 
-## Delete a title
+## Good to know
 
-**Delete…** deletes a title's files from the disk, a show's or season's episodes with it, and the
-title with them, where its library allows [media deletion](02-libraries.md#media-deletion). The
-files cannot be brought back. A file you delete by hand instead leaves its title with a missing
-copy: see [keep libraries up to date](06-keep-up-to-date.md#a-file-that-moves-or-goes-missing).
+- **Analyse** is different from refreshing. It reads the title's files again and remakes what comes
+  from them, such as the previews you see while seeking and the intro and credits markers.
+- **Fix match** offers only providers that can search and are ready: TMDB for films and shows,
+  TheTVDB for shows, and plugins that search.
+- **Delete…** removes a title's files from the disk, but only where its library allows
+  [media deletion](02-libraries.md#media-deletion). It can't be undone. A file you delete yourself
+  instead leaves the title showing as missing: see
+  [keep libraries up to date](06-keep-up-to-date.md#a-file-that-moves-or-goes-missing).

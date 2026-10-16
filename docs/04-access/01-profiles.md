@@ -1,129 +1,108 @@
 ---
 title: "Profiles, passwords, PINs and roles"
-summary: "Add the household's profiles, decide what each may see, and know what an admin, a manager and a user may each do."
+summary: "Add the people in your household, decide what each may see, and know what an admin, a manager and a user can each do."
 ---
 
-A profile is one person watching: their own progress, favourites, playlists and settings, and the
-libraries and certificates they may see. The first profile, made as the server is
-[set up](../01-get-started/04-first-run.md), is an admin. Every other is added under
-Settings › Profiles.
+A profile is one person watching. It keeps their own progress, favourites, playlists and settings,
+and it says which libraries and age ratings they may see.
+
+The first profile is made when you [set up the server](../01-get-started/04-first-run.md), and it
+is an admin. You add everyone else under Settings › Profiles.
+
+![Settings › Profiles, listing three profiles with their roles and locks](../images/access-profiles-list.webp)
 
 ## Roles
 
 Every profile has one of three roles.
 
-| Role | What it may do |
+| Role | What it can do |
 |---|---|
 | Admin | Everything: the server's settings, every profile, every signed-in device, the dashboard, the activity log and API keys. |
-| Manager | Adds users and keeps the ones it added: renames them, sets their passwords and pictures, chooses what they see, removes them and signs out their devices. The rest of the server is the admin's. |
-| User | Watches what its access allows, and changes only its own name, password, PIN, picture and settings. |
+| Manager | Adds users and looks after the ones it added: renames them, sets their passwords and pictures, chooses what they see, removes them and signs out their devices. Nothing else on the server. |
+| User | Watches what it is allowed to, and changes only its own name, password, PIN, picture and settings. |
 
-A manager grants no more than it may see itself: a user it keeps can be given only libraries the
-manager sees, and a certificate no older than the manager's. A user a manager adds starts seeing
-exactly what the manager sees. Where an admin raises a user a manager added to manager or admin, it
-becomes the admin's to keep. Where a manager is removed, the admin keeps its users.
+A manager can't give more than it has. A user it adds starts out seeing exactly what the manager
+sees, and can only be narrowed from there.
 
-The server always has an admin: the last one can be neither removed nor given another role.
+The server always keeps at least one admin. You can't remove the last admin or change its role.
 
 ## Add a profile
 
 1. Open Settings › Profiles and choose **Add a profile**.
-2. Give it a **Name**, up to 64 characters. No two profiles share a name, whatever their case.
-3. Choose its **Role**. A manager is not offered the choice: it adds users.
-4. Give it a **Password** of at least 8 characters. It signs in with this, and is switched to with
-   it until its owner sets a PIN.
-5. An admin chooses what it may see here too (see below). A manager's new profile sees what the
-   manager sees, and is narrowed on its own page afterwards.
+2. Type a **Name**. Two profiles can't share a name, even in different capitals.
+3. Choose a **Role**. A manager doesn't see this choice: it can only add users.
+4. Type a **Password** of at least 8 characters.
+5. Choose **Add profile**. The new profile appears in the list.
 
-```sh
-curl -X POST https://photon.example/api/v1/admin/profiles \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "Sam", "role": "user", "password": "a long password"}'
-```
-
-The list under Settings › Profiles shows each profile's role, its lock (PIN or Password), and, to an
-admin, when one of its devices was last seen. A manager's list holds only the users it keeps.
+The list shows each profile's role and its **Lock**: whether switching to it asks for a PIN or a
+password. An admin also sees when each profile was last seen on a device. A manager sees only the
+users it looks after.
 
 ## Choose what a profile sees
 
-Open the profile from Settings › Profiles. **What it sees** has three settings.
+Open the profile from Settings › Profiles. **What it sees** has three settings. Choose **Save
+access** when you are done.
 
 | Setting | What it does |
 |---|---|
-| Every library, including ones added later | On by default. Off, it sees only the libraries ticked. |
-| Certificates | The oldest age rating it may watch: Any (the default), Suitable for all, or Up to 6, 7, 9, 12, 13, 15, 16, 17 or 18. |
-| Titles with no certificate | Shown (the default) or Hidden, for a profile with a certificate limit. |
+| Every library, including ones added later | On by default. Turn it off to tick only the libraries this profile may see. |
+| Certificates | The highest age rating it may watch. **Any** by default, **Suitable for all**, or **Up to** 6, 7, 9, 12, 13, 15, 16, 17 or 18. |
+| Titles with no certificate | **Shown** by default, or **Hidden**. Only matters when you set a certificate limit. |
 
-A title's certificate is read in the country set under Settings › Server › General, as
-**Certification country**; a certificate already found keeps the country it came from.
+![A profile's page, with What it sees open](../images/access-profile-what-it-sees.webp)
 
-```sh
-curl -X PUT https://photon.example/api/v1/admin/profiles/$PROFILE/access \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"libraries": [], "max_age": 12, "unrated": "block"}'
-```
-
-An empty `libraries` is every library; `max_age` is an age up to 21, or `null` for any.
+Age ratings are read for the country set as **Certification country** under
+Settings › Server › General.
 
 ## Change or remove a profile
 
-On the profile's own page, the **Profile** card renames it, changes its role, and sets a **New
-password**; leave that empty to keep the password as it is. Setting a password here leaves the
-profile's devices signed in: sign them out under [Devices](07-devices-and-playback.md) where that
-is why you changed it.
+On the profile's page, the **Profile** card renames it, changes its role, and sets a new password.
+Leave the password empty to keep the old one.
 
-**Remove this profile** signs out its devices, revokes any API keys it made, and forgets what it
-has watched.
+> **Note:** Setting a password here leaves the profile's devices signed in. If you changed it
+> because someone else knows it, also sign those devices out under
+> [Devices](07-devices-and-playback.md).
 
-```sh
-curl -X PATCH https://photon.example/api/v1/admin/profiles/$PROFILE \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"role": "manager"}'
-```
+**Remove this profile** signs out its devices, cancels any API keys it made, and forgets
+everything it has watched. This can't be undone.
 
 ## Passwords
 
-A profile changes its own password under Settings › Profile, giving its **Current password** and
-the new one twice. Changing it signs out every other device signed in as that profile, since a
-password changed for fear of who knows it must not leave them signed in; its API keys stay. A
-profile made by a [sign-in provider](02-single-sign-on.md) has no password until it sets one here,
-leaving the current password empty.
+Each person changes their own password under Settings › Profile. They type their **Current
+password**, then the new one twice. This signs out every other device on that profile, in case
+someone else knew the old password. Its API keys keep working.
 
-Passwords are kept as argon2id hashes. Signing in is limited per address and per name, so guessing
-one profile's password from many addresses is slowed too: after ten attempts, an address waits six
-seconds between tries and a name six minutes.
+A profile made by a [sign-in service](02-single-sign-on.md) has no password at first. Its owner can
+add one on the same page, leaving **Current password** empty.
+
+After ten wrong passwords, the server makes whoever is trying wait before they can try again.
 
 ### A forgotten password
 
-**Forgot your password?** on the login page resets one, from a device on the server's local
-networks:
+You can reset a password from a device on your home network.
 
-1. Enter the profile's name and choose **Get a code**. The page answers the same whether or not a
-   profile has that name.
-2. The server writes the code to its log, on the server named on the page, where only whoever runs
-   the server reads it: `docker compose logs server` in Docker.
-3. Enter the code and a new password within 30 minutes. Every device on the profile is signed out.
+1. On the login page, choose **Forgot your password?**.
+2. Type the profile's name and choose **Get a code**.
+3. The code is written to the server's log, not shown on screen, so only whoever runs the server
+   can read it. With Docker, run `docker compose logs server` to see it.
+4. Type the code and a new password within 30 minutes.
 
-Asking for codes and guessing them is limited to five tries, then one a minute, per address.
+Every device on that profile is signed out.
 
 ## PINs and switching profile
 
-A device signed in as one profile can switch to another of the household: **Switch profile** in the
-profile menu opens **Who's watching?**, which lists every profile. Switching to a profile asks for
-its lock:
+On a shared device, anyone can change who is watching. Choose **Switch profile** in the profile
+menu to open **Who's watching?**, then pick a profile.
 
-- A **user** with a PIN asks for its PIN, of 4 to 6 digits, which its owner sets under
-  Settings › Profile. Without one, it asks for its password.
-- An **admin** or a **manager** always asks for its password, so a household profile cannot come to
-  keep others by guessing a few digits.
+- A **user** with a PIN asks for its PIN (4 to 6 digits). Each person sets their own PIN under
+  Settings › Profile. A user with no PIN asks for its password.
+- An **admin** or **manager** always asks for its password. That way nobody can take over the
+  household's settings by guessing a few digits.
 
-An admin cannot set another profile's PIN: a PIN is its owner's. Each device may try five switches,
-then one every three minutes.
+## Good to know
 
-```sh
-curl -X POST https://photon.example/api/v1/profiles/$PROFILE/switch \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"secret": "1234"}'
-```
-
-Every endpoint is listed in the [API reference](../08-reference/03-api.md).
+- Only the profile's owner can set its PIN. An admin can't.
+- If an admin changes a manager's user into a manager or admin, that profile is then the admin's to
+  look after. If a manager is removed, its users pass to the admin.
+- After five wrong PINs or passwords on **Who's watching?**, a device must wait three minutes
+  between tries.

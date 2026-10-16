@@ -1,195 +1,76 @@
 ---
 title: "Run several servers"
-summary: "Run several photon-server nodes on one database and Valkey as one server, and decide what each node serves and transcodes."
+summary: "Share the work of one photon-server between several machines, and decide what each one does."
 ---
 
-Several photon-server processes, nodes, can serve one household as one server. They share its
-PostgreSQL and Valkey, and each reads the libraries from its own mount of the media. A client may
-reach any node: a request for a stream another node runs is handed to that node, so each node
-must be reachable by the others.
+Most households need one server. If you want to share the work, such as a small always-on machine for everyday streaming and a second machine with a graphics card for converting, you can run several photon-server processes as one server. On this page each of them is called a **node**.
 
-## Setting a node up
+The nodes share one database and one Valkey (a small store for what is happening right now). Your apps can connect to any node. If someone's film is being made on another node, the node they connected to passes the request on, so every node must be able to reach the others.
 
-A node joins the server as it starts, given only the database and Valkey. Settings › Server sets
-where the other nodes reach it, such as `http://10.0.0.5:8640`, which it takes up at once
-(`PATCH /api/v1/admin/nodes/{id}`). A node without one is never handed another node's requests
-and is not listed as running.
+## Add a node
 
-A node finds what it encodes video with as it starts: VideoToolbox on a Mac, NVENC, then QSV and
-VAAPI on each render node, the first that encodes a test picture, or software where none does, or
-what an admin sets of it (see Encoder below). Its log says which, and Settings › Server shows it.
+1. On the new machine, mount your media at **the same path** as on the first. A library remembers its folders by their path.
+2. Start photon-server with the same database and Valkey addresses as the first node. It joins the server by itself.
+3. In Docker, give each machine its own name with `PHOTON_HOSTNAME` in `.env`. Otherwise every node is called `photon`. See the [Docker Compose reference](../08-reference/02-docker-compose.md).
+4. Open Settings › Server › Dashboard. In the **Server** card, open the new node's actions menu (**…**) and choose **Settings…**.
+5. Set **Address** to where the other nodes reach it, such as `http://10.0.0.5:8640`, and choose **Save**.
 
-A node is named by its host. In a container, give each machine's its own name: the compose
-file in [install with Docker](../01-get-started/02-install-docker.md) takes `PHOTON_HOSTNAME`, `photon` where it is unset.
+The node now appears in the **Server** card, with its encoder and how busy it is, such as "3 of 8".
 
-Every node mounts the media at the same path, as a library is kept by its path. Node addresses
-belong on a private network: the nodes trust what they hand each other.
+![The Server card on the dashboard, listing two nodes with their encoders and how many each is transcoding](../images/playback-nodes.webp)
 
-Settings › Libraries checks a library's root on every node running, at
-`POST /api/v1/admin/libraries/{id}/check`: the node asked asks each other at
-`GET /api/v1/internal/libraries/{id}/check`, signed as a remux is. Each stats and lists the root,
-and says it is `readable`, with how many entries it holds, or `missing`, `not_a_folder`, `denied`
-or `unreadable`, with why; one that has not finished in 5 seconds, as on a hung network mount, is
-`timed_out`, and a node that does not answer within 7 is `unreachable_node`.
+> **Important:** Keep node addresses on a private network. The nodes trust what they pass each other.
 
-## What each node tells the others
-
-Every 15 seconds, and as soon as a transcode starts or ends, each node tells the others, through
-Valkey, where it is reached, what it encodes with (its encoder, whether it encodes HEVC, whether
-it can draw styled subtitles into video), and how many videos it encodes now of at most how
-many. A node that says nothing for 45 seconds is no longer listed.
-
-Settings › Server lists the nodes, what each transcodes with, and how busy each that is up is:
-"3 of 8", with those transcoding for downloads said beneath.
-
-## Where a transcode is made
-
-A playback that encodes its video is made on the node with the most of its transcode slots free, of
-those whose encoder can make it (HEVC, or styled subtitles drawn in, where it asks for them): of
-those with a slot free and room for another stream, one in the group of the node the client asks
-first, then one set to transcode first, then one with no limit. The node a client asks decides how
-the copy is played with that node's encoder, starts the playback there, and answers the client: the
-client's every request for its HLS, to whichever node, is handed to the node making it. A node with
-no slot free by the time it is asked refuses, as does one with less than 2 GiB free in its
-transcode cache, and the next is asked; when every one refuses, the client is told the server is
-transcoding as many videos at once as it may, and how many that is across the nodes, or, where one
-was short of space, that it is full or short of space.
-
-A playback that copies its video, or is played as it is, is delivered by the node asked, or by
-another the client reaches itself, at its local or public URL, that is not drained: of those, one
-with room for another stream first, of them one in the node asked's group, then one set to serve
-only, then the one delivering the fewest streams, the node asked before another delivering as many.
-Nodes set to serve only, with public or local URLs, are so the cluster's proxies. A node with no
-room by the time it is asked refuses, and the next is asked; when every one refuses, the client is
-told `stream_limit`. A Jellyfin app's file played as it is is delivered by the node it asks: the
-app fetches it before it says it plays, so there is no playback yet to place.
-
-A playback delivered by a node the client reaches itself, for a client that asked another, is
-fetched from there: the client is answered its files or playlist at the node's local or public URL,
-not through the node it asked, and the web app's pages may fetch streams from every node's URLs a
-node tells the others of as the page loads. A Jellyfin app is sent to the HLS another node runs, by
-a redirect to its signed address there, where the app reaches it; one it reaches at neither URL is
-handed it through the node it asked.
-
-Nodes ask each other at `POST /api/v1/internal/playbacks/{id}/delivery`, signed with a key derived
-from the cluster's own, which no client is ever given: a request no node signed, or changed on
-its way, is refused. The route is no client's, and in no description of the API.
+A node without an **Address** is never passed another node's work, and is not listed as running.
 
 ## What each node does
 
-Settings › Server lists every node there is or has been. Each one's settings say what it does,
-taken up at once, as it runs:
+Each node's **Settings…** dialog says what it does. Changes take effect at once, without a restart.
 
-- **Role.** *All* serves clients and transcodes, as every node of a server of one does. *Serve
-  only* serves clients and transcodes nothing, for its playbacks or for downloads: a node without
-  a GPU beside one with. *Transcode first* is asked for a transcode before any node of all, where
-  it has a slot free, and serves clients too: the GPU node.
-- **Streams at once.** How many playbacks a node delivers at once, transcoded or not, or no
-  limit, as its uplink carries. Lowering it stops none playing; none is begun until there is room.
+![A node's Settings dialog, showing Role, Address, Streams at once and Transcodes at once](../images/playback-node-settings.webp)
 
-- **Egress.** How fast a node sends its players media, in megabits a second, or no limit. Each
-  node measures it every 5 seconds, from what it sent since; at or past its limit, it has no room
-  for another stream, as one delivering as many as it may has none. A stream begun since it last
-  measured is not yet in it, so a node may pass its limit by those.
-
-- **Encoder.** Automatic, as above, or an acceleration and the device it is on: the render node
-  of a VAAPI or QSV one, such as `/dev/dri/renderD129`, or the index of an NVIDIA card, such as
-  `1` for the second, none being the first. The node tries it as it is set, and encodes the next
-  video it starts on it; one encoding keeps what it began on, so a seek never changes it. One that
-  encodes no test picture is passed over for the first that does, and its log says so.
-
-- **Transcodes at once.** Worked out from the node's encoder, or set: at most a number, or no
-  limit. Lowering it stops none playing; none is begun until there is room under it.
-
-- **Public URL.** Where clients reach a node themselves, such as `https://gpu.example.com`, or
-  none. A stream it delivers for another node's client is fetched from there; without one, its
-  streams go through the node the client asked.
-
-- **Local URL.** Where clients on the server's local networks (Settings › Network) reach a node
-  themselves, such as `http://192.168.1.5:8640`, or its tailnet address where the tailnet is among
-  them, or none. Such a client fetches a stream from there, and from its public URL where it has
-  none; a client elsewhere, from its public URL.
-
-- **Group.** Any name, such as the site a node runs at, or none. A node asks those of its own
-  group to transcode first, where one has a slot free, so a stream need not cross between sites;
-  a node with no group is in the group of those with none.
-
-- **Drain.** A node drained takes no new stream to transcode and no download's conversion; its
-  streams play to their end, and the others take new ones. Settings › Server says "Draining · 3
-  streams left", then "Drained · safe to stop", with any note an admin left for the others.
-  Resume gives it work again.
-
-- **Forget.** A node not running stays listed, "Not running · last seen 3 days ago", with what an
-  admin set of it, for it may only be restarting. One taken away for good is forgotten; should it
-  start again, it joins as a new node does. A node running cannot be forgotten.
-
-A node told to stop (SIGTERM, as `docker compose stop` and Kubernetes send) drains itself: it
-tells the others at once, takes no new work, and goes on serving and telling the others where it
-is until its streams have played to their end, two hours at most, before it stops. Meanwhile
-`/health` answers 503, so a balancer that asks sends it no new clients, while what its streams
-ask, landing on the others, is handed on to it. Telling it to
-stop again stops it at once. Its container must be given that long to stop: the deploy folder's
-compose file gives it `stop_grace_period: 2h`, and Kubernetes' `terminationGracePeriodSeconds`
-does the same there.
-
-A new node starts as all, its limit worked out, taking work. A node set to serve only, asked to transcode by
-another told of it before the change, refuses, and the next is asked.
-
-Worked out, a node encoding in software takes one transcode per four logical CPUs, and one
-encoding on hardware takes 8. That is the NVENC sessions a GeForce card's driver allowed at once
-before 591.44 (December 2025); 591.44 and later allow 12, per machine rather than per card,
-which a limit set to 12 takes up. NVIDIA's professional cards, and the other encoders, have no
-such count: they are bound by how fast they encode, which at 1080p reaches 8 or more. A
-download's conversion takes a transcode slot only while no playback wants it.
-
-## When a node is missing
-
-A node missing from Settings › Server, while running, has stopped telling the others of itself:
-it has no address, or it cannot reach Valkey. Its log says which.
-
-## Metrics
-
-Every node answers `GET /metrics` on its own port in Prometheus' text format, to a client on the
-server's local networks (Settings › Network; this machine's and the private ones where none is
-set) and to no other: anyone else is answered 404. Behind a proxy, a client is known by the
-proxy's `X-Forwarded-For` only where Settings › Network trusts it. Scrape each node.
-
-Each node says what is its own:
-
-| Metric | |
+| Setting | What it does |
 |---|---|
-| `photon_build_info{version}` | the version it runs |
-| `photon_node_info{node, role, state}` | its name, its role, and `active` or `draining` |
-| `photon_playbacks{method}` | the playbacks it serves now: `direct`, `remux` or `transcode` |
-| `photon_playback_starts_total{method}` | playbacks started by clients asking it, wherever each is served; one refused is not counted |
-| `photon_sent_bytes_total{delivery}` | the bytes of media it sent players, a `file` as it is or HLS `segment`s (playlists among them), by either API; a request handed to another node is counted there |
-| `photon_transcodes{kind}` | the videos it encodes now, for a `playback` or a download's `conversion` |
-| `photon_transcode_slots` | the most it encodes at once; absent with no limit |
-| `photon_transcode_refusals_total{reason}` | plays it refused for want of a node to encode them: every one `full`, `no_space` where one or more was short of space in its transcode cache, or `no_encoder` taking it |
-| `photon_hls_segment_wait_seconds` | how long a request for a segment waits for it to be made |
-| `photon_jobs_finished_total{kind, outcome}` | runs of jobs it ended, `done` or `failed` (a failed run may be tried again) |
+| Role | **Serves and transcodes**, the default, does everything. **Serves only** sends films but converts nothing, for a machine with no graphics card. **Transcodes first** is asked to convert before any other node while it has room: the machine with the graphics card. |
+| Address | Where the other nodes reach this one. |
+| Public URL | Where apps outside your home reach this node directly, such as `https://gpu.example.com`. Empty: its streams go through the node the app connected to. |
+| Local URL | Where apps at home reach this node directly, such as `http://192.168.1.5:8640`. |
+| Group | Any name, such as the place a node runs. A node asks those in its own group to convert first, so a stream need not travel between sites. Empty by default. |
+| Streams at once | How many films the node sends at once, converted or not. No limit by default. |
+| Egress | How fast the node may send, in megabits a second, to suit its upload. No limit by default. |
+| Transcodes at once | How many films it converts at once. See [transcoding](01-transcoding.md#how-many-at-once). |
+| Encoder | What it converts on. See [transcoding](01-transcoding.md#choose-it-yourself). |
 
-beside the Go runtime's (`go_*`) and the process's (`process_*`). These are summed across the
-nodes: `sum(photon_playbacks)` is every playback going on.
+Lowering a limit never stops a film already playing. It only stops new ones starting until there is room.
 
-What the nodes share, in Postgres and Valkey, is said only by the node holding the scheduler lease,
-the one running scheduled tasks; the others leave it out, so it is never counted twice:
+## Where a film is converted
 
-| Metric | |
-|---|---|
-| `photon_jobs{kind, state}` | the jobs queued, running, to run again (`rerun`) and `dead` |
-| `photon_jobs_oldest_due_seconds{kind}` | how long the queued job due now and waiting longest has been due; one held for the maintenance window, or put off until later, is left out |
-| `photon_task_last_finished_timestamp_seconds{task, result}` | when each task's last run ended, `succeeded`, `failed` or `cancelled`; absent while it runs again |
-| `photon_nodes{state}` | the nodes running, `active` or `draining`, the leader among them whether or not it has an address |
-| `photon_library_items{kind}` | the films (`movie`) and episodes in the libraries |
-| `photon_library_bytes{kind}` | the bytes those films and episodes hold on disk: each file once however many paths or episode numbers read it, and every copy, hd or ultra hd, of a title; a missing file holds none |
+When a film needs converting, the server picks the node with the most free transcode slots, among those whose hardware can do the job. It prefers, in order, a node in the same group, then a node set to **Transcodes first**. If a node is full or short of space, the next is asked. If every node is full, the person watching is told the server is busy.
 
-The lease passes to another node within 20 seconds of its holder stopping, so for a moment either
-or neither says them. Query them across instances with `max without(instance)`, as
-`max without(instance) (photon_jobs{state="queued"})`, never `sum`.
+A film that isn't converted is sent by the node the app connected to, or by another node with more room, preferring one set to **Serves only**.
 
-An admin is answered what every node's metrics say now, and what the nodes share, at
-`GET /api/v1/admin/metrics`: the node asked asks each other at `GET /api/v1/internal/metrics`,
-signed as a remux is, and lists one that does not answer within 2 seconds as unreachable.
-Settings › Server › Metrics shows it, asked every 5 seconds while the page is in view, with the
-last ten minutes drawn beside it; history longer than that is Prometheus'.
+## Take a node out of service
+
+To stop a node without cutting anyone off:
+
+1. In the node's actions menu (**…**), choose **Drain…** and confirm.
+2. The node takes no new films. The ones it is sending play to the end. The dashboard says "Draining · 3 streams left".
+3. When it says "Drained · safe to stop", stop the node.
+
+Choose **Resume** to give it work again.
+
+Stopping a node any other way, such as `docker compose stop`, drains it too. It waits up to two hours for its streams to end. Stop it a second time to stop it at once. The Compose file gives it those two hours with `stop_grace_period: 2h`.
+
+A node that isn't running stays listed as "Not running · last seen 3 days ago", in case it is only restarting. If you have removed it for good, choose **Forget…** in its menu.
+
+## Check a library on every node
+
+On Settings › Server › Libraries, choosing **Check access** beside a library checks its folder on every running node. Each says whether it can read the folder, or why not: missing, not a folder, no permission, or no answer, as with a network drive that has stopped responding.
+
+## Good to know
+
+- If a running node is missing from the dashboard, it either has no **Address** or can't reach Valkey. Its log says which.
+- Each node keeps its own identity in its cache folder. A node given an empty cache folder joins as a new node.
+- Everything one node is told by the others is refreshed every 15 seconds. A node silent for 45 seconds is no longer listed as running.
+- Scheduled tasks run on one node at a time. If it stops, another takes over within 20 seconds.
+- With Prometheus, scrape every node. Some figures, such as the job queue and library size, are reported by only one node at a time, so combine them across nodes with `max without(instance)`, not `sum`. See [health, logs and metrics](../07-maintain/03-health-and-metrics.md).
