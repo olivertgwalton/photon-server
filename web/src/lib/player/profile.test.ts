@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { browserProfile, type Capabilities } from "./profile.ts";
+import { browserProfile, type Capabilities, castProfile } from "./profile.ts";
 
 const t = (codecs: string) => `video/mp4; codecs="${codecs}"`;
 const a = (codecs: string) => `audio/mp4; codecs="${codecs}"`;
@@ -133,5 +133,23 @@ test("a browser draws the text files it is given, ASS where JASSUB runs and PGS 
 	).toEqual([
 		{ codec: "subrip", delivery: "sidecar" },
 		{ codec: "webvtt", delivery: "sidecar" },
+	]);
+});
+
+test("a Chromecast is sent HLS of eight-bit H.264 and stereo AAC at the quality chosen", () => {
+	const profile = castProfile(8000);
+	expect(profile.containers).toEqual([]);
+	expect(
+		profile.video.map((v) => [v.codec, v.max_level, v.max_bit_depth]),
+	).toEqual([["h264", 42, 8]]);
+	expect(profile.video[0]?.ranges).toBeUndefined();
+	expect(profile.audio.every((x) => (x.max_channels ?? 0) <= 2)).toBe(true);
+	expect(profile.max_bitrate_kbps).toBe(8000);
+});
+
+test("a Chromecast shows plain text subtitles and has the rest drawn in", () => {
+	expect(castProfile(0).subtitles?.map((s) => s.codec)).toEqual([
+		"subrip",
+		"webvtt",
 	]);
 });

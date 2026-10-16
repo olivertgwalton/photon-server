@@ -9,6 +9,6 @@
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"sourceMap": true,
-		"types": ["bun", "$app/types"]
+		"types": ["bun", "$app/types", "chromecast-caf-sender"]
 	}
 }
