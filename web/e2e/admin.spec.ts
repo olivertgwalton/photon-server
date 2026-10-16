@@ -211,8 +211,14 @@ test("a library is added from a folder found by browsing the server", async ({
 	).not.toBeChecked();
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Holds" }).click();
-	await page.getByRole("option", { name: "Films", exact: true }).click();
+	await page
+		.getByRole("option", { name: "Films and shows", exact: true })
+		.click();
+	const added = page.waitForRequest(
+		(r) => r.method() === "POST" && r.url().endsWith("/admin/libraries"),
+	);
 	await page.getByRole("button", { name: "Add and scan" }).click();
+	expect((await added).postDataJSON()).toMatchObject({ kind: "mixed" });
 	await expect(page).toHaveURL("/settings/server/libraries");
 
 	await page.getByRole("link", { name: "Edit Films" }).click();
