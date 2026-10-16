@@ -370,6 +370,26 @@ test("an episode goes on to the next and back to the one before", async ({
 	await expect(page).toHaveURL("/play/p-ep");
 });
 
+test("another episode of the show is picked from the player", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/titles/t-show/playable", async (route) => {
+		const card = async (id: string) =>
+			(await page.request.get(`/api/v1/titles/${id}`)).json();
+		await route.fulfill({
+			json: { items: [await card("p-ep"), await card("p-ep2")] },
+		});
+	});
+	await logIn(page, "/play/p-ep");
+	await page.getByRole("button", { name: "Episodes" }).click();
+	const list = page.getByRole("dialog", { name: "Episodes" });
+	await expect(list.locator("a[aria-current]")).toContainText("Pilot");
+	await expectAccessible(page);
+	await list.getByRole("link", { name: /Second/ }).click();
+	await expect(page).toHaveURL("/play/p-ep2");
+	await expect(list).not.toBeAttached();
+});
+
 test("a playlist plays in its order, not the show's", async ({ page }) => {
 	await logIn(page);
 	const list = await (

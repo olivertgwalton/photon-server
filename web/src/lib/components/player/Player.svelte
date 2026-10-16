@@ -50,6 +50,7 @@ import { qualities, skips } from "#lib/player/words.js";
 import { queued } from "#lib/queue.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
+import EpisodeList from "./EpisodeList.svelte";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
 import UpNext from "./UpNext.svelte";
@@ -178,6 +179,7 @@ let remoteAvailable = $state(false);
 let resting = $state(false);
 let menuOpen = $state(false);
 let infoOpen = $state(false);
+let episodesOpen = $state(false);
 let frames = $state.raw<VideoPlaybackQuality>();
 let next = $state.raw<Schemas["Card"]>();
 let upNextHidden = $state(false);
@@ -218,7 +220,7 @@ const upNext = $derived(
 		position >= (credits ? credits.start_ms / 1000 : duration - 30),
 );
 const chromeHidden = $derived(
-	resting && !paused && !menuOpen && !infoOpen && !refusal,
+	resting && !paused && !menuOpen && !infoOpen && !episodesOpen && !refusal,
 );
 const heading = $derived(fullTitle(title, title.show?.title));
 
@@ -628,7 +630,14 @@ function wake() {
 // Jellyfin's and YouTube's keys. A control under focus keeps Space, Enter
 // and its arrows; the seek bar's arrows are the player's.
 function keydown(event: KeyboardEvent) {
-	if (event.metaKey || event.ctrlKey || event.altKey || infoOpen || menuOpen)
+	if (
+		event.metaKey ||
+		event.ctrlKey ||
+		event.altKey ||
+		infoOpen ||
+		menuOpen ||
+		episodesOpen
+	)
 		return;
 	const target = event.target as HTMLElement;
 	const seekBar = target.matches?.("input[aria-label='Seek']");
@@ -975,6 +984,14 @@ onMount(() => {
 					>
 						<NextIcon class="size-5" />
 					</Button>
+				{/if}
+				{#if title.show}
+					<EpisodeList
+						bind:open={episodesOpen}
+						show={title.show}
+						current={title.id}
+						portal={root}
+					/>
 				{/if}
 				<Button
 					variant="ghost"
