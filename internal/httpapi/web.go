@@ -45,8 +45,9 @@ func NewWeb(files fs.FS, objectOrigin func() string, streamOrigins func(ctx cont
 	// Everything the app fetches comes from this origin. hls.js plays from blob: media sources and
 	// runs its worker from a blob:. JASSUB compiles libass's WebAssembly, which 'wasm-unsafe-eval'
 	// allows without allowing eval. Vite inlines small fonts as data:. The page's own inline script
-	// is allowed by its hash.
-	scripts := []string{"'self'", "'wasm-unsafe-eval'"}
+	// is allowed by its hash. Google's Cast sender, which casts to a Chromecast, is loaded from
+	// Google, as its guide loads it, and its paths alone are allowed.
+	scripts := []string{"'self'", "'wasm-unsafe-eval'", castSender}
 	for _, m := range inlineScript.FindAllSubmatch(index, -1) {
 		sum := sha256.Sum256(m[1])
 		scripts = append(scripts, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
@@ -72,6 +73,11 @@ func (web *Web) csp(ctx context.Context) string {
 		"form-action 'self'", "frame-ancestors 'none'",
 	}, "; ")
 }
+
+// castSender is where the Cast sender's loader, its framework, and Chrome on Android's own sender
+// are fetched from.
+const castSender = "https://www.gstatic.com/cv/js/sender/ https://www.gstatic.com/cast/sdk/libs/sender/ " +
+	"https://www.gstatic.com/eureka/clank/"
 
 // candidatePosters are the hosts a match candidate's poster is drawn from straight, as the
 // built-in providers give it, to tell like-named titles apart by; a plugin's from elsewhere is not.
