@@ -160,6 +160,16 @@ func (s *Service) Authenticate(ctx context.Context, token string) (domain.Sessio
 	return session, nil
 }
 
+// Session finds an unexpired session by its id, for an address signed in its name: signing the
+// device out ends what the address may fetch too.
+func (s *Service) Session(ctx context.Context, id uuid.UUID) (domain.Session, error) {
+	session, _, err := s.store.SessionByID(ctx, id, time.Now())
+	if errors.Is(err, store.ErrNotFound) {
+		return domain.Session{}, ErrUnauthenticated
+	}
+	return session, err
+}
+
 func (s *Service) SignOut(ctx context.Context, session uuid.UUID) error {
 	return s.store.DeleteSession(ctx, session)
 }

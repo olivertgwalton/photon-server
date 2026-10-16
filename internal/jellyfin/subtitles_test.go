@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -307,10 +308,10 @@ func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
 	}
 	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
 	pgs, ass := subtitleStream(t, src, pgsStream), subtitleStream(t, src, assStream)
-	if pgs["DeliveryMethod"] != "External" || pgs["DeliveryUrl"] != base+"2/0/Stream.pgssub?ApiKey=pst_ada" {
+	if pgs["DeliveryMethod"] != "External" || keyed(pgs["DeliveryUrl"].(string)) != base+"2/0/Stream.pgssub?ApiKey=KEY" {
 		t.Errorf("the PGS stream: %v", pgs)
 	}
-	if ass["DeliveryMethod"] != "External" || ass["DeliveryUrl"] != base+"3/0/Stream.ass?ApiKey=pst_ada" {
+	if ass["DeliveryMethod"] != "External" || keyed(ass["DeliveryUrl"].(string)) != base+"3/0/Stream.ass?ApiKey=KEY" {
 		t.Errorf("the ASS stream: %v", ass)
 	}
 	// The app fetches it with no header, as libbitsub does.
@@ -341,9 +342,11 @@ func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
 	if src["SupportsDirectPlay"] != true || src["TranscodingUrl"] != nil {
 		t.Fatalf("the web app's source with a SubRip stream chosen: %v, want the file as it is", src)
 	}
-	address := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/" + strconv.Itoa(srtStream) + "/0/Stream.vtt?ApiKey=pst_ada"
-	if srt := subtitleStream(t, src, srtStream); srt["DeliveryMethod"] != "External" || srt["DeliveryUrl"] != address {
-		t.Errorf("the SubRip stream: %v, want it at %s", srt, address)
+	want := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/" + strconv.Itoa(srtStream) + "/0/Stream.vtt?ApiKey=KEY"
+	srt := subtitleStream(t, src, srtStream)
+	address, _ := srt["DeliveryUrl"].(string)
+	if srt["DeliveryMethod"] != "External" || keyed(address) != want {
+		t.Errorf("the SubRip stream: %v, want it at %s", srt, want)
 	}
 	if w := serve(api, http.MethodGet, address, "", ""); w.Code != http.StatusOK || !strings.HasPrefix(w.Body.String(), "WEBVTT") ||
 		!strings.Contains(w.Body.String(), "00:01.000 --> 00:03.000\nHello.") {
@@ -386,7 +389,7 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 	}
 	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
 	for index, want := range map[int]string{srtFile: strconv.Itoa(srtFile) + "/0/Stream.vtt", assFile: strconv.Itoa(assFile) + "/0/Stream.ass", pgsFile: strconv.Itoa(pgsFile) + "/0/Stream.pgssub", vobSubFile: strconv.Itoa(vobSubFile) + "/0/Stream.vobsub"} {
-		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || keyed(s["DeliveryUrl"].(string)) != base+want+"?ApiKey=KEY" {
 			t.Errorf("the file at %d: %v, want it at %s", index, s, want)
 		}
 	}
@@ -416,7 +419,7 @@ func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
 	}
 	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
 	for index, want := range map[int]string{srtFile: strconv.Itoa(srtFile) + "/0/Stream.vtt", assFile: strconv.Itoa(assFile) + "/0/Stream.ass", assStream: strconv.Itoa(assStream) + "/0/Stream.ass", vobSubFile: strconv.Itoa(vobSubFile) + "/0/Stream.vobsub"} {
-		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || keyed(s["DeliveryUrl"].(string)) != base+want+"?ApiKey=KEY" {
 			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
 		}
 	}
@@ -447,7 +450,7 @@ func TestJellyfinWebDrawsAStyledOrPictureSubtitleBesideHLS(t *testing.T) {
 		if tc := plannedFor(t, api, transcoding); tc.Video.Encode != nil {
 			t.Errorf("HLS with %d chosen: %+v, want the video copied, nothing drawn in", index, tc)
 		}
-		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || s["DeliveryUrl"] != base+want+"?ApiKey=pst_ada" {
+		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || keyed(s["DeliveryUrl"].(string)) != base+want+"?ApiKey=KEY" {
 			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
 		}
 	}
@@ -473,4 +476,12 @@ func TestAnAppStartsOnTheSubtitleItChose(t *testing.T) {
 			t.Errorf("%s chosen: the default is %v, want %d", c.name, src["DefaultSubtitleStreamIndex"], c.subtitle)
 		}
 	}
+}
+
+var mediaKeys = regexp.MustCompile(`ApiKey=psm_[^&"\s]+`)
+
+// keyed is an address with each media key in it written KEY, as a key is signed until a moment
+// that moves; an address carrying the app's own token is left as it is, and fails to match.
+func keyed(address string) string {
+	return mediaKeys.ReplaceAllString(address, "ApiKey=KEY")
 }

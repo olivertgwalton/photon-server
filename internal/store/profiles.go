@@ -153,6 +153,16 @@ func (s *Store) CreateSession(ctx context.Context, n NewSession) (uuid.UUID, err
 
 // SessionByToken finds the unexpired session holding a token, with when it was last seen.
 func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.Time) (domain.Session, time.Time, error) {
+	return s.session(ctx, `d.token_hash = $1`, tokenHash, now)
+}
+
+// SessionByID finds an unexpired session by its id, with when it was last seen.
+func (s *Store) SessionByID(ctx context.Context, id uuid.UUID, now time.Time) (domain.Session, time.Time, error) {
+	return s.session(ctx, `d.id = $1`, id, now)
+}
+
+// session finds the unexpired session where says, of $1, as of $2.
+func (s *Store) session(ctx context.Context, where string, key any, now time.Time) (domain.Session, time.Time, error) {
 	var (
 		id                uuid.UUID
 		kind              domain.SessionKind
@@ -166,7 +176,7 @@ func (s *Store) SessionByToken(ctx context.Context, tokenHash []byte, now time.T
 		SELECT d.id, d.kind, d.profile_id, p.name, p.role, p.avatar_id, d.device_name, d.client, d.last_seen_at,
 			d.sign_in_provider, d.sign_in_subject
 		FROM device_sessions d JOIN profiles p ON p.id = d.profile_id
-		WHERE d.token_hash = $1 AND (d.expires_at IS NULL OR d.expires_at > $2)`, tokenHash, now).
+		WHERE `+where+` AND (d.expires_at IS NULL OR d.expires_at > $2)`, key, now).
 		Scan(&id, &kind, &p.ID, &p.Name, &p.Role, &p.AvatarID, &device, &client, &lastSeenAt, &provider, &subject)
 	if err != nil {
 		return domain.Session{}, time.Time{}, found(err)

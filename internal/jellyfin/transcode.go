@@ -80,8 +80,8 @@ type transcode struct {
 }
 
 // transcodingURL keeps a play session's plan and answers where an app fetches its HLS: relative, as
-// every app puts its own base before it, and carrying the app's token, as no app sends one with
-// media.
+// every app puts its own base before it, and carrying a key for the app's token, as no app sends
+// one with media.
 func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transcode, copyVideo, copyAudio *bool) (string, error) {
 	b, err := json.Marshal(planned{Profile: auth.SessionOf(r.Context()).Profile.ID, Item: item, Transcode: t})
 	if err != nil {
@@ -90,7 +90,7 @@ func (a *API) transcodingURL(r *http.Request, item, session uuid.UUID, t transco
 	if err := a.svc.Plans.SavePlan(r.Context(), session, b, transcodeFor); err != nil {
 		return "", err
 	}
-	q := url.Values{"PlaySessionId": {guid(session)}, "MediaSourceId": {guid(t.Version)}, "ApiKey": {appOf(r).Token}}
+	q := url.Values{"PlaySessionId": {guid(session)}, "MediaSourceId": {guid(t.Version)}, "ApiKey": {a.mediaKey(r)}}
 	// Jellyfin's web app falls back again on an error until its stream's address refuses both
 	// copies, which Jellyfin's own address never says.
 	for name, allowed := range map[string]*bool{"allowVideoStreamCopy": copyVideo, "allowAudioStreamCopy": copyAudio} {
@@ -152,7 +152,7 @@ func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID
 	}
 	w.Header().Set("Content-Type", res.Type)
 	if res.File == nil {
-		a.write(w, []byte(carryQuery(res.Text, playlistQuery(r), name)))
+		a.write(w, []byte(carryQuery(res.Text, a.playlistQuery(r), name)))
 		return
 	}
 	defer res.File.Close()
@@ -267,7 +267,7 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 		return
 	}
 	exp, sig := a.svc.Signer.Token(subject, time.Now().Add(time.Hour))
-	appQuery := playlistQuery(r)
+	appQuery := a.playlistQuery(r)
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
@@ -293,14 +293,14 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 	proxy.ServeHTTP(w, r)
 }
 
-// playlistQuery is what an address a playlist names carries of the app's query: its token, as no
-// app sends one with what it fetches of HLS, and its play session. The plan, its signature and the
-// copy only open the session, at the master; carried on every line, they made a playlist about
-// ten times its size.
-func playlistQuery(r *http.Request) string {
+// playlistQuery is what an address a playlist names carries of the app's query: a key in place of
+// its token, as no app sends one with what it fetches of HLS, and its play session. The plan, its
+// signature and the copy only open the session, at the master; carried on every line, they made a
+// playlist about ten times its size.
+func (a *API) playlistQuery(r *http.Request) string {
 	q := url.Values{"PlaySessionId": {query(r, "PlaySessionId")}}
-	if key := query(r, "ApiKey"); key != "" {
-		q.Set("ApiKey", key)
+	if query(r, "ApiKey") != "" {
+		q.Set("ApiKey", a.mediaKey(r))
 	}
 	return q.Encode()
 }
