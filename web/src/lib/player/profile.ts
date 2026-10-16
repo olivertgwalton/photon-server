@@ -180,6 +180,35 @@ export function browserProfile(
 	};
 }
 
+// The profile sent with a play on a Chromecast, through Google's Default
+// Media Receiver, whose device the sender cannot ask: what every Chromecast
+// since the third generation plays. Always HLS, which the receiver fetches
+// from the server itself; stereo AAC, as Dolby is only passed through to a TV
+// that may not take it; WebVTT renditions, and other subtitles drawn into the
+// video.
+export function castProfile(maxBitrateKbps: number): ClientProfile {
+	return {
+		containers: [],
+		video: [
+			{
+				codec: "h264",
+				profiles: ["Constrained Baseline", "Baseline", "Main", "High"],
+				max_level: 42,
+				max_bit_depth: 8,
+			},
+		],
+		audio: [
+			{ codec: "aac", max_channels: 2 },
+			{ codec: "mp3", max_channels: 2 },
+		],
+		max_bitrate_kbps: maxBitrateKbps,
+		subtitles: [
+			{ codec: "subrip", delivery: "sidecar" },
+			{ codec: "webvtt", delivery: "sidecar" },
+		],
+	};
+}
+
 // What this browser answers. A type counts where the video element plays it
 // and, unless the browser plays HLS itself, where hls.js can feed it to the
 // element through media sources too.
