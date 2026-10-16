@@ -46,10 +46,10 @@ $effect(() => connectLive(admin ? stream : undefined));
 	/>
 	<Sidebar.Inset>
 		<header
-			class="border-line bg-ground/85 sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-3 backdrop-blur-xl sm:px-4"
+			class="border-line bg-ground/85 sticky top-0 z-20 grid h-14 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 border-b px-3 backdrop-blur-xl sm:px-4"
 		>
 			<Sidebar.Trigger />
-			<search class="mx-auto w-full max-w-md">
+			<search>
 				<form action="/search" class="relative">
 					<SearchIcon
 						class="text-ink-3 pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
@@ -66,23 +66,25 @@ $effect(() => connectLive(admin ? stream : undefined));
 					>
 				</form>
 			</search>
-			{#if data.me.role === "admin"}
-				<svelte:boundary pending={nothing} onerror={console.error}>
-					{@const ActivityMenu = (
-						await import("#lib/components/ActivityMenu.svelte")
-					).default}
-					<ActivityMenu libraries={data.libraries} />
-				</svelte:boundary>
-				<a
-					href="/settings/server"
-					class="hover:bg-raise text-ink grid size-9 place-items-center rounded-full outline-none"
-					aria-label="Server dashboard"
-				>
-					<GaugeIcon class="size-5" />
-				</a>
-			{/if}
-			<NotificationMenu />
-			<ProfileMenu profile={data.me} />
+			<div class="flex items-center justify-end gap-3">
+				{#if data.me.role === "admin"}
+					<svelte:boundary pending={nothing} onerror={console.error}>
+						{@const ActivityMenu = (
+							await import("#lib/components/ActivityMenu.svelte")
+						).default}
+						<ActivityMenu libraries={data.libraries} />
+					</svelte:boundary>
+					<a
+						href="/settings/server"
+						class="hover:bg-raise text-ink grid size-9 place-items-center rounded-full outline-none"
+						aria-label="Server dashboard"
+					>
+						<GaugeIcon class="size-5" />
+					</a>
+				{/if}
+				<NotificationMenu />
+				<ProfileMenu profile={data.me} />
+			</div>
 		</header>
 		<main
 			id="main"
