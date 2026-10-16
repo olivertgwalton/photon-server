@@ -115,11 +115,12 @@ func TestDetailsInTheClientsLanguageAndCountry(t *testing.T) {
 		Genres: []string{"Drama"}, Studios: []string{"HBO"},
 		IDs:     map[domain.Provider]string{domain.ProviderTVDB: "79126", domain.ProviderIMDb: "tt0306414", domain.ProviderTMDB: "1438"},
 		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "https://artworks.thetvdb.com/banners/posters/79126-2.jpg"}},
-		// Billed in TVDB's order, the host left out, and a picture TVDB has none of not given.
+		// Billed in TVDB's order, the host among the cast, and a picture TVDB has none of not given.
 		Credits: []domain.Credit{
 			{Name: "Sonja Sohn", IDs: map[domain.Provider]string{domain.ProviderTVDB: "292"}, Kind: domain.CreditActor, Role: "Kima Greggs"},
 			{Name: "Dominic West", IDs: map[domain.Provider]string{domain.ProviderTVDB: "289"}, Kind: domain.CreditActor, Role: "Jimmy McNulty", Photo: "https://artworks.thetvdb.com/banners/person/289/a.jpg"},
 			{Name: "Lance Reddick", IDs: map[domain.Provider]string{domain.ProviderTVDB: "290"}, Kind: domain.CreditActor, Role: "Cedric Daniels"},
+			{Name: "A Host", IDs: map[domain.Provider]string{domain.ProviderTVDB: "291"}, Kind: domain.CreditActor, Role: "Himself"},
 		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {

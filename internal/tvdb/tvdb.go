@@ -191,10 +191,10 @@ type character struct {
 	Sort   int    `json:"sort"`
 }
 
-// creditKinds are TVDB's people types of those credited; a type left out (a host, a musical
-// guest, the crew at large) is not credited.
+// creditKinds are TVDB's people types of those credited; a type left out (a musical guest, the
+// crew at large) is not credited. A host is the cast of a show presented, as TMDB bills them.
 var creditKinds = map[string]domain.CreditKind{
-	"Actor": domain.CreditActor, "Guest Star": domain.CreditGuestStar, "Director": domain.CreditDirector,
+	"Actor": domain.CreditActor, "Host": domain.CreditActor, "Guest Star": domain.CreditGuestStar, "Director": domain.CreditDirector,
 	"Writer": domain.CreditWriter, "Producer": domain.CreditProducer, "Executive Producer": domain.CreditProducer,
 	"Creator": domain.CreditCreator, "Composer": domain.CreditComposer,
 }
