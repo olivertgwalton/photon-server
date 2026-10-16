@@ -22,7 +22,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// profiles signs in by token as the profile it names.
+// profiles signs in by token as the profile it names, in a session with the profile's id.
 type profiles map[string]domain.Profile
 
 func (profiles) SignIn(context.Context, string, string, auth.Device) (string, domain.Profile, error) {
@@ -31,7 +31,16 @@ func (profiles) SignIn(context.Context, string, string, auth.Device) (string, do
 
 func (p profiles) Authenticate(_ context.Context, token string) (domain.Session, error) {
 	if pr, ok := p[token]; ok {
-		return domain.Session{Kind: domain.SessionDevice, Profile: pr}, nil
+		return domain.Session{ID: pr.ID, Kind: domain.SessionDevice, Profile: pr}, nil
+	}
+	return domain.Session{}, auth.ErrUnauthenticated
+}
+
+func (p profiles) Session(_ context.Context, id uuid.UUID) (domain.Session, error) {
+	for _, pr := range p {
+		if pr.ID == id {
+			return domain.Session{ID: id, Kind: domain.SessionDevice, Profile: pr}, nil
+		}
 	}
 	return domain.Session{}, auth.ErrUnauthenticated
 }

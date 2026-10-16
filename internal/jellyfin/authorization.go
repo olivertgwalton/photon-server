@@ -1,9 +1,14 @@
 package jellyfin
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 // app is what a Jellyfin app says of itself, and the token it holds.
@@ -77,4 +82,47 @@ func query(r *http.Request, name string) string {
 		}
 	}
 	return ""
+}
+
+// mediaKeyPrefix marks a media key, which signedIn never takes: a key that leaked from a log
+// fetches media, and only until it lapses.
+const mediaKeyPrefix = "psm_"
+
+// mediaKey stands for the app's token in an address the server hands it for its player: Jellyfin
+// writes the app's own token there, which never lapses and ends up in every log on the way. It is
+// signed in the session's name until a play session's plan lapses, and is good while the session
+// is.
+func (a *API) mediaKey(r *http.Request) string {
+	id := auth.SessionOf(r.Context()).ID.String()
+	exp, sig := a.svc.Signer.Token(mediaKeyPrefix+id, time.Now().Add(transcodeFor))
+	return mediaKeyPrefix + id + "." + exp + "." + sig
+}
+
+// media lets a request through as signedIn does, or with a media key.
+func (a *API) media(next http.HandlerFunc) http.HandlerFunc {
+	signedIn := a.signedIn(next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		key, ok := strings.CutPrefix(appOf(r).Token, mediaKeyPrefix)
+		if !ok {
+			signedIn(w, r)
+			return
+		}
+		id, rest, _ := strings.Cut(key, ".")
+		exp, sig, _ := strings.Cut(rest, ".")
+		session, err := uuid.Parse(id)
+		if err != nil || !a.svc.Signer.Valid(mediaKeyPrefix+id, exp, sig, time.Now()) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		s, err := a.svc.Auth.Session(r.Context(), session)
+		switch {
+		case errors.Is(err, auth.ErrUnauthenticated):
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		case err != nil:
+			a.internal(w, r, err)
+			return
+		}
+		next(w, r.WithContext(auth.WithSession(r.Context(), s)))
+	}
 }

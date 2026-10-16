@@ -88,7 +88,7 @@ func (a *API) trickplayFile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
 	if strings.EqualFold(name, "tiles.m3u8") {
 		w.Header().Set("Content-Type", "application/x-mpegURL")
-		a.write(w, []byte(tiles(t, url.Values{"MediaSourceId": {guid(c.Version)}, "ApiKey": {appOf(r).Token}}.Encode())))
+		a.write(w, []byte(tiles(t, url.Values{"MediaSourceId": {guid(c.Version)}, "ApiKey": {a.mediaKey(r)}}.Encode())))
 		return
 	}
 	number, isSheet := strings.CutSuffix(name, ".jpg")

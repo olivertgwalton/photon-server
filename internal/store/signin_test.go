@@ -271,3 +271,33 @@ func TestAnAccountIsCheckedByOneNodeAndASignInSinceStands(t *testing.T) {
 		t.Errorf("the session is still signed in: %v", err)
 	}
 }
+
+// A session is found by its id until it lapses or is signed out, as a signed address names it.
+func TestASessionIsFoundByItsIDWhileItLasts(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleUser, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := func(token string, expires time.Time) uuid.UUID {
+		id, err := s.CreateSession(ctx, NewSession{Kind: domain.SessionDevice, ProfileID: ada.ID, TokenHash: []byte(token), ExpiresAt: &expires})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	tv, lapsed := open("tv", time.Now().Add(time.Hour)), open("old", time.Now().Add(-time.Minute))
+	if got, _, err := s.SessionByID(ctx, tv, time.Now()); err != nil || got.ID != tv || got.Profile.ID != ada.ID {
+		t.Errorf("the TV's session: %+v, %v", got, err)
+	}
+	if _, _, err := s.SessionByID(ctx, lapsed, time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a lapsed session: %v, want ErrNotFound", err)
+	}
+	if err := s.DeleteSession(ctx, tv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SessionByID(ctx, tv, time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a session signed out: %v, want ErrNotFound", err)
+	}
+}

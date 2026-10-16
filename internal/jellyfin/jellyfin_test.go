@@ -94,6 +94,15 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 	return domain.Session{}, auth.ErrUnauthenticated
 }
 
+func (f fakeAuth) Session(ctx context.Context, id uuid.UUID) (domain.Session, error) {
+	for _, token := range []string{"pst_device", "pst_key"} {
+		if s, err := f.Authenticate(ctx, token); err == nil && s.ID == id {
+			return s, nil
+		}
+	}
+	return domain.Session{}, auth.ErrUnauthenticated
+}
+
 func (f fakeAuth) SignOut(_ context.Context, id uuid.UUID) error {
 	*f.signedOut = append(*f.signedOut, id)
 	return nil
@@ -704,5 +713,40 @@ func TestAnAppIsToldWhetherItIsOnTheServersNetwork(t *testing.T) {
 		if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != tc.want {
 			t.Errorf("from %s: %d %s, want %s", tc.from, w.Code, w.Body, tc.want)
 		}
+	}
+}
+
+// An address handed an app's player carries a media key, not the app's token: it opens media while
+// its session lasts, and nothing else.
+func TestAMediaKeyOpensMediaAloneWhileItsSessionLasts(t *testing.T) {
+	api, _, _, _ := newAPI()
+	keyOf := func(session domain.Session) string {
+		return api.mediaKey(httptest.NewRequestWithContext(auth.WithSession(t.Context(), session), http.MethodGet, "/", nil))
+	}
+	device, err := api.svc.Auth.Authenticate(t.Context(), "pst_device")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := keyOf(device)
+	media := api.media(func(w http.ResponseWriter, r *http.Request) {
+		api.write(w, []byte(auth.SessionOf(r.Context()).ID.String()))
+	})
+	for _, tc := range []struct {
+		name, key string
+		want      int
+	}{
+		{"the key", key, http.StatusOK},
+		{"the app's own token", "pst_device", http.StatusOK},
+		{"the key, altered", key + "x", http.StatusUnauthorized},
+		{"a key of a session signed out", keyOf(domain.Session{ID: uuid.NewV7(), Profile: ada}), http.StatusUnauthorized},
+	} {
+		w := httptest.NewRecorder()
+		media(w, httptest.NewRequest(http.MethodGet, "/Videos/x/stream?ApiKey="+tc.key, nil))
+		if w.Code != tc.want || w.Code == http.StatusOK && w.Body.String() != device.ID.String() {
+			t.Errorf("%s: %d %q, want %d", tc.name, w.Code, w.Body, tc.want)
+		}
+	}
+	if w := serve(api, http.MethodGet, "/Users/Me?ApiKey="+key, "", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("the key beyond media: %d, want 401", w.Code)
 	}
 }

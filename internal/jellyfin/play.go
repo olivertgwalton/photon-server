@@ -173,7 +173,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if (req.EnableDirectPlay == nil || *req.EnableDirectPlay) && p.playsDirectly(c, video, sound, picked, limit) {
 		// So Jellyfin's web app falls back to HLS where the copy fails to play, as Jellyfin answers.
 		src.SupportsTranscoding = takesHLS
-		deliverSubtitles(r, src, item, c, p, nil, true)
+		deliverSubtitles(a.mediaKey(r), src, item, c, p, nil, true)
 		return
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
@@ -223,7 +223,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
 	src.TranscodingURL = address
-	deliverSubtitles(r, src, item, c, p, d.Video.Encode, false)
+	deliverSubtitles(a.mediaKey(r), src, item, c, p, d.Video.Encode, false)
 }
 
 // transcodingContainers are Jellyfin's names for the segments of each format.

@@ -197,12 +197,12 @@ func readsOutAs(codec, name, format string) bool {
 }
 
 // deliverSubtitles says how the app is sent each subtitle of a copy, as Jellyfin does once it knows
-// the app's profile: External, at the address Jellyfin gives it, carrying the app's token, as an
-// app sends none with what it fetches for its player, where it draws the subtitle beside the
+// the app's profile: External, at the address Jellyfin gives it, carrying key for the app's token,
+// as an app sends none with what it fetches for its player, where it draws the subtitle beside the
 // video: a stream read out of the file, or a file beside it, in the format the app takes it in.
 // Encode where it is drawn in, the subtitle burn draws, or is a file the app draws in no format.
 // A subtitle is fetched whole, from the start, beside HLS too: that keeps the film's own clock.
-func deliverSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile, burn *domain.VideoEncode, direct bool) {
+func deliverSubtitles(key string, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile, burn *domain.VideoEncode, direct bool) {
 	for i, m := range src.MediaStreams {
 		_, s := subtitleOf(c, &m.Index)
 		if s == nil {
@@ -228,7 +228,7 @@ func deliverSubtitles(r *http.Request, src *mediaSource, item uuid.UUID, c store
 		case format != "":
 			src.MediaStreams[i].DeliveryMethod = "External"
 			src.MediaStreams[i].DeliveryURL = "/Videos/" + guid(item) + "/" + src.ID + "/Subtitles/" + strconv.Itoa(m.Index) + "/0/Stream." + format +
-				"?" + url.Values{"ApiKey": {appOf(r).Token}}.Encode()
+				"?" + url.Values{"ApiKey": {key}}.Encode()
 		}
 	}
 }

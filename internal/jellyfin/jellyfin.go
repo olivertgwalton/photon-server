@@ -36,6 +36,7 @@ const (
 type authenticator interface {
 	auth.Authenticator
 	PairingStatus(ctx context.Context, deviceCode string) (kv.PairingState, auth.Pairing, error)
+	Session(ctx context.Context, id uuid.UUID) (domain.Session, error)
 }
 
 // parts opens the parts of copies for players to fetch.
@@ -211,15 +212,15 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 		"GET /Items/{itemId}/Intros", "GET /Users/{userId}/Items/{itemId}/Intros")
 	// Playing: a title's copies, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
-	a.handle(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
-	a.handle(a.video, "GET /Videos/{itemId}/{file}")
+	a.handleMedia(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
+	a.handleMedia(a.video, "GET /Videos/{itemId}/{file}")
 	a.handle(a.sending(playback.DeliveryFile, a.download), "GET /Items/{itemId}/Download")
 	a.handle(a.endEncoding, "DELETE /Videos/ActiveEncodings")
-	a.handle(a.subtitle,
+	a.handleMedia(a.subtitle,
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}",
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{start}/{file}")
 	a.handle(a.mediaSegments, "GET /MediaSegments/{itemId}")
-	a.handle(a.trickplayFile, "GET /Videos/{itemId}/Trickplay/{width}/{file}")
+	a.handleMedia(a.trickplayFile, "GET /Videos/{itemId}/Trickplay/{width}/{file}")
 	a.handle(a.reported(reportProgress), "POST /Sessions/Playing", "POST /Sessions/Playing/Progress")
 	a.handle(a.reported(reportStopped), "POST /Sessions/Playing/Stopped")
 	a.handle(noContent, "POST /Sessions/Playing/Ping")
@@ -250,6 +251,12 @@ func (a *API) sending(d playback.Delivery, h http.HandlerFunc) http.HandlerFunc 
 // anyone.
 func (a *API) handle(h http.HandlerFunc, patterns ...string) {
 	a.anyone(a.signedIn(h), patterns...)
+}
+
+// handleMedia answers the patterns with h for a signed-in profile, or for an address the server
+// signed for one's player (mediaKey).
+func (a *API) handleMedia(h http.HandlerFunc, patterns ...string) {
+	a.anyone(a.media(h), patterns...)
 }
 
 func (a *API) anyone(h http.HandlerFunc, patterns ...string) {

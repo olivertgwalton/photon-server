@@ -412,7 +412,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	src := info.MediaSources[0]
 	transcoding, _ := src["TranscodingUrl"].(string)
 	if src["SupportsDirectPlay"] != false || src["TranscodingSubProtocol"] != "hls" || !strings.HasPrefix(transcoding, "/videos/"+guid(heat)+"/master.m3u8?") ||
-		!strings.Contains(transcoding, "ApiKey=pst_ada") || !strings.Contains(transcoding, "PlaySessionId="+info.PlaySessionID) {
+		!strings.Contains(keyed(transcoding), "ApiKey=KEY") || !strings.Contains(transcoding, "PlaySessionId="+info.PlaySessionID) {
 		t.Fatalf("an MKV for a player that opens none: %v", src)
 	}
 	if len(remuxes.opened) != 0 || len(plays.started) != 0 {
@@ -437,14 +437,16 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	if card, ok := plays.started[session]; !ok || card.Version.ID != copyID {
 		t.Errorf("the playback the dashboard shows: %v", plays.started)
 	}
-	// Past the master, an address carries the app's token and its play session alone: the plan and
-	// its signature open the session, and on every line they made a playlist many times its size.
-	query := "ApiKey=pst_ada&PlaySessionId=" + info.PlaySessionID
-	if !strings.Contains(master.Body.String(), "video.m3u8?"+query+"\n") {
-		t.Errorf("the master's variant does not carry the app's token and session alone:\n%s", master.Body)
+	// Past the master, an address carries a key for the app's token and its play session alone: the
+	// plan and its signature open the session, and on every line they made a playlist many times its
+	// size.
+	query := "ApiKey=KEY&PlaySessionId=" + info.PlaySessionID
+	if !strings.Contains(keyed(master.Body.String()), "video.m3u8?"+query+"\n") {
+		t.Errorf("the master's variant does not carry a key and the session alone:\n%s", master.Body)
 	}
-	variant := fetch("/videos/" + guid(heat) + "/video.m3u8?" + query)
-	if body := variant.Body.String(); !strings.Contains(body, `URI="init0.mp4?`+query+`"`) || !strings.Contains(body, "0.m4s?"+query+"\n") ||
+	variantAt, _, _ := strings.Cut(master.Body.String()[strings.Index(master.Body.String(), "video.m3u8?"):], "\n")
+	variant := fetch("/videos/" + guid(heat) + "/" + variantAt)
+	if body := keyed(variant.Body.String()); variant.Code != http.StatusOK || !strings.Contains(body, `URI="init0.mp4?`+query+`"`) || !strings.Contains(body, "0.m4s?"+query+"\n") ||
 		strings.Contains(body, "Plan=") {
 		t.Errorf("the variant's addresses do not carry the app's token and session alone:\n%s", variant.Body)
 	}

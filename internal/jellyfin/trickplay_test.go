@@ -89,10 +89,10 @@ func TestAnAppFetchesAFilmsTrickplaySheets(t *testing.T) {
 	base := "/Videos/" + guid(heat) + "/Trickplay/320/"
 	w := serve(api, http.MethodGet, base+"tiles.m3u8?MediaSourceId="+guid(copyID)+"&ApiKey=pst_ada", "", "")
 	want := "#EXTM3U\n#EXT-X-TARGETDURATION:1000\n#EXT-X-VERSION:7\n#EXT-X-MEDIA-SEQUENCE:1\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-IMAGES-ONLY\n" +
-		"#EXTINF:1000,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n0.jpg?ApiKey=pst_ada&MediaSourceId=" + guid(copyID) + "\n" +
-		"#EXTINF:500,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n1.jpg?ApiKey=pst_ada&MediaSourceId=" + guid(copyID) + "\n" +
+		"#EXTINF:1000,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n0.jpg?ApiKey=KEY&MediaSourceId=" + guid(copyID) + "\n" +
+		"#EXTINF:500,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n1.jpg?ApiKey=KEY&MediaSourceId=" + guid(copyID) + "\n" +
 		"#EXT-X-ENDLIST\n"
-	if w.Code != http.StatusOK || w.Body.String() != want {
+	if w.Code != http.StatusOK || keyed(w.Body.String()) != want {
 		t.Errorf("the playlist: %d\n%s\nwant\n%s", w.Code, w.Body, want)
 	}
 	if w := serve(api, http.MethodGet, base+"1.jpg?ApiKey=pst_ada&MediaSourceId="+guid(copyID), "", ""); w.Code != http.StatusOK ||
