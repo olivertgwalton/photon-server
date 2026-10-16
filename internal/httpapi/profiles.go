@@ -47,6 +47,11 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.allowed(w, r, switchesPerSession, "switch:session:"+auth.SessionOf(r.Context()).ID.String()) {
 		return
 	}
+	// A guess at a profile's secret is also counted against that profile, as a sign-in is against
+	// a name, or a member minting sessions by approving their own pairings guesses without limit.
+	if req.Secret != "" && !a.allowed(w, r, auth.SignInsPerName, "switch:profile:"+target.String()) {
+		return
+	}
 	profile, err := a.svc.Auth.SwitchProfile(r.Context(), auth.SessionOf(r.Context()), target, req.Secret)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(profile))

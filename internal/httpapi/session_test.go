@@ -248,6 +248,26 @@ func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
 	}
 }
 
+// Every request here is a session of its own, as a member minting sessions would be.
+func TestGuessingAProfilesSecretIsLimitedAcrossSessions(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: &fakeLimiter{}, Events: &fakeEvents{}})
+	guess := func() int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles/"+oliver.ID.String()+"/switch", strings.NewReader(`{"secret":"1234"}`))
+		req.Header.Set("Authorization", "Bearer "+memberToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for range auth.SignInsPerName.Burst {
+		if code := guess(); code != http.StatusForbidden {
+			t.Fatalf("a wrong guess inside the limit: %d, want 403", code)
+		}
+	}
+	if code := guess(); code != http.StatusTooManyRequests {
+		t.Errorf("guessing past the limit from fresh sessions: %d, want 429", code)
+	}
+}
+
 func TestChangingYourOwnPassword(t *testing.T) {
 	limits := &fakeLimiter{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Limits: limits, Events: &fakeEvents{}})
