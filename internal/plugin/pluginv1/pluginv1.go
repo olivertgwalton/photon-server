@@ -2,7 +2,7 @@
 // GET {base}/manifest, and takes and answers at POST {base}/{capability}/v{version}/{call} for each
 // capability its manifest names. Anything a plugin written against it could notice changing is a
 // new version, in a package of its own; adding an optional field, a capability or a version of
-// one is not. docs/plugins.md is its reference.
+// one is not. docs/08-reference/06-write-a-plugin.md is its reference.
 package pluginv1
 
 import (

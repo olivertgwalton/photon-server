@@ -38,7 +38,7 @@ jobs:
           MEDIA_DIR="$(mktemp -d)"
           export MEDIA_DIR
           # The install guide's compose file is the one users run.
-          awk '/^```yaml compose.yml$/{f=1;next} f&&/^```$/{exit} f' docs/install.md > compose.yml
+          awk '/^```yaml compose.yml$/{f=1;next} f&&/^```$/{exit} f' docs/01-get-started/02-install-docker.md > compose.yml
           docker compose up -d --wait server
           for _ in $(seq 30); do
             if [ "$(curl -s -o /dev/null -w '%{http_code}' localhost:8640/health)" = 204 ]; then

@@ -1,4 +1,9 @@
-# Photon beside Jellyfin, Plex and silo
+---
+title: "Photon beside Jellyfin, Plex and silo"
+summary: "How fast photon-server answers, and what memory and CPU it takes, measured beside Jellyfin, Plex and silo on one machine."
+---
+
+We ran photon-server, Jellyfin, Plex and silo side by side on one Mac mini, with the same library of 358 films and about 85 shows. We timed how long each takes to answer the requests its own app sends for everyday pages (Home, a library, a film, a show, search), how many it can answer a second, and how much memory and processor each uses. Playback was not measured. photon-server answered fastest on almost every page and handled the most requests a second. Its own process uses little memory, but with its database it uses more in total than Jellyfin or Plex, which keep everything in one process.
 
 ## Setup
 

@@ -378,7 +378,7 @@ function ago(seconds: number, now: number) {
 <p class="text-ink-3 text-xs">
 	This page keeps the last ten minutes only. History over time comes from
 	scraping each node's <code class="font-mono">/metrics</code> with Prometheus,
-	as the Metrics section of
-	<code class="font-mono">docs/cluster.md</code>
+	as
+	<code class="font-mono">docs/07-maintain/03-health-and-metrics.md</code>
 	describes.
 </p>

@@ -1,4 +1,7 @@
-# Plugins
+---
+title: "Write a plugin"
+summary: "The protocol a plugin speaks to describe, list and stream titles for photon-server, version 1."
+---
 
 A plugin is a web service that tells photon-server about films and shows, keeps lists of them, or
 streams them. It can be written in any language and run anywhere the server can reach over HTTP.
@@ -7,42 +10,10 @@ TheTVDB and MDBList: it is listed among the providers, takes settings such as an
 library can take metadata from it, ranked where the admin puts it, or play the streams it offers
 for the titles of a list.
 
+This page is the protocol, for a plugin's author. Registering a plugin, setting it up, ranking it
+in a library and removing it are the admin's, in [Install and manage plugins](../06-integrations/01-plugins.md).
+
 This is protocol version **1**.
-
-## Registering one
-
-```sh
-curl -X POST https://photon.example/api/v1/admin/plugins \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"url": "http://films-plugin.local:9000"}'
-```
-
-The server reads `GET {url}/manifest` and refuses a plugin whose protocol it does not speak, whose
-manifest is not valid, or whose id is already registered. The plugin is then the provider
-`plugin:{id}`:
-
-```sh
-# its settings, as the manifest declares them
-curl -X PATCH https://photon.example/api/v1/admin/providers/plugin:films \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"settings": {"api_key": "…"}}'
-
-# a library that takes its metadata after any NFO beside the files and before TMDB, and its pictures
-curl -X PATCH https://photon.example/api/v1/admin/libraries/$FILMS_ID \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"sources": [{"kind": "movie",
-    "metadata": [{"source": "nfo", "enabled": true}, {"source": "plugin:films", "enabled": true}, {"source": "tmdb", "enabled": true}],
-    "images": [{"source": "plugin:films", "enabled": true}, {"source": "tmdb", "enabled": true}]}]}'
-```
-
-| Route | |
-|---|---|
-| `GET /api/v1/admin/plugins` | the registered plugins |
-| `POST /api/v1/admin/plugins` | register the plugin at `{"url": "…"}` |
-| `POST /api/v1/admin/plugins/{id}/refresh` | read its manifest again, after it gains a capability or a setting |
-| `DELETE /api/v1/admin/plugins/{id}` | forget it, its settings and its place in each library's sources |
-
-Removing a plugin keeps what it said about titles as it is, ranked below every source a library
-takes, so the next source to speak of a field replaces it; its pictures come after every other
-source's.
 
 ## Calls
 
@@ -135,9 +106,9 @@ than none.
 Say what is known of the title matched. For a show, `seasons` are the seasons the server wants,
 numbered in `order` (`aired`, `dvd`, `absolute`, or `group` as the TMDB episode group whose id is
 `episode_group` numbers them); describe those you have, and none in an order you cannot number
-them in. A `season_scope` of
-`every`, which a show in a remote library has no files to number seasons by is asked with, wants
-every season you have; `numbered`, or none, wants those in `seasons`.
+them in. A `season_scope` of `every`, which a show in a remote library has no files to number
+seasons by is asked with, wants every season you have; `numbered`, or none, wants those in
+`seasons`.
 
 ```json
 {
@@ -407,7 +378,7 @@ its own session for the profile from then on.
 A plugin that acts on the server, rather than only answering it (one that scans a folder a
 download landed in, or sets an episode's markers), calls its API as any client does, with an API
 key: declare the server's address and a key as settings, the key `secret`, and the admin makes one
-under **Settings → API keys** and sets both.
+under Settings › Server › API keys and sets both.
 
 ```json
 "settings": [
@@ -445,21 +416,6 @@ otherwise (a field renamed, removed or newly required, a changed meaning) is a n
 
 ## Stremio addons
 
-A [Stremio addon](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs) is a plugin too,
-registered by the address of its `manifest.json`, as Stremio installs one:
-
-```sh
-curl -X POST https://photon.example/api/v1/admin/plugins \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"url": "https://aiostreams.example/stremio/…/manifest.json", "protocol": "stremio"}'
-```
-
-Its id is its manifest's, made lower case letters, digits and hyphens
-(`com.stremio.torrentio.addon` is `plugin:com-stremio-torrentio-addon`), unless `id` names it: two
-installs of one addon, configured apart, need ids of their own. An addon's configuration is in its
-address, a debrid service's key among it, so the address is kept as a secret is: nothing shows it
-past its host, and no error names it.
-
-Each of its catalogs of films (`movie`) or shows (`series`) is a list, named as `{type}/{id}` as the
-manifest lists it: `movie/top`. A list collection can hold a catalog's titles, as it does an
-MDBList list's. A catalog is read a page at a time, by `skip`, to 500 titles.
+A [Stremio addon](https://github.com/Stremio/stremio-addon-sdk/tree/master/docs) is registered as a
+plugin too, and speaks Stremio's own protocol rather than this one: its catalogs are lists and its
+streams are copies a remote library plays. See [Stremio addons](../06-integrations/03-stremio.md).
