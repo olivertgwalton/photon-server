@@ -1,4 +1,7 @@
-# Photon beside Jellyfin, Plex and silo
+---
+title: "Photon beside Jellyfin, Plex and silo"
+summary: "How fast photon-server answers, and what memory and CPU it takes, measured beside Jellyfin, Plex and silo on one machine."
+---
 
 ## Setup
 

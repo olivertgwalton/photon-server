@@ -1,4 +1,7 @@
-# Running several servers
+---
+title: "Run several servers"
+summary: "Run several photon-server nodes on one database and Valkey as one server, and decide what each node serves and transcodes."
+---
 
 Several photon-server processes, nodes, can serve one household as one server. They share its
 PostgreSQL and Valkey, and each reads the libraries from its own mount of the media. A client may
@@ -17,7 +20,7 @@ VAAPI on each render node, the first that encodes a test picture, or software wh
 what an admin sets of it (see Encoder below). Its log says which, and Settings › Server shows it.
 
 A node is named by its host. In a container, give each machine's its own name: the compose
-file in [install.md](install.md) takes `PHOTON_HOSTNAME`, `photon` where it is unset.
+file in [install with Docker](../01-get-started/02-install-docker.md) takes `PHOTON_HOSTNAME`, `photon` where it is unset.
 
 Every node mounts the media at the same path, as a library is kept by its path. Node addresses
 belong on a private network: the nodes trust what they hand each other.

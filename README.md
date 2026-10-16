@@ -25,13 +25,13 @@ https://github.com/user-attachments/assets/6e3b3d94-8076-4d41-aa39-83e45a2d9409
 
 ## Performance
 
-[docs/comparison.md](docs/comparison.md) measures photon against Jellyfin, Plex and silo on one host
+[docs/08-reference/04-performance.md](docs/08-reference/04-performance.md) measures photon against Jellyfin, Plex and silo on one host
 with one library: API latency and throughput, page data and memory.
 
 ## Deploy
 
 The image is `ghcr.io/olivertgwalton/photon-server` (amd64 and arm64), run with PostgreSQL and
-Valkey by the compose file in [docs/install.md](docs/install.md). Each release also has a Flatpak
+Valkey by the compose file in [docs/01-get-started/02-install-docker.md](docs/01-get-started/02-install-docker.md). Each release also has a Flatpak
 for Linux and a macOS app in a DMG, each carrying its own database, and archives for Linux, macOS
 and Windows, which the same guide installs.
 
@@ -57,8 +57,8 @@ docker compose start server
 
 ### Several servers
 
-Several servers can share one PostgreSQL and Valkey; see [docs/cluster.md](docs/cluster.md).
-Plugins are described in [docs/plugins.md](docs/plugins.md).
+Several servers can share one PostgreSQL and Valkey; see [docs/05-playback/04-several-servers.md](docs/05-playback/04-several-servers.md).
+Plugins are described in [docs/06-integrations/02-write-a-plugin.md](docs/06-integrations/02-write-a-plugin.md).
 
 ## Develop
 
