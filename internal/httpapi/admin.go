@@ -223,7 +223,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Kind == "" || req.Name == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "name is set and kind is movies or shows")
+		writeProblem(w, a.logger, codeInvalidBody, "name and kind are set")
 		return
 	}
 	var lib domain.Library

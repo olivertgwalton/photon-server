@@ -12,12 +12,14 @@ export async function addLibrary(
 	form: FormData,
 ): Promise<components["schemas"]["AdminLibrary"] | undefined> {
 	const api = client();
+	// One of the kinds the form offers, which are the server's own; it refuses any other.
+	const kind = String(form.get("kind")) as components["schemas"]["LibraryKind"];
 	const added = await api.POST("/api/v1/admin/libraries", {
 		body:
 			form.get("media") === "remote"
 				? {
 						name: textAsTyped(form, "name"),
-						kind: form.get("kind") === "shows" ? "shows" : "movies",
+						kind,
 						media: "remote",
 						list: form.get("list_source")
 							? {
@@ -30,7 +32,7 @@ export async function addLibrary(
 					}
 				: {
 						name: textAsTyped(form, "name"),
-						kind: form.get("kind") === "shows" ? "shows" : "movies",
+						kind,
 						root: textAsTyped(form, "root"),
 					},
 	});
