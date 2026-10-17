@@ -68,7 +68,7 @@ type libraryAdmin interface {
 	AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error)
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
-	ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, error)
+	ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, store.Changed, error)
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
 	LibraryCounts(ctx context.Context) (map[uuid.UUID]domain.TitleCounts, error)

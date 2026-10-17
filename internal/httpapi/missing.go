@@ -16,10 +16,11 @@ func (a *API) forgetMissingCopies(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	forgotten, err := a.svc.Libraries.ForgetMissingCopies(r.Context(), id)
+	forgotten, changed, err := a.svc.Libraries.ForgetMissingCopies(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
 	}
+	a.svc.Events.Changed(r.Context(), id, changed)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, forgottenJSON{Copies: forgotten})
 }
 

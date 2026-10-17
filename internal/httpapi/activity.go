@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
@@ -16,6 +17,8 @@ type activityLog interface {
 
 type eventHub interface {
 	Raise(ctx context.Context, e domain.Event)
+	// Changed tells a library's titles that were added, changed or removed outside a scan.
+	Changed(ctx context.Context, lib uuid.UUID, titles store.Changed)
 	Subscribe() (<-chan domain.Event, func())
 	Scans(ctx context.Context) ([]domain.ScanProgress, error)
 	Backlogs(ctx context.Context) ([]domain.Backlog, error)

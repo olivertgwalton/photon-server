@@ -300,30 +300,46 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 	return changed, err
 }
 
-// forgetMissing takes a library's copies on no disk out of it, answering how many went and
-// leaving the titles that held nothing else to removeEmptied.
-func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) (int64, error) {
-	tag, err := tx.Exec(ctx, `DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL`, lib)
-	return tag.RowsAffected(), err
+// forgetMissing takes a library's copies on no disk out of it, answering the title of each copy
+// that went and leaving the titles that held nothing else to removeEmptied.
+func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
+	return queryColumn[uuid.UUID](ctx, tx,
+		`DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL RETURNING item_id`, lib)
 }
 
 // ForgetMissingCopies takes a library's copies on no disk out of it, and the titles left with
 // nothing with them, as an admin asks of a library that keeps them: Plex's Empty Trash. It answers
-// how many copies went.
-func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, error) {
+// how many copies went and the titles that lost one or went with them, to tell as a scan's are. A
+// remote library, which no scan ends for and whose copies are its provider's offers, is refused.
+func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, Changed, error) {
 	var forgotten int64
+	changed := Changed{}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := hasLibrary(ctx, tx, lib); err != nil {
+		var media domain.LibraryMedia
+		if err := tx.QueryRow(ctx, `SELECT media FROM libraries WHERE id = $1`, lib).Scan(&media); err != nil {
+			return found(err)
+		}
+		if media == domain.MediaRemote {
+			return ErrRemoteUntouched
+		}
+		lost, err := forgetMissing(ctx, tx, lib)
+		if err != nil {
 			return err
 		}
-		var err error
-		if forgotten, err = forgetMissing(ctx, tx, lib); err != nil {
+		forgotten = int64(len(lost))
+		removed, err := removeEmptied(ctx, tx, lib)
+		if err != nil {
 			return err
 		}
-		_, err = removeEmptied(ctx, tx, lib)
-		return err
+		changed.add(domain.TitleRemoved, removed...)
+		for _, id := range lost {
+			if !slices.Contains(removed, id) {
+				changed.add(domain.TitleUpdated, id)
+			}
+		}
+		return nil
 	})
-	return forgotten, err
+	return forgotten, changed, err
 }
 
 // removeEmptied removes a library's films, episodes and extras left with no copy, the seasons and

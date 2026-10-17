@@ -94,13 +94,18 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	return nil
 }
 
-func (f *fakeLibraries) ForgetMissingCopies(_ context.Context, lib uuid.UUID) (int64, error) {
+// ForgetMissingCopies takes the copies on no disk of the library, as one title apiece.
+func (f *fakeLibraries) ForgetMissingCopies(_ context.Context, lib uuid.UUID) (int64, store.Changed, error) {
 	if !slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.ID == lib }) {
-		return 0, store.ErrNotFound
+		return 0, nil, store.ErrNotFound
 	}
 	forgotten := f.missing[lib]
 	delete(f.missing, lib)
-	return forgotten, nil
+	changed := store.Changed{}
+	for range forgotten {
+		changed[domain.TitleRemoved] = append(changed[domain.TitleRemoved], uuid.NewV7())
+	}
+	return forgotten, changed, nil
 }
 
 func (f *fakeLibraries) CertificateCountries(context.Context) ([]string, error) {
@@ -226,6 +231,10 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	rec = do(goodToken, http.MethodDelete, "/api/v1/admin/libraries/"+added.ID.String()+"/missing", "")
 	if !strings.Contains(rec.Body.String(), `"copies":3`) {
 		t.Errorf("forgetting the copies on no disk: %d %s", rec.Code, rec.Body)
+	}
+	// Their titles are told as a scan's are, so what is gone leaves every client's catalogue.
+	if n := len(told.changed[added.ID][domain.TitleRemoved]); n != 3 {
+		t.Errorf("told %d titles removed, want the 3 copies' own", n)
 	}
 	for _, tc := range []struct {
 		method, target, body string
