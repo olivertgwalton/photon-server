@@ -144,7 +144,7 @@ Further down, where the title has them: **Cast & crew**, **Extras**, the **Colle
 
 ### Shows and episodes
 
-A show's page plays the episode you are up to: **Play S1 E3**, or **Resume S1 E3** once you have
+A show's page plays the episode you are up to: **Play S1, E3**, or **Resume S1, E3** once you have
 started it. The **Seasons** row shows how many episodes of each season you have watched. Choosing
 a season opens the episode you are up to in it.
 

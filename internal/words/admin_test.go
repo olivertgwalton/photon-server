@@ -29,7 +29,7 @@ func TestAnEventReadsAsASentence(t *testing.T) {
 		event domain.Event
 		want  string
 	}{
-		{domain.Event{Kind: domain.EventPlaybackStarted, Details: domain.PlaybackDetails{Playback: domain.NowPlaying{PlaybackCard: episode}}}, "Ada started Small Show S1 E2–E3 · Second"},
+		{domain.Event{Kind: domain.EventPlaybackStarted, Details: domain.PlaybackDetails{Playback: domain.NowPlaying{PlaybackCard: episode}}}, "Ada started Small Show S1, E2–E3 · Second"},
 		{domain.Event{Kind: domain.EventPlaybackStopped, Details: domain.PlaybackDetails{
 			Playback: domain.NowPlaying{PlaybackCard: domain.PlaybackCard{
 				Profile: domain.PlaybackProfile{Name: "Ada"}, Title: domain.PlaybackTitle{Kind: domain.ItemMovie, Title: "Heat"},

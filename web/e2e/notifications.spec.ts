@@ -10,7 +10,9 @@ test("the bell lists what was added that the profile follows, and reads it", asy
 	const inbox = page.getByRole("dialog", { name: "Notifications" });
 	const show = inbox.getByRole("link", { name: /Small Show/ });
 	await expect(show).toHaveAttribute("href", "/titles/t-show?notification=1");
-	await expect(show).toContainText("2 new episodes, the latest S1 E2 · Second");
+	await expect(show).toContainText(
+		"2 new episodes, the latest S1, E2 · Second",
+	);
 	await expectAccessible(page);
 
 	await inbox.getByRole("button", { name: "Mark all read" }).click();

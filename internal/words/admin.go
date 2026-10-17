@@ -140,7 +140,7 @@ func name(of func(uuid.UUID) string, id uuid.UUID) string {
 }
 
 // playedTitle is a played title as one line: an episode by its show and its place in it,
-// "Small Show S1 E2 · Second"; anything else by its own title.
+// "Small Show S1, E2 · Second"; anything else by its own title.
 func playedTitle(t domain.PlaybackTitle) string {
 	if t.Kind != domain.ItemEpisode || t.Show == "" {
 		return t.Title
@@ -152,7 +152,7 @@ func playedTitle(t domain.PlaybackTitle) string {
 			at += "–E" + strconv.Itoa(*t.EpisodeEnd)
 		}
 		if t.SeasonNumber != nil {
-			at = "S" + strconv.Itoa(*t.SeasonNumber) + " " + at
+			at = "S" + strconv.Itoa(*t.SeasonNumber) + ", " + at
 		}
 	}
 	return strings.Join(strings.Fields(t.Show+" "+at), " ") + " · " + t.Title

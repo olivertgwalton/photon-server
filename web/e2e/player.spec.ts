@@ -278,11 +278,11 @@ test("the next episode is offered in the credits and plays", async ({
 }) => {
 	await logIn(page, "/play/p-ep?t=3.5");
 	const upNext = page.getByRole("region", { name: "Up next" });
-	await expect(upNext).toContainText("S1 E2 · Second");
+	await expect(upNext).toContainText("S1, E2 · Second");
 	await upNext.getByRole("button", { name: "Play now" }).click();
 	await expect(page).toHaveURL("/play/p-ep2");
 	await expect(
-		page.getByRole("heading", { name: "Small Show S1 E2 · Second" }),
+		page.getByRole("heading", { name: "Small Show S1, E2 · Second" }),
 	).toBeVisible();
 });
 
@@ -402,7 +402,7 @@ test("a playlist plays in its order, not the show's", async ({ page }) => {
 	await page.getByRole("button", { name: "Play all" }).click();
 	await expect(page).toHaveURL("/play/p-ep2");
 	const upNext = page.getByRole("region", { name: "Up next" });
-	await expect(upNext).toContainText("S1 E1 · Pilot");
+	await expect(upNext).toContainText("S1, E1 · Pilot");
 	await upNext.getByRole("button", { name: "Play now" }).click();
 	await expect(page).toHaveURL("/play/p-ep");
 	// The show would go on to its second episode; the playlist goes to a film.
