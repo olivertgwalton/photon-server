@@ -42,6 +42,7 @@ type catalogue interface {
 	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
+	BestPicture(ctx context.Context, item uuid.UUID, kinds []domain.ArtworkKind) (uuid.UUID, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
