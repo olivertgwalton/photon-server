@@ -34,9 +34,11 @@ let {
 	current?: boolean;
 } = $props();
 
+// An episode drawn as a poster wears its season's art, as Infuse draws one
+// among a search's results, not the show's poster its card otherwise carries.
 const picture = $derived(
 	shape === "poster"
-		? (card.poster ?? card.thumb)
+		? (card.season_poster ?? card.poster ?? card.thumb)
 		: (card.thumb ?? card.backdrop),
 );
 

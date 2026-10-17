@@ -37,6 +37,8 @@ const libraries: Schemas["LibraryList"] = {
 const person = "5f0c1d8e-2b1a-4c3d-9e8f-0a1b2c3d4e5f";
 const guest = "6a1d2e9f-3c2b-4d4e-8f9a-1b2c3d4e5f6a";
 const art = "0b4e2f1a-9c8d-4e7f-a6b5-c4d3e2f1a0b9";
+// A season's own poster, which an episode is drawn by among a search's results.
+const seasonArt = "1c5f3a2b-8d7e-4f6a-b5c4-d3e2f1a0b9c8";
 
 type State = Schemas["TitleState"];
 const states = new Map<string, State>([
@@ -87,6 +89,7 @@ const episode = (id: string, n: number, title: string, s = 1) =>
 		duration_ms: 1_800_000,
 		show: { id: "t-show", title: "Small Show" },
 		season: { id: `t-s${s}`, title: `Season ${s}` },
+		season_poster: seasonArt,
 		season_number: s,
 		episode_number: n,
 	});

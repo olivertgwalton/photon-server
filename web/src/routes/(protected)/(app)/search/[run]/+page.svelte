@@ -26,9 +26,6 @@ let { data } = $props();
 			{/snippet}
 		</CardGrid>
 	{:else if data.cards}
-		<CardGrid
-			cards={data.cards}
-			shape={data.kind === "episode" ? "still" : "poster"}
-		/>
+		<CardGrid cards={data.cards} />
 	{/if}
 </div>
