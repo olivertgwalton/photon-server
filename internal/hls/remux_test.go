@@ -137,6 +137,31 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 }
 
+// A version the probe gave no duration — an audio-only or subtitle file the scanner took as a
+// version of a title, say — has no segments at all, and asking for its initialisation or a segment
+// is refused.
+func TestAVersionWithNoDurationHasNothingToServe(t *testing.T) {
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: unplayed, Video: domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"init0.mp4", "0.m4s"} {
+		res, err := r.Resource(t.Context(), playback, name)
+		if res.File != nil {
+			_ = res.File.Close()
+		}
+		if !errors.Is(err, ErrNoRemux) {
+			t.Errorf("%s: %v, want ErrNoRemux", name, err)
+		}
+	}
+}
+
 // A long film played through keeps only its last minute of segments on disk; one asked for again
 // is made again.
 func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {

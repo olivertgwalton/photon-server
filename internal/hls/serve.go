@@ -131,13 +131,15 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 	if err != nil {
 		return nil, err
 	}
-	if part < 0 || part >= len(s.sources) || s.format != domain.SegmentsFMP4 {
+	// A part of no duration has no segment in the plan, so no run would write its initialisation.
+	n := slices.IndexFunc(s.plan, func(seg Segment) bool { return seg.Part == part })
+	if part < 0 || part >= len(s.sources) || n < 0 || s.format != domain.SegmentsFMP4 {
 		return nil, ErrNoRemux
 	}
 	s.mu.Lock()
 	wait := waiter(s.inits, part)
 	if !closed(wait) && (s.run == nil || s.run.part != part) {
-		r.start(ctx, s, slices.IndexFunc(s.plan, func(seg Segment) bool { return seg.Part == part }))
+		r.start(ctx, s, n)
 	}
 	s.mu.Unlock()
 	select {
