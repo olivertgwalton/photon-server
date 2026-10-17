@@ -93,7 +93,7 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	if got.Unread != 2 || len(got.Items) != 2 {
 		t.Fatalf("inbox = %+v, want two, the title it no longer sees left out", got)
 	}
-	if n := got.Items[0]; n.Title.Title != "Severance" || n.Latest.ID != episode || n.Message != "2 new episodes, the latest S1 E5 · Half Loop" {
+	if n := got.Items[0]; n.Title.Title != "Severance" || n.Latest.ID != episode || n.Message != "2 new episodes, the latest S1, E5 · Half Loop" {
 		t.Errorf("the show's notification = %+v", n)
 	}
 	if n := got.Items[1]; n.Title.ID != film || n.Message != "New film" {

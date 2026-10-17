@@ -19,8 +19,8 @@ func TestANotificationSaysWhatItBrings(t *testing.T) {
 		want   string
 	}{
 		{1, store.Card{Kind: domain.ItemMovie, Title: "Heat"}, "New film"},
-		{1, episode, "New episode: S1 E3 · Half Loop"},
-		{3, episode, "3 new episodes, the latest S1 E3 · Half Loop"},
+		{1, episode, "New episode: S1, E3 · Half Loop"},
+		{3, episode, "3 new episodes, the latest S1, E3 · Half Loop"},
 		{1, store.Card{Kind: domain.ItemEpisode, Title: "Pilot"}, "New episode: Pilot"},
 	} {
 		if got := w.Notification(c.new, c.latest); got != c.want {

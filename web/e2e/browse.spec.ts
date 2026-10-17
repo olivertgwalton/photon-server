@@ -290,7 +290,7 @@ test("a show opens on itself, and its season on the episode the reader is at", a
 	await logIn(page, "/titles/t-show");
 	await expect(page.getByRole("heading", { name: "Small Show" })).toBeVisible();
 	await expect(
-		page.getByRole("link", { name: "Resume S1 E1" }),
+		page.getByRole("link", { name: "Resume S1, E1" }),
 	).toHaveAttribute("href", "/play/t-ep");
 	const seasons = page.getByRole("region", { name: /Seasons/ });
 	await seasons.getByRole("link", { name: /Season 2/ }).click();

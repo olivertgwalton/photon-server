@@ -1170,7 +1170,7 @@ const inboxOf = (token: string): Schemas["Inbox"] => {
 					episode_number: 2,
 				}),
 				new: 2,
-				message: "2 new episodes, the latest S1 E2 · Second",
+				message: "2 new episodes, the latest S1, E2 · Second",
 				added_at: "2026-10-15T20:00:00Z",
 			},
 		],
