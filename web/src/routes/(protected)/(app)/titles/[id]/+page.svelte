@@ -20,7 +20,7 @@ import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
-import { averageColour, blurStyle, isDark } from "#lib/blurhash.js";
+import { blurStyle, isDark, tintColour } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
@@ -255,7 +255,7 @@ const backdrop = $derived(art("backdrop"));
 // fades into the page rather than stopping on it. Without a backdrop, or
 // before its hash arrives, the fade is the page's own colour as it was.
 const accent = $derived(
-	(backdrop && averageColour(t.blurhashes?.[backdrop])) ?? "transparent",
+	(backdrop && tintColour(t.blurhashes?.[backdrop])) ?? "transparent",
 );
 const logo = $derived(art("logo"));
 const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
