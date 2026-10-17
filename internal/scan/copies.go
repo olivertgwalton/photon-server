@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"path"
+	"slices"
 
 	"golang.org/x/sync/errgroup"
 
@@ -109,10 +110,19 @@ func (s *Scanner) readCopy(ctx context.Context, r reading, c *store.Copy) (bool,
 			s.unreadable(ctx, r, p.RelPath, err)
 			return false, nil
 		}
+		if !slices.ContainsFunc(facts.Streams, func(st domain.Stream) bool { return st.Kind == domain.StreamVideo }) {
+			s.skip(ctx, r.run, p.RelPath, errNoPicture)
+			return false, nil
+		}
 		c.Parts[i].Facts = &facts
 	}
 	return true, nil
 }
+
+// errNoPicture is a file that is no version of a film or episode: sound or subtitles alone, which
+// plays as nothing. Plex and Jellyfin decide by extension and so never meet one, but a .strm says
+// nothing of what it names until its media is probed.
+var errNoPicture = errors.New("no video stream")
 
 // describe is a planned copy's parts and subtitles, its bytes not yet read.
 func describe(dir string, v copyPlan) store.Copy {
