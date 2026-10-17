@@ -42,6 +42,7 @@ var ErrNotMedia = errors.New("not media ffprobe can read")
 type probeOutput struct {
 	Format struct {
 		FormatName string `json:"format_name"`
+		Score      int    `json:"probe_score"`
 		Duration   string `json:"duration"`
 		Size       string `json:"size"`
 		BitRate    string `json:"bit_rate"`
@@ -88,10 +89,21 @@ type probeSideData struct {
 	Compatibility int    `json:"dv_bl_signal_compatibility_id"`
 }
 
+// guessedFormat is the score at or below which FFmpeg warns that it may have misdetected a format,
+// AVPROBE_SCORE_RETRY: a container's magic scores 100 and a raw stream named by its extension 50,
+// so only a guess from the bytes alone falls here. Media at an address that answers too little to
+// go on is guessed to be a raw stream of whatever the bytes were, with no dimensions and no
+// duration, and the version that would make plays as nothing.
+const guessedFormat = 25
+
 func parseProbe(out []byte) (domain.Facts, error) {
 	var p probeOutput
 	if err := json.Unmarshal(out, &p); err != nil {
 		return domain.Facts{}, fmt.Errorf("ffprobe output: %w", err)
+	}
+	if p.Format.Score <= guessedFormat {
+		return domain.Facts{}, fmt.Errorf("ffprobe guessed the format %s, scoring it %d",
+			p.Format.FormatName, p.Format.Score)
 	}
 	facts := domain.Facts{
 		Container:   p.Format.FormatName,
