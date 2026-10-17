@@ -66,15 +66,30 @@ export function decodeBlurhash(hash: string, width: number, height: number) {
 	return pixels;
 }
 
+// A picture's average colour is the first and strongest of its waves, which a
+// hash writes plainly: the four digits after the two that say its shape. It is
+// read without drawing the hash at all.
+function average(hash: string): number {
+	return base83(hash.slice(2, 6));
+}
+
 // Whether a hash's picture is dark: its average colour, the hash's first, under
 // the luma at which dark lettering is lost on a dark page (navy, maroon and
 // black are, a mid grey is not). The server hashes a logo by its letters alone,
 // so a logo's hash says whether its letters are dark.
 export function isDark(hash: string | undefined): boolean {
 	if (!hash || hash.length < 6) return false;
-	const v = base83(hash.slice(2, 6));
+	const v = average(hash);
 	const [r, g, b] = [v >> 16, (v >> 8) & 255, v & 255].map((c) => c / 255);
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b < darkLuma;
+}
+
+// The average colour of a hash's picture, to tint the page a backdrop fades
+// into: as a CSS colour, or nothing where there is no hash to read, so a page
+// without one is left as it was.
+export function averageColour(hash: string | undefined): string | undefined {
+	if (!hash || hash.length < 6) return undefined;
+	return `#${average(hash).toString(16).padStart(6, "0")}`;
 }
 
 const darkLuma = 0.3;

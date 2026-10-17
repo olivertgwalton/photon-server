@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { decodeBlurhash, isDark } from "./blurhash.ts";
+import { averageColour, decodeBlurhash, isDark } from "./blurhash.ts";
 
 test("a hash is drawn as the reference decoder draws it", () => {
 	// woltapp/blurhash's own example, decoded by its TypeScript decoder.
@@ -17,4 +17,13 @@ test("a logo is dark by its hash's average colour", () => {
 	expect(isDark("00F$Y7")).toBe(false); // mid grey, #898989
 	expect(isDark("00TSUA")).toBe(false); // white
 	expect(isDark(undefined)).toBe(false);
+});
+
+test("a picture's average colour is read from its hash", () => {
+	expect(averageColour("000000")).toBe("#000000");
+	expect(averageColour("002~Qp")).toBe("#1a1a59");
+	expect(averageColour("00F$Y7")).toBe("#898989");
+	expect(averageColour("00TSUA")).toBe("#ffffff");
+	expect(averageColour(undefined)).toBeUndefined();
+	expect(averageColour("00T")).toBeUndefined();
 });
