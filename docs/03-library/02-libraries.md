@@ -61,6 +61,7 @@ To change a library's settings, choose **Edit** beside it at Settings › Server
 | **Pictures** | **In its language first** (the default) prefers posters in your language. **The most liked, any language** takes the most popular. |
 | **Certification country** | Which country's age ratings to show, which parental controls use. Default: **Automatic**. |
 | **Media deletion** | Whether an admin can delete files from the web app. Default: **Not allowed**. See below. |
+| **Copies on no disk** | What becomes of a copy whose files have gone, at the end of a scan. Default: **Kept, marked missing**. See [keep libraries up to date](06-keep-up-to-date.md#clearing-out-what-has-gone). |
 
 Changing **Metadata downloaders**, **Image fetchers** or **Metadata language** looks up every title
 in the library again, which can take a while on a large library.

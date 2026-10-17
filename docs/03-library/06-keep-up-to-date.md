@@ -74,6 +74,19 @@ This is deliberate. A disconnected drive shouldn't cost you your library.
 A title whose files are all missing stays until you remove it. Where the library allows
 [media deletion](02-libraries.md#media-deletion), **Delete…** on the title removes it.
 
+### Clearing out what has gone
+
+Two things clear missing copies, both at Settings › Server › Libraries:
+
+- **Forget copies on no disk**, on a library's own page, takes every copy whose files have gone out
+  of the library now, and the titles left with nothing with them. It says how many went.
+- **Copies on no disk**, in the library's settings, set to **Forgotten at the end of a scan**, does
+  the same at the end of every scan from then on. Leave it at **Kept, marked missing**, the
+  default, if your media is on a drive or share that is sometimes away.
+
+Either way, what people have watched of a title that goes is forgotten with it, and files still on
+disk are never touched.
+
 ## Keeping descriptions fresh
 
 Scans read your files. Descriptions and pictures come from the online providers, and are kept
