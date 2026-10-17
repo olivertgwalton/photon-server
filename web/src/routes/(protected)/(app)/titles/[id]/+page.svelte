@@ -20,7 +20,7 @@ import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
-import { blurStyle, isDark } from "#lib/blurhash.js";
+import { blurStyle, isDark, tintColour } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
@@ -251,6 +251,12 @@ const glass =
 	"rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14";
 
 const backdrop = $derived(art("backdrop"));
+// The page takes the title's own colour from its backdrop, so the picture
+// fades into the page rather than stopping on it. Without a backdrop, or
+// before its hash arrives, the fade is the page's own colour as it was.
+const accent = $derived(
+	(backdrop && tintColour(t.blurhashes?.[backdrop])) ?? "transparent",
+);
 const logo = $derived(art("logo"));
 const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
 const poster = $derived(art("poster"));
@@ -261,7 +267,7 @@ const poster = $derived(art("poster"));
 </svelte:head>
 
 <article class="grid gap-10">
-	<header class="relative -mx-3 -mt-6 sm:-mx-6">
+	<header class="relative -mx-3 -mt-6 sm:-mx-6" style:--accent={accent}>
 		{#if backdrop}
 			<div
 				class="absolute inset-x-0 top-0 h-[70svh] overflow-hidden"
@@ -280,7 +286,7 @@ const poster = $derived(art("poster"));
 					/>
 				{/key}
 				<div
-					class="from-ground via-ground/70 absolute inset-0 bg-linear-to-t to-transparent"
+					class="from-ground via-(--accent)/35 absolute inset-0 bg-linear-to-t to-transparent"
 				></div>
 				<div
 					class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent"

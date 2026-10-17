@@ -66,15 +66,60 @@ export function decodeBlurhash(hash: string, width: number, height: number) {
 	return pixels;
 }
 
+// A picture's average colour is the first and strongest of its waves, which a
+// hash writes plainly: the four digits after the two that say its shape. It is
+// read without drawing the hash at all.
+function average(hash: string): number {
+	return base83(hash.slice(2, 6));
+}
+
 // Whether a hash's picture is dark: its average colour, the hash's first, under
 // the luma at which dark lettering is lost on a dark page (navy, maroon and
 // black are, a mid grey is not). The server hashes a logo by its letters alone,
 // so a logo's hash says whether its letters are dark.
 export function isDark(hash: string | undefined): boolean {
 	if (!hash || hash.length < 6) return false;
-	const v = base83(hash.slice(2, 6));
+	const v = average(hash);
 	const [r, g, b] = [v >> 16, (v >> 8) & 255, v & 255].map((c) => c / 255);
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b < darkLuma;
+}
+
+// A corner with less colour than this is no colour at all: it tints a page
+// muddy rather than giving it the title's colour.
+const tintSaturation = 0.2;
+// A tint is drawn at this lightness whatever the backdrop's own: the hue is
+// what the page wants, where a pale backdrop would wash it and a dark one
+// blacken it. The browser holds the hue and saturation and takes this.
+const tintLightness = "35%";
+
+// How much colour a pixel holds, as its saturation told apart from how light
+// it is: a pale blue and a deep one are both blue.
+function colourfulness(r: number, g: number, b: number): number {
+	const [R, G, B] = [r / 255, g / 255, b / 255];
+	const light = (Math.max(R, G, B) + Math.min(R, G, B)) / 2;
+	const spread = Math.max(R, G, B) - Math.min(R, G, B);
+	return spread === 0 ? 0 : spread / (1 - Math.abs(2 * light - 1));
+}
+
+// The colour to tint the page a picture fades into: the most colourful quarter
+// of it, which the hash is drawn at two by two to find. A picture's average is
+// a grey far more often than the picture is — a warm corner and a cold one
+// cancel — so the quarters are asked, as Plex tints a page from its artwork's
+// corners rather than its mean. Nothing is answered where there is no hash to
+// read or no colour in any quarter, and such a page is left as it was.
+export function tintColour(hash: string | undefined): string | undefined {
+	if (!hash || hash.length < 6) return undefined;
+	const quarters = decodeBlurhash(hash, 2, 2);
+	let strongest = tintSaturation;
+	let tint: number[] | undefined;
+	for (let i = 0; i < 4; i++) {
+		const quarter = Array.from(quarters.slice(i * 4, i * 4 + 3));
+		const colour = colourfulness(quarter[0], quarter[1], quarter[2]);
+		if (colour >= strongest) [strongest, tint] = [colour, quarter];
+	}
+	if (!tint) return undefined;
+	const hex = tint.map((c) => c.toString(16).padStart(2, "0")).join("");
+	return `hsl(from #${hex} h s ${tintLightness})`;
 }
 
 const darkLuma = 0.3;
