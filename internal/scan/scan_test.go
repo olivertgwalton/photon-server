@@ -449,6 +449,42 @@ func TestAFileThatIsNotMediaIsNotProbedAgainUntilItChanges(t *testing.T) {
 	}
 }
 
+// soundOnly finds sound and no picture in the files named, as ffprobe does in a .strm naming an
+// .eac3, which also says nothing of how long it runs.
+type soundOnly struct {
+	fakeProber
+	names map[string]bool
+}
+
+func (p *soundOnly) Probe(ctx context.Context, in media.Input) (domain.Facts, error) {
+	facts, err := p.fakeProber.Probe(ctx, in)
+	if err != nil || !p.names[filepath.Base(in.File.Name())] {
+		return facts, err
+	}
+	facts.Duration = 0
+	facts.Streams = []domain.Stream{{Index: 0, Kind: domain.StreamAudio, Codec: "eac3", Channels: 6}}
+	return facts, nil
+}
+
+// A file with sound and no picture is no version of a film, whatever it is named: it would play as
+// nothing, so the film is left without it.
+func TestAFileWithNoPictureIsNoVersionOfAFilm(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	p := &soundOnly{names: map[string]bool{"Heat (1995).mkv": true}}
+	f.scanner = New(f.st, p, lists(nil), slog.New(slog.DiscardHandler))
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Collateral (2004)/Collateral (2004).mkv", "collateral")
+	if r := f.scan(); r.Skipped != 1 {
+		t.Errorf("left out %d files, want the one with no picture", r.Skipped)
+	}
+	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id WHERE i.title = 'Heat'`); n != 0 {
+		t.Errorf("Heat has %d versions, want none", n)
+	}
+	if n := f.count(`SELECT count(*) FROM versions`); n != 1 {
+		t.Errorf("%d versions in all, want only the film with a picture", n)
+	}
+}
+
 // fetching probes only what a .strm names, as ffprobe fetches it, and answers where it was.
 type fetching struct {
 	fakeProber
