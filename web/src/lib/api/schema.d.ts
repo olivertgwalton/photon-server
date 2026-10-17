@@ -7720,6 +7720,8 @@ export interface components {
             release_date?: string;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
+            /** Format: uuid */
+            season_poster?: string;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
@@ -7847,6 +7849,8 @@ export interface components {
             role?: string;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
+            /** Format: uuid */
+            season_poster?: string;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
@@ -8014,6 +8018,8 @@ export interface components {
             release_date?: string;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
+            /** Format: uuid */
+            season_poster?: string;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */

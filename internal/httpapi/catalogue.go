@@ -61,9 +61,11 @@ type cardJSON struct {
 	State        titleStateJSON  `json:"state,omitzero"`
 	DurationMS   int64           `json:"duration_ms,omitzero"`
 	VersionCount int             `json:"version_count,omitzero"`
-	// An episode's card names its show and where in it it is, and carries its still.
+	// An episode's card names its show and where in it it is, and carries its still and its
+	// season's poster, which a search shows it by.
 	Show          *titleRefJSON `json:"show,omitzero"`
 	Season        *titleRefJSON `json:"season,omitzero"`
+	SeasonPoster  uuid.UUID     `json:"season_poster,omitzero"`
 	SeasonNumber  *int          `json:"season_number,omitzero"`
 	EpisodeNumber *int          `json:"episode_number,omitzero"`
 	EpisodeEnd    *int          `json:"episode_end,omitzero"`
@@ -187,7 +189,7 @@ func cardOf(c store.Card) cardJSON {
 	out := cardJSON{
 		ID: c.ID, Kind: c.Kind, Title: c.Title, Year: c.Year, ReleaseDate: domain.Date(c.ReleaseDate), AddedAt: c.AddedAt,
 		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, VersionCount: c.VersionCount, Show: (*titleRefJSON)(c.Show), Season: (*titleRefJSON)(c.Season),
-		SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
+		SeasonPoster: c.SeasonPoster, SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: domain.Bare(c.Certificate),
 		Blurhashes: c.Blurhashes,
 	}
