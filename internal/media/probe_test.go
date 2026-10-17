@@ -55,6 +55,16 @@ func TestProbeHDR10Matroska(t *testing.T) {
 	}
 }
 
+// A .strm whose media answered too little to go on: ffprobe took 616 MB of Matroska for a raw VVC
+// stream, at a score it warns of, and read no dimensions and no duration from it.
+func TestProbeGuessedFormat(t *testing.T) {
+	const out = `{"streams": [{"index": 0, "codec_name": "vvc", "codec_type": "video"}],
+		"format": {"format_name": "vvc", "probe_score": 12}}`
+	if _, err := parseProbe([]byte(out)); err == nil {
+		t.Error("a format ffprobe only guessed at was read as media")
+	}
+}
+
 func TestProbeRange(t *testing.T) {
 	tests := []struct {
 		fixture string
@@ -116,7 +126,7 @@ func TestProbeReadsAFileWhoseNameLooksLikeAnAddress(t *testing.T) {
 }
 
 func TestProbeLeavesAChapterNamedByItsTimeUnnamed(t *testing.T) {
-	facts, err := parseProbe([]byte(`{"format": {"format_name": "matroska,webm", "duration": "120"}, "chapters": [
+	facts, err := parseProbe([]byte(`{"format": {"format_name": "matroska,webm", "duration": "120", "probe_score": 100}, "chapters": [
 		{"start_time": "0", "end_time": "60", "tags": {"title": "00:00:00.000"}},
 		{"start_time": "60", "end_time": "90", "tags": {"title": "(02)00:01:00:000"}},
 		{"start_time": "90", "end_time": "120", "tags": {"title": "Act 3"}}]}`))
