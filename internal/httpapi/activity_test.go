@@ -25,12 +25,28 @@ type fakeEvents struct {
 	raised   []domain.Event
 	webhooks []uuid.UUID
 	stopped  []domain.JobKind
+	// changed are the titles told as changed outside a scan, by their library.
+	changed map[uuid.UUID]store.Changed
 }
 
 func (f *fakeEvents) Raise(_ context.Context, e domain.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.raised = append(f.raised, e)
+}
+
+func (f *fakeEvents) Changed(_ context.Context, lib uuid.UUID, titles store.Changed) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.changed == nil {
+		f.changed = map[uuid.UUID]store.Changed{}
+	}
+	if f.changed[lib] == nil {
+		f.changed[lib] = store.Changed{}
+	}
+	for change, ids := range titles {
+		f.changed[lib][change] = append(f.changed[lib][change], ids...)
+	}
 }
 
 func (f *fakeEvents) Subscribe() (<-chan domain.Event, func()) {

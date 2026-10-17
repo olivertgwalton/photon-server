@@ -130,6 +130,21 @@ func MediaDeletions() []MediaDeletion {
 	return []MediaDeletion{DeletionOff, DeletionFiles}
 }
 
+// MissingCopy is what becomes of a library's copy on no disk at the end of a scan: kept, marked
+// missing so a mount down for repair does not cost its titles, as Plex keeps a removed item until
+// its trash is emptied; or forgotten there and then, as Plex's "Empty trash automatically after
+// every scan" does.
+type MissingCopy string
+
+const (
+	MissingKept      MissingCopy = "keep"
+	MissingForgotten MissingCopy = "forget"
+)
+
+func MissingCopies() []MissingCopy {
+	return []MissingCopy{MissingKept, MissingForgotten}
+}
+
 type Library struct {
 	ID    uuid.UUID
 	Name  string
@@ -157,6 +172,8 @@ type Library struct {
 	Keyframes   KeyframeMode
 	Themes      ThemeLookup
 	Deletion    MediaDeletion
+	// MissingCopies is what becomes of its copies on no disk at the end of a scan.
+	MissingCopies MissingCopy
 	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
 	Locale Locale
 	Titles TitleLanguage

@@ -56,6 +56,17 @@ function save(event: SubmitEvent) {
 		>
 			Refresh metadata <span class="sr-only">of {data.library.name}</span>
 		</Button>
+		{#if data.library.media !== "remote"}
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() =>
+					shell.askToForgetMissingCopies(data.library.id, data.library.name)}
+			>
+				Forget copies on no disk
+				<span class="sr-only">in {data.library.name}</span>
+			</Button>
+		{/if}
 		<Button
 			variant="outline"
 			size="sm"

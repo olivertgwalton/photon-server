@@ -27,6 +27,8 @@ type fakeLibraries struct {
 	libs    []domain.Library
 	scanned []uuid.UUID
 	folders []string
+	// missing is how many copies on no disk each library holds, as an ask to forget them takes.
+	missing map[uuid.UUID]int64
 }
 
 func (f *fakeLibraries) Libraries(context.Context) ([]domain.Library, error) { return f.libs, nil }
@@ -88,7 +90,22 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 		f.libs[i].SubtitleLanguages = c.SubtitleLanguages
 	}
 	f.libs[i].SubtitleMatch = cmp.Or(c.SubtitleMatch, f.libs[i].SubtitleMatch)
+	f.libs[i].MissingCopies = cmp.Or(c.MissingCopies, f.libs[i].MissingCopies)
 	return nil
+}
+
+// ForgetMissingCopies takes the copies on no disk of the library, as one title apiece.
+func (f *fakeLibraries) ForgetMissingCopies(_ context.Context, lib uuid.UUID) (int64, store.Changed, error) {
+	if !slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.ID == lib }) {
+		return 0, nil, store.ErrNotFound
+	}
+	forgotten := f.missing[lib]
+	delete(f.missing, lib)
+	changed := store.Changed{}
+	for range forgotten {
+		changed[domain.TitleRemoved] = append(changed[domain.TitleRemoved], uuid.NewV7())
+	}
+	return forgotten, changed, nil
 }
 
 func (f *fakeLibraries) CertificateCountries(context.Context) ([]string, error) {
@@ -209,6 +226,16 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"subtitle_languages":["fr","pt-BR"],"subtitle_match":"any"`) {
 		t.Errorf("setting subtitle languages: %d %s", rec.Code, rec.Body)
 	}
+	// Forgetting a library's copies on no disk says how many went, as Plex's Empty Trash does.
+	libs.missing = map[uuid.UUID]int64{added.ID: 3}
+	rec = do(goodToken, http.MethodDelete, "/api/v1/admin/libraries/"+added.ID.String()+"/missing", "")
+	if !strings.Contains(rec.Body.String(), `"copies":3`) {
+		t.Errorf("forgetting the copies on no disk: %d %s", rec.Code, rec.Body)
+	}
+	// Their titles are told as a scan's are, so what is gone leaves every client's catalogue.
+	if n := len(told.changed[added.ID][domain.TitleRemoved]); n != 3 {
+		t.Errorf("told %d titles removed, want the 3 copies' own", n)
+	}
 	for _, tc := range []struct {
 		method, target, body string
 		want                 int
@@ -233,6 +260,10 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"themes": "off"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_languages": ["fr", "Klingon!"]}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_match": "perfect"}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "bin"}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "forget"}`, http.StatusOK},
+		{http.MethodDelete, "/api/v1/admin/libraries/" + added.ID.String() + "/missing", "", http.StatusOK},
+		{http.MethodDelete, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/missing", "", http.StatusNotFound},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/scan", "", http.StatusAccepted},
 		{http.MethodPost, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/scan", "", http.StatusNotFound},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/refresh", `{"mode": "missing"}`, http.StatusAccepted},

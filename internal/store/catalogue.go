@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"uuid"
@@ -273,34 +274,100 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		if err != nil {
 			return err
 		}
-		changed.add(domain.TitleUpdated, updated...)
-		for _, sql := range []string{
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
-				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
-				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
-				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-		} {
-			removed, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
-			if err != nil {
+		var missing domain.MissingCopy
+		if err := tx.QueryRow(ctx, `SELECT missing_copies FROM libraries WHERE id = $1`, lib).Scan(&missing); err != nil {
+			return err
+		}
+		if missing == domain.MissingForgotten {
+			if _, err := forgetMissing(ctx, tx, lib); err != nil {
 				return err
 			}
-			changed.add(domain.TitleRemoved, removed...)
 		}
-		// A provider's box set left empty goes, whichever library's titles it held.
-		removed, err := queryColumn[uuid.UUID](ctx, tx, `
-			DELETE FROM items i USING collections c WHERE c.item_id = i.id AND c.origin NOT IN `+madeHere+`
-				AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id) RETURNING i.id`)
+		removed, err := removeEmptied(ctx, tx, lib)
 		if err != nil {
 			return err
 		}
 		changed.add(domain.TitleRemoved, removed...)
+		for _, id := range updated {
+			if !slices.Contains(removed, id) {
+				changed.add(domain.TitleUpdated, id)
+			}
+		}
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
 			lib, folders, scopes)
 		return err
 	})
 	return changed, err
+}
+
+// forgetMissing takes a library's copies on no disk out of it, answering the title of each copy
+// that went and leaving the titles that held nothing else to removeEmptied.
+func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
+	return queryColumn[uuid.UUID](ctx, tx,
+		`DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL RETURNING item_id`, lib)
+}
+
+// ForgetMissingCopies takes a library's copies on no disk out of it, and the titles left with
+// nothing with them, as an admin asks of a library that keeps them: Plex's Empty Trash. It answers
+// how many copies went and the titles that lost one or went with them, to tell as a scan's are. A
+// remote library, which no scan ends for and whose copies are its provider's offers, is refused.
+func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, Changed, error) {
+	var forgotten int64
+	changed := Changed{}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var media domain.LibraryMedia
+		if err := tx.QueryRow(ctx, `SELECT media FROM libraries WHERE id = $1`, lib).Scan(&media); err != nil {
+			return found(err)
+		}
+		if media == domain.MediaRemote {
+			return ErrRemoteUntouched
+		}
+		lost, err := forgetMissing(ctx, tx, lib)
+		if err != nil {
+			return err
+		}
+		forgotten = int64(len(lost))
+		removed, err := removeEmptied(ctx, tx, lib)
+		if err != nil {
+			return err
+		}
+		changed.add(domain.TitleRemoved, removed...)
+		for _, id := range lost {
+			if !slices.Contains(removed, id) {
+				changed.add(domain.TitleUpdated, id)
+			}
+		}
+		return nil
+	})
+	return forgotten, changed, err
+}
+
+// removeEmptied removes a library's films, episodes and extras left with no copy, the seasons and
+// shows left with nothing in them, and a provider's box set left empty, whichever library's titles
+// it held, answering every title that went.
+func removeEmptied(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
+	var removed []uuid.UUID
+	for _, sql := range []string{
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
+			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
+			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
+			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+	} {
+		gone, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
+		if err != nil {
+			return nil, err
+		}
+		removed = append(removed, gone...)
+	}
+	gone, err := queryColumn[uuid.UUID](ctx, tx, `
+		DELETE FROM items i USING collections c WHERE c.item_id = i.id AND c.origin NOT IN `+madeHere+`
+			AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id) RETURNING i.id`)
+	if err != nil {
+		return nil, err
+	}
+	return append(removed, gone...), nil
 }
 
 // notIn is the condition that a path column is none of the array parameter param. Written as

@@ -332,6 +332,7 @@ func (a *API) routes() []route {
 		a.styledRoutes(),
 		a.previewsRoutes(),
 		a.adminRoutes(),
+		a.missingRoutes(),
 		a.foldersRoutes(),
 		a.accessRoutes(),
 		a.profileAdminRoutes(),

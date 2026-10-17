@@ -986,6 +986,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/libraries/{id}/missing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget a library's copies on no disk, and the titles left with nothing
+         * @description Admin only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Forgotten"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/libraries/{id}/refresh": {
         parameters: {
             query?: never;
@@ -7501,6 +7543,7 @@ export interface components {
             markers: components["schemas"]["MarkerDetection"];
             media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
+            missing_copies: components["schemas"]["MissingCopy"];
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -7528,6 +7571,7 @@ export interface components {
             markers: components["schemas"]["MarkerDetection"];
             media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
+            missing_copies: components["schemas"]["MissingCopy"];
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -8157,6 +8201,10 @@ export interface components {
         Fonts: {
             fonts: components["schemas"]["Font"][];
         };
+        Forgotten: {
+            /** Format: int64 */
+            copies: number;
+        };
         FoundSubtitle: {
             downloads?: number;
             for_release?: boolean;
@@ -8368,6 +8416,7 @@ export interface components {
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             metadata_language?: string | null;
+            missing_copies?: components["schemas"]["MissingCopy"];
             monitor?: components["schemas"]["Monitor"];
             name?: string;
             previews?: components["schemas"]["PreviewLevel"];
@@ -8492,6 +8541,8 @@ export interface components {
             reason: components["schemas"]["ImportMiss"];
             title: string;
         };
+        /** @enum {string} */
+        MissingCopy: "keep" | "forget";
         /** @enum {string} */
         Monitor: "realtime" | "off";
         Move: {

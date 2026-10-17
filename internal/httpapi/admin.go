@@ -68,6 +68,7 @@ type libraryAdmin interface {
 	AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error)
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
+	ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, store.Changed, error)
 	ScanFolders(ctx context.Context, lib uuid.UUID, folders []string, delay time.Duration) error
 	RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.RefreshMode) error
 	LibraryCounts(ctx context.Context) (map[uuid.UUID]domain.TitleCounts, error)
@@ -110,6 +111,9 @@ type adminLibraryJSON struct {
 	Keyframes    domain.KeyframeMode    `json:"keyframes"`
 	Themes       domain.ThemeLookup     `json:"themes"`
 	Deletion     domain.MediaDeletion   `json:"deletion"`
+	// MissingCopies is what becomes of its copies on no disk at the end of a scan: keep, marked
+	// missing; or forget, taken out of it with the titles left with nothing.
+	MissingCopies domain.MissingCopy `json:"missing_copies"`
 	// MetadataLanguage and CertificationCountry are what its metadata is asked in, absent for the
 	// server's own.
 	MetadataLanguage     domain.LanguageTag `json:"metadata_language,omitzero"`
@@ -147,6 +151,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		Sources:      []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
+		MissingCopies:    l.MissingCopies,
 		MetadataLanguage: domain.LanguageTag(l.Locale.Language), CertificationCountry: domain.CountryCode(l.Locale.Country), ArtworkLanguage: l.Locale.Artwork,
 		TitleLanguage: l.Titles, SubtitleLanguages: nonNil(each(l.SubtitleLanguages, domain.TagOf)),
 		SubtitleMatch: l.SubtitleMatch,
@@ -331,6 +336,8 @@ type libraryChangeJSON struct {
 	Themes domain.ThemeLookup `json:"themes,omitzero"`
 	// Deletion is whether an admin may delete its titles with their files: off, or files.
 	Deletion domain.MediaDeletion `json:"deletion,omitzero"`
+	// MissingCopies is what becomes of its copies on no disk at the end of a scan: keep, or forget.
+	MissingCopies domain.MissingCopy `json:"missing_copies,omitzero"`
 	// MetadataLanguage is the language its metadata is asked in, an IETF tag such as en-GB, and
 	// CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code such as GB;
 	// "" is the server's own. Changing either describes its titles again.
@@ -371,7 +378,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
 		Previews: req.Previews, Markers: req.Markers, Keyframes: req.Keyframes, Themes: req.Themes,
-		Deletion: req.Deletion, SubtitleMatch: req.SubtitleMatch,
+		Deletion: req.Deletion, MissingCopies: req.MissingCopies, SubtitleMatch: req.SubtitleMatch,
 	}
 	if req.SubtitleLanguages != nil {
 		change.SubtitleLanguages = make([]language.Tag, 0, len(req.SubtitleLanguages))
