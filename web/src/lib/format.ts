@@ -47,7 +47,8 @@ export function timecode(ms: number): string {
 	return h ? `${h}:${mm.padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
-// "S1 E2", "S1 E2–E3" for a double episode, "E5" where the season is not known.
+// "S1, E2", "S1, E2–E3" for a double episode, "E5" where the season is not known. The
+// comma is the Photon apps' own spelling, which a card reads beside.
 export function episodeLabel(
 	season: number | null | undefined,
 	episode: number | null | undefined,
@@ -56,7 +57,7 @@ export function episodeLabel(
 	if (episode == null) return season == null ? "" : `S${season}`;
 	const span =
 		end != null && end > episode ? `E${episode}–E${end}` : `E${episode}`;
-	return season == null ? span : `S${season} ${span}`;
+	return season == null ? span : `S${season}, ${span}`;
 }
 
 // "Small Show: Second": a title named with its show, where it has one, as a
@@ -68,7 +69,7 @@ export function titleWithShow(t: {
 	return t.show ? `${t.show.title}: ${t.title}` : t.title;
 }
 
-// "S1 E2 · Second": an episode by where it is in its show, and its name.
+// "S1, E2 · Second": an episode by where it is in its show, and its name.
 export function episodeLine(t: {
 	title: string;
 	season_number?: number | null;
@@ -79,7 +80,7 @@ export function episodeLine(t: {
 	return [at, t.title].filter(Boolean).join(" · ");
 }
 
-// "Small Show S1 E2 · Second": an episode as one line, by its show and place
+// "Small Show S1, E2 · Second": an episode as one line, by its show and place
 // in it; anything else by its own title.
 export function fullTitle(
 	t: {

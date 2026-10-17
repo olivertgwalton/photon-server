@@ -29,8 +29,8 @@ test("a bitrate reads in Mbps from a thousand kbps, a whole one without a point"
 });
 
 test("an episode is placed by season and number, a double by both ends", () => {
-	expect(episodeLabel(1, 2)).toBe("S1 E2");
-	expect(episodeLabel(1, 2, 3)).toBe("S1 E2–E3");
+	expect(episodeLabel(1, 2)).toBe("S1, E2");
+	expect(episodeLabel(1, 2, 3)).toBe("S1, E2–E3");
 	expect(episodeLabel(null, 5)).toBe("E5");
 });
 
@@ -40,7 +40,7 @@ test("an episode is named with its show and place, anything else alone", () => {
 			{ kind: "episode", title: "Second", season_number: 1, episode_number: 2 },
 			"Show",
 		),
-	).toBe("Show S1 E2 · Second");
+	).toBe("Show S1, E2 · Second");
 	expect(fullTitle({ kind: "season", title: "Season 1" }, "Show")).toBe(
 		"Season 1",
 	);
