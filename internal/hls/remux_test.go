@@ -137,28 +137,43 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	}
 }
 
-// A version the probe gave no duration — an audio-only or subtitle file the scanner took as a
-// version of a title, say — has no segments at all, and asking for its initialisation or a segment
-// is refused.
-func TestAVersionWithNoDurationHasNothingToServe(t *testing.T) {
+// A copy no playlist can be cut from — a version the probe gave no duration, and of which no
+// keyframes are known — is refused as it is opened, rather than played as an empty playlist.
+func TestACopyWithNoLengthIsRefused(t *testing.T) {
 	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
 	playback := uuid.NewV7()
-	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
-		Open: unplayed, Video: domain.VideoPlan{Codec: "h264"},
-	}}}); err != nil {
+	err = r.Open(t.Context(), playback, Copy{Parts: []Source{{Open: unplayed, Video: domain.VideoPlan{Codec: "h264"}}}})
+	if !errors.Is(err, ErrNoSegments) {
+		t.Fatalf("opening a copy with no length: %v, want ErrNoSegments", err)
+	}
+	if r.Has(playback) {
+		t.Error("the refused playback has a remux")
+	}
+}
+
+// One part of a copy with none of its own is refused its initialisation: the plan holds no segment
+// of that part for a run of it to start at.
+func TestAPartWithNoSegmentsIsRefusedItsInit(t *testing.T) {
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: fakeFFmpeg(t)}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"init0.mp4", "0.m4s"} {
-		res, err := r.Resource(t.Context(), playback, name)
-		if res.File != nil {
-			_ = res.File.Close()
-		}
-		if !errors.Is(err, ErrNoRemux) {
-			t.Errorf("%s: %v, want ErrNoRemux", name, err)
-		}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{
+		{Open: unplayed, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}},
+		{Open: unplayed, Video: domain.VideoPlan{Codec: "h264"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Resource(t.Context(), playback, "init1.mp4")
+	if res.File != nil {
+		_ = res.File.Close()
+	}
+	if !errors.Is(err, ErrNoRemux) {
+		t.Errorf("init1.mp4: %v, want ErrNoRemux", err)
 	}
 }
 

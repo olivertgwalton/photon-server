@@ -47,6 +47,10 @@ const (
 // ErrNoRemux is a remux that has ended, or never was.
 var ErrNoRemux = errors.New("hls: no such remux")
 
+// ErrNoSegments is a copy no playlist can be cut from: a part that says nothing of how long it
+// runs, and whose keyframes are not known either, has no length to cut into segments.
+var ErrNoSegments = errors.New("hls: the copy has no length to cut into segments")
+
 // ErrTranscodeLimit is a remux that would encode video on a remuxer already encoding its limit.
 var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
 
@@ -238,6 +242,9 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		ready: map[int]chan struct{}{}, failed: map[int]error{}, inits: map[int]chan struct{}{},
 		cued: map[int]chan struct{}{}, cueFailed: map[int]error{},
 	}
+	if len(s.plan) == 0 {
+		return ErrNoSegments
+	}
 	// MPEG-TS has no initialisation, and needs no later version than 3, which older players read.
 	version, init := 7, initName
 	switch s.format {
@@ -281,16 +288,14 @@ func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
 		}
 		return ErrTranscodeLimit
 	}
-	if len(s.plan) > 0 {
-		first := 0
-		for n, seg := range s.plan {
-			if offsets[seg.Part]+seg.Start <= c.Start {
-				first = n
-			}
+	first := 0
+	for n, seg := range s.plan {
+		if offsets[seg.Part]+seg.Start <= c.Start {
+			first = n
 		}
-		// Nothing else has the session yet to hold its lock against.
-		r.start(ctx, s, first)
 	}
+	// Nothing else has the session yet to hold its lock against.
+	r.start(ctx, s, first)
 	r.sessions[playback] = s
 	if s.encodes() {
 		r.change()

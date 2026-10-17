@@ -148,6 +148,7 @@ var problems = []struct {
 	{err: backup.ErrNoTools, code: codeConflict, ownWords: true},
 	{err: playback.ErrNoPlayback, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
+	{err: hls.ErrNoSegments, code: codeConflict, detail: "the copy cannot be played: it says nothing of how long it runs, and no keyframes of it are known"},
 	{err: playback.ErrNoSuchAudio, code: codeInvalidBody, detail: "audio_stream is not one of the copy's audio streams"},
 	{err: playback.ErrNoSuchSubtitle, code: codeInvalidBody, detail: "subtitle_stream is not one of the copy's subtitle streams"},
 	{err: playback.ErrNoSuchSubtitleFile, code: codeInvalidBody, detail: "subtitle_file is not one of the subtitle files beside the copy, or is pictures the client does not draw"},
