@@ -16,14 +16,15 @@ import (
 
 var (
 	ErrLibraryExists = errors.New("a library with that name or root already exists")
-	// ErrRemoteUntouched is a remote library set to be watched or deleted from: it has no folder.
-	ErrRemoteUntouched = errors.New("a remote library has no folder to watch or delete files from")
+	// ErrRemoteUntouched is a remote library set to be watched, deleted from, or to forget the
+	// copies its provider no longer offers: it has no folder, and no scan ends for it.
+	ErrRemoteUntouched = errors.New("a remote library has no folder to watch, to delete files from, or to forget copies of")
 )
 
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion,
+	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_copies,
 		metadata_language, certification_country, artwork_language, title_language, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
@@ -159,6 +160,8 @@ type LibraryChange struct {
 	Themes domain.ThemeLookup
 	// Deletion is whether an admin may delete its titles with their files.
 	Deletion domain.MediaDeletion
+	// MissingCopies is what becomes of its copies on no disk at the end of a scan.
+	MissingCopies domain.MissingCopy
 	// MetadataLanguage and CertificationCountry, where set, replace its locale's: "" is the
 	// server's own. With either changed its titles are described again in it.
 	MetadataLanguage     *string
@@ -332,6 +335,11 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 			return err
 		}
 	}
+	if change.MissingCopies != "" {
+		if err := setColumn(ctx, tx, id, "missing_copies", change.MissingCopies); err != nil {
+			return err
+		}
+	}
 	if change.SubtitleLanguages != nil {
 		tags := make([]string, len(change.SubtitleLanguages))
 		for i, t := range change.SubtitleLanguages {
@@ -440,7 +448,7 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 		ListID: deref(r.ListID), StreamSource: deref(r.StreamSource), DiscoverSource: deref(r.DiscoverSource),
 		Sources: sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
-		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion,
+		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion, MissingCopies: r.MissingCopies,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},
 		Titles: r.TitleLanguage, SubtitleLanguages: tags(r.SubtitleLanguages), SubtitleMatch: r.SubtitleMatch,
 	}

@@ -22,6 +22,7 @@ type Library struct {
 	Markers        domain.MarkerDetection
 	Keyframes      domain.KeyframeMode
 	Deletion       domain.MediaDeletion
+	MissingCopies  domain.MissingCopy
 	Themes         domain.ThemeLookup
 	// MetadataLanguage and CertificationCountry are nil for the server's own.
 	MetadataLanguage     *string

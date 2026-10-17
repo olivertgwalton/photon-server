@@ -236,6 +236,31 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	}
 }
 
+// A library that forgets its copies on no disk loses the removed file's copy there and then, and
+// the title left with nothing with it, where Plex's trash emptied after every scan would.
+func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	f.scan()
+	if err := f.st.SetLibrary(t.Context(), f.lib.ID, store.LibraryChange{MissingCopies: domain.MissingForgotten}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(f.root, "Heat (1995)", "Heat (1995).mkv")); err != nil {
+		t.Fatal(err)
+	}
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
+		t.Error("a copy on no disk was kept")
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Heat'`); n != 0 {
+		t.Error("the title left with no copy was kept")
+	}
+	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Alien'`); n != 1 {
+		t.Error("the title still on disk went with it")
+	}
+}
+
 // A library of links into another mount, as Riven and other debrid setups make them, scans as
 // the files behind the links; a link the mount no longer answers is left out and counted, and a
 // root that cannot be read fails the scan rather than emptying the library.

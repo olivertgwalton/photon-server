@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"uuid"
@@ -273,17 +274,56 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		if err != nil {
 			return err
 		}
-		changed.add(domain.TitleUpdated, updated...)
+		var missing domain.MissingCopy
+		if err := tx.QueryRow(ctx, `SELECT missing_copies FROM libraries WHERE id = $1`, lib).Scan(&missing); err != nil {
+			return err
+		}
+		if missing == domain.MissingForgotten {
+			if _, err := forgetMissing(ctx, tx, lib); err != nil {
+				return err
+			}
+		}
 		removed, err := removeEmptied(ctx, tx, lib)
 		if err != nil {
 			return err
 		}
 		changed.add(domain.TitleRemoved, removed...)
+		for _, id := range updated {
+			if !slices.Contains(removed, id) {
+				changed.add(domain.TitleUpdated, id)
+			}
+		}
 		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
 			lib, folders, scopes)
 		return err
 	})
 	return changed, err
+}
+
+// forgetMissing takes a library's copies on no disk out of it, answering how many went and
+// leaving the titles that held nothing else to removeEmptied.
+func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) (int64, error) {
+	tag, err := tx.Exec(ctx, `DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL`, lib)
+	return tag.RowsAffected(), err
+}
+
+// ForgetMissingCopies takes a library's copies on no disk out of it, and the titles left with
+// nothing with them, as an admin asks of a library that keeps them: Plex's Empty Trash. It answers
+// how many copies went.
+func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, error) {
+	var forgotten int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := hasLibrary(ctx, tx, lib); err != nil {
+			return err
+		}
+		var err error
+		if forgotten, err = forgetMissing(ctx, tx, lib); err != nil {
+			return err
+		}
+		_, err = removeEmptied(ctx, tx, lib)
+		return err
+	})
+	return forgotten, err
 }
 
 // removeEmptied removes a library's films, episodes and extras left with no copy, the seasons and
