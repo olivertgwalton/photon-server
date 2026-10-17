@@ -60,7 +60,6 @@ function scope(library: string) {
 		<Rail
 			title={group.name}
 			cards={group.cards}
-			shape={group.kind === "episode" ? "still" : "poster"}
 			href="/search/{group.kind}{page.url.search}"
 		/>
 	{/each}

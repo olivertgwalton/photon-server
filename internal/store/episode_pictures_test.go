@@ -12,7 +12,8 @@ import (
 )
 
 // An episode wears its show's backdrop, poster and lettering where it has none, on its card and its
-// page, as Plex answers an episode with its show's art, and keeps its own still.
+// page, as Plex answers an episode with its show's art, and keeps its own still; its card carries
+// its season's poster beside them, which a search shows it by.
 func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -33,9 +34,12 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	art := func(kind domain.ArtworkKind, name string) domain.Artwork {
 		return domain.Artwork{Kind: kind, URL: "https://image.tmdb.org/t/p/original/" + name + ".jpg"}
 	}
-	seasons := map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
-		1: {Title: "Pilot", Artwork: []domain.Artwork{art(domain.ArtworkThumb, "still")}},
-	}}}
+	seasons := map[int]domain.SeasonMetadata{1: {
+		Metadata: domain.Metadata{Title: "Season 1", Artwork: []domain.Artwork{art(domain.ArtworkPoster, "season")}},
+		Episodes: map[int]domain.Metadata{
+			1: {Title: "Pilot", Artwork: []domain.Artwork{art(domain.ArtworkThumb, "still")}},
+		},
+	}}
 	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Show", Artwork: []domain.Artwork{
 		art(domain.ArtworkPoster, "poster"), art(domain.ArtworkBackdrop, "backdrop"), art(domain.ArtworkLogo, "logo"),
 	}}, seasons); err != nil {
@@ -74,6 +78,13 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	}
 	if c.Thumb != still {
 		t.Errorf("card thumb = %v, want the episode's own still %v", c.Thumb, still)
+	}
+	seasonPictures, _, err := s.bestPictures(ctx, []*model.Item{{ID: *ep.ParentID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poster := first(seasonPictures[*ep.ParentID][domain.ArtworkPoster]); c.SeasonPoster != poster || poster == (uuid.UUID{}) {
+		t.Errorf("card season poster = %v, want the season's %v", c.SeasonPoster, poster)
 	}
 	page, err := s.Title(ctx, viewer.ID, ep.ID)
 	if err != nil {

@@ -489,6 +489,14 @@ test("search finds titles and people", async ({ page }) => {
 		page.getByRole("heading", { name: "Collections" }),
 	).toBeVisible();
 	await expectAccessible(page);
+	// An episode is found by its season's poster, as its still says nothing of
+	// which show it is of.
+	await page.goto("/search?q=pilot");
+	const found = page.getByRole("region", { name: "Episodes" });
+	await expect(found.locator("img").first()).toHaveAttribute(
+		"src",
+		/\/api\/v1\/artwork\/1c5f3a2b-8d7e-4f6a-b5c4-d3e2f1a0b9c8/,
+	);
 	// A run of results narrowed to a library leads back to them so narrowed.
 	await page.goto("/search/movie?q=quiet&library=l-films");
 	await expect(page.getByRole("link", { name: /Results for/ })).toHaveAttribute(
