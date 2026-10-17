@@ -32,6 +32,24 @@ func TestPlanCutsAtTheFirstKeyframeOfEachSixSeconds(t *testing.T) {
 	}
 }
 
+// A part whose container says nothing of how long it runs, as a raw elementary stream does not,
+// and one that says less than its own keyframes show, are both planned as far as the keyframes
+// reach, rather than not at all.
+func TestPlanReachesTheLastKeyframeOfAPartThatSaysItIsShorter(t *testing.T) {
+	parts := []Part{
+		{Keyframes: seconds(0, 2, 4, 6, 8, 10, 12, 14)},
+		{Duration: 3 * time.Second, Keyframes: seconds(0, 6, 12)},
+	}
+	var got []string
+	for _, s := range Plan(parts) {
+		got = append(got, strconv.Itoa(s.Part)+":"+s.Start.String()+"-"+s.End.String())
+	}
+	want := []string{"0:0s-6s", "0:6s-12s", "0:12s-14s", "1:0s-6s", "1:6s-12s"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Plan = %q, want %q", got, want)
+	}
+}
+
 func TestPlaylistMarksWhereOnePartGivesWayToTheNext(t *testing.T) {
 	segs := []Segment{{0, 0, 7500 * time.Millisecond}, {0, 7500 * time.Millisecond, 12 * time.Second}, {1, 0, 4 * time.Second}}
 	got := Playlist(segs, 7, func(p int) string { return "init" + strconv.Itoa(p) + ".mp4" }, func(n int) string { return strconv.Itoa(n) + ".m4s" })

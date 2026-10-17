@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,17 @@ func Forced(duration time.Duration) []time.Duration {
 		k = append(k, t)
 	}
 	return k
+}
+
+// extent is how far of a part is planned: what it says it runs, or its last keyframe where that
+// reaches further. ffprobe answers no duration at all for a raw elementary stream, which cannot
+// have one without being read to its end, and a container may say less than its own frames show.
+// Planning to the last keyframe loses what follows it, at most a segment, instead of the part.
+func (p Part) extent() time.Duration {
+	if len(p.Keyframes) == 0 {
+		return p.Duration
+	}
+	return max(p.Duration, slices.Max(p.Keyframes))
 }
 
 // Segment is one segment of the playlist: which part it is cut from, and where it starts and ends
@@ -66,9 +78,10 @@ func pieces(plan []Segment) []piece {
 func Plan(parts []Part) []Segment {
 	var segs []Segment
 	for p, part := range parts {
+		end := part.extent()
 		start, next := time.Duration(0), SegmentLength
 		for _, k := range part.Keyframes {
-			if k >= next && k > start && k < part.Duration {
+			if k >= next && k > start && k < end {
 				segs = append(segs, Segment{Part: p, Start: start, End: k})
 				start = k
 				for next <= k {
@@ -76,8 +89,8 @@ func Plan(parts []Part) []Segment {
 				}
 			}
 		}
-		if part.Duration > start {
-			segs = append(segs, Segment{Part: p, Start: start, End: part.Duration})
+		if end > start {
+			segs = append(segs, Segment{Part: p, Start: start, End: end})
 		}
 	}
 	return segs
