@@ -61,6 +61,7 @@ const defaults = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
+	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
 	subtitle_match: "release",
@@ -553,6 +554,26 @@ const refreshOptions = $derived(
 							Allowed, an admin's Delete removes a title's files from the disk,
 							which the server must be able to write to. They cannot be brought
 							back.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-missing"
+							>Copies on no disk</Field.Label
+						>
+						<Choice
+							id="{id}-library-missing"
+							name="missing_copies"
+							value={library?.missing_copies ?? defaults.missing_copies}
+							options={[
+								{ value: "keep", label: "Kept, marked missing" },
+								{ value: "forget", label: "Forgotten at the end of a scan" },
+							]}
+						/>
+						<Field.Description>
+							Kept, a copy whose files have gone stays, marked missing, so a
+							mount down for repair costs no titles; forget it instead and each
+							scan takes it, and the titles left with nothing, out of the
+							library.
 						</Field.Description>
 					</Field.Field>
 				{/if}

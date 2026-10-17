@@ -152,6 +152,20 @@ export function deleteTitle(id: string, name: string) {
 	);
 }
 
+// Takes a library's copies on no disk out of it, as Plex's Empty Trash does.
+export async function forgetMissingCopies(id: string, name: string) {
+	const done = await act(
+		api.DELETE("/api/v1/admin/libraries/{id}/missing", path(id)),
+	);
+	if (!done) return;
+	const copies = done.data.copies;
+	toast.success(
+		copies === 0
+			? `${name} had no copies on no disk.`
+			: `${copies === 1 ? "One copy" : `${copies} copies`} left ${name}.`,
+	);
+}
+
 // The library's own pages are gone with it: its wall leads home, its settings
 // to the list of libraries.
 export function removeLibrary(id: string, name: string, here: string) {

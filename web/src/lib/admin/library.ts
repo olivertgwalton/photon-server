@@ -54,8 +54,8 @@ export function libraryChange(
 		.map(String) as Schemas["ExtraKind"][];
 	const change: Schemas["LibraryChange"] = {
 		name: textAsTyped(form, "name"),
-		// A remote library has no folder to watch or delete from, and the form asks
-		// neither of one.
+		// A remote library has no folder to watch, to delete from, or to forget
+		// copies of, and the form asks none of those of one.
 		monitor: (form.get("monitor") ?? undefined) as
 			| Schemas["Monitor"]
 			| undefined,
@@ -65,6 +65,9 @@ export function libraryChange(
 		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
 		deletion: (form.get("deletion") ?? undefined) as
 			| Schemas["MediaDeletion"]
+			| undefined,
+		missing_copies: (form.get("missing_copies") ?? undefined) as
+			| Schemas["MissingCopy"]
 			| undefined,
 		metadata_language: localeChoice(form.get("metadata_language")),
 		certification_country: localeChoice(form.get("certification_country")),
