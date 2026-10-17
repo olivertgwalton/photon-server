@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -548,11 +549,20 @@ func TestAnAppSignsInByQuickConnect(t *testing.T) {
 	}
 }
 
-// onePicture is a server holding one picture, kept in file.
+// onePicture is a server holding one picture, kept in file; of names the title it is the poster
+// of, where it is a title's and not a profile's.
 type onePicture struct {
 	noLibraries
 	id   uuid.UUID
 	file string
+	of   uuid.UUID
+}
+
+func (p onePicture) BestPicture(_ context.Context, item uuid.UUID, kinds []domain.ArtworkKind) (uuid.UUID, error) {
+	if p.of == (uuid.UUID{}) || item != p.of || !slices.Contains(kinds, domain.ArtworkPoster) {
+		return uuid.UUID{}, store.ErrNotFound
+	}
+	return p.id, nil
 }
 
 func (p onePicture) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
@@ -601,6 +611,39 @@ func TestAnAppShowsAProfilesPicture(t *testing.T) {
 		}
 	}
 	for _, target := range []string{"/UserImage?userId=" + guid(ada.ID), "/UserImage?tag=" + guid(uuid.NewV7())} {
+		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", target, w.Code)
+		}
+	}
+}
+
+// An app draws an episode among a search's results by its season's poster, which nothing on the
+// episode names: it asks for the season's picture by the season's id, naming no tag, as Jellyfin
+// serves one. It is answered the season's poster, and refused a picture the season has not.
+func TestAnAppAsksAnItemForItsPictureWithoutATag(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "poster.png")
+	if err := os.WriteFile(file, []byte("\x89PNG\r\n\x1a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	season, poster := uuid.NewV7(), uuid.NewV7()
+	pictures := onePicture{id: poster, file: file, of: season}
+	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{},
+		Auth: fakeAuth{}, Catalogue: pictures, Pictures: pictures, Preferences: newPreferences{},
+	})
+	w := serve(api, http.MethodGet, "/Items/"+guid(season)+"/Images/Primary?maxWidth=480", "", "")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("the season's poster: %d %s, want the PNG", w.Code, w.Header().Get("Content-Type"))
+	}
+	// It changes as the season's pictures do, so an app is not to keep it for good.
+	if cache := w.Header().Get("Cache-Control"); strings.Contains(cache, "immutable") {
+		t.Errorf("Cache-Control %q, want one that lets the app ask again", cache)
+	}
+	for _, target := range []string{
+		"/Items/" + guid(season) + "/Images/Logo",
+		"/Items/" + guid(uuid.NewV7()) + "/Images/Primary",
+		"/Items/" + guid(season) + "/Images/Nonsense",
+	} {
 		if w := serve(api, http.MethodGet, target, "", ""); w.Code != http.StatusNotFound {
 			t.Errorf("%s: %d, want 404", target, w.Code)
 		}

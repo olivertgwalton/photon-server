@@ -129,6 +129,16 @@ func (s *Store) bestPictures(ctx context.Context, items []*model.Item) (map[uuid
 	return out, hashes, err
 }
 
+// BestPicture answers the first of kinds an item has a best picture of, as best_artwork keeps
+// them: what an app asks an item for by its id, naming no picture. ErrNotFound where it has none
+// of them.
+func (s *Store) BestPicture(ctx context.Context, item uuid.UUID, kinds []domain.ArtworkKind) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT artwork_id FROM best_artwork WHERE item_id = $1 AND kind = ANY($2)
+		ORDER BY array_position($2, kind) LIMIT 1`, item, kinds).Scan(&id)
+	return id, found(err)
+}
+
 // keepLibraryPictures chooses again the best pictures of the titles of libs, whose picture sources
 // changed.
 func keepLibraryPictures(ctx context.Context, tx db, libs []uuid.UUID) error {
