@@ -33,9 +33,11 @@ type Card struct {
 	DurationMS int64
 	// VersionCount is how many copies of it are on disk, for a choice of which to play.
 	VersionCount int
-	// An episode's card says which show and season it is of, where in them, and carries its still.
+	// An episode's card says which show and season it is of, where in them, and carries its still
+	// and its season's poster, which a search shows it by.
 	Show          *TitleRef
 	Season        *TitleRef
+	SeasonPoster  uuid.UUID
 	SeasonNumber  *int
 	EpisodeNumber *int
 	EpisodeEnd    *int
@@ -310,12 +312,13 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 			DurationMS: lengths[r.ID].ms, VersionCount: lengths[r.ID].versions, Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
+			SeasonPoster:     seasonPoster(pictures, r, shows[r.ID]),
 			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}
 		c := &cards[n]
-		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo)
+		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo, c.SeasonPoster)
 	}
 	return cards, nil
 }
@@ -330,7 +333,8 @@ type seasonShow struct {
 
 // picturesWorn answers titles' pictures as bestPictures does, an episode wearing its show's of
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
-// show's art: its own still stays its thumb. The shows are read in the same lookup.
+// show's art: its own still stays its thumb. The shows, and the seasons an episode's card carries
+// the poster of, are read in the same lookup.
 func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	// A show is ranked as a show of its episode's library; nothing more of it is read.
 	all := slices.Clone(rows)
@@ -339,6 +343,10 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 		if show := shows[r.ID].ref; show != nil && !seen[show.ID] {
 			seen[show.ID] = true
 			all = append(all, &model.Item{ID: show.ID, LibraryID: r.LibraryID, Kind: domain.ItemShow})
+		}
+		if season := shows[r.ID].season; r.Kind == domain.ItemEpisode && season != nil && !seen[season.ID] {
+			seen[season.ID] = true
+			all = append(all, &model.Item{ID: season.ID, LibraryID: r.LibraryID, Kind: domain.ItemSeason})
 		}
 	}
 	pictures, hashes, err := s.bestPictures(ctx, all)
@@ -360,6 +368,15 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 		}
 	}
 	return pictures, hashes, nil
+}
+
+// seasonPoster is the poster of the season an episode is of, where it has one of its own: what a
+// search shows an episode by, as Infuse shows one by its season's art and not by its still.
+func seasonPoster(pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, r *model.Item, of episodeShow) uuid.UUID {
+	if r.Kind != domain.ItemEpisode || of.season == nil {
+		return uuid.UUID{}
+	}
+	return first(pictures[of.season.ID][domain.ArtworkPoster])
 }
 
 // episodeShow is the show an episode is of, and the certificate it wears where it has none of its
