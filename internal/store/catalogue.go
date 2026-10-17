@@ -274,24 +274,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			return err
 		}
 		changed.add(domain.TitleUpdated, updated...)
-		for _, sql := range []string{
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
-				AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
-				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-			`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
-				AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-		} {
-			removed, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
-			if err != nil {
-				return err
-			}
-			changed.add(domain.TitleRemoved, removed...)
-		}
-		// A provider's box set left empty goes, whichever library's titles it held.
-		removed, err := queryColumn[uuid.UUID](ctx, tx, `
-			DELETE FROM items i USING collections c WHERE c.item_id = i.id AND c.origin NOT IN `+madeHere+`
-				AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id) RETURNING i.id`)
+		removed, err := removeEmptied(ctx, tx, lib)
 		if err != nil {
 			return err
 		}
@@ -301,6 +284,34 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		return err
 	})
 	return changed, err
+}
+
+// removeEmptied removes a library's films, episodes and extras left with no copy, the seasons and
+// shows left with nothing in them, and a provider's box set left empty, whichever library's titles
+// it held, answering every title that went.
+func removeEmptied(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
+	var removed []uuid.UUID
+	for _, sql := range []string{
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra')
+			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'season'
+			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind = 'show'
+			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
+	} {
+		gone, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
+		if err != nil {
+			return nil, err
+		}
+		removed = append(removed, gone...)
+	}
+	gone, err := queryColumn[uuid.UUID](ctx, tx, `
+		DELETE FROM items i USING collections c WHERE c.item_id = i.id AND c.origin NOT IN `+madeHere+`
+			AND NOT EXISTS (SELECT 1 FROM collection_members m WHERE m.collection_id = c.item_id) RETURNING i.id`)
+	if err != nil {
+		return nil, err
+	}
+	return append(removed, gone...), nil
 }
 
 // notIn is the condition that a path column is none of the array parameter param. Written as
