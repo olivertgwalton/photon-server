@@ -2,6 +2,7 @@ package hls
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -150,8 +151,25 @@ func streamArgs(hw Hardware, start time.Duration, video domain.VideoPlan, audio 
 	default:
 		a = append(a, "-map", in, "-c:v", "copy")
 	}
+	var bsf []string
+	// Some files hold no parameter set in their avcC or hvcC, carrying them in the stream instead.
+	// The MP4 muxer writes that configuration into the init segment as it found it, and a browser,
+	// which builds its decoder from the init segment alone, then draws nothing: the picture stays
+	// black while the sound plays. The metadata filter writes the stream's own back into it.
+	// Encoded video carries its encoder's.
+	if video.Encode == nil {
+		switch video.Codec {
+		case "h264":
+			bsf = append(bsf, "h264_metadata")
+		case "hevc":
+			bsf = append(bsf, "hevc_metadata")
+		}
+	}
 	if video.DolbyVision == domain.DolbyVisionStrip {
-		a = append(a, "-bsf:v", "dovi_rpu=strip=1")
+		bsf = append(bsf, "dovi_rpu=strip=1")
+	}
+	if len(bsf) > 0 {
+		a = append(a, "-bsf:v", strings.Join(bsf, ","))
 	}
 	if audio != nil {
 		a = append(a, "-map", "0:"+strconv.Itoa(audio.Stream))

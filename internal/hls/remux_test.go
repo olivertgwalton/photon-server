@@ -260,7 +260,21 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			domain.VideoPlan{Codec: "hevc", DolbyVision: domain.DolbyVisionStrip},
 			nil,
 			nil,
-			[]string{"-tag:v hvc1", "-bsf:v dovi_rpu=strip=1"},
+			[]string{"-tag:v hvc1", "-bsf:v hevc_metadata,dovi_rpu=strip=1"},
+		},
+		{
+			"copied H.264 has its parameter sets written into the init segment",
+			domain.VideoPlan{Codec: "h264"},
+			nil,
+			nil,
+			[]string{"-c:v copy", "-bsf:v h264_metadata"},
+		},
+		{
+			"copied HEVC has its parameter sets written into the init segment",
+			domain.VideoPlan{Codec: "hevc"},
+			nil,
+			nil,
+			[]string{"-c:v copy", "-bsf:v hevc_metadata"},
 		},
 		{
 			"encoded video is H.264 with a keyframe every segment, tone mapped",
@@ -290,7 +304,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			&styledLayer{file: "/hls/p/styled.ass", charset: "CP1251", offset: 45 * time.Minute},
 			[]string{"-vf scale=1280:720,format=yuv420p,setpts=PTS+2700.000000/TB,subtitles=f=/hls/p/styled.ass:charenc=CP1251,setpts=PTS-2700.000000/TB"},
 		},
-		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, nil, []string{"-map 0:0 -c:v copy -map 0:2 -c:a copy"}},
+		{"audio asked for is copied", domain.VideoPlan{Stream: 0, Codec: "h264"}, &domain.AudioPlan{Stream: 2}, nil, []string{"-map 0:0 -c:v copy", "-map 0:2 -c:a copy"}},
 		{"chapters are no track of their own, which Safari refuses", domain.VideoPlan{Codec: "h264"}, nil, nil, []string{"-map_chapters -1"}},
 		{
 			"audio encoded",
