@@ -19,11 +19,15 @@ test("a logo is dark by its hash's average colour", () => {
 	expect(isDark(undefined)).toBe(false);
 });
 
-test("a picture's average colour is read from its hash", () => {
-	expect(averageColour("000000")).toBe("#000000");
-	expect(averageColour("002~Qp")).toBe("#1a1a59");
-	expect(averageColour("00F$Y7")).toBe("#898989");
-	expect(averageColour("00TSUA")).toBe("#ffffff");
+test("a picture with a colour of its own tints the page", () => {
+	// Navy: its hue at the tint's own lightness, not its near-black brightness.
+	expect(averageColour("002~Qp")).toBe("hsl(from #1a1a59 h s 35%)");
+});
+
+test("a picture with no colour of its own tints nothing", () => {
+	expect(averageColour("00F$Y7")).toBeUndefined(); // mid grey, #898989
+	expect(averageColour("000000")).toBeUndefined(); // black
+	expect(averageColour("00TSUA")).toBeUndefined(); // white
 	expect(averageColour(undefined)).toBeUndefined();
 	expect(averageColour("00T")).toBeUndefined();
 });

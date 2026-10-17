@@ -84,12 +84,26 @@ export function isDark(hash: string | undefined): boolean {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b < darkLuma;
 }
 
-// The average colour of a hash's picture, to tint the page a backdrop fades
-// into: as a CSS colour, or nothing where there is no hash to read, so a page
-// without one is left as it was.
+// A backdrop with less colour than this is no colour at all: its average is a
+// grey, which tints a page muddy rather than giving it the title's colour.
+const tintSaturation = 0.2;
+// A tint is drawn at this lightness whatever the backdrop's own: the hue is
+// what the page wants, where a pale backdrop would wash it and a dark one
+// blacken it. The browser holds the hue and saturation and takes this.
+const tintLightness = "35%";
+
+// The colour to tint the page a backdrop fades into, from the average colour
+// its hash writes: nothing where there is no hash to read, or where the
+// picture has no colour of its own, so such a page is left as it was.
 export function averageColour(hash: string | undefined): string | undefined {
 	if (!hash || hash.length < 6) return undefined;
-	return `#${average(hash).toString(16).padStart(6, "0")}`;
+	const v = average(hash);
+	const [r, g, b] = [v >> 16, (v >> 8) & 255, v & 255].map((c) => c / 255);
+	const light = (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
+	const spread = Math.max(r, g, b) - Math.min(r, g, b);
+	if (spread === 0 || spread / (1 - Math.abs(2 * light - 1)) < tintSaturation)
+		return undefined;
+	return `hsl(from #${v.toString(16).padStart(6, "0")} h s ${tintLightness})`;
 }
 
 const darkLuma = 0.3;
