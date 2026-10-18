@@ -51,6 +51,10 @@ linters:
   settings:
     errcheck:
       check-blank: true
+      # A Win32 call says it failed in its result; the error beside it is GetLastError's, set
+      # whether it failed or not.
+      exclude-functions:
+        - (*golang.org/x/sys/windows.LazyProc).Call
     funlen:
       lines: 100
       statements: -1

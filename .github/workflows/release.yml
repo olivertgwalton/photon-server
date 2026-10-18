@@ -4,7 +4,7 @@ on:
     tags: ["v*"]
   # A change to how archives are made builds and runs them without publishing.
   pull_request:
-    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/fetch-jellyfin-web.sh, macos/**, flatpak/**]
+    paths: [.github/workflows/release.yml, deploy/fetch-tools.sh, deploy/fetch-jellyfin-web.sh, macos/**, flatpak/**, windows/**, cmd/photon-tray/**]
 permissions:
   contents: read
 jobs:
@@ -245,6 +245,98 @@ jobs:
             appcast.xml
           if-no-files-found: error
 
+  # Photon for Windows: the tray app that runs the server beside its own PostgreSQL and Valkey, in
+  # an installer that asks for no admin. Valkey has no Windows build of its own, so the one built
+  # here under MSYS2 passes the kv package's tests before it is carried.
+  windows:
+    needs: archive
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          path-type: inherit
+          install: >-
+            gcc make curl unzip
+            mingw-w64-ucrt-x86_64-librsvg mingw-w64-ucrt-x86_64-imagemagick
+      - name: Find makensis
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) { choco install nsis -y --no-progress }
+          "${env:ProgramFiles(x86)}\NSIS" >> $env:GITHUB_PATH
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*_windows_amd64"
+          merge-multiple: true
+      # PostgreSQL and Valkey are built again only when the versions build-services.sh pins change.
+      - uses: actions/cache@v6
+        id: services
+        with:
+          path: services
+          key: windows-services-${{ hashFiles('windows/build-services.sh') }}
+      - name: Build PostgreSQL and Valkey
+        if: steps.services.outputs.cache-hit != 'true'
+        run: windows/build-services.sh services
+      - name: Valkey passes the kv tests
+        env:
+          TEST_VALKEY_URL: valkey://127.0.0.1:6379
+        run: |
+          services/valkey/bin/valkey-server.exe --port 6379 --save "" --appendonly no > valkey.log 2>&1 &
+          trap 'kill $!' EXIT
+          go test -tags integration -count=1 ./internal/kv/ || { cat valkey.log; exit 1; }
+      - name: Build the installer
+        run: |
+          unzip -q photon-server_*.zip
+          PATH="$PATH:/ucrt64/bin" windows/build-app.sh "$VERSION" photon-server services .
+          echo "SETUP=photon-server_${VERSION}_windows_amd64_setup.exe" >> "$GITHUB_ENV"
+      # Installed, it starts Photon, which makes its database, starts PostgreSQL, Valkey and the
+      # server, and serves the web app. Installed again over it, as an update is, it quits Photon,
+      # replaces it and starts it again on the same database. Closed, Photon stops all three.
+      - name: Install and run it
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Programs\Photon"
+          $logs = "$env:LOCALAPPDATA\Photon\logs"
+          function Install {
+            (Start-Process -FilePath ".\$env:SETUP" -ArgumentList '/S' -PassThru).WaitForExit()
+            for ($i = 0; $i -lt 90; $i++) {
+              try {
+                if ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://localhost:8640/health).StatusCode -eq 204) { return }
+              } catch {}
+              Start-Sleep 2
+            }
+            Get-Content "$logs\*.log"
+            exit 1
+          }
+          Install
+          Install
+          if (-not ((Invoke-WebRequest -UseBasicParsing http://localhost:8640/auth/login).Content -match 'kit.start')) { exit 1 }
+          taskkill /im Photon.exe
+          for ($i = 0; $i -lt 60; $i++) {
+            $left = Get-Process | Where-Object { $_.Path -like "$app\*" }
+            if (-not $left) { break }
+            Start-Sleep 1
+          }
+          Get-Content "$logs\*.log"
+          if ($left) { $left | Format-Table Id, Path; exit 1 }
+          # Each time, photon-server stopped when it was told to rather than being ended.
+          if ((Select-String -Path "$logs\photon.log" -Pattern '"msg":"photon-server exited","command":"serve","exit":0').Count -ne 2) { exit 1 }
+          if (Select-String -Path "$logs\photon.log" -Pattern 'not stopped when told' -Quiet) { exit 1 }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.SETUP }}
+          path: ${{ env.SETUP }}
+          if-no-files-found: error
+
   # The Linux build: a Flatpak carrying the server with its own PostgreSQL and Valkey. Run, it makes
   # its database, serves the web app, and stops all three when told to.
   flatpak:
@@ -319,7 +411,7 @@ jobs:
 
   publish:
     if: github.ref_type == 'tag'
-    needs: [run, dmg, flatpak-run]
+    needs: [run, dmg, windows, flatpak-run]
     runs-on: ubuntu-latest
     permissions:
       contents: write
