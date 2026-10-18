@@ -37,6 +37,7 @@ and your browser opens the **Set up** page.
 | Open Photon | Opens the web app in your browser. |
 | Start at Login | Opens Photon whenever you log in to the Mac. Off at first. |
 | Show Logs | Opens the folder of log files, useful when something goes wrong. |
+| Check for Updates… | Looks for a newer version, and installs it if you choose to. Photon also looks once a day. |
 | Quit Photon | Stops the server. |
 
 The Mac app uses the Mac's own video hardware to convert video.

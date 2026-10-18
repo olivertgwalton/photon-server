@@ -1,4 +1,5 @@
 import ServiceManagement
+import Sparkle
 import SwiftUI
 
 @main
@@ -7,16 +8,17 @@ struct PhotonApp: App {
 
     var body: some Scene {
         MenuBarExtra("Photon", systemImage: "play.rectangle.fill") {
-            PhotonMenu(server: delegate.server)
+            PhotonMenu(server: delegate.server, updater: delegate.updater.updater)
         }
     }
 }
 
-/// AppDelegate stops the server however the app is quit: from its menu, at logout, or by another
-/// app asking.
+/// AppDelegate stops the server however the app is quit: from its menu, at logout, by another app
+/// asking, or by Sparkle to install an update, which opens the new version once it is in place.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let server = Server()
+    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     func applicationWillTerminate(_: Notification) {
         server.stop()
@@ -25,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct PhotonMenu: View {
     @ObservedObject var server: Server
+    let updater: SPUUpdater
     @State private var atLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -41,6 +44,7 @@ struct PhotonMenu: View {
                 }
             }
         Button("Show Logs") { NSWorkspace.shared.activateFileViewerSelecting([Server.log]) }
+        Button("Check for Updates…") { updater.checkForUpdates() }
         Divider()
         Button("Quit Photon") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

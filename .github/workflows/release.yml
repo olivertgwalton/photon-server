@@ -160,6 +160,10 @@ jobs:
           find "$res" -type f ! -name yt-dlp | while read -r f; do
             if file "$f" | grep -q Mach-O; then sign "$f"; fi
           done
+          sparkle=Photon.app/Contents/Frameworks/Sparkle.framework
+          sign "$sparkle/Versions/B/Autoupdate"
+          sign "$sparkle/Versions/B/Updater.app"
+          sign "$sparkle"
           sign Photon.app
           codesign --verify --strict --verbose=2 Photon.app
           echo "IDENTITY=$identity" >> "$GITHUB_ENV"
