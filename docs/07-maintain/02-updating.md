@@ -5,6 +5,8 @@ summary: "Move photon-server to a new version, and go back to the old one if you
 
 A new version of photon-server may change how its database is laid out. These changes are called **migrations**, and `photon-server migrate` applies them before the new version starts. The standard Docker setup, the Flatpak and the Mac app do this for you.
 
+When a newer release is out, Settings › Server › Dashboard says so under **Needs attention**, with a link to its notes. The server asks GitHub for it a few times a day. To stop it asking, set **Look for new versions** to **Off** under Settings › Server › General.
+
 ## Before you update
 
 1. Note the version you run. Settings › Server › Dashboard shows it under the server's name.
@@ -48,7 +50,7 @@ PHOTON_IMAGE=ghcr.io/olivertgwalton/photon-server:latest
   ```
 
   This replaces the old version and keeps your database. Stop Photon and open it again: it migrates the database as it starts. `flatpak update` doesn't find new versions, as the bundle doesn't come from a Flatpak repository.
-- **Mac app.** Quit Photon, drag the new one from the release's disk image to Applications, and open it. It migrates every time it starts.
+- **Mac app.** Choose **Check for Updates…** in Photon's menu, then **Install Update**. Photon also looks once a day and asks you when a newer version is out. It stops the server, puts the new version in place, and opens it, which migrates the database. A version with no **Check for Updates…** is updated once by hand: quit Photon, drag the new one from the release's disk image to Applications, and open it.
 - **Windows app.** Open the new `_setup.exe`. It quits Photon, replaces it, keeps your database, and starts it again. It migrates every time it starts.
 - **Archive.** Stop the server. Unpack the new archive over the old one. Then, with `PHOTON_DATABASE_URL` set as before, run:
 

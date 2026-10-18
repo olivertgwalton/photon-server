@@ -40,6 +40,18 @@ func (r HomeRow) LibraryKinds() []LibraryKind {
 	return nil
 }
 
+// WearsCardArt is whether a card on the row is drawn by the picture CardArt chooses: the rows
+// about where the profile is, which draw a film or an episode wide rather than by its poster.
+func (r HomeRow) WearsCardArt() bool {
+	switch r {
+	case RowContinueWatching, RowNextUp:
+		return true
+	case RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched:
+		return false
+	}
+	return false
+}
+
 // RowVisibility is whether a profile's home shows a row.
 type RowVisibility string
 

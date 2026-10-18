@@ -55,16 +55,16 @@ const columns = $derived(buckets(data.stats.daily));
 </PageHeader>
 
 <div class="grid gap-6">
-	<dl class="grid grid-cols-2 gap-4 sm:max-w-md">
-		<div class="bg-raise rounded-lg p-4">
-			<dt class="text-ink-3 text-sm">Plays</dt>
-			<dd class="text-ink text-2xl font-semibold">
+	<dl class="grid grid-cols-2 gap-3 sm:max-w-md">
+		<div class="bg-raise grid content-start gap-1 rounded-xl p-4">
+			<dt class="label">Plays</dt>
+			<dd class="text-ink font-heading text-2xl font-bold">
 				{data.stats.plays.toLocaleString()}
 			</dd>
 		</div>
-		<div class="bg-raise rounded-lg p-4">
-			<dt class="text-ink-3 text-sm">Time watched</dt>
-			<dd class="text-ink text-2xl font-semibold">
+		<div class="bg-raise grid content-start gap-1 rounded-xl p-4">
+			<dt class="label">Time watched</dt>
+			<dd class="text-ink font-heading text-2xl font-bold">
 				{data.stats.watched_ms ? runtime(data.stats.watched_ms) : "None"}
 			</dd>
 		</div>

@@ -37,6 +37,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/push"
 	"github.com/olivertgwalton/photon-server/internal/pushrelay"
 	"github.com/olivertgwalton/photon-server/internal/reach"
+	"github.com/olivertgwalton/photon-server/internal/release"
 	"github.com/olivertgwalton/photon-server/internal/remote"
 	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/secure"
@@ -94,6 +95,7 @@ type node struct {
 	trackers  *tracker.Links
 	signIns   *sso.Service
 	identity  *identity.Server
+	releases  *release.Checker
 	secured   *secure.Server
 	jellyfin  *jellyfin.Listener
 	finished  *jobs.Finished
@@ -148,6 +150,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	if n.identity, err = identity.New(ctx, n.st, hostname, n.logger); err != nil {
 		return err
 	}
+	n.releases = release.New(version, n.identity.ReleaseCheck, n.logger)
 	n.plugins = plugin.New(n.st, n.cache)
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
 	offers := remote.New(n.providers)
@@ -281,7 +284,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Notifications: st, Push: st, PushKey: n.pusher, People: st, PersonDescriber: n.providers, Editing: st, History: st, Statistics: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Notifications: st, Push: st, PushKey: n.pusher, People: st, PersonDescriber: n.providers, Editing: st, History: st, Statistics: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Copies: n.copies, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Releases: n.releases, Postgres: st, Valkey: cache, Web: web,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, n.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    n.sent,
 		}),
@@ -371,6 +374,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { n.reach.Run(background) })
 	wg.Go(func() { answerDiscovery(background, n.srv.Addr, n.reach, n.secured.Scheme, n.said, logger) })
 	wg.Go(func() { n.identity.Run(background, n.hub.Subscribe) })
+	wg.Go(func() { n.releases.Run(background) })
 	wg.Go(func() { n.secured.Run(background) })
 	wg.Go(func() {
 		n.stores.Run(background, storage.Cluster{Node: n.id, Subscribe: n.hub.Subscribe, Raise: n.hub.Raise, Nodes: nodeIDs(n.cache)})

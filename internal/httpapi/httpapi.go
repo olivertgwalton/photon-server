@@ -222,6 +222,8 @@ type Services struct {
 	// where an admin sets them.
 	Identity       *identity.Server
 	ServerSettings serverSettings
+	// Releases is the latest release, where it is newer than this node's.
+	Releases releases
 	// Setup is how this node was started, and Postgres and Valkey what it reaches.
 	Setup    Setup
 	Postgres versioned

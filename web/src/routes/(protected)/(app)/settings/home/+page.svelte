@@ -7,25 +7,30 @@ import { toast } from "svelte-sonner";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
+import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
+import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
 import { reorder } from "#lib/reorder.svelte.js";
 import { moved } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 type Section = components["schemas"]["HomeSection"];
+type CardArt = components["schemas"]["CardArt"];
 
 let { data } = $props();
 const words = vocabulary();
 // Each change answers the home as kept, until a load gives it afresh.
 let home = $derived(data.prefs.home);
+let art = $derived(data.prefs.card_art);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");
 
-// The order last kept by the server, to go back to where a save fails.
+// What the server last kept, to go back to where a save fails.
 let kept = $derived(data.prefs.home);
+let keptArt = $derived(data.prefs.card_art);
 // Each save is sent once the one before is answered, so the server keeps the
 // last order drawn; only the answer to that last one is drawn.
 let sending = Promise.resolve();
@@ -69,6 +74,36 @@ function show(i: number, shown: boolean) {
 }
 
 const drag = reorder(move);
+
+// What the rows about where the reader is draw a card by: the server answers
+// those rows' cards with the picture chosen, so nothing here draws it twice.
+const artOptions: { value: CardArt; label: string }[] = [
+	{ value: "still", label: "The episode's still" },
+	{ value: "backdrop", label: "The show's backdrop" },
+];
+
+// On the same queue as the order: a change is sent once the one before is
+// answered, since the server keeps a change against the preferences as it
+// reads them, and two at once would each drop the other's.
+function picture(chosen: CardArt) {
+	art = chosen;
+	const send = async () => {
+		const { data: saved, error } = await client().PATCH(
+			"/api/v1/profile/preferences",
+			{ body: { card_art: chosen } },
+		);
+		if (saved) keptArt = saved.card_art;
+		if (art !== chosen) return;
+		if (error) {
+			art = keptArt;
+			toast.error(problemMessage(error));
+			return;
+		}
+		art = saved.card_art;
+		toast.success("Saved for every device.");
+	};
+	sending = sending.then(send, send);
+}
 
 type Way = "up" | "down";
 
@@ -151,5 +186,23 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 			{/each}
 		</ol>
 		<p class="sr-only" aria-live="polite">{said}</p>
+	</Card.Content>
+</Card.Root>
+
+<Card.Root class="mt-6 max-w-2xl">
+	<Card.Content>
+		<Field.Field>
+			<Field.Label for="card-art">Row pictures</Field.Label>
+			<Choice
+				id="card-art"
+				options={artOptions}
+				value={art}
+				onchange={picture}
+				class="w-full sm:w-72"
+			/>
+			<Field.Description>
+				What Continue Watching and Next Up draw a card by.
+			</Field.Description>
+		</Field.Field>
 	</Card.Content>
 </Card.Root>

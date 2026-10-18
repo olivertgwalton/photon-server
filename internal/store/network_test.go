@@ -56,7 +56,7 @@ func TestTheServersCountryChangesNoCertificateKept(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	set, err := s.ServerSettings(ctx)
-	if want := (domain.ServerSettings{Locale: domain.Locale{Language: "en-US", Country: "US"}}); err != nil || set != want {
+	if want := (domain.ServerSettings{Locale: domain.Locale{Language: "en-US", Country: "US"}, ReleaseCheck: domain.ReleaseCheckOn}); err != nil || set != want {
 		t.Fatalf("a new server: %+v, %v; want %+v", set, err, want)
 	}
 	age := func() int {
@@ -67,7 +67,7 @@ func TestTheServersCountryChangesNoCertificateKept(t *testing.T) {
 		}
 		return age
 	}
-	gb := domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}}
+	gb := domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}, ReleaseCheck: domain.ReleaseCheckOff}
 	if err := s.SetServerSettings(ctx, gb); err != nil {
 		t.Fatal(err)
 	}

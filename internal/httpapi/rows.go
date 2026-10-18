@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"slices"
 	"strconv"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -19,9 +21,12 @@ func (a *API) profileRow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	row := domain.HomeRow(r.PathValue("row"))
-	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), auth.SessionOf(r.Context()).Profile.ID, row, offset, limit)
+	profile, row := auth.SessionOf(r.Context()).Profile.ID, domain.HomeRow(r.PathValue("row"))
+	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), profile, row, offset, limit)
 	if a.answered(w, r, err) {
+		return
+	}
+	if a.answered(w, r, a.wearCardArt(r.Context(), profile, row, cards)) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
@@ -56,6 +61,25 @@ func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+}
+
+// wearCardArt has each card on a row about where the profile is carry the picture the profile
+// chose as its thumb, the picture a client draws such a card by: so a client draws what was asked
+// for without choosing between the two itself.
+func (a *API) wearCardArt(ctx context.Context, profile uuid.UUID, row domain.HomeRow, cards []store.Card) error {
+	if !row.WearsCardArt() {
+		return nil
+	}
+	p, err := a.svc.Preferences.Preferences(ctx, profile)
+	if err != nil || p.CardArt != domain.CardBackdrop {
+		return err
+	}
+	for i := range cards {
+		if c := &cards[i]; c.Backdrop != (uuid.UUID{}) {
+			c.Thumb = c.Backdrop
+		}
+	}
+	return nil
 }
 
 func (a *API) rowsRoutes() []route {

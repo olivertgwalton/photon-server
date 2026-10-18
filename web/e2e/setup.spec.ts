@@ -71,6 +71,7 @@ test("a new server is set up step by step: its admin, its name, its libraries, a
 		name: "Den",
 		metadata_language: "en-GB",
 		certification_country: "GB",
+		release_check: "on",
 	});
 
 	await expect(page).toHaveURL("/setup/libraries");
