@@ -2282,6 +2282,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What was watched over the last so many days: altogether, by profile, by title, and day by day
+         * @description Admin only.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description How many days back the report reaches, today counted; 30 by default, 3650 at most. */
+                    days?: number;
+                    /** @description The time zone its days are counted in, such as Europe/London; UTC by default. */
+                    zone?: string;
+                    /** @description Only this profile's plays. */
+                    profile?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Statistics"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/storage": {
         parameters: {
             query?: never;
@@ -7917,6 +7964,13 @@ export interface components {
             photo?: string;
             role?: string;
         };
+        DayWatched: {
+            /** Format: date */
+            day: string;
+            plays: number;
+            /** Format: int64 */
+            watched_ms: number;
+        };
         DeadJob: {
             attempts: number;
             error?: string;
@@ -9077,6 +9131,14 @@ export interface components {
         ProfileTrackerList: {
             items: components["schemas"]["ProfileTracker"][];
         };
+        ProfileWatched: {
+            name: string;
+            plays: number;
+            /** Format: uuid */
+            profile_id: string;
+            /** Format: int64 */
+            watched_ms: number;
+        };
         Progress: {
             /** Format: date-time */
             at?: string | null;
@@ -9351,6 +9413,16 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        Statistics: {
+            daily: components["schemas"]["DayWatched"][];
+            days: number;
+            plays: number;
+            profiles: components["schemas"]["ProfileWatched"][];
+            titles: components["schemas"]["TitleWatched"][];
+            /** Format: int64 */
+            watched_ms: number;
+            zone: string;
+        };
         Storage: {
             bucket?: components["schemas"]["Bucket"];
             kind: components["schemas"]["StorageKind"];
@@ -9566,6 +9638,12 @@ export interface components {
             watched_at?: string | null;
             /** Format: date-time */
             watchlisted_at?: string | null;
+        };
+        TitleWatched: {
+            plays: number;
+            title: components["schemas"]["Card"];
+            /** Format: int64 */
+            watched_ms: number;
         };
         Tool: {
             path: string;

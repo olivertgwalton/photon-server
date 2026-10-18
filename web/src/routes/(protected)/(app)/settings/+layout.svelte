@@ -3,6 +3,7 @@ import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
 import BellIcon from "@lucide/svelte/icons/bell";
 import CalendarClockIcon from "@lucide/svelte/icons/calendar-clock";
+import ChartColumnIcon from "@lucide/svelte/icons/chart-column";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
@@ -124,6 +125,12 @@ const server: [string, string, Component, string][] = [
 		"Play history",
 		RotateCcwClockIcon,
 		"plays watched",
+	],
+	[
+		"/settings/server/statistics",
+		"Watch statistics",
+		ChartColumnIcon,
+		"stats hours most watched top titles who watched report",
 	],
 	[
 		"/settings/server/imports",
