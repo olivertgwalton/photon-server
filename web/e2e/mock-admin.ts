@@ -598,6 +598,46 @@ export async function admin(
 				offset: 0,
 				total: 1,
 			} satisfies Schemas["HistoryEntryPage"]);
+		case "GET /api/v1/admin/statistics": {
+			// The Kids watched Quiet Hours once, yesterday; a report of Ada's
+			// alone has nothing in it.
+			const days = Number(url.searchParams.get("days") ?? 30);
+			const kids = url.searchParams.get("profile") !== "p-ada";
+			const watched = kids
+				? { plays: 1, watched_ms: 6_000_000 }
+				: { plays: 0, watched_ms: 0 };
+			const today = new Date();
+			const daily = Array.from({ length: days }, (_, i) => {
+				const d = new Date(today);
+				d.setDate(today.getDate() - (days - 1 - i));
+				const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+				return i === days - 2
+					? { day, ...watched }
+					: { day, plays: 0, watched_ms: 0 };
+			});
+			return json({
+				days,
+				zone: url.searchParams.get("zone") ?? "UTC",
+				...watched,
+				profiles: kids
+					? [{ profile_id: "p-kids", name: "Kids", ...watched }]
+					: [],
+				titles: kids
+					? [
+							{
+								title: {
+									id: "t-quiet",
+									kind: "movie",
+									title: "Quiet Hours",
+									added_at: film.added_at,
+								},
+								...watched,
+							},
+						]
+					: [],
+				daily,
+			} satisfies Schemas["Statistics"]);
+		}
 		case "GET /api/v1/admin/libraries":
 			return json({
 				items: [

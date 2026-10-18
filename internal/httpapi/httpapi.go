@@ -120,8 +120,9 @@ type Services struct {
 	Profiles  profileLister
 	Catalogue catalogue
 	Libraries libraryAdmin
-	// History is the plays each profile has finished.
-	History history
+	// History is the plays each profile has finished, and Statistics what they add up to.
+	History    history
+	Statistics statistics
 	// Editing is an admin's say over what a title is.
 	Editing editing
 	// People are those credited on titles, and PersonDescriber says who they are.
@@ -319,6 +320,7 @@ func (a *API) routes() []route {
 		a.collectionsRoutes(),
 		a.peopleRoutes(),
 		a.historyRoutes(),
+		a.statisticsRoutes(),
 		a.playlistsRoutes(),
 		a.editRoutes(),
 		a.artworkEditRoutes(),

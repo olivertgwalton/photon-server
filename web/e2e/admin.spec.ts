@@ -512,6 +512,46 @@ test("tasks run, dead jobs are retried, and the logs read", async ({
 	await expectAccessible(page);
 });
 
+test("an admin reads what was watched, by whom, over the span they choose", async ({
+	page,
+}) => {
+	const asked = page.waitForRequest((r) =>
+		r.url().includes("/admin/statistics"),
+	);
+	await logIn(page, "/settings/server/statistics");
+	// Days are counted where the admin is reading.
+	expect(new URL((await asked).url()).searchParams.get("zone")).toBe(
+		await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
+	);
+	await expect(
+		page.getByRole("heading", { name: "Watch statistics" }),
+	).toBeVisible();
+	await expect(page.getByRole("link", { name: "Quiet Hours" })).toBeVisible();
+	await expect(page.getByRole("link", { name: "Kids" })).toHaveAttribute(
+		"href",
+		"/settings/server/history?profile=p-kids",
+	);
+	// The chart's values are there to read, yesterday's play among them.
+	await expect(
+		page.getByRole("table", { name: "Time watched by day" }),
+	).toContainText("1 play, 1h 40m");
+	await expectAccessible(page);
+
+	// A year is drawn a column a week.
+	await page.getByLabel("When").click();
+	await page.getByRole("option", { name: "Last year" }).click();
+	await expect(page).toHaveURL("/settings/server/statistics?days=365");
+	await expect(
+		page.getByRole("table", { name: "Time watched by week" }),
+	).toBeAttached();
+
+	await page.getByLabel("Who").click();
+	await page.getByRole("option", { name: "Ada" }).click();
+	await expect(
+		page.getByText("Nothing was watched in the last year."),
+	).toBeVisible();
+});
+
 test("a webhook's secret is shown once, to copy", async ({ page }) => {
 	await logIn(page, "/settings/server/webhooks");
 	await page.getByRole("button", { name: "Add a webhook" }).click();
