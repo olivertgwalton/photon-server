@@ -41,7 +41,13 @@ PHOTON_IMAGE=ghcr.io/olivertgwalton/photon-server:latest
 
 ## Update a native install
 
-- **Flatpak.** Run `flatpak update io.github.olivertgwalton.Photon`. It migrates the database every time it starts.
+- **Flatpak.** Download the new `.flatpak` from the release, and install it as you did the first one:
+
+  ```sh
+  flatpak install --user ./photon-server_<version>_linux_amd64.flatpak
+  ```
+
+  This replaces the old version and keeps your database. Stop Photon and open it again: it migrates the database as it starts. `flatpak update` doesn't find new versions, as the bundle doesn't come from a Flatpak repository.
 - **Mac app.** Quit Photon, drag the new one from the release's disk image to Applications, and open it. It migrates every time it starts.
 - **Archive.** Stop the server. Unpack the new archive over the old one. Then, with `PHOTON_DATABASE_URL` set as before, run:
 
