@@ -6,9 +6,8 @@ import { act } from "#lib/act.js";
 import { withQuery } from "#lib/address.js";
 import { client, refusal } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
-import SmartPlaylistDialog from "#lib/components/SmartPlaylistDialog.svelte";
+import SmartSaveDialog from "#lib/components/SmartSaveDialog.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
 import Wall from "#lib/components/Wall.svelte";
@@ -126,6 +125,30 @@ function saveListRule() {
 	);
 }
 
+// Keep this wall as a new smart collection, everyone's, or a smart playlist,
+// the profile's own.
+async function keepCollection(title: string) {
+	if (!rule) return;
+	return act(
+		client().POST("/api/v1/admin/collections", {
+			body: { library_ids: [id], title, rule },
+		}),
+		`${title} is a smart collection.`,
+		(made) => `/settings/server/collections/${made.id}`,
+	);
+}
+
+async function keepPlaylist(name: string) {
+	if (!playRule) return;
+	return act(
+		client().POST("/api/v1/playlists", {
+			body: { name, library_id: id, rule: playRule },
+		}),
+		`${name} plays what these filters find.`,
+		(made) => `/playlists/${made.id}`,
+	);
+}
+
 function choose(style: string) {
 	if (!style) return;
 	view = style as ViewStyle;
@@ -199,7 +222,13 @@ function jump(letters: Letter[], letter: string) {
 		<Button variant="outline" size="sm" onclick={() => (saving = true)}>
 			Save as a smart collection
 		</Button>
-		<SmartCollectionDialog bind:open={saving} library={id} {rule} />
+		<SmartSaveDialog
+			bind:open={saving}
+			heading="Save as a smart collection"
+			about="It holds what these filters find, in this order, kept up to date as the library changes."
+			placeholder="Recent comedies"
+			save={keepCollection}
+		/>
 	{/if}
 	{#if playRule && data.editingList}
 		<Button size="sm" onclick={saveListRule}>Save to the playlist</Button>
@@ -207,7 +236,13 @@ function jump(letters: Letter[], letter: string) {
 		<Button variant="outline" size="sm" onclick={() => (keeping = true)}>
 			Save as a smart playlist
 		</Button>
-		<SmartPlaylistDialog bind:open={keeping} library={id} rule={playRule} />
+		<SmartSaveDialog
+			bind:open={keeping}
+			heading="Save as a smart playlist"
+			about="It plays what these filters find, in this order, worked out again each time you open it."
+			placeholder="Not yet seen"
+			save={keepPlaylist}
+		/>
 	{/if}
 	<WallFilterMenu query={data.query} {facets} onchange={show} />
 	<WallSortMenu
