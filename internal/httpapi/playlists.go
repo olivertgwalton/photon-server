@@ -101,11 +101,14 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id, err = a.svc.Playlists.AddSmartPlaylist(r.Context(), profile, req.LibraryID, req.Name, *req.Rule)
+		if a.answeredAs(w, r, err, "library_id names a library the profile sees") {
+			return
+		}
 	} else {
 		id, err = a.svc.Playlists.AddPlaylist(r.Context(), profile, req.Name, req.ItemIDs)
-	}
-	if a.answeredAs(w, r, err, "library_id names a library the profile sees") {
-		return
+		if a.answered(w, r, err) {
+			return
+		}
 	}
 	a.playlistChanged(r, id)
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})

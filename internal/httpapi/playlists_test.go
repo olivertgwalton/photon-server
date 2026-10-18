@@ -54,7 +54,13 @@ func (fakePlaylists) Playlists(_ context.Context, profile uuid.UUID) ([]store.Pl
 	}, nil
 }
 
-func (fakePlaylists) AddPlaylist(context.Context, uuid.UUID, string, []uuid.UUID) (uuid.UUID, error) {
+// AddPlaylist takes Heat alone, as the store refuses a title not there.
+func (fakePlaylists) AddPlaylist(_ context.Context, _ uuid.UUID, _ string, items []uuid.UUID) (uuid.UUID, error) {
+	for _, item := range items {
+		if item != films {
+			return uuid.UUID{}, store.ErrNotFound
+		}
+	}
 	return nightIn, nil
 }
 
@@ -161,6 +167,15 @@ func TestAProfileKeepsItsPlaylists(t *testing.T) {
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.has) {
 			t.Errorf("%s %s: %d %s, want %d with %s", tc.method, tc.target, rec.Code, rec.Body, tc.want, tc.has)
 		}
+	}
+	// A title not there is missing as itself: a playlist made by hand reads no library to blame.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/playlists",
+		strings.NewReader(`{"name": "Night in", "item_ids": ["`+uuid.NewV7().String()+`"]}`))
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "library_id") {
+		t.Errorf("a playlist of a title not there: %d %s, want 404 naming no library", rec.Code, rec.Body)
 	}
 	if p.moved != 3 {
 		t.Errorf("moved to %d, want 3", p.moved)
