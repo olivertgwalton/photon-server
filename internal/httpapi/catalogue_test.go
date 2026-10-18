@@ -120,8 +120,8 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 }
 
 // episodeStill is the picture an episode of the fake catalogue carries, showBackdrop and showThumb
-// those of its show, and filmThumb a film's landscape picture.
-var episodeStill, showBackdrop, showThumb, filmThumb = uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+// those of its show, filmThumb a film's landscape picture and filmPoster a film's poster.
+var episodeStill, showBackdrop, showThumb, filmThumb, filmPoster = uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
 // The watchlist holds the one film, from offset 0; next up as many episodes of The Wire as a page
 // is asked for.
@@ -142,11 +142,12 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 		}
 		return cards, int64(offset + limit), nil
 	case domain.RowContinueWatching:
-		// A film with a landscape picture, and one with a backdrop alone.
+		// A film with a landscape picture, one with a backdrop alone, and one with a poster alone.
 		return []store.Card{
 			{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop, Thumb: filmThumb},
 			{ID: films, Kind: domain.ItemMovie, Title: "Ronin", Backdrop: showBackdrop},
-		}, 2, nil
+			{ID: films, Kind: domain.ItemMovie, Title: "Thief", Poster: filmPoster},
+		}, 3, nil
 	case domain.RowFavourites:
 		return []store.Card{}, 0, nil
 	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
@@ -223,11 +224,12 @@ func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
 	var page struct {
 		Items []struct{ Title, Thumb string }
 	}
-	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Items) != 2 {
+	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Items) != 3 {
 		t.Fatalf("continue watching: %v %s", err, body)
 	}
-	if page.Items[0].Thumb != filmThumb.String() || page.Items[1].Thumb != showBackdrop.String() {
-		t.Errorf("films wear %q and %q, want their own landscape picture, else their backdrop", page.Items[0].Thumb, page.Items[1].Thumb)
+	if page.Items[0].Thumb != filmThumb.String() || page.Items[1].Thumb != showBackdrop.String() || page.Items[2].Thumb != filmPoster.String() {
+		t.Errorf("films wear %q, %q and %q, want their own landscape picture, else their backdrop, else their poster",
+			page.Items[0].Thumb, page.Items[1].Thumb, page.Items[2].Thumb)
 	}
 }
 

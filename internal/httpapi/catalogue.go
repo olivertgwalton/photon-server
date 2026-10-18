@@ -70,7 +70,8 @@ type cardJSON struct {
 	EpisodeNumber *int          `json:"episode_number,omitzero"`
 	EpisodeEnd    *int          `json:"episode_end,omitzero"`
 	// Thumb is the picture a card is drawn by where it is drawn wide: the still, or on a row
-	// about where the profile is, the picture its card_art chose.
+	// about where the profile is, the picture its card_art chose, else its backdrop, else a
+	// film's poster.
 	Thumb uuid.UUID `json:"thumb,omitzero"`
 	// Origin is who made a collection: only an admin's is changed through the admin routes.
 	Origin      domain.CollectionOrigin `json:"origin,omitzero"`

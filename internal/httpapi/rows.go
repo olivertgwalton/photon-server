@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"slices"
@@ -65,7 +66,7 @@ func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
 
 // wearCardArt has each card on a row about where the profile is carry the picture the profile
 // chose as its thumb, the picture a client draws such a card by: so a client draws what was asked
-// for without choosing between them itself. A card with none of the picture chosen keeps its own.
+// for without choosing between them itself.
 func (a *API) wearCardArt(ctx context.Context, profile uuid.UUID, row domain.HomeRow, cards []store.Card) error {
 	if !row.WearsCardArt() {
 		return nil
@@ -92,9 +93,13 @@ func (a *API) wearCardArt(ctx context.Context, profile uuid.UUID, row domain.Hom
 				worn = c.Backdrop
 			}
 		}
-		if worn != (uuid.UUID{}) {
-			c.Thumb = worn
+		// Without the picture chosen, a card wears its own, then its backdrop, then its poster
+		// cropped to the card, as Jellyfin draws one; not an episode's, which is its show's.
+		poster := c.Poster
+		if c.Kind == domain.ItemEpisode {
+			poster = uuid.UUID{}
 		}
+		c.Thumb = cmp.Or(worn, c.Thumb, c.Backdrop, poster)
 	}
 	return nil
 }
