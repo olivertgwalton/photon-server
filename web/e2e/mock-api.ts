@@ -39,6 +39,9 @@ const guest = "6a1d2e9f-3c2b-4d4e-8f9a-1b2c3d4e5f6a";
 const art = "0b4e2f1a-9c8d-4e7f-a6b5-c4d3e2f1a0b9";
 // A season's own poster, which an episode is drawn by among a search's results.
 const seasonArt = "1c5f3a2b-8d7e-4f6a-b5c4-d3e2f1a0b9c8";
+// An episode's own still, which a row about where the reader is draws it by
+// unless the profile chose the show's backdrop.
+const stillArt = "2d6a4b3c-7e8f-4a5b-96c4-e3d2f1a0b9c7";
 
 type State = Schemas["TitleState"];
 const states = new Map<string, State>([
@@ -90,6 +93,8 @@ const episode = (id: string, n: number, title: string, s = 1) =>
 		show: { id: "t-show", title: "Small Show" },
 		season: { id: `t-s${s}`, title: `Season ${s}` },
 		season_poster: seasonArt,
+		thumb: stillArt,
+		backdrop: art,
 		season_number: s,
 		episode_number: n,
 	});
@@ -1136,6 +1141,7 @@ const defaults: Schemas["Preferences"] = {
 	intro_action: "ask",
 	credits_action: "ask",
 	theme_music: "off",
+	card_art: "still",
 	notify: "marked",
 	quiet_libraries: [],
 	home: [
@@ -1783,7 +1789,14 @@ const server_ = Bun.serve<Socket>({
 		if (request.method === "GET" && kind === "profile" && id === "rows") {
 			const row = homeRows().find((r) => r.kind === sub && !r.library);
 			if (!row) return problem(404, "not_found", "Not Found");
-			const items = row.items;
+			// As the server does: a card on a row about where the reader is wears
+			// the picture the profile chose as its thumb.
+			const prefs = preferences.get(token as string) ?? defaults;
+			const items =
+				prefs.card_art === "backdrop" &&
+				(sub === "continue_watching" || sub === "next_up")
+					? row.items.map((c) => (c.backdrop ? { ...c, thumb: c.backdrop } : c))
+					: row.items;
 			const offset = Number(url.searchParams.get("offset") ?? 0);
 			const limit = Number(url.searchParams.get("limit") ?? 50);
 			return Response.json({

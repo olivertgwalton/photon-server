@@ -42,6 +42,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"theme_lookup":             names(domain.ThemeLookups()),
 		"theme_source":             names(domain.ThemeSources()),
 		"theme_music":              names(domain.ThemeMusics()),
+		"card_art":                 names(domain.CardArts()),
 		"notify":                   names(domain.Notifies()),
 		"push_kind":                names(domain.PushKinds()),
 		"apns_environment":         names(domain.APNsEnvironments()),

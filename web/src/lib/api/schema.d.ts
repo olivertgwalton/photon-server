@@ -7730,6 +7730,8 @@ export interface components {
             version_count?: number;
             year?: number;
         };
+        /** @enum {string} */
+        CardArt: "still" | "backdrop";
         CardList: {
             items: components["schemas"]["Card"][];
         };
@@ -8936,6 +8938,7 @@ export interface components {
         Preferences: {
             audio_language: string;
             audio_track: components["schemas"]["AudioTrack"];
+            card_art: components["schemas"]["CardArt"];
             credits_action: components["schemas"]["SegmentAction"];
             home: components["schemas"]["HomeSection"][];
             intro_action: components["schemas"]["SegmentAction"];
@@ -8954,6 +8957,7 @@ export interface components {
         PreferencesChange: {
             audio_language?: string | null;
             audio_track?: components["schemas"]["AudioTrack"];
+            card_art?: components["schemas"]["CardArt"];
             credits_action?: components["schemas"]["SegmentAction"];
             home?: components["schemas"]["HomeSectionChange"][];
             intro_action?: components["schemas"]["SegmentAction"];
