@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"time"
 	"uuid"
@@ -15,26 +16,61 @@ import (
 
 // PlaylistSummary is a playlist as its list shows it: how many entries it has and how long they run.
 type PlaylistSummary struct {
-	ID         uuid.UUID
-	Name       string
+	ID   uuid.UUID
+	Name string
+	// Library and Rule are a smart playlist's: the library whose wall its rule reads, and the rule
+	// its entries are what of. Both are zero for a playlist made by hand, which holds its entries.
+	Library    uuid.UUID
+	Rule       *SmartRule
 	Entries    int
 	DurationMS int64
 	UpdatedAt  time.Time
 }
 
-// PlaylistEntry is one entry of a playlist: its own id, and the title it plays.
+// PlaylistEntry is one entry of a playlist: its own id, and the title it plays. A smart playlist's
+// entries are its rule's findings rather than rows of its own, so each has no id.
 type PlaylistEntry struct {
 	ID   uuid.UUID
 	Card Card
 }
 
+// playlistRow is a playlist as its table holds it, its library and rule unset where it has none.
+type playlistRow struct {
+	ID         uuid.UUID
+	Name       string
+	LibraryID  *uuid.UUID
+	Rule       *SmartRule
+	Entries    int
+	DurationMS int64
+	UpdatedAt  time.Time
+}
+
 // Playlists answers a profile's playlists, by name.
 func (s *Store) Playlists(ctx context.Context, profile uuid.UUID) ([]PlaylistSummary, error) {
-	return queryStructs[PlaylistSummary](ctx, s.pool, `
-		SELECT p.id, p.name, p.updated_at, count(e.id) AS entries,
+	rows, err := queryStructs[playlistRow](ctx, s.pool, `
+		SELECT p.id, p.name, p.library_id, p.rule, p.updated_at, count(e.id) AS entries,
 			coalesce(sum((SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = e.item_id AND v.missing_since IS NULL)), 0) AS duration_ms
 		FROM playlists p LEFT JOIN playlist_entries e ON e.playlist_id = p.id
 		WHERE p.profile_id = $1 GROUP BY p.id ORDER BY lower(p.name), p.id`, profile)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PlaylistSummary, len(rows))
+	for n, r := range rows {
+		out[n] = PlaylistSummary{
+			ID: r.ID, Name: r.Name, Library: deref(r.LibraryID), Rule: r.Rule,
+			Entries: r.Entries, DurationMS: r.DurationMS, UpdatedAt: r.UpdatedAt,
+		}
+		if r.Rule == nil {
+			continue
+		}
+		// A smart playlist holds no entries of its own, so what its rule finds now is counted for
+		// each; a profile has a handful of playlists, not a wall of them.
+		if out[n].Entries, out[n].DurationMS, err = s.smartSize(ctx, profile, out[n].Library, *r.Rule); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // AddPlaylist makes a profile's playlist of titles (see AddToPlaylist).
@@ -51,10 +87,15 @@ func (s *Store) AddPlaylist(ctx context.Context, profile uuid.UUID, name string,
 }
 
 // PlaylistEntries answers a page of a profile's playlist, in its order, and how many entries it
-// has. ErrNotFound for no such playlist of the profile's.
+// has: a smart playlist's are what its rule finds now. ErrNotFound for no such playlist of the
+// profile's.
 func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]PlaylistEntry, int64, error) {
-	if err := ownPlaylist(ctx, s.pool, profile, playlist); err != nil {
+	lib, rule, err := ownPlaylist(ctx, s.pool, profile, playlist)
+	if err != nil {
 		return nil, 0, err
+	}
+	if rule != nil {
+		return s.smartEntries(ctx, profile, lib, *rule, offset, limit)
 	}
 	// An entry the profile may no longer see, as a library taken from it, is passed over.
 	const seen = `FROM playlist_entries e WHERE e.playlist_id = $1
@@ -96,7 +137,7 @@ func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID
 // is, a show or season as its episodes, a collection as its titles.
 func (s *Store) AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := ownPlaylist(ctx, tx, profile, playlist); err != nil {
+		if err := byHand(ctx, tx, profile, playlist); err != nil {
 			return err
 		}
 		return appendEntries(ctx, tx, playlist, items)
@@ -106,7 +147,7 @@ func (s *Store) AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, 
 // RemoveFromPlaylist takes one entry out of a profile's playlist.
 func (s *Store) RemoveFromPlaylist(ctx context.Context, profile, playlist, entry uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := ownPlaylist(ctx, tx, profile, playlist); err != nil {
+		if err := byHand(ctx, tx, profile, playlist); err != nil {
 			return err
 		}
 		if err := affected(tx.Exec(ctx, `DELETE FROM playlist_entries WHERE playlist_id = $1 AND id = $2`, playlist, entry)); err != nil {
@@ -120,7 +161,7 @@ func (s *Store) RemoveFromPlaylist(ctx context.Context, profile, playlist, entry
 // past the end goes last.
 func (s *Store) MovePlaylistEntry(ctx context.Context, profile, playlist, entry uuid.UUID, position int) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := ownPlaylist(ctx, tx, profile, playlist); err != nil {
+		if err := byHand(ctx, tx, profile, playlist); err != nil {
 			return err
 		}
 		entries, err := queryRows[model.PlaylistEntry](ctx, tx, `
@@ -158,9 +199,110 @@ func (s *Store) RemovePlaylist(ctx context.Context, profile, playlist uuid.UUID)
 	return affected(s.pool.Exec(ctx, `DELETE FROM playlists WHERE id = $1 AND profile_id = $2`, playlist, profile))
 }
 
-func ownPlaylist(ctx context.Context, q db, profile, playlist uuid.UUID) error {
-	var one int
-	return found(q.QueryRow(ctx, `SELECT 1 FROM playlists WHERE id = $1 AND profile_id = $2`, playlist, profile).Scan(&one))
+// ErrSmartPlaylist is a change to the entries of a playlist whose rule finds them.
+var ErrSmartPlaylist = errors.New("a smart playlist's entries are what its rule finds: change the rule instead")
+
+// ErrNotSmartPlaylist is a rule given to a playlist that holds its own entries.
+var ErrNotSmartPlaylist = errors.New("the playlist holds the entries put in it by hand, not a rule's findings")
+
+// ownPlaylist answers the library a profile's playlist reads and the rule it reads it by, both
+// zero for one made by hand; ErrNotFound for no such playlist of the profile's.
+func ownPlaylist(ctx context.Context, q db, profile, playlist uuid.UUID) (uuid.UUID, *SmartRule, error) {
+	var lib *uuid.UUID
+	var rule *SmartRule
+	err := q.QueryRow(ctx, `SELECT library_id, rule FROM playlists WHERE id = $1 AND profile_id = $2`,
+		playlist, profile).Scan(&lib, &rule)
+	return deref(lib), rule, found(err)
+}
+
+// byHand is whether a profile's playlist is one that holds its own entries; ErrSmartPlaylist for
+// a smart one, whose entries no client sets.
+func byHand(ctx context.Context, q db, profile, playlist uuid.UUID) error {
+	_, rule, err := ownPlaylist(ctx, q, profile, playlist)
+	if err != nil {
+		return err
+	}
+	if rule != nil {
+		return ErrSmartPlaylist
+	}
+	return nil
+}
+
+// AddSmartPlaylist makes a profile's playlist whose entries a rule finds on one library's wall, as
+// Plex's smart playlists: ErrNotFound for a library the profile does not see.
+func (s *Store) AddSmartPlaylist(ctx context.Context, profile, lib uuid.UUID, name string, rule SmartRule) (uuid.UUID, error) {
+	if err := rule.CheckPlayable(); err != nil {
+		return uuid.UUID{}, err
+	}
+	if seen, err := s.HasLibrary(ctx, profile, lib); err != nil || !seen {
+		return uuid.UUID{}, cmp.Or(err, ErrNotFound)
+	}
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO playlists (profile_id, name, library_id, rule) VALUES ($1, $2, $3, $4) RETURNING id`,
+		profile, name, lib, rule).Scan(&id)
+	return id, err
+}
+
+// SetPlaylistRule replaces a smart playlist's rule, and so its entries with what the new one
+// finds; ErrNotSmartPlaylist for a playlist made by hand.
+func (s *Store) SetPlaylistRule(ctx context.Context, profile, playlist uuid.UUID, rule SmartRule) error {
+	if err := rule.CheckPlayable(); err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		_, kept, err := ownPlaylist(ctx, tx, profile, playlist)
+		if err != nil {
+			return err
+		}
+		if kept == nil {
+			return ErrNotSmartPlaylist
+		}
+		if _, err := tx.Exec(ctx, `UPDATE playlists SET rule = $2 WHERE id = $1`, playlist, rule); err != nil {
+			return err
+		}
+		return touch(ctx, tx, playlist)
+	})
+}
+
+// smartEntries answers a page of what a smart playlist's rule finds now, and how many it finds.
+func (s *Store) smartEntries(ctx context.Context, profile, lib uuid.UUID, rule SmartRule, offset, limit int) ([]PlaylistEntry, int64, error) {
+	cards, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
+	if err != nil {
+		return nil, 0, err
+	}
+	if rule.Limit > 0 {
+		total = min(total, int64(rule.Limit))
+	}
+	out := make([]PlaylistEntry, len(cards))
+	for n, c := range cards {
+		out[n] = PlaylistEntry{Card: c}
+	}
+	return out, total, nil
+}
+
+// smartSize counts what a smart playlist's rule finds now and how long those run altogether.
+func (s *Store) smartSize(ctx context.Context, profile, lib uuid.UUID, rule SmartRule) (int, int64, error) {
+	where, args, err := s.wallQuery(ctx, []uuid.UUID{lib}, profile, rule.Kind, rule.Filter)
+	if err != nil {
+		return 0, 0, err
+	}
+	from, _, _ := wallRows(rule.Kind)
+	// A rule that takes all its findings needs no order to count them, and sorting half a library
+	// to add up its runtimes would be the cost of the page itself.
+	var join, taken string
+	if rule.Limit > 0 {
+		var order string
+		join, order = rule.playlistPage(profile, 0, 0).orderBy(args)
+		args["limit"] = rule.Limit
+		taken = " " + order + " LIMIT @limit"
+	}
+	var entries int
+	var ms int64
+	err = s.pool.QueryRow(ctx, `SELECT count(*), coalesce(sum(found.duration_ms), 0) FROM (
+		SELECT (SELECT max(v.duration_ms) FROM versions v WHERE v.item_id = items.id AND v.missing_since IS NULL) AS duration_ms
+		FROM `+from+join+` `+where+taken+`) found`, args).Scan(&entries, &ms)
+	return entries, ms, err
 }
 
 func touch(ctx context.Context, tx db, playlist uuid.UUID) error {

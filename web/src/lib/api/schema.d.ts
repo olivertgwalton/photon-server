@@ -5175,7 +5175,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Make a playlist */
+        /** Make a playlist, by hand or by a rule */
         post: {
             parameters: {
                 query?: never;
@@ -5398,6 +5398,47 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": components["schemas"]["Move"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playlists/{id}/rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a smart playlist's rule, and so its entries with what it finds */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SmartRule"];
                 };
             };
             responses: {
@@ -7500,7 +7541,10 @@ export interface components {
         };
         AddPlaylist: {
             item_ids?: string[];
+            /** Format: uuid */
+            library_id?: string;
             name: string;
+            rule?: components["schemas"]["SmartRule"] | null;
         };
         AddPlugin: {
             id?: string;
@@ -8044,7 +8088,7 @@ export interface components {
             /** Format: int64 */
             duration_ms?: number;
             /** Format: uuid */
-            entry_id: string;
+            entry_id?: string;
             episode_end?: number | null;
             episode_number?: number | null;
             genres?: string[];
@@ -8948,7 +8992,10 @@ export interface components {
             entries: number;
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            library_id?: string;
             name: string;
+            rule?: components["schemas"]["SmartRule"] | null;
             /** Format: date-time */
             updated_at: string;
         };
@@ -9327,6 +9374,7 @@ export interface components {
         };
         SmartRule: {
             filter: components["schemas"]["WallFilter"];
+            kind?: components["schemas"]["WallKind"];
             limit?: number;
             order?: components["schemas"]["Order"];
             sort?: components["schemas"]["WallSort"];

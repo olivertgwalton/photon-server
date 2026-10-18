@@ -68,7 +68,7 @@ device, the page changes by itself. There is no need to refresh.
   page and a person's.
 - [Search](02-search.md): finding a title or a person.
 - [Your lists](03-your-lists.md): the watchlist, favourites, history and the calendar.
-- [Playlists](04-playlists.md): making, ordering and playing playlists.
+- [Playlists](04-playlists.md): making, ordering and playing playlists, by hand or by filters.
 - [Watching](05-watching.md): the player, subtitles, skipping, casting and downloads.
 - [Your settings](06-your-settings.md): your profile, playback, Home's rows, notifications,
   devices, linking a TV, sign-in and trackers.

@@ -1,12 +1,14 @@
 <script lang="ts">
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+import FilterIcon from "@lucide/svelte/icons/filter";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import XIcon from "@lucide/svelte/icons/x";
 import { act } from "#lib/act.js";
+import { withQuery } from "#lib/address.js";
 import { client } from "#lib/api/client.js";
 import TitleRow from "#lib/components/TitleRow.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -15,12 +17,28 @@ import { Input } from "#lib/components/ui/input/index.js";
 import { count, runtime, titleWithShow } from "#lib/format.js";
 import { playQueue } from "#lib/queue.js";
 import { getShell } from "#lib/shell.svelte.js";
+import { ruleQuery, wallSearch } from "#lib/wall.js";
+import { page } from "$app/state";
 
 let { data } = $props();
 const shell = getShell();
 
 const api = client();
 const path = $derived({ id: data.playlist.id });
+// A smart playlist plays what its rule finds, so its entries are not its own
+// to order or take out: the rule is changed on the wall it reads.
+const rule = $derived(data.playlist.rule);
+const filters = $derived(
+	rule
+		? withQuery(
+				new URL(
+					`/libraries/${data.playlist.library_id}${wallSearch(ruleQuery(rule))}`,
+					page.url.href,
+				),
+				{ playlist: data.playlist.id },
+			)
+		: undefined,
+);
 let renaming = $state(false);
 let newName = $state("");
 
@@ -85,6 +103,9 @@ function drop(entry: string) {
 		<h1 class="title">{data.playlist.name}</h1>
 	{/if}
 	<p class="text-ink-3 text-sm">
+		{#if rule}
+			Smart playlist ·
+		{/if}
 		{count(data.entries.length, "title")}{data.playlist.duration_ms
 			? ` · ${runtime(data.playlist.duration_ms)}`
 			: ""}
@@ -97,6 +118,11 @@ function drop(entry: string) {
 			</Button>
 			<Button onclick={() => playQueue(data.entries, true)} variant="outline">
 				<ShuffleIcon />Shuffle
+			</Button>
+		{/if}
+		{#if filters}
+			<Button variant="outline" href={filters}>
+				<FilterIcon />Change the filters
 			</Button>
 		{/if}
 		<Button
@@ -113,41 +139,47 @@ function drop(entry: string) {
 
 	{#if data.entries.length}
 		<ol class="divide-line divide-y">
-			{#each data.entries as entry, i (entry.entry_id)}
+			{#each data.entries as entry, i (entry.entry_id ?? entry.id)}
 				<li class="py-2">
 					<TitleRow card={entry}>
 						{#snippet end()}
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								disabled={i === 0}
-								aria-label="Move {titleWithShow(entry)} up"
-								onclick={() => move(entry.entry_id, i - 1)}
-							>
-								<ArrowUpIcon />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								disabled={i === data.entries.length - 1}
-								aria-label="Move {titleWithShow(entry)} down"
-								onclick={() => move(entry.entry_id, i + 1)}
-							>
-								<ArrowDownIcon />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Remove {titleWithShow(entry)}"
-								onclick={() => drop(entry.entry_id)}
-							>
-								<XIcon />
-							</Button>
+							<!-- A rule's finding is no entry of its own to move or take out. -->
+							{#if entry.entry_id}
+								{@const entryID = entry.entry_id}
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									disabled={i === 0}
+									aria-label="Move {titleWithShow(entry)} up"
+									onclick={() => move(entryID, i - 1)}
+								>
+									<ArrowUpIcon />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									disabled={i === data.entries.length - 1}
+									aria-label="Move {titleWithShow(entry)} down"
+									onclick={() => move(entryID, i + 1)}
+								>
+									<ArrowDownIcon />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Remove {titleWithShow(entry)}"
+									onclick={() => drop(entryID)}
+								>
+									<XIcon />
+								</Button>
+							{/if}
 						{/snippet}
 					</TitleRow>
 				</li>
 			{/each}
 		</ol>
+	{:else if rule}
+		<p class="text-ink-3">Nothing in the library matches these filters.</p>
 	{:else}
 		<p class="text-ink-3">
 			Nothing in this playlist yet. Add titles from their menus.

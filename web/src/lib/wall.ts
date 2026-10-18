@@ -152,15 +152,13 @@ export function letterOffset(
 	return offset;
 }
 
-// A wall's query as a smart collection's rule, as Plex saves a filtered
-// library as a smart collection; none where it reads a profile's own marks or
-// plays, which a collection everyone shares cannot, or pages one kind of a
-// library's items, which a rule over all its titles cannot keep to.
-export function smartRule(query: WallQuery): Schemas["SmartRule"] | undefined {
-	if (query.mark?.length || query.sort === "played" || query.kind)
-		return undefined;
+// What a wall is narrowed and ordered by, as a rule holds it. A letter is
+// where the wall was scrolled to rather than part of what it holds, so a rule
+// never carries one.
+function ruleOf(query: WallQuery): Schemas["SmartRule"] {
 	return {
 		filter: {
+			marks: query.mark,
 			genres: query.genre,
 			years: query.year,
 			certificates: query.certificate,
@@ -176,13 +174,40 @@ export function smartRule(query: WallQuery): Schemas["SmartRule"] | undefined {
 	};
 }
 
-// The wall a smart collection's rule reads, to open and change it there.
+// A wall's query as a smart collection's rule, as Plex saves a filtered
+// library as a smart collection; none where it reads a profile's own marks or
+// plays, which a collection everyone shares cannot, or pages one kind of a
+// library's items, which a rule over all its titles cannot keep to.
+export function smartRule(query: WallQuery): Schemas["SmartRule"] | undefined {
+	if (query.mark?.length || query.sort === "played" || query.kind)
+		return undefined;
+	return ruleOf(query);
+}
+
+// A wall's query as a smart playlist's rule, as Plex saves a filtered library
+// as a smart playlist. A playlist plays its entries one after another, so only
+// a wall of films or of episodes is one to keep, a films library's whole wall
+// being its films. The rule is one profile's own, so unlike a collection's it
+// may read that profile's marks and plays.
+export function playlistRule(
+	query: WallQuery,
+	library: Schemas["LibraryKind"],
+): Schemas["SmartRule"] | undefined {
+	const kind = query.kind ?? (library === "movies" ? "films" : undefined);
+	if (kind !== "films" && kind !== "episodes") return undefined;
+	return { ...ruleOf(query), kind };
+}
+
+// The wall a smart collection's or a smart playlist's rule reads, to open and
+// change it there.
 export function ruleQuery(rule: Schemas["SmartRule"]): WallQuery {
 	const f = rule.filter;
 	return Object.fromEntries(
 		Object.entries({
+			kind: rule.kind,
 			sort: rule.sort,
 			order: rule.order,
+			mark: f.marks,
 			genre: f.genres,
 			year: f.years,
 			certificate: f.certificates,

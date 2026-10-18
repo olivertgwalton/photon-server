@@ -6,8 +6,8 @@ import { act } from "#lib/act.js";
 import { withQuery } from "#lib/address.js";
 import { client, refusal } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import SmartCollectionDialog from "#lib/components/admin/SmartCollectionDialog.svelte";
 import LetterBar from "#lib/components/LetterBar.svelte";
+import SmartSaveDialog from "#lib/components/SmartSaveDialog.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
 import Wall from "#lib/components/Wall.svelte";
@@ -19,6 +19,7 @@ import {
 	cleared,
 	filterCount,
 	letterOffset,
+	playlistRule,
 	smartRule,
 	type ViewStyle,
 	viewKey,
@@ -69,13 +70,20 @@ const kinds = $derived(
 	)[data.library.kind],
 );
 const narrowed = $derived(filterCount(data.query) > 0);
+const worth = $derived(narrowed || Boolean(data.query.sort));
 // What an admin may keep of this wall as a smart collection.
 const rule = $derived(
-	data.me.role === "admin" && (narrowed || data.query.sort)
-		? smartRule(data.query)
-		: undefined,
+	data.me.role === "admin" && worth ? smartRule(data.query) : undefined,
+);
+// And what anyone may keep of it as a playlist of their own.
+const playRule = $derived(
+	worth ? playlistRule(data.query, data.library.kind) : undefined,
 );
 let saving = $derived.by(() => {
+	id;
+	return false;
+});
+let keeping = $derived.by(() => {
 	id;
 	return false;
 });
@@ -84,10 +92,13 @@ let saving = $derived.by(() => {
 // leaves the library rather than undoing a filter.
 function show(query: WallQuery) {
 	const wall = new URL(`/libraries/${id}${wallSearch(query)}`, page.url.href);
-	goto(withQuery(wall, { collection: data.editing }), {
-		replace: true,
-		reset: false,
-	});
+	goto(
+		withQuery(wall, { collection: data.editing, playlist: data.editingList }),
+		{
+			replace: true,
+			reset: false,
+		},
+	);
 }
 
 function saveRule() {
@@ -99,6 +110,42 @@ function saveRule() {
 		}),
 		"Saved. The collection holds what these filters find.",
 		`/settings/server/collections/${data.editing}`,
+	);
+}
+
+function saveListRule() {
+	if (!playRule || !data.editingList) return;
+	return act(
+		client().PUT("/api/v1/playlists/{id}/rule", {
+			params: { path: { id: data.editingList } },
+			body: playRule,
+		}),
+		"Saved. The playlist plays what these filters find.",
+		`/playlists/${data.editingList}`,
+	);
+}
+
+// Keep this wall as a new smart collection, everyone's, or a smart playlist,
+// the profile's own.
+async function keepCollection(title: string) {
+	if (!rule) return;
+	return act(
+		client().POST("/api/v1/admin/collections", {
+			body: { library_ids: [id], title, rule },
+		}),
+		`${title} is a smart collection.`,
+		(made) => `/settings/server/collections/${made.id}`,
+	);
+}
+
+async function keepPlaylist(name: string) {
+	if (!playRule) return;
+	return act(
+		client().POST("/api/v1/playlists", {
+			body: { name, library_id: id, rule: playRule },
+		}),
+		`${name} plays what these filters find.`,
+		(made) => `/playlists/${made.id}`,
 	);
 }
 
@@ -175,7 +222,27 @@ function jump(letters: Letter[], letter: string) {
 		<Button variant="outline" size="sm" onclick={() => (saving = true)}>
 			Save as a smart collection
 		</Button>
-		<SmartCollectionDialog bind:open={saving} library={id} {rule} />
+		<SmartSaveDialog
+			bind:open={saving}
+			heading="Save as a smart collection"
+			about="It holds what these filters find, in this order, kept up to date as the library changes."
+			placeholder="Recent comedies"
+			save={keepCollection}
+		/>
+	{/if}
+	{#if playRule && data.editingList}
+		<Button size="sm" onclick={saveListRule}>Save to the playlist</Button>
+	{:else if playRule && !data.editing}
+		<Button variant="outline" size="sm" onclick={() => (keeping = true)}>
+			Save as a smart playlist
+		</Button>
+		<SmartSaveDialog
+			bind:open={keeping}
+			heading="Save as a smart playlist"
+			about="It plays what these filters find, in this order, worked out again each time you open it."
+			placeholder="Not yet seen"
+			save={keepPlaylist}
+		/>
 	{/if}
 	<WallFilterMenu query={data.query} {facets} onchange={show} />
 	<WallSortMenu

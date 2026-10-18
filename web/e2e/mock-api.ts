@@ -404,6 +404,25 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 }
 
 let playlists: (Schemas["Playlist"] & { items: string[] })[] = [];
+
+// What a smart playlist's rule finds: the kind it names, less what the profile
+// has watched where the rule asks only for what it has not.
+function ruleFinds(rule: Schemas["SmartRule"]): string[] {
+	const kind = rule.kind === "episodes" ? "episode" : "movie";
+	return everything()
+		.filter((c) => c.kind === kind)
+		.filter(
+			(c) =>
+				!rule.filter.marks?.includes("unwatched") ||
+				!states.get(c.id)?.watched_at,
+		)
+		.slice(0, rule.limit || undefined)
+		.map((c) => c.id);
+}
+
+// A playlist's entries: a smart one's are its rule's findings, read afresh.
+const entriesOf = (list: (typeof playlists)[number]) =>
+	list.rule ? ruleFinds(list.rule) : list.items;
 const downloads: Schemas["Download"][] = [];
 
 // The events socket's open connections, and a way for a test to speak on the
@@ -1583,9 +1602,14 @@ const server_ = Bun.serve<Socket>({
 			}
 			case "GET /api/v1/playlists":
 				return Response.json({
-					items: playlists.map(({ items, ...p }) => ({
-						...p,
-						entries: items.length,
+					items: playlists.map((list) => ({
+						id: list.id,
+						name: list.name,
+						library_id: list.library_id,
+						rule: list.rule,
+						duration_ms: list.duration_ms,
+						updated_at: list.updated_at,
+						entries: entriesOf(list).length,
 					})),
 				} satisfies Schemas["PlaylistList"]);
 			case "POST /api/v1/playlists": {
@@ -1594,6 +1618,8 @@ const server_ = Bun.serve<Socket>({
 				playlists.push({
 					id,
 					name: body.name,
+					library_id: body.library_id,
+					rule: body.rule,
 					entries: 0,
 					duration_ms: 0,
 					updated_at: "2026-10-05T20:00:00Z",
@@ -1893,12 +1919,41 @@ const server_ = Bun.serve<Socket>({
 				} else list.name = ((await json(request)) as Schemas["Name"]).name;
 				return none();
 			}
+			case "PUT playlists/rule": {
+				const list = playlists.find((p) => p.id === id);
+				if (!list) return problem(404, "not_found", "Not Found");
+				if (!list.rule) {
+					return problem(
+						409,
+						"conflict",
+						"the playlist holds the entries put in it by hand, not a rule's findings",
+					);
+				}
+				list.rule = await json(request);
+				return none();
+			}
 			case "GET playlists/entries":
 			case "POST playlists/entries":
 			case "PUT playlists/entries":
 			case "DELETE playlists/entries": {
 				const list = playlists.find((p) => p.id === id);
 				if (!list) return problem(404, "not_found", "Not Found");
+				if (list.rule && request.method !== "GET") {
+					return problem(
+						409,
+						"conflict",
+						"a smart playlist's entries are what its rule finds: change the rule instead",
+					);
+				}
+				if (list.rule) {
+					return Response.json({
+						items: entriesOf(list).map((item) =>
+							card(byID(item) as Schemas["Card"]),
+						),
+						offset: 0,
+						total: entriesOf(list).length,
+					} satisfies Schemas["EntryPage"]);
+				}
 				if (request.method === "POST") {
 					list.items.push(
 						...((await json(request)) as Schemas["ItemIDs"]).item_ids,

@@ -1,6 +1,6 @@
 ---
 title: "Playlists"
-summary: "Make your own lists of films and episodes, put them in order, and play them through or shuffled."
+summary: "Make your own lists of films and episodes, by hand or by filters, and play them through or shuffled."
 ---
 
 A playlist is a list of films and episodes you put together, to play in your order or shuffled.
@@ -20,6 +20,24 @@ You can also make one while adding a title: **Add to playlist…** offers **New 
 existing ones.
 
 **Playlists** lists yours by name, with how many titles each holds and how long they last.
+
+## Make a smart playlist
+
+A smart playlist holds no titles of its own. It plays whatever a library's filters find, worked out
+again every time you open it, so "episodes I haven't watched" loses an episode the moment you watch
+it.
+
+1. Open a library and choose **Episodes** or **Films** at the top. A playlist plays one title after
+   another, so a wall of shows is not one to keep.
+2. Narrow it with **Filter** and order it with the sort menu. **Unwatched**, under Filter, is yours
+   alone, and a smart playlist may use it where a collection cannot.
+3. Choose **Save as a smart playlist**, give it a name, and choose **Save**.
+
+On its page, **Change the filters** opens that library again as the playlist reads it. Change them
+there and choose **Save to the playlist**.
+
+A smart playlist's titles are not yours to order or remove one by one: change the filters instead.
+Everything else — playing, shuffling, renaming, deleting — works as any playlist does.
 
 ## Add titles
 
@@ -42,8 +60,9 @@ The same title can be added more than once.
 
 On a playlist's page:
 
-- The up and down arrows beside an entry move it one place.
-- The cross beside an entry removes it.
+- The up and down arrows beside an entry move it one place. A smart playlist has none: its order is
+  the sort its filters were saved with.
+- The cross beside an entry removes it. A smart playlist has none either.
 - **Rename** changes the name. Choose **Save** to keep it.
 - **Delete** removes the playlist after asking. The titles stay in your library.
 
