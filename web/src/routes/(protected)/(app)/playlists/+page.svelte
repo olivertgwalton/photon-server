@@ -1,4 +1,5 @@
 <script lang="ts">
+import FilterIcon from "@lucide/svelte/icons/filter";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
@@ -53,13 +54,20 @@ async function create(event: SubmitEvent) {
 						<span
 							class="bg-raise text-ink-3 grid size-12 shrink-0 place-items-center rounded-md"
 						>
-							<ListVideoIcon aria-hidden="true" />
+							{#if playlist.rule}
+								<FilterIcon aria-hidden="true" />
+							{:else}
+								<ListVideoIcon aria-hidden="true" />
+							{/if}
 						</span>
 						<span class="min-w-0">
 							<span class="text-ink block truncate font-semibold">
 								{playlist.name}
 							</span>
 							<span class="text-ink-3 block text-sm">
+								{#if playlist.rule}
+									Smart playlist ·
+								{/if}
 								{count(playlist.entries, "title")}{playlist.duration_ms
 									? ` · ${runtime(playlist.duration_ms)}`
 									: ""}

@@ -44,8 +44,9 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 					}),
 				)
 			: undefined,
-		// A smart collection whose rule is being changed here.
+		// A smart collection, or a smart playlist, whose rule is being changed here.
 		editing: url.searchParams.get("collection") ?? undefined,
+		editingList: url.searchParams.get("playlist") ?? undefined,
 		wall,
 		view: storedView(params.id),
 	};

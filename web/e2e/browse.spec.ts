@@ -565,6 +565,52 @@ test("a playlist is made, filled, reordered and deleted", async ({ page }) => {
 	await expect(page.getByLabel("New playlist")).toBeFocused();
 });
 
+test("a filtered wall is kept as a smart playlist, and its filters changed there", async ({
+	page,
+}) => {
+	await logIn(page, "/libraries/l-shows?kind=episodes&mark=unwatched");
+	const made = page.waitForRequest(
+		(r) => r.method() === "POST" && r.url().endsWith("/api/v1/playlists"),
+	);
+	await page.getByRole("button", { name: "Save as a smart playlist" }).click();
+	await page.getByLabel("Name").fill("Not yet seen");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	expect((await made).postDataJSON()).toMatchObject({
+		name: "Not yet seen",
+		library_id: "l-shows",
+		rule: { kind: "episodes", filter: { marks: ["unwatched"] } },
+	});
+	await expect(page).toHaveURL(/\/playlists\/pl-\d+$/);
+	const list = page.url().split("/").pop();
+	await expect(page.getByText(/Smart playlist/)).toBeVisible();
+	await expect(page.getByText("3 titles")).toBeVisible();
+	await expectAccessible(page);
+	// Its entries are its rule's findings, so none of them is moved or taken out.
+	await expect(page.getByRole("button", { name: /^Move / })).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+
+	await page.getByRole("link", { name: "Change the filters" }).click();
+	await expect(page).toHaveURL(
+		`/libraries/l-shows?kind=episodes&mark=unwatched&playlist=${list}`,
+	);
+	const saved = page.waitForRequest(
+		(r) => r.method() === "PUT" && r.url().endsWith(`/${list}/rule`),
+	);
+	await page.getByRole("button", { name: "Save to the playlist" }).click();
+	expect((await saved).postDataJSON()).toMatchObject({
+		kind: "episodes",
+		filter: { marks: ["unwatched"] },
+	});
+	await expect(page).toHaveURL(`/playlists/${list}`);
+
+	await page.getByRole("button", { name: "Delete" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Delete" })
+		.click();
+	await expect(page.getByText("No playlists yet.")).toBeVisible();
+});
+
 test("a playlist made on the playlists page is named as it was typed", async ({
 	page,
 }) => {

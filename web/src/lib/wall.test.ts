@@ -3,6 +3,7 @@ import {
 	cleared,
 	filterCount,
 	letterOffset,
+	playlistRule,
 	ruleQuery,
 	smartRule,
 	toggled,
@@ -93,4 +94,25 @@ test("a wall of a profile's own marks or plays is no smart collection", () => {
 
 test("a wall of episodes is no smart collection, which holds titles", () => {
 	expect(smartRule({ kind: "episodes", genre: ["Drama"] })).toBeUndefined();
+});
+
+test("a smart playlist keeps a wall of what it can play, marks and all", () => {
+	const query = {
+		kind: "episodes" as const,
+		sort: "released" as const,
+		order: "asc" as const,
+		mark: ["unwatched" as const],
+	};
+	const rule = playlistRule(query, "shows");
+	expect(rule?.kind).toBe("episodes");
+	expect(rule?.filter.marks).toEqual(["unwatched"]);
+	expect(rule && ruleQuery(rule)).toEqual(query);
+});
+
+test("a films library's whole wall is its films, and so one to play", () => {
+	expect(playlistRule({ genre: ["Comedy"] }, "movies")?.kind).toBe("films");
+	// A wall of shows, or a mixed library's of everything, plays nothing itself.
+	expect(playlistRule({ genre: ["Comedy"] }, "shows")).toBeUndefined();
+	expect(playlistRule({ kind: "shows" }, "mixed")).toBeUndefined();
+	expect(playlistRule({ kind: "titles" }, "mixed")).toBeUndefined();
 });
