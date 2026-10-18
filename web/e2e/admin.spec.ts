@@ -531,10 +531,20 @@ test("an admin reads what was watched, by whom, over the span they choose", asyn
 		"href",
 		"/settings/server/history?profile=p-kids",
 	);
-	// The chart's values are there to read, yesterday's play among them.
-	await expect(
-		page.getByRole("table", { name: "Time watched by day" }),
-	).toContainText("1 play, 1h 40m");
+	// Each column says its value, to the pointer and to the keyboard alike.
+	const chart = page.getByRole("toolbar", { name: /a column a day/ });
+	const yesterday = chart.getByRole("button", { name: /1 play, 1h 40m$/ });
+	await yesterday.hover();
+	await expect(page.locator("[data-slot=tooltip-content]")).toContainText(
+		"1 play, 1h 40m",
+	);
+	// The chart is one stop for Tab, at the latest column; the arrow keys
+	// walk back from there.
+	await expect(chart.locator('[tabindex="0"]')).toHaveCount(1);
+	await chart.getByRole("button").last().focus();
+	await page.keyboard.press("ArrowLeft");
+	await expect(yesterday).toBeFocused();
+	await expect(yesterday).toHaveAttribute("tabindex", "0");
 	await expectAccessible(page);
 
 	// A year is drawn a column a week.
@@ -542,8 +552,8 @@ test("an admin reads what was watched, by whom, over the span they choose", asyn
 	await page.getByRole("option", { name: "Last year" }).click();
 	await expect(page).toHaveURL("/settings/server/statistics?days=365");
 	await expect(
-		page.getByRole("table", { name: "Time watched by week" }),
-	).toBeAttached();
+		page.getByRole("toolbar", { name: /a column a week/ }),
+	).toBeVisible();
 
 	await page.getByLabel("Who").click();
 	await page.getByRole("option", { name: "Ada" }).click();
