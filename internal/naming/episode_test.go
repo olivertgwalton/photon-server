@@ -117,7 +117,10 @@ func TestEpisodeTitles(t *testing.T) {
 		"01.Pilot.1080p":            "Pilot",
 		"Show - 01 - Pilot [1080p]": "Pilot",
 		"Marvel's Agents of S.H.I.E.L.D. S01E01 - Pilot": "Pilot",
-		"Show - 101 [720p]": "",
+		"Show - 101 [720p]":                                       "",
+		"The Great (2020) {tvdb-369301} - s01e02 [hd]":            "",
+		"The Great (2020) {tvdb-369301} - s01e02 [ultra_hd]":      "",
+		"The Great (2020) {tvdb-369301} - s01e02 - Pilot [1080p]": "Pilot",
 	} {
 		ep, ok := ParseEpisode(stem, "")
 		if !ok {
