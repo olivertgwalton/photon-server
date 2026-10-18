@@ -113,8 +113,11 @@ func moreEpisodes(first int, rest string) ([]int, string) {
 }
 
 // episodeTitle reads what follows an episode's marker: " - Pilot", ".Good.News.About.Hell.2160p".
-// Release tags end it even when they come first, so "S02E01 - 720p" has no title.
+// Release tags end it even when they come first, so "S02E01 - 720p" has no title. A square
+// bracket ends it too, as it does in Jellyfin's and Kodi's clean strings, so "S01E02 [ultra_hd]"
+// has none.
 func episodeTitle(rest string) string {
+	rest, _, _ = strings.Cut(rest, "[")
 	if i := releaseToken(tokenize(rest)); i >= 0 {
 		rest = rest[:tokenize(rest)[i].start]
 	}
