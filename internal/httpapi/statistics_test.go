@@ -16,12 +16,12 @@ import (
 
 // fakeStatistics answers one play of Heat, and keeps what each report was asked over.
 type fakeStatistics struct {
-	since []time.Time
+	days  []int
 	zones []string
 }
 
-func (f *fakeStatistics) Statistics(_ context.Context, since time.Time, zone *time.Location, _ uuid.UUID) (store.Statistics, error) {
-	f.since, f.zones = append(f.since, since), append(f.zones, zone.String())
+func (f *fakeStatistics) Statistics(_ context.Context, days int, zone *time.Location, _ uuid.UUID) (store.Statistics, error) {
+	f.days, f.zones = append(f.days, days), append(f.zones, zone.String())
 	watched := store.Watched{Plays: 1, WatchedMS: 7_200_000}
 	return store.Statistics{
 		Watched:  watched,
@@ -57,14 +57,8 @@ func TestAnAdminReadsWhatWasWatched(t *testing.T) {
 			t.Errorf("%s: %d %s, want %d with %s", tc.target, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	// A week's report starts at midnight six days back where it is read, so today is its seventh.
-	london, err := time.LoadLocation("Europe/London")
-	if err != nil {
-		t.Fatal(err)
-	}
-	week := f.since[1].In(london)
-	if f.zones[1] != "Europe/London" || week.Hour() != 0 || week.Minute() != 0 ||
-		time.Now().In(london).Sub(week) < 6*24*time.Hour || time.Now().In(london).Sub(week) > 7*24*time.Hour+time.Hour {
-		t.Errorf("a week's report was asked from %s in %s, want midnight six days back in London", week, f.zones[1])
+	// A report is a month in UTC unless it asks for another span or zone.
+	if f.days[0] != 30 || f.zones[0] != "UTC" || f.days[1] != 7 || f.zones[1] != "Europe/London" {
+		t.Errorf("asked over %v days in %v, want 30 in UTC, then 7 in Europe/London", f.days, f.zones)
 	}
 }

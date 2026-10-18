@@ -69,9 +69,12 @@ func TestStatisticsAddUpWhatWasWatched(t *testing.T) {
 	play(kid.ID, second, day(0, 2), time.Hour)      // early today
 	play(kid.ID, first, day(0, 3), 30*time.Minute)  // early today, the first again
 	play(oliver.ID, heat, day(40, 20), 2*time.Hour) // before the span
+	// The evening before the span's first day in New York, though that day already in UTC.
+	play(oliver.ID, heat, day(3, 23), 2*time.Hour)
 
+	// Three days: the day before yesterday, yesterday and today.
 	since := day(2, 0)
-	stats, err := s.Statistics(ctx, since, zone, uuid.UUID{})
+	stats, err := s.Statistics(ctx, 3, zone, uuid.UUID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +109,7 @@ func TestStatisticsAddUpWhatWasWatched(t *testing.T) {
 	}
 
 	// One profile's report is that profile's alone.
-	theirs, err := s.Statistics(ctx, since, zone, kid.ID)
+	theirs, err := s.Statistics(ctx, 3, zone, kid.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +118,7 @@ func TestStatisticsAddUpWhatWasWatched(t *testing.T) {
 	}
 
 	// A span nothing was watched in still has its days.
-	quiet, err := s.Statistics(ctx, day(0, 0), zone, uuid.NewV7())
+	quiet, err := s.Statistics(ctx, 1, zone, uuid.NewV7())
 	if err != nil || quiet.Plays != 0 || len(quiet.Days) != 1 || len(quiet.Titles) != 0 {
 		t.Errorf("a profile that watched nothing: %+v, %v", quiet, err)
 	}

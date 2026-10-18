@@ -11,7 +11,7 @@ import (
 )
 
 type statistics interface {
-	Statistics(ctx context.Context, since time.Time, zone *time.Location, profile uuid.UUID) (store.Statistics, error)
+	Statistics(ctx context.Context, days int, zone *time.Location, profile uuid.UUID) (store.Statistics, error)
 }
 
 // defaultStatisticsDays is the span a report covers where none is asked for, and mostStatisticsDays
@@ -74,11 +74,7 @@ func (a *API) adminStatistics(w http.ResponseWriter, r *http.Request) {
 		}
 		zone = where
 	}
-	// The span starts at the first moment of the earliest day it covers, so today and the days
-	// before it are whole days wherever the report is read.
-	midnight := time.Now().In(zone).AddDate(0, 0, -(days - 1))
-	since := time.Date(midnight.Year(), midnight.Month(), midnight.Day(), 0, 0, 0, 0, zone)
-	stats, err := a.svc.Statistics.Statistics(r.Context(), since, zone, profile)
+	stats, err := a.svc.Statistics.Statistics(r.Context(), days, zone, profile)
 	if err != nil {
 		a.internal(w, r, err)
 		return

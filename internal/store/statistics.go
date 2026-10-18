@@ -54,20 +54,25 @@ const mostWatched = 10
 // playedMS is how long the plays a statement counts ran, in milliseconds.
 const playedMS = `coalesce(sum(extract(epoch FROM (p.stopped_at - p.started_at)) * 1000), 0)::bigint`
 
-// Statistics answers what was watched from the day since falls on to today, in zone, by everyone
-// or by one profile. Days are counted in zone, so a play late on Sunday night is Sunday's.
-func (s *Store) Statistics(ctx context.Context, since time.Time, zone *time.Location, profile uuid.UUID) (Statistics, error) {
+// Statistics answers what was watched over the last so many days, today the last of them, by
+// everyone or by one profile. Days are counted in zone, so a play late on Sunday night is Sunday's;
+// the span starts at midnight of its first day there, and is read from one clock so it is the same
+// number of days however near midnight it is asked.
+func (s *Store) Statistics(ctx context.Context, days int, zone *time.Location, profile uuid.UUID) (Statistics, error) {
+	now := time.Now().In(zone)
+	first := now.AddDate(0, 0, 1-days)
+	since := time.Date(first.Year(), first.Month(), first.Day(), 0, 0, 0, 0, zone)
 	args := pgx.NamedArgs{
 		"since":   since,
 		"zone":    zone.String(),
 		"profile": optional(profile),
-		"from":    since.In(zone).Format(time.DateOnly),
-		"to":      time.Now().In(zone).Format(time.DateOnly),
+		"from":    since.Format(time.DateOnly),
+		"to":      now.Format(time.DateOnly),
 	}
 	// The plays counted: those of the span, and of one profile where a report names one.
 	const whose = ` WHERE p.stopped_at >= @since AND (@profile::uuid IS NULL OR p.profile_id = @profile)`
 
-	days, err := queryStructs[dayRow](ctx, s.pool, `
+	daily, err := queryStructs[dayRow](ctx, s.pool, `
 		WITH watched AS (
 			SELECT (p.stopped_at AT TIME ZONE @zone)::date AS day, count(*)::int AS plays, `+playedMS+` AS watched_ms
 			FROM plays p`+whose+`
@@ -80,26 +85,18 @@ func (s *Store) Statistics(ctx context.Context, since time.Time, zone *time.Loca
 	if err != nil {
 		return Statistics{}, err
 	}
-	out := Statistics{Days: make([]DayWatched, len(days))}
-	for n, d := range days {
+	out := Statistics{Days: make([]DayWatched, len(daily))}
+	for n, d := range daily {
 		out.Days[n] = DayWatched{Day: domain.Date(d.Day), Plays: d.Plays, WatchedMS: d.WatchedMS}
 		out.Plays += d.Plays
 		out.WatchedMS += d.WatchedMS
 	}
 
-	profiles, err := queryStructs[profileRow](ctx, s.pool, `
-		SELECT p.profile_id, who.name, count(*)::int AS plays, `+playedMS+` AS watched_ms
+	if out.Profiles, err = queryStructs[ProfileWatched](ctx, s.pool, `
+		SELECT p.profile_id AS profile, who.name, count(*)::int AS plays, `+playedMS+` AS watched_ms
 		FROM plays p JOIN profiles who ON who.id = p.profile_id`+whose+`
-		GROUP BY p.profile_id, who.name ORDER BY watched_ms DESC, who.name`, args)
-	if err != nil {
+		GROUP BY p.profile_id, who.name ORDER BY watched_ms DESC, who.name`, args); err != nil {
 		return Statistics{}, err
-	}
-	out.Profiles = make([]ProfileWatched, len(profiles))
-	for n, r := range profiles {
-		out.Profiles[n] = ProfileWatched{
-			Profile: r.ProfileID, Name: r.Name,
-			Plays: r.Plays, WatchedMS: r.WatchedMS,
-		}
 	}
 
 	// An episode counts towards its show, which is the title an admin reads a report by; a film,
@@ -142,13 +139,6 @@ func (s *Store) Statistics(ctx context.Context, since time.Time, zone *time.Loca
 
 type dayRow struct {
 	Day       time.Time
-	Plays     int
-	WatchedMS int64
-}
-
-type profileRow struct {
-	ProfileID uuid.UUID
-	Name      string
 	Plays     int
 	WatchedMS int64
 }
