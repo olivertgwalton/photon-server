@@ -45,15 +45,14 @@ func New(running string, on func() domain.ReleaseCheck, log *slog.Logger) *Check
 // Run checks now and every checkEvery until ctx ends. A build of main or a local one is no release,
 // and has none to be compared with.
 func (c *Checker) Run(ctx context.Context) {
-	running, ok := parse(c.running)
-	if !ok {
+	if !Is(c.running) {
 		return
 	}
 	t := time.NewTicker(checkEvery)
 	defer t.Stop()
 	for {
 		if c.on() == domain.ReleaseCheckOn {
-			if err := c.check(ctx, running); err != nil && ctx.Err() == nil {
+			if err := c.check(ctx); err != nil && ctx.Err() == nil {
 				c.log.WarnContext(ctx, "no newer release looked for", slog.Any("err", err))
 			}
 		}
@@ -65,7 +64,7 @@ func (c *Checker) Run(ctx context.Context) {
 	}
 }
 
-func (c *Checker) check(ctx context.Context, running [3]int) error {
+func (c *Checker) check(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
 	if err != nil {
 		return err
@@ -87,11 +86,10 @@ func (c *Checker) check(ctx context.Context, running [3]int) error {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswer)).Decode(&latest); err != nil {
 		return err
 	}
-	v, ok := parse(latest.Tag)
-	if !ok {
+	if !Is(latest.Tag) {
 		return fmt.Errorf("the latest release's tag %q is no version", latest.Tag)
 	}
-	if slices.Compare(v[:], running[:]) > 0 {
+	if Newer(latest.Tag, c.running) {
 		c.newer.Store(&domain.Release{Version: latest.Tag, URL: latest.Page})
 	} else {
 		c.newer.Store(nil)
@@ -106,6 +104,20 @@ func (c *Checker) Newer() (domain.Release, bool) {
 		return domain.Release{}, false
 	}
 	return *r, true
+}
+
+// Is says whether tag names a release.
+func Is(tag string) bool {
+	_, ok := parse(tag)
+	return ok
+}
+
+// Newer says whether tag names a release later than running. Where either is no release, as a
+// build of main is not, neither is newer.
+func Newer(tag, running string) bool {
+	v, ok := parse(tag)
+	than, ran := parse(running)
+	return ok && ran && slices.Compare(v[:], than[:]) > 0
 }
 
 // parse reads a release's tag, vMAJOR.MINOR.PATCH. A pre-release's is not one: none is published
