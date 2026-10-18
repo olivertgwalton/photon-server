@@ -3,7 +3,7 @@ title: "Health, logs and metrics"
 summary: "See how photon-server is doing on the dashboard, read its log, and watch it with an uptime monitor or Prometheus."
 ---
 
-photon-server tells you how it is doing in four places: the dashboard and Metrics pages in the web app, its log, a health address for uptime monitors, and figures for Prometheus. Most people only need the dashboard.
+photon-server tells you how it is doing in four places: the dashboard, Metrics and Watch statistics pages in the web app, its log, a health address for uptime monitors, and figures for Prometheus. Most people only need the dashboard.
 
 ## The dashboard
 
@@ -31,6 +31,19 @@ Settings › Server › Metrics shows what the server is doing now, refreshed ev
 ![Settings › Server › Metrics, with charts of streams and bandwidth over the last ten minutes](../images/maintain-metrics.webp)
 
 The page keeps no history beyond ten minutes. For longer, use Prometheus.
+
+## Watch statistics
+
+Settings › Server › Watch statistics adds up what the household watched, from its play history:
+
+- **Plays** and **Time watched** over the span chosen under **When**: the last 7, 30 or 90 days, or the last year.
+- **Time watched**, drawn a day at a time, or a week at a time for a year. Days are counted where you are reading, so a film finished late at night is that night's.
+- **Who watched**, longest first. Each name opens that profile's plays in Settings › Server › Play history.
+- **Watched most**: the ten titles watched longest, a show counting every episode of it.
+
+**Who** narrows all of it to one profile.
+
+A play counts from when it started to when it stopped, so a film left paused counts the time it sat paused, as Plex's and Tautulli's reports count it.
 
 ## The log
 
