@@ -100,7 +100,7 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "library_ids names the libraries a rule or a list reads, and a collection made by hand none")
 		return
 	}
-	if req.Rule != nil && !a.checkedRule(w, *req.Rule) {
+	if req.Rule != nil && !a.checkedRule(w, req.Rule.CheckShared()) {
 		return
 	}
 	var id uuid.UUID
@@ -174,9 +174,10 @@ func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// checkedRule refuses a rule a smart collection cannot keep.
-func (a *API) checkedRule(w http.ResponseWriter, rule store.SmartRule) bool {
-	if err := rule.Check(); err != nil {
+// checkedRule refuses a rule whose check, as a smart collection's or a smart playlist's, says it
+// cannot be kept.
+func (a *API) checkedRule(w http.ResponseWriter, err error) bool {
+	if err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())
 		return false
 	}
@@ -190,7 +191,7 @@ func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req store.SmartRule
-	if !a.decode(w, r, &req) || !a.checkedRule(w, req) {
+	if !a.decode(w, r, &req) || !a.checkedRule(w, req.CheckShared()) {
 		return
 	}
 	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req)) {

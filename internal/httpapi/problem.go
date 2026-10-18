@@ -122,6 +122,8 @@ var problems = []struct {
 	{err: store.ErrProfileExists, code: codeConflict, ownWords: true},
 	{err: store.ErrPluginExists, code: codeConflict, ownWords: true},
 	{err: store.ErrNotUserCollection, code: codeConflict, ownWords: true},
+	{err: store.ErrSmartPlaylist, code: codeConflict, ownWords: true},
+	{err: store.ErrNotSmartPlaylist, code: codeConflict, ownWords: true},
 	{err: store.ErrLastAdmin, code: codeConflict, ownWords: true},
 	{err: store.ErrSetUp, code: codeConflict, ownWords: true},
 	{err: auth.ErrResetNotFound, code: codeNotFound, ownWords: true},
