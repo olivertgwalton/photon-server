@@ -82,16 +82,19 @@ func SegmentActions() []SegmentAction {
 }
 
 // CardArt is what a card on a row about where the profile is wears: the episode's or film's own
-// still, as Plex draws one, or the backdrop of the show it is of, as Jellyfin's web app does.
+// still, as Plex draws one, the backdrop of the show it is of, as Jellyfin's web app does, or the
+// landscape picture lettered with its show's or film's name, as Kodi's landscape art is.
 type CardArt string
 
 const (
 	CardStill    CardArt = "still"
 	CardBackdrop CardArt = "backdrop"
+	// CardLandscape is a show's or film's thumb, else its backdrop.
+	CardLandscape CardArt = "landscape"
 )
 
 func CardArts() []CardArt {
-	return []CardArt{CardStill, CardBackdrop}
+	return []CardArt{CardStill, CardBackdrop, CardLandscape}
 }
 
 // Preferences are how a profile plays, on every device, as Jellyfin's UserConfiguration. The server
