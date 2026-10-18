@@ -100,14 +100,15 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 			sub.Scope = domain.SeasonsEvery
 		}
 	case item.Kind == domain.ItemShow:
-		// Only a season holding an episode still titled by its file name, as Jellyfin asks a
-		// provider only about items it has never refreshed: a show's new episode costs one season.
-		// A season's own title is always its number, so it says nothing of what was asked.
+		// Only a season holding an episode still titled by its file name or asked about again, as
+		// Jellyfin asks a provider only about items it has never refreshed: a show's new episode
+		// costs one season. A season's own title is always its number, so it says nothing of what
+		// was asked.
 		sub.Seasons, err = queryColumn[int](ctx, s.pool, `
 			SELECT DISTINCT s.season_number FROM items s
 			JOIN items e ON e.parent_id = s.id
-			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
-			WHERE s.parent_id = $1 AND s.kind = 'season'
+			JOIN item_fields f ON f.item_id = e.id AND f.field = 'title'
+			WHERE s.parent_id = $1 AND s.kind = 'season' AND (f.source = 'file' OR e.asked_again_at IS NOT NULL)
 			ORDER BY s.season_number`, id)
 		if err != nil {
 			return Subject{}, false, err

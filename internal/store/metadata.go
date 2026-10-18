@@ -109,6 +109,10 @@ func (f *fields) apply(ctx context.Context, tx db, source domain.FieldSource, m 
 	for _, name := range written {
 		f.sources[name] = source
 	}
+	// A source titling an item answers describeAgain's asking about it.
+	if source != domain.SourceFile && slices.Contains(written, domain.FieldTitle) {
+		assigns = append(assigns, "asked_again_at = NULL")
+	}
 	b := &pgx.Batch{}
 	if len(assigns) > 0 {
 		b.Queue(`UPDATE items SET `+strings.Join(assigns, ", ")+` WHERE id = $1`, args...)

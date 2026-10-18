@@ -288,4 +288,21 @@ func TestEachKindOfItemTakesItsOwnSources(t *testing.T) {
 	if sub, _, err := s.IdentifySubject(ctx, row.ID); err != nil || !slices.Equal(sub.Seasons, []int{1}) {
 		t.Errorf("seasons asked about = %v, %v; want the first again", sub.Seasons, err)
 	}
+	// Until TheTVDB answers again, the scan that follows leaves its title standing over the file's.
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v2"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := title(domain.ItemEpisode); got != "The Train Job (tvdb)" {
+		t.Errorf("episode rescanned before it is described again = %q, want TheTVDB's title kept", got)
+	}
+	if err := s.SaveIdentity(ctx, row.ID, domain.SourceTVDB, domain.Metadata{},
+		map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{1: {Title: "The Train Job"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := title(domain.ItemEpisode); got != "The Train Job" {
+		t.Errorf("episode described again = %q, want TheTVDB's new title", got)
+	}
+	if sub, _, err := s.IdentifySubject(ctx, row.ID); err != nil || len(sub.Seasons) != 0 {
+		t.Errorf("seasons asked about once described again = %v, %v; want none", sub.Seasons, err)
+	}
 }

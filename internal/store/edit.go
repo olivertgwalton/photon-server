@@ -173,12 +173,14 @@ func (s *Store) Refresh(ctx context.Context, id uuid.UUID, mode domain.RefreshMo
 	})
 }
 
-// describeAgain says the seasons and episodes a query selects were titled by their files, so
-// their show's next match asks about each again; their values stand until then.
+// describeAgain asks their show's next match about the episodes a query selects again. Each keeps
+// its title, and the source that gave it, until a source answers, so a scan in between does not
+// title it by its file.
 func describeAgain(ctx context.Context, tx db, items string, args pgx.NamedArgs) error {
 	_, err := tx.Exec(ctx, `
-		UPDATE item_fields SET source = 'file', updated_at = now()
-		WHERE field = 'title' AND source NOT IN ('file', 'nfo', 'user') AND item_id IN (`+items+`)`, args)
+		UPDATE items i SET asked_again_at = now() FROM item_fields f
+		WHERE f.item_id = i.id AND f.field = 'title' AND f.source NOT IN ('file', 'nfo', 'user')
+			AND i.kind = 'episode' AND i.id IN (`+items+`)`, args)
 	return err
 }
 
@@ -201,8 +203,9 @@ func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.R
 				OR coalesce(i.overview, '') = ''
 				OR NOT EXISTS (SELECT 1 FROM artwork a WHERE a.item_id = i.id AND a.kind = 'poster')
 				OR EXISTS (SELECT 1 FROM jobs j WHERE j.kind = 'identify' AND j.subject = i.id AND j.state = 'dead')
-				OR EXISTS (SELECT 1 FROM items e JOIN item_fields f ON f.item_id = e.id AND f.field = 'title' AND f.source = 'file'
-					WHERE e.kind = 'episode' AND e.parent_id IN (SELECT id FROM items WHERE parent_id = i.id)))`
+				OR EXISTS (SELECT 1 FROM items e JOIN item_fields f ON f.item_id = e.id AND f.field = 'title'
+					WHERE e.kind = 'episode' AND e.parent_id IN (SELECT id FROM items WHERE parent_id = i.id)
+						AND (f.source = 'file' OR e.asked_again_at IS NOT NULL)))`
 		case domain.RefreshAll:
 			err := describeAgain(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind IN ('season', 'episode')`, args)
 			if err != nil {
