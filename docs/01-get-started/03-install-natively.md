@@ -57,8 +57,9 @@ networks, so your other devices can reach it. When Photon's menu says **Running*
 **Open Photon** and your browser opens the **Set up** page.
 
 Click Photon's icon for its menu, which has the same items as the Mac app's, with
-**Start at Sign-in** for **Start at Login**. Opening Photon from the Start menu again opens the web
-app.
+**Start at Sign-in** for **Start at Login**, and **Check for Updates…**, which
+[Updating](../07-maintain/02-updating.md) describes. Opening Photon from the Start menu again opens
+the web app.
 
 It reads libraries on your drives and on network shares you have mapped. It uses an NVIDIA, Intel
 or AMD graphics card to convert video where it can. To remove it, uninstall **Photon** in

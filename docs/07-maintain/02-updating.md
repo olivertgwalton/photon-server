@@ -51,7 +51,7 @@ PHOTON_IMAGE=ghcr.io/olivertgwalton/photon-server:latest
 
   This replaces the old version and keeps your database. Stop Photon and open it again: it migrates the database as it starts. `flatpak update` doesn't find new versions, as the bundle doesn't come from a Flatpak repository.
 - **Mac app.** Choose **Check for Updates…** in Photon's menu, then **Install Update**. Photon also looks once a day and asks you when a newer version is out. It stops the server, puts the new version in place, and opens it, which migrates the database. A version with no **Check for Updates…** is updated once by hand: quit Photon, drag the new one from the release's disk image to Applications, and open it.
-- **Windows app.** Open the new `_setup.exe`. It quits Photon, replaces it, keeps your database, and starts it again. It migrates every time it starts.
+- **Windows app.** Photon looks for a new version once a day, and when there is one, says so beside its icon. Click the notice, or choose **Install Photon** from its menu: it downloads the new version, checks it is the one the release signed, quits, installs it, keeps your database, and starts again. **Check for Updates…** looks now. Opening a new `_setup.exe` yourself does the same. It migrates every time it starts.
 - **Archive.** Stop the server. Unpack the new archive over the old one. Then, with `PHOTON_DATABASE_URL` set as before, run:
 
   ```sh
