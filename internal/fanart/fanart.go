@@ -1,7 +1,7 @@
 // Package fanart reads fanart.tv, which pictures a film by its TMDB or IMDb id and a show by its
 // TheTVDB id: posters, backdrops, logos, banners, and the landscape pictures lettered with the
 // title's name that a wide card wears, as Jellyfin's fanart.tv plugin reads them. It describes
-// nothing else. Each server uses its own key, set by an admin.
+// nothing else. Every server asks with photon's own project key; an admin may add a personal key.
 package fanart
 
 import (
@@ -21,12 +21,13 @@ import (
 
 const baseURL = "https://webservice.fanart.tv/v3.2/"
 
-// keySetting holds the project key fanart.tv issues; clientSetting a personal key, which fanart.tv
-// answers with pictures newer than a project key alone sees.
-const (
-	keySetting    = "api_key"
-	clientSetting = "client_key"
-)
+// projectKey is the key fanart.tv issued photon, which every server asks with, as Jellyfin's plugin
+// carries its own: fanart.tv means a project's key to ship with it.
+const projectKey = "097e6f9e491fdeb5d46b5198dfa28fa2"
+
+// clientSetting holds an admin's personal key, which fanart.tv answers with pictures newer than a
+// project key alone sees.
+const clientSetting = "client_key"
 
 // limit is gentle: fanart.tv publishes none, and a library's first scan asks for every title.
 var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
@@ -43,10 +44,7 @@ func New(settings provider.Settings, limits kv.Limiter) *Client {
 func (c *Client) Info() provider.Info {
 	return provider.Info{
 		ID: domain.SourceFanart, Name: "fanart.tv", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow},
-		Settings: []provider.Setting{
-			{Key: keySetting, Name: "API key", Secret: true, Required: true},
-			{Key: clientSetting, Name: "Personal API key", Secret: true},
-		},
+		Settings: []provider.Setting{{Key: clientSetting, Name: "Personal API key", Secret: true}},
 	}
 }
 
@@ -97,10 +95,7 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 	if err != nil {
 		return domain.Metadata{}, nil, err
 	}
-	if set[keySetting] == "" {
-		return domain.Metadata{}, nil, provider.ErrNotConfigured
-	}
-	q := url.Values{keySetting: {set[keySetting]}}
+	q := url.Values{"api_key": {projectKey}}
 	if set[clientSetting] != "" {
 		q.Set(clientSetting, set[clientSetting])
 	}
@@ -187,7 +182,7 @@ func number(s string) int {
 
 // get asks fanart.tv for a title's pictures, answering false for a title it has none of, which it
 // answers 404. A key it refuses is provider.ErrUnavailable, so a title is pictured by its other
-// sources until the key is mended.
+// sources meanwhile.
 func (c *Client) get(ctx context.Context, path string, q url.Values, into any) (bool, error) {
 	err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q}, into)
 	if errors.Is(err, provider.ErrNotFound) {
