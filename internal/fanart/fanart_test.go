@@ -36,12 +36,14 @@ var answers = map[string]string{
 		"seasonposter":[{"id":"10","url":"https://assets.fanart.tv/fanart/tv/81189/seasonposter/bb-s1.jpg","lang":"en","likes":"4","season":"1"}]}`,
 }
 
-func client(t *testing.T, key string) (*Client, *[]string) {
+// client asks a fanart.tv served here, which refuses every key where refuse is set, with an
+// admin's personal key where personal is not empty.
+func client(t *testing.T, personal string, refuse bool) (*Client, *[]string) {
 	t.Helper()
 	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asked = append(asked, r.URL.Path+"?"+r.URL.RawQuery)
-		if r.URL.Query().Get("api_key") != "project" {
+		if refuse || r.URL.Query().Get("api_key") != projectKey {
 			http.Error(w, `{"status":"error","error message":"Not authorized"}`, http.StatusUnauthorized)
 			return
 		}
@@ -56,14 +58,14 @@ func client(t *testing.T, key string) (*Client, *[]string) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) {
-		return map[string]string{"api_key": key, "client_key": "mine"}, nil
+		return map[string]string{"client_key": personal}, nil
 	}, unlimited{})
 	c.api.Base = srv.URL + "/"
 	return c, &asked
 }
 
 func TestAFilmIsPicturedByItsTMDBID(t *testing.T) {
-	c, asked := client(t, "project")
+	c, asked := client(t, "mine", false)
 	id, err := c.Match(t.Context(), domain.Locale{}, domain.ItemMovie, provider.Hints{
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: "578", domain.ProviderIMDb: "tt0073195"},
 	})
@@ -93,13 +95,13 @@ func TestAFilmIsPicturedByItsTMDBID(t *testing.T) {
 	if m.Title != "" || m.Overview != "" {
 		t.Errorf("fanart.tv says nothing but pictures: %+v", m)
 	}
-	if got := (*asked)[0]; got != "/movies/578?api_key=project&client_key=mine" {
+	if got := (*asked)[0]; got != "/movies/578?api_key="+projectKey+"&client_key=mine" {
 		t.Errorf("asked %s", got)
 	}
 }
 
 func TestAFilmWithNoTMDBIDIsAskedForByItsIMDbID(t *testing.T) {
-	c, _ := client(t, "project")
+	c, _ := client(t, "", false)
 	id, err := c.Match(t.Context(), domain.Locale{}, domain.ItemMovie, provider.Hints{IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0073195"}})
 	if err != nil || id != "tt0073195" {
 		t.Errorf("match = %q, %v", id, err)
@@ -107,7 +109,7 @@ func TestAFilmWithNoTMDBIDIsAskedForByItsIMDbID(t *testing.T) {
 }
 
 func TestAShowIsPicturedByItsTheTVDBID(t *testing.T) {
-	c, _ := client(t, "project")
+	c, _ := client(t, "", false)
 	hints := provider.Hints{IDs: map[domain.Provider]string{domain.ProviderTMDB: "1396", domain.ProviderTVDB: "81189"}}
 	id, err := c.Match(t.Context(), domain.Locale{}, domain.ItemShow, hints)
 	if err != nil || id != "81189" {
@@ -124,23 +126,33 @@ func TestAShowIsPicturedByItsTheTVDBID(t *testing.T) {
 }
 
 func TestATitleFanartHasNothingOfIsDescribedWithNothing(t *testing.T) {
-	c, _ := client(t, "project")
+	c, _ := client(t, "", false)
 	m, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "999999", domain.SeasonRequest{})
 	if err != nil || len(m.Artwork) != 0 {
 		t.Errorf("describe = %+v, %v", m, err)
 	}
 }
 
+// With no personal key, fanart.tv is asked with photon's project key alone.
+func TestAServerNeedsNoKeyOfItsOwn(t *testing.T) {
+	c, asked := client(t, "", false)
+	m, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "578", domain.SeasonRequest{})
+	if err != nil || len(m.Artwork) == 0 {
+		t.Fatalf("describe = %d pictures, %v", len(m.Artwork), err)
+	}
+	if got := (*asked)[0]; got != "/movies/578?api_key="+projectKey {
+		t.Errorf("asked %s", got)
+	}
+	for _, s := range c.Info().Settings {
+		if s.Required {
+			t.Errorf("an admin must set %s", s.Key)
+		}
+	}
+}
+
 func TestAKeyFanartRefusesPassesItOver(t *testing.T) {
-	c, _ := client(t, "wrong")
+	c, _ := client(t, "", true)
 	if _, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "578", domain.SeasonRequest{}); !errors.Is(err, provider.ErrUnavailable) {
 		t.Errorf("err = %v, want ErrUnavailable", err)
-	}
-	c, asked := client(t, "")
-	if _, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemMovie, "578", domain.SeasonRequest{}); !errors.Is(err, provider.ErrNotConfigured) {
-		t.Errorf("no key: err = %v, want ErrNotConfigured", err)
-	}
-	if len(*asked) != 0 {
-		t.Errorf("asked fanart.tv with no key: %v", *asked)
 	}
 }
