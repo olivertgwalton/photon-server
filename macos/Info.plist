@@ -24,6 +24,14 @@
 	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.entertainment</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/olivertgwalton/photon-server/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>JpQqFbH5QPhYj+oa2Z4TDS+rNYwDfkGtGXeeK2vqk6M=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Photon serves your films and shows to the players on your network.</string>
 </dict>
