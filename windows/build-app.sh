@@ -11,7 +11,7 @@ trap 'rm -rf "$work"' EXIT
 
 app="$work/app"
 mkdir -p "$app"
-(cd "$here/.." && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" \
+(cd "$here/.." && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$version" \
   -o "$app/Photon.exe" ./cmd/photon-tray)
 cp -R "$server" "$app/photon-server"
 cp -R "$services/postgres" "$services/valkey" "$app/"

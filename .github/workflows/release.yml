@@ -247,12 +247,14 @@ jobs:
 
   # Photon for Windows: the tray app that runs the server beside its own PostgreSQL and Valkey, in
   # an installer that asks for no admin. Valkey has no Windows build of its own, so the one built
-  # here under MSYS2 passes the kv package's tests before it is carried.
+  # here under MSYS2 passes the kv package's tests before it is carried. SPARKLE_PRIVATE_KEY, the
+  # Mac's, signs the manifest the tray updates from, as a tag requires.
   windows:
     needs: archive
     runs-on: windows-latest
     env:
       VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     defaults:
       run:
         shell: msys2 {0}
@@ -266,7 +268,7 @@ jobs:
           msystem: MSYS
           path-type: inherit
           install: >-
-            gcc make curl unzip
+            gcc make curl unzip openssl
             mingw-w64-ucrt-x86_64-librsvg mingw-w64-ucrt-x86_64-imagemagick
       - name: Find makensis
         shell: pwsh
@@ -298,6 +300,33 @@ jobs:
           unzip -q photon-server_*.zip
           PATH="$PATH:/ucrt64/bin" windows/build-app.sh "$VERSION" photon-server services .
           echo "SETUP=photon-server_${VERSION}_windows_amd64_setup.exe" >> "$GITHUB_ENV"
+      # The manifest the tray reads at releases/latest/download/photon-server_windows_amd64_update.json:
+      # this release's installer, its size and SHA-256, signed with the key whose public half the
+      # tray carries in cmd/photon-tray/update-key.pub.
+      - name: Make the update manifest
+        if: env.SPARKLE_PRIVATE_KEY != ''
+        run: |
+          manifest=photon-server_windows_amd64_update.json
+          printf '{"version":"%s","url":"%s","size":%d,"sha256":"%s"}' "$VERSION" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$VERSION/$SETUP" \
+            "$(stat -c %s "$SETUP")" "$(sha256sum "$SETUP" | cut -d' ' -f1)" > "$manifest"
+          cat "$manifest"
+          # Sparkle's key is an Ed25519 seed; openssl takes it as PKCS #8, a fixed prefix before it.
+          seed="$RUNNER_TEMP/seed" key="$RUNNER_TEMP/update.pem"
+          trap 'rm -f "$seed" "$key"' EXIT
+          echo "$SPARKLE_PRIVATE_KEY" | base64 -d > "$seed"
+          [ "$(stat -c %s "$seed")" = 32 ] || { echo "SPARKLE_PRIVATE_KEY is no Ed25519 seed" >&2; exit 1; }
+          { echo '-----BEGIN PRIVATE KEY-----'
+            { printf '\060\056\002\001\000\060\005\006\003\053\145\160\004\042\004\040'; cat "$seed"; } | base64
+            echo '-----END PRIVATE KEY-----'; } > "$key"
+          [ "$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64)" = "$(cat cmd/photon-tray/update-key.pub)" ] ||
+            { echo "SPARKLE_PRIVATE_KEY is not the key the tray trusts" >&2; exit 1; }
+          openssl pkeyutl -sign -rawin -inkey "$key" -in "$manifest" -out "$manifest.sig"
+      - name: A tag's update is signed
+        if: github.ref_type == 'tag' && env.SPARKLE_PRIVATE_KEY == ''
+        run: |
+          echo "set the SPARKLE_PRIVATE_KEY secret to publish a signed update" >&2
+          exit 1
       # Installed, it starts Photon, which makes its database, starts PostgreSQL, Valkey and the
       # server, and serves the web app. Installed again over it, as an update is, it quits Photon,
       # replaces it and starts it again on the same database. Closed, Photon stops all three.
@@ -334,7 +363,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.SETUP }}
-          path: ${{ env.SETUP }}
+          path: |
+            ${{ env.SETUP }}
+            photon-server_windows_amd64_update.json*
           if-no-files-found: error
 
   # The Linux build: a Flatpak carrying the server with its own PostgreSQL and Valkey. Run, it makes
