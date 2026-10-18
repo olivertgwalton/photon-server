@@ -78,8 +78,9 @@ const drag = reorder(move);
 // What the rows about where the reader is draw a card by: the server answers
 // those rows' cards with the picture chosen, so nothing here draws it twice.
 const artOptions: { value: CardArt; label: string }[] = [
-	{ value: "still", label: "The episode's still" },
-	{ value: "backdrop", label: "The show's backdrop" },
+	{ value: "still", label: "Stills" },
+	{ value: "backdrop", label: "Backdrops" },
+	{ value: "landscape", label: "Title art" },
 ];
 
 // On the same queue as the order: a change is sent once the one before is
@@ -201,7 +202,8 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 				class="w-full sm:w-72"
 			/>
 			<Field.Description>
-				What Continue Watching and Next Up draw a card by.
+				What Continue Watching and Next Up draw a card by. A film uses its own;
+				an episode uses its own still, or its show's backdrop or title art.
 			</Field.Description>
 		</Field.Field>
 	</Card.Content>
