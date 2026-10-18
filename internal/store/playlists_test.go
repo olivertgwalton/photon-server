@@ -118,3 +118,143 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 		t.Errorf("after removing it: %+v", left)
 	}
 }
+
+// A smart playlist holds no entries of its own: it plays what its rule finds now, for the profile
+// whose it is, so watching an episode takes that episode out of one of unwatched episodes.
+func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var episodes []Episode
+	for n := range 3 {
+		name := "Cosmos" + string(rune('1'+n))
+		episodes = append(episodes, Episode{
+			Season: 1, Episodes: []int{n + 1}, Title: name, Folder: "Cosmos/Season 1", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte(name), Parts: []Part{
+				{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}},
+			}}},
+		})
+	}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, episodes, nil); err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unseen := SmartRule{
+		Kind:   domain.WallEpisodes,
+		Sort:   domain.SortTitle,
+		Order:  domain.Ascending,
+		Filter: WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}},
+	}
+	list, err := s.AddSmartPlaylist(ctx, oliver.ID, tv.ID, "Not yet seen", unseen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func(offset, limit int) ([]string, int64) {
+		t.Helper()
+		entries, total, err := s.PlaylistEntries(ctx, oliver.ID, list, offset, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, e := range entries {
+			if e.ID != (uuid.UUID{}) {
+				t.Errorf("%s has an entry of its own, and a rule's finding has none", e.Card.Title)
+			}
+			out = append(out, e.Card.Title)
+		}
+		return out, total
+	}
+	if got, total := names(0, 50); !slices.Equal(got, []string{"Cosmos1", "Cosmos2", "Cosmos3"}) || total != 3 {
+		t.Fatalf("playlist = %q of %d, want its three unwatched episodes", got, total)
+	}
+	if got, total := names(1, 1); !slices.Equal(got, []string{"Cosmos2"}) || total != 3 {
+		t.Errorf("second page = %q of %d, want Cosmos2 of three", got, total)
+	}
+	summaries, err := s.Playlists(ctx, oliver.ID)
+	if err != nil || len(summaries) != 1 || summaries[0].Entries != 3 || summaries[0].DurationMS != (3*time.Hour).Milliseconds() {
+		t.Fatalf("playlists = %+v, %v; want one of three entries, three hours", summaries, err)
+	}
+	if summaries[0].Rule == nil || summaries[0].Rule.Kind != domain.WallEpisodes || summaries[0].Library != tv.ID {
+		t.Errorf("summary = %+v, want the rule it finds its episodes by, over the TV library", summaries[0])
+	}
+
+	// Watched, an episode is no longer one the rule finds.
+	first, _, err := s.PlaylistEntries(ctx, oliver.ID, list, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWatched(ctx, oliver.ID, first[0].Card.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, total := names(0, 50); !slices.Equal(got, []string{"Cosmos2", "Cosmos3"}) || total != 2 {
+		t.Errorf("after watching the first: %q of %d", got, total)
+	}
+	summaries, err = s.Playlists(ctx, oliver.ID)
+	if err != nil || summaries[0].Entries != 2 || summaries[0].DurationMS != (2*time.Hour).Milliseconds() {
+		t.Errorf("summary after watching the first = %+v, %v; want two entries, two hours", summaries, err)
+	}
+
+	// A rule that takes only its first findings stops the playlist, and its count, at them.
+	capped := unseen
+	capped.Limit = 1
+	if err := s.SetPlaylistRule(ctx, oliver.ID, list, capped); err != nil {
+		t.Fatal(err)
+	}
+	if got, total := names(0, 50); !slices.Equal(got, []string{"Cosmos2"}) || total != 1 {
+		t.Errorf("capped at one: %q of %d", got, total)
+	}
+	if got, total := names(1, 50); len(got) != 0 || total != 1 {
+		t.Errorf("past the cap: %q of %d, want none of one", got, total)
+	}
+	summaries, err = s.Playlists(ctx, oliver.ID)
+	if err != nil || summaries[0].Entries != 1 || summaries[0].DurationMS != time.Hour.Milliseconds() {
+		t.Errorf("capped summary = %+v, %v; want one entry, one hour", summaries, err)
+	}
+
+	// Its entries are the rule's, so nothing else sets them.
+	for name, err := range map[string]error{
+		"add":    s.AddToPlaylist(ctx, oliver.ID, list, []uuid.UUID{first[0].Card.ID}),
+		"remove": s.RemoveFromPlaylist(ctx, oliver.ID, list, uuid.NewV7()),
+		"move":   s.MovePlaylistEntry(ctx, oliver.ID, list, uuid.NewV7(), 0),
+	} {
+		if !errors.Is(err, ErrSmartPlaylist) {
+			t.Errorf("%s to a smart playlist: %v, want ErrSmartPlaylist", name, err)
+		}
+	}
+	// And a playlist made by hand takes no rule.
+	hand, err := s.AddPlaylist(ctx, oliver.ID, "Night in", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPlaylistRule(ctx, oliver.ID, hand, unseen); !errors.Is(err, ErrNotSmartPlaylist) {
+		t.Errorf("a rule for a playlist made by hand: %v, want ErrNotSmartPlaylist", err)
+	}
+
+	// A rule finds what a playlist can play, from a library the profile sees.
+	shows := unseen
+	shows.Kind = domain.WallShows
+	if _, err := s.AddSmartPlaylist(ctx, oliver.ID, tv.ID, "Shows", shows); !errors.Is(err, ErrRuleNotPlayable) {
+		t.Errorf("a rule finding shows: %v, want ErrRuleNotPlayable", err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Unrated: domain.UnratedAllow, Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddSmartPlaylist(ctx, kid.ID, tv.ID, "Not mine", unseen); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a rule over a library the profile does not see: %v, want ErrNotFound", err)
+	}
+}

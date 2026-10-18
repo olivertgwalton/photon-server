@@ -350,7 +350,7 @@ func userCollection(ctx context.Context, tx db, collection uuid.UUID, made ...do
 
 // AddSmartCollection makes an admin's collection whose titles a rule finds in libs.
 func (s *Store) AddSmartCollection(ctx context.Context, libs []uuid.UUID, title string, rule SmartRule) (uuid.UUID, error) {
-	if err := rule.Check(); err != nil {
+	if err := rule.CheckShared(); err != nil {
 		return uuid.UUID{}, err
 	}
 	var id uuid.UUID
@@ -372,7 +372,7 @@ func (s *Store) AddSmartCollection(ctx context.Context, libs []uuid.UUID, title 
 
 // SetRule replaces a smart collection's rule, and its titles with what it finds.
 func (s *Store) SetRule(ctx context.Context, collection uuid.UUID, rule SmartRule) error {
-	if err := rule.Check(); err != nil {
+	if err := rule.CheckShared(); err != nil {
 		return err
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
