@@ -37,6 +37,11 @@ const activity = $derived(
 // warnings first: each with where to put it right.
 const attention = $derived(
 	[
+		data.server.newer_release && {
+			said: `Photon ${data.server.newer_release.version} is out. This server runs ${data.server.version}.`,
+			href: data.server.newer_release.url,
+			go: "See what's new",
+		},
 		!data.libraries.length && {
 			said: "There are no libraries yet: add a folder of films or shows.",
 			href: "/settings/server/libraries/new",

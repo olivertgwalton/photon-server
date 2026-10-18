@@ -77,6 +77,10 @@ let server: Schemas["Server"] = {
 	metadata_language: "en-GB",
 	certification_country: "GB",
 	release_check: "on",
+	newer_release: {
+		version: "v1.1.0",
+		url: "https://github.com/olivertgwalton/photon-server/releases/tag/v1.1.0",
+	},
 	postgres: { reachable: true, version: "18.1" },
 	valkey: { reachable: true, version: "9.0" },
 };

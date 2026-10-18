@@ -5,6 +5,8 @@ summary: "Move photon-server to a new version, and go back to the old one if you
 
 A new version of photon-server may change how its database is laid out. These changes are called **migrations**, and `photon-server migrate` applies them before the new version starts. The standard Docker setup, the Flatpak and the Mac app do this for you.
 
+When a newer release is out, Settings › Server › Dashboard says so under **Needs attention**, with a link to its notes. The server asks GitHub for it a few times a day. To stop it asking, set **Look for new versions** to **Off** under Settings › Server › General.
+
 ## Before you update
 
 1. Note the version you run. Settings › Server › Dashboard shows it under the server's name.

@@ -21,6 +21,15 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	// What wants looking at comes first, with where to put it right.
 	const attention = page.getByRole("region", { name: "Needs attention" });
 	await expect(attention).toContainText(
+		"Photon v1.1.0 is out. This server runs v1.0.0.",
+	);
+	await expect(
+		attention.getByRole("link", { name: "See what's new" }),
+	).toHaveAttribute(
+		"href",
+		"https://github.com/olivertgwalton/photon-server/releases/tag/v1.1.0",
+	);
+	await expect(attention).toContainText(
 		"1 job failed every attempt and waits to be tried again.",
 	);
 	await expect(
