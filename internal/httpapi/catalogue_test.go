@@ -119,6 +119,10 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, 1, nil
 }
 
+// episodeStill is the picture an episode of the fake catalogue carries, showBackdrop the one it
+// wears from its show.
+var episodeStill, showBackdrop = uuid.NewV7(), uuid.NewV7()
+
 // The watchlist holds the one film, from offset 0; next up as many episodes of The Wire as a page
 // is asked for.
 func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error) {
@@ -127,11 +131,14 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 		if offset > 0 {
 			return []store.Card{}, 1, nil
 		}
-		return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}, 1, nil
+		return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop}}, 1, nil
 	case domain.RowNextUp:
 		cards := make([]store.Card, limit)
 		for i := range cards {
-			cards[i] = store.Card{ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"}}
+			cards[i] = store.Card{
+				ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"},
+				Thumb: episodeStill, Backdrop: showBackdrop,
+			}
 		}
 		return cards, int64(offset + limit), nil
 	case domain.RowContinueWatching, domain.RowFavourites:
@@ -172,6 +179,32 @@ func TestProfileRow(t *testing.T) {
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {
 			t.Errorf("%s: %d %s, want %d %s", tc.target, rec.Code, rec.Body, tc.want, tc.wantBody)
 		}
+	}
+}
+
+// A card on a row about where the profile is wears the picture the profile chose for those rows,
+// so a client draws what was asked for without choosing between the two itself.
+func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, Preferences: &fakePreferences{},
+	})
+	call := func(method, target, body string) string {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+episodeStill.String()+`"`) {
+		t.Errorf("until it chooses, an episode wears its own still: %s", body)
+	}
+	call(http.MethodPatch, "/api/v1/profile/preferences", `{"card_art": "backdrop"}`)
+	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+showBackdrop.String()+`"`) {
+		t.Errorf("having chosen the backdrop, an episode wears its show's: %s", body)
+	}
+	// A row drawn by posters is left as it is.
+	if body := call(http.MethodGet, "/api/v1/profile/rows/watchlist", ""); strings.Contains(body, `"thumb"`) {
+		t.Errorf("the watchlist is not a row about where the profile is: %s", body)
 	}
 }
 

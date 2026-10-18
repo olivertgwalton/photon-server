@@ -81,6 +81,19 @@ func SegmentActions() []SegmentAction {
 	return []SegmentAction{SegmentNone, SegmentAsk, SegmentSkip}
 }
 
+// CardArt is what a card on a row about where the profile is wears: the episode's or film's own
+// still, as Plex draws one, or the backdrop of the show it is of, as Jellyfin's web app does.
+type CardArt string
+
+const (
+	CardStill    CardArt = "still"
+	CardBackdrop CardArt = "backdrop"
+)
+
+func CardArts() []CardArt {
+	return []CardArt{CardStill, CardBackdrop}
+}
+
 // Preferences are how a profile plays, on every device, as Jellyfin's UserConfiguration. The server
 // chooses the sound and subtitles by them; the rest are a player's to follow.
 type Preferences struct {
@@ -98,6 +111,7 @@ type Preferences struct {
 	IntroAction   SegmentAction
 	CreditsAction SegmentAction
 	ThemeMusic    ThemeMusic
+	CardArt       CardArt
 	Notify        Notify
 	// QuietLibraries are the libraries the profile is told nothing of.
 	QuietLibraries []uuid.UUID
@@ -113,7 +127,7 @@ func DefaultPreferences() Preferences {
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
 		NextEpisode: NextEpisodePlay, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
-		ThemeMusic: ThemeMusicOff, Notify: NotifyMarked, Home: ArrangeHome(nil),
+		ThemeMusic: ThemeMusicOff, CardArt: CardStill, Notify: NotifyMarked, Home: ArrangeHome(nil),
 	}
 }
 
