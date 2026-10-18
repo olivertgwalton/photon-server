@@ -112,13 +112,15 @@ jobs:
   # DMG for Apple silicon: signed with the Developer ID and notarized where the secrets are set, as a tag requires. The secrets:
   # MACOS_CERTIFICATE, the Developer ID Application certificate and key as a base64 .p12, and
   # MACOS_CERTIFICATE_PASSWORD; APPLE_API_KEY, an App Store Connect API key's .p8 in base64, with
-  # APPLE_API_KEY_ID and APPLE_API_ISSUER_ID.
+  # APPLE_API_KEY_ID and APPLE_API_ISSUER_ID; SPARKLE_PRIVATE_KEY, the EdDSA key Sparkle's
+  # generate_keys -x exports, whose public half is SUPublicEDKey in macos/Info.plist.
   dmg:
     needs: archive
     runs-on: macos-latest
     env:
       VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -188,10 +190,36 @@ jobs:
             --issuer "$APPLE_API_ISSUER_ID" --wait
           xcrun stapler staple "$DMG"
           spctl --assess --type open --context context:primary-signature --verbose "$DMG"
-      - name: A tag's DMG is signed
-        if: github.ref_type == 'tag' && env.MACOS_CERTIFICATE == ''
+      # The feed the app reads at releases/latest/download/appcast.xml: this release's DMG, with the
+      # EdDSA signature Sparkle checks it by before it checks the Developer ID's.
+      - name: Make the appcast
+        if: env.SPARKLE_PRIVATE_KEY != ''
         run: |
-          echo "set the MACOS_CERTIFICATE and APPLE_API_KEY secrets to publish a signed DMG" >&2
+          echo "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          signed=$(macos/.build/artifacts/sparkle/Sparkle/bin/sign_update --ed-key-file "$RUNNER_TEMP/sparkle.key" "$DMG")
+          releases="https://github.com/$GITHUB_REPOSITORY/releases"
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Photon</title>
+              <item>
+                <title>Photon $VERSION</title>
+                <pubDate>$(date -R)</pubDate>
+                <sparkle:version>${VERSION#v}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION#v}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+                <sparkle:fullReleaseNotesLink>$releases/tag/$VERSION</sparkle:fullReleaseNotesLink>
+                <enclosure url="$releases/download/$VERSION/$DMG" $signed type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          EOF
+          cat appcast.xml
+      - name: A tag's DMG is signed
+        if: github.ref_type == 'tag' && (env.MACOS_CERTIFICATE == '' || env.SPARKLE_PRIVATE_KEY == '')
+        run: |
+          echo "set the MACOS_CERTIFICATE, APPLE_API_KEY and SPARKLE_PRIVATE_KEY secrets to publish a signed DMG" >&2
           exit 1
       # Opened from the DMG, the app makes its database, starts PostgreSQL, Valkey and the server,
       # and serves the web app; quit, it stops all three.
@@ -212,7 +240,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DMG }}
-          path: ${{ env.DMG }}
+          path: |
+            ${{ env.DMG }}
+            appcast.xml
           if-no-files-found: error
 
   # The Linux build: a Flatpak carrying the server with its own PostgreSQL and Valkey. Run, it makes
@@ -300,4 +330,4 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server[_-]*
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server[_-]* appcast.xml
