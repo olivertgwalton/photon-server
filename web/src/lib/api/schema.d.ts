@@ -7866,7 +7866,7 @@ export interface components {
             year?: number;
         };
         /** @enum {string} */
-        CardArt: "still" | "backdrop";
+        CardArt: "still" | "backdrop" | "landscape";
         CardList: {
             items: components["schemas"]["Card"][];
         };

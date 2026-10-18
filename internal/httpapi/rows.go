@@ -65,18 +65,35 @@ func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
 
 // wearCardArt has each card on a row about where the profile is carry the picture the profile
 // chose as its thumb, the picture a client draws such a card by: so a client draws what was asked
-// for without choosing between the two itself.
+// for without choosing between them itself. A card with none of the picture chosen keeps its own.
 func (a *API) wearCardArt(ctx context.Context, profile uuid.UUID, row domain.HomeRow, cards []store.Card) error {
 	if !row.WearsCardArt() {
 		return nil
 	}
 	p, err := a.svc.Preferences.Preferences(ctx, profile)
-	if err != nil || p.CardArt != domain.CardBackdrop {
+	if err != nil {
 		return err
 	}
 	for i := range cards {
-		if c := &cards[i]; c.Backdrop != (uuid.UUID{}) {
-			c.Thumb = c.Backdrop
+		c := &cards[i]
+		var worn uuid.UUID
+		switch p.CardArt {
+		case domain.CardStill:
+		case domain.CardBackdrop:
+			worn = c.Backdrop
+		case domain.CardLandscape:
+			// An episode wears its show's; a film's own thumb is its landscape picture.
+			switch {
+			case c.Kind == domain.ItemEpisode && c.ShowThumb != (uuid.UUID{}):
+				worn = c.ShowThumb
+			case c.Kind == domain.ItemMovie && c.Thumb != (uuid.UUID{}):
+				worn = c.Thumb
+			default:
+				worn = c.Backdrop
+			}
+		}
+		if worn != (uuid.UUID{}) {
+			c.Thumb = worn
 		}
 	}
 	return nil

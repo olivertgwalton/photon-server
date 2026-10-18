@@ -42,6 +42,7 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	}}
 	if err := s.SaveIdentity(ctx, show.ID, domain.SourceTMDB, domain.Metadata{Title: "Show", Artwork: []domain.Artwork{
 		art(domain.ArtworkPoster, "poster"), art(domain.ArtworkBackdrop, "backdrop"), art(domain.ArtworkLogo, "logo"),
+		art(domain.ArtworkThumb, "landscape"),
 	}}, seasons); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,10 @@ func TestAnEpisodeWearsItsShowsPictures(t *testing.T) {
 	}
 	if c.Thumb != still {
 		t.Errorf("card thumb = %v, want the episode's own still %v", c.Thumb, still)
+	}
+	// Its show's landscape picture comes with it, for a row of what is watched to draw it by.
+	if landscape := want(domain.ArtworkThumb); c.ShowThumb != landscape || landscape == (uuid.UUID{}) {
+		t.Errorf("card show thumb = %v, want the show's %v", c.ShowThumb, landscape)
 	}
 	seasonPictures, _, err := s.bestPictures(ctx, []*model.Item{{ID: *ep.ParentID}})
 	if err != nil {

@@ -119,9 +119,9 @@ func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Car
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, 1, nil
 }
 
-// episodeStill is the picture an episode of the fake catalogue carries, showBackdrop the one it
-// wears from its show.
-var episodeStill, showBackdrop = uuid.NewV7(), uuid.NewV7()
+// episodeStill is the picture an episode of the fake catalogue carries, showBackdrop and showThumb
+// those of its show, and filmThumb a film's landscape picture.
+var episodeStill, showBackdrop, showThumb, filmThumb = uuid.NewV7(), uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
 
 // The watchlist holds the one film, from offset 0; next up as many episodes of The Wire as a page
 // is asked for.
@@ -137,11 +137,17 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 		for i := range cards {
 			cards[i] = store.Card{
 				ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"},
-				Thumb: episodeStill, Backdrop: showBackdrop,
+				Thumb: episodeStill, Backdrop: showBackdrop, ShowThumb: showThumb,
 			}
 		}
 		return cards, int64(offset + limit), nil
-	case domain.RowContinueWatching, domain.RowFavourites:
+	case domain.RowContinueWatching:
+		// A film with a landscape picture, and one with a backdrop alone.
+		return []store.Card{
+			{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop, Thumb: filmThumb},
+			{ID: films, Kind: domain.ItemMovie, Title: "Ronin", Backdrop: showBackdrop},
+		}, 2, nil
+	case domain.RowFavourites:
 		return []store.Card{}, 0, nil
 	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
 	}
@@ -205,6 +211,23 @@ func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
 	// A row drawn by posters is left as it is.
 	if body := call(http.MethodGet, "/api/v1/profile/rows/watchlist", ""); strings.Contains(body, `"thumb"`) {
 		t.Errorf("the watchlist is not a row about where the profile is: %s", body)
+	}
+
+	// Having chosen the landscape picture, an episode wears its show's, and a film its own, else
+	// its backdrop.
+	call(http.MethodPatch, "/api/v1/profile/preferences", `{"card_art": "landscape"}`)
+	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+showThumb.String()+`"`) {
+		t.Errorf("an episode wears its show's landscape picture: %s", body)
+	}
+	body := call(http.MethodGet, "/api/v1/profile/rows/continue_watching", "")
+	var page struct {
+		Items []struct{ Title, Thumb string }
+	}
+	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Items) != 2 {
+		t.Fatalf("continue watching: %v %s", err, body)
+	}
+	if page.Items[0].Thumb != filmThumb.String() || page.Items[1].Thumb != showBackdrop.String() {
+		t.Errorf("films wear %q and %q, want their own landscape picture, else their backdrop", page.Items[0].Thumb, page.Items[1].Thumb)
 	}
 }
 
