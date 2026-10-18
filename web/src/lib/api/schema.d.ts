@@ -2135,7 +2135,7 @@ export interface paths {
             };
         };
         /**
-         * Name the server and set what its metadata is asked in, which every node takes up at once
+         * Name the server, set what its metadata is asked in and whether it looks for a newer release, which every node takes up at once
          * @description Admin only.
          */
         put: {
@@ -9256,6 +9256,13 @@ export interface components {
             status: number;
             title: string;
         };
+        Release: {
+            /** Format: uri */
+            url: string;
+            version: string;
+        };
+        /** @enum {string} */
+        ReleaseCheck: "on" | "off";
         Reset: {
             name: string;
         };
@@ -9360,10 +9367,12 @@ export interface components {
             listen: string;
             metadata_language: string;
             name: string;
+            newer_release?: components["schemas"]["Release"] | null;
             /** Format: uuid */
             node_id: string;
             os: string;
             postgres: components["schemas"]["Backend"];
+            release_check: components["schemas"]["ReleaseCheck"];
             role: components["schemas"]["NodeRole"];
             /** Format: date-time */
             started_at: string;
@@ -9378,6 +9387,7 @@ export interface components {
             certification_country?: string;
             metadata_language: string;
             name: string;
+            release_check: components["schemas"]["ReleaseCheck"];
         };
         SetEpisodeOrder: {
             group?: string;

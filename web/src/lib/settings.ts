@@ -31,6 +31,7 @@ export const settings: Record<string, [string, string, string][]> = {
 		["server-name", "Server name", "rename"],
 		["server-language", "Metadata language", "locale"],
 		["server-country", "Certification country", "age rating"],
+		["release-check", "Look for new versions", "update upgrade release github"],
 	],
 	"/settings/server/network": [
 		["secure-connections", "Secure connections", "https tls"],

@@ -21,6 +21,15 @@ test("the overview follows the server live: who is playing, and a scan as it gro
 	// What wants looking at comes first, with where to put it right.
 	const attention = page.getByRole("region", { name: "Needs attention" });
 	await expect(attention).toContainText(
+		"Photon v1.1.0 is out. This server runs v1.0.0.",
+	);
+	await expect(
+		attention.getByRole("link", { name: "See what's new" }),
+	).toHaveAttribute(
+		"href",
+		"https://github.com/olivertgwalton/photon-server/releases/tag/v1.1.0",
+	);
+	await expect(attention).toContainText(
 		"1 job failed every attempt and waits to be tried again.",
 	);
 	await expect(
@@ -717,6 +726,8 @@ test("an admin names the server and sets what it describes titles in", async ({
 	await page.getByRole("option", { name: "German (Germany)" }).click();
 	await page.getByLabel("Certification country").click();
 	await page.getByRole("option", { name: "Germany" }).click();
+	await page.getByLabel("Look for new versions").click();
+	await page.getByRole("option", { name: "Off" }).click();
 	await expectAccessible(page);
 	const saved = page.waitForRequest(
 		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/server"),
@@ -726,6 +737,7 @@ test("an admin names the server and sets what it describes titles in", async ({
 		name: "Lounge",
 		metadata_language: "de-DE",
 		certification_country: "DE",
+		release_check: "off",
 	});
 	await expect(page.getByText(/^Saved/)).toBeVisible();
 	await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
@@ -737,6 +749,7 @@ test("an admin names the server and sets what it describes titles in", async ({
 			name: "Den",
 			metadata_language: "en-GB",
 			certification_country: "GB",
+			release_check: "on",
 		},
 	});
 });

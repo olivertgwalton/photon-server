@@ -41,7 +41,7 @@ You are signed in, and the next step opens.
 
 ## 2. Name the server
 
-**Name the server** has three settings. All three can be changed later under
+**Name the server** has four settings. All four can be changed later under
 Settings › Server › **General**.
 
 | Setting | What it does |
@@ -49,6 +49,7 @@ Settings › Server › **General**.
 | Name | What apps and the sign-in page call this server, such as Home. Until you set one, it is the name of the machine it runs on. |
 | Metadata language | The language titles are described in. US English (`en-US`) at first. |
 | Certification country | Which country's age ratings titles show. The United States at first. |
+| Look for new versions | Whether the server asks GitHub a few times a day for a newer release, and says on the dashboard when one is out. On at first. |
 
 Select **Next**.
 

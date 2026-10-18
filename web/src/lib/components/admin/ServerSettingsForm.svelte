@@ -10,9 +10,11 @@ import { fields, textAsTyped } from "#lib/form.js";
 import { country, localeOptions } from "#lib/format.js";
 
 type Schemas = components["schemas"];
+type ReleaseCheck = Schemas["ReleaseCheck"];
 
-// What the server is called and what its metadata is asked in, as Jellyfin's
-// general settings. Saved, it goes `to` a page where one is given.
+// What the server is called, what its metadata is asked in, as Jellyfin's
+// general settings, and whether it looks for new versions, as Plex's. Saved, it
+// goes `to` a page where one is given.
 let {
 	settings,
 	locales,
@@ -28,6 +30,13 @@ let {
 const languages = $derived(localeOptions(locales.languages));
 const countries = $derived(localeOptions(locales.countries, country));
 
+const releaseChecks: readonly { value: ReleaseCheck; label: string }[] = [
+	{ value: "on", label: "On" },
+	{ value: "off", label: "Off" },
+];
+// What is chosen, until a save loads the page again.
+let releaseCheck = $derived<ReleaseCheck>(settings.release_check);
+
 function save(event: SubmitEvent) {
 	const form = fields(event);
 	return act(
@@ -36,6 +45,7 @@ function save(event: SubmitEvent) {
 				name: textAsTyped(form, "name"),
 				metadata_language: textAsTyped(form, "metadata_language"),
 				certification_country: textAsTyped(form, "certification_country"),
+				release_check: releaseCheck,
 			},
 		}),
 		to ? undefined : "Saved. Every server goes by it now.",
@@ -85,5 +95,18 @@ function save(event: SubmitEvent) {
 			</Field.Description>
 		</Field.Field>
 	</div>
+	<Field.Field>
+		<Field.Label for="release-check">Look for new versions</Field.Label>
+		<Choice
+			id="release-check"
+			bind:value={releaseCheck}
+			options={releaseChecks}
+			class="w-48"
+		/>
+		<Field.Description>
+			Asks GitHub a few times a day whether a newer Photon is out, and says so
+			on the dashboard.
+		</Field.Description>
+	</Field.Field>
 	<div><Button type="submit">{submit}</Button></div>
 </form>
