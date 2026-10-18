@@ -45,6 +45,10 @@ type Card struct {
 	// show's seasons.
 	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
 	Thumb                                                uuid.UUID
+	// ShowThumb is an episode's show's thumb, the landscape picture lettered with its name, which a
+	// row of what is watched draws the episode by where the profile chose it. It is not answered
+	// beside the card's own.
+	ShowThumb uuid.UUID
 	// Origin is who made a collection: an admin's is changed by hand, a provider's only by it.
 	Origin domain.CollectionOrigin
 	// What a showcase or a wall's hover says of it: its write-up, lettering, genres, certificate
@@ -312,13 +316,13 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Backdrop: first(pictures[r.ID][domain.ArtworkBackdrop]), State: states[r.ID],
 			DurationMS: lengths[r.ID].ms, VersionCount: lengths[r.ID].versions, Show: shows[r.ID].ref, Season: shows[r.ID].season, SeasonNumber: r.SeasonNumber,
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
-			SeasonPoster:     seasonPoster(pictures, r, shows[r.ID]),
+			SeasonPoster: seasonPoster(pictures, r, shows[r.ID]), ShowThumb: showThumb(pictures, r, shows[r.ID]),
 			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
 			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}
 		c := &cards[n]
-		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo, c.SeasonPoster)
+		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo, c.SeasonPoster, c.ShowThumb)
 	}
 	return cards, nil
 }
@@ -377,6 +381,14 @@ func seasonPoster(pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, r *
 		return uuid.UUID{}
 	}
 	return first(pictures[of.season.ID][domain.ArtworkPoster])
+}
+
+// showThumb is the thumb of the show an episode is of, where the show has one.
+func showThumb(pictures map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, r *model.Item, of episodeShow) uuid.UUID {
+	if r.Kind != domain.ItemEpisode || of.ref == nil {
+		return uuid.UUID{}
+	}
+	return first(pictures[of.ref.ID][domain.ArtworkThumb])
 }
 
 // episodeShow is the show an episode is of, and the certificate it wears where it has none of its
