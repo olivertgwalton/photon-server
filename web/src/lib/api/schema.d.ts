@@ -8277,7 +8277,7 @@ export interface components {
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios" | "airs_before_season" | "airs_before_episode" | "airs_after_season";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb") | unknown;
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart") | unknown;
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
