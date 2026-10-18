@@ -76,6 +76,7 @@ let server: Schemas["Server"] = {
 	},
 	metadata_language: "en-GB",
 	certification_country: "GB",
+	release_check: "on",
 	postgres: { reachable: true, version: "18.1" },
 	valkey: { reachable: true, version: "9.0" },
 };

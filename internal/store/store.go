@@ -297,20 +297,22 @@ func (s *Store) SigningKey(ctx context.Context) ([]byte, error) {
 	return key, err
 }
 
-// ServerSettings answers what the server is called and what its metadata is asked in.
+// ServerSettings answers what the server is called, what its metadata is asked in, and whether it
+// looks for a newer release.
 func (s *Store) ServerSettings(ctx context.Context) (domain.ServerSettings, error) {
 	var set domain.ServerSettings
 	var country *string
-	err := s.pool.QueryRow(ctx, `SELECT name, metadata_language, certificate_country FROM server`).
-		Scan(&set.Name, &set.Locale.Language, &country)
+	err := s.pool.QueryRow(ctx, `SELECT name, metadata_language, certificate_country, release_check FROM server`).
+		Scan(&set.Name, &set.Locale.Language, &country, &set.ReleaseCheck)
 	set.Locale.Country = deref(country)
 	return set, err
 }
 
 // SetServerSettings replaces them.
 func (s *Store) SetServerSettings(ctx context.Context, set domain.ServerSettings) error {
-	_, err := s.pool.Exec(ctx, `UPDATE server SET name = $1, metadata_language = $2, certificate_country = nullif(upper($3), '')`,
-		set.Name, set.Locale.Language, set.Locale.Country)
+	_, err := s.pool.Exec(ctx, `
+		UPDATE server SET name = $1, metadata_language = $2, certificate_country = nullif(upper($3), ''), release_check = $4`,
+		set.Name, set.Locale.Language, set.Locale.Country, set.ReleaseCheck)
 	return err
 }
 

@@ -717,6 +717,8 @@ test("an admin names the server and sets what it describes titles in", async ({
 	await page.getByRole("option", { name: "German (Germany)" }).click();
 	await page.getByLabel("Certification country").click();
 	await page.getByRole("option", { name: "Germany" }).click();
+	await page.getByLabel("Look for new versions").click();
+	await page.getByRole("option", { name: "Off" }).click();
 	await expectAccessible(page);
 	const saved = page.waitForRequest(
 		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/server"),
@@ -726,6 +728,7 @@ test("an admin names the server and sets what it describes titles in", async ({
 		name: "Lounge",
 		metadata_language: "de-DE",
 		certification_country: "DE",
+		release_check: "off",
 	});
 	await expect(page.getByText(/^Saved/)).toBeVisible();
 	await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
@@ -737,6 +740,7 @@ test("an admin names the server and sets what it describes titles in", async ({
 			name: "Den",
 			metadata_language: "en-GB",
 			certification_country: "GB",
+			release_check: "on",
 		},
 	});
 });

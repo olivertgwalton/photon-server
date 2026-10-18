@@ -90,10 +90,11 @@ type serverJSON struct {
 	Folders        foldersJSON        `json:"folders"`
 	// MetadataLanguage and CertificationCountry are what its metadata is asked in, as
 	// serverSettingsJSON says.
-	MetadataLanguage     domain.LanguageTag `json:"metadata_language"`
-	CertificationCountry domain.CountryCode `json:"certification_country,omitzero"`
-	Postgres             backendJSON        `json:"postgres"`
-	Valkey               backendJSON        `json:"valkey"`
+	MetadataLanguage     domain.LanguageTag  `json:"metadata_language"`
+	CertificationCountry domain.CountryCode  `json:"certification_country,omitzero"`
+	ReleaseCheck         domain.ReleaseCheck `json:"release_check"`
+	Postgres             backendJSON         `json:"postgres"`
+	Valkey               backendJSON         `json:"valkey"`
 }
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
@@ -111,6 +112,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 		Transcodes: active, TranscodeLimit: limit, Listen: s.Listen,
 		Folders:          foldersJSON{folder(s.CacheDir), folder(s.BackupDir)},
 		MetadataLanguage: domain.LanguageTag(a.svc.Identity.Locale().Language), CertificationCountry: domain.CountryCode(a.svc.Identity.Locale().Country),
+		ReleaseCheck: a.svc.Identity.ReleaseCheck(),
 	}
 	self := a.svc.Placer.Self()
 	out.Role, out.LimitSource = self.Role, self.LimitSource
@@ -153,13 +155,15 @@ type serverSettings interface {
 	SetServerSettings(ctx context.Context, set domain.ServerSettings) error
 }
 
-// serverSettingsJSON is what the server is called, as clients and the login page show it, and what
+// serverSettingsJSON is what the server is called, as clients and the login page show it, what
 // its metadata is asked in where a library or title says none: an IETF language tag, and the
-// country certificates are fetched in. An empty name is each node's host's.
+// country certificates are fetched in, and whether it asks GitHub for a newer release of itself.
+// An empty name is each node's host's.
 type serverSettingsJSON struct {
-	Name                 string             `json:"name"`
-	MetadataLanguage     domain.LanguageTag `json:"metadata_language"`
-	CertificationCountry domain.CountryCode `json:"certification_country,omitzero"`
+	Name                 string              `json:"name"`
+	MetadataLanguage     domain.LanguageTag  `json:"metadata_language"`
+	CertificationCountry domain.CountryCode  `json:"certification_country,omitzero"`
+	ReleaseCheck         domain.ReleaseCheck `json:"release_check"`
 }
 
 // maxServerName is the longest name a server is given, in characters, as a profile's is.
@@ -181,16 +185,21 @@ func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
 		refusal = "metadata_language is required: an IETF language tag, such as en-GB"
 	}
 	country, refusal2 := certificationCountry(string(req.CertificationCountry))
+	if req.ReleaseCheck == "" {
+		refusal2 = cmp.Or(refusal2, "release_check is on or off")
+	}
 	if refusal = cmp.Or(refusal, refusal2); refusal != "" {
 		writeProblem(w, a.logger, codeInvalidBody, refusal)
 		return
 	}
-	set := domain.ServerSettings{Name: req.Name, Locale: domain.Locale{Language: lang, Country: country}}
+	set := domain.ServerSettings{Name: req.Name, Locale: domain.Locale{Language: lang, Country: country}, ReleaseCheck: req.ReleaseCheck}
 	if a.answered(w, r, a.svc.ServerSettings.SetServerSettings(r.Context(), set)) {
 		return
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventServerChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{Name: set.Name, MetadataLanguage: domain.LanguageTag(lang), CertificationCountry: domain.CountryCode(country)})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{
+		Name: set.Name, MetadataLanguage: domain.LanguageTag(lang), CertificationCountry: domain.CountryCode(country), ReleaseCheck: set.ReleaseCheck,
+	})
 }
 
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +226,7 @@ func (a *API) serverRoutes() []route {
 		},
 		{
 			pattern: "PUT /api/v1/admin/server", access: admin,
-			summary: "Name the server and set what its metadata is asked in, which every node takes up at once",
+			summary: "Name the server, set what its metadata is asked in and whether it looks for a newer release, which every node takes up at once",
 			body:    serverSettingsJSON{}, status: http.StatusOK, reply: serverSettingsJSON{}, handle: a.setServer,
 		},
 		{

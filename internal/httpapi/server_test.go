@@ -92,23 +92,26 @@ func (k *keptServer) SetServerSettings(_ context.Context, set domain.ServerSetti
 	return nil
 }
 
-// An admin names the server and sets what its metadata is asked in, and every node is told.
+// An admin names the server and sets what its metadata is asked in and whether it looks for a newer
+// release, and every node is told.
 func TestAnAdminNamesTheServerAndItsLanguage(t *testing.T) {
 	kept := &keptServer{}
 	events := &fakeEvents{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Events: events, ServerSettings: kept})
 	for body, want := range map[string]int{
-		`{"name":" Den ","metadata_language":"en-gb","certification_country":"gb"}`: http.StatusOK,
-		`{"name":"Den","metadata_language":""}`:                                     http.StatusBadRequest,
-		`{"name":"Den","metadata_language":"not a tag!"}`:                           http.StatusBadRequest,
-		`{"name":"Den","metadata_language":"en-GB","certification_country":"EU"}`:   http.StatusBadRequest,
-		`{"name":"Den\u0007","metadata_language":"en-GB"}`:                          http.StatusBadRequest,
+		`{"name":" Den ","metadata_language":"en-gb","certification_country":"gb","release_check":"off"}`: http.StatusOK,
+		`{"name":"Den","metadata_language":"","release_check":"on"}`:                                      http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"not a tag!","release_check":"on"}`:                            http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"en-GB","certification_country":"EU","release_check":"on"}`:    http.StatusBadRequest,
+		`{"name":"Den\u0007","metadata_language":"en-GB","release_check":"on"}`:                           http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"en-GB"}`:                                                      http.StatusBadRequest,
+		`{"name":"Den","metadata_language":"en-GB","release_check":"weekly"}`:                             http.StatusBadRequest,
 	} {
 		if rec := ask(api, http.MethodPut, "/api/v1/admin/server", body); rec.Code != want {
 			t.Errorf("%s: %d %s, want %d", body, rec.Code, rec.Body, want)
 		}
 	}
-	if want := (domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}}); kept.set != want {
+	if want := (domain.ServerSettings{Name: "Den", Locale: domain.Locale{Language: "en-GB", Country: "GB"}, ReleaseCheck: domain.ReleaseCheckOff}); kept.set != want {
 		t.Errorf("kept %+v, want %+v", kept.set, want)
 	}
 	if len(events.raised) != 1 || events.raised[0].Kind != domain.EventServerChanged {

@@ -61,3 +61,6 @@ func (s *Server) Name() string { return cmp.Or(s.set.Load().Name, s.host) }
 
 // Locale is what its metadata is asked in where a library or title says none.
 func (s *Server) Locale() domain.Locale { return s.set.Load().Locale }
+
+// ReleaseCheck is whether it looks for a newer release of itself.
+func (s *Server) ReleaseCheck() domain.ReleaseCheck { return s.set.Load().ReleaseCheck }
