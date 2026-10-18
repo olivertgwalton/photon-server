@@ -61,6 +61,16 @@ type foldersJSON struct {
 	Backups folderJSON `json:"backups"`
 }
 
+// releaseJSON is a published release of the server, and its page with its notes.
+type releaseJSON struct {
+	Version string `json:"version"`
+	URL     uri    `json:"url"`
+}
+
+type releases interface {
+	Newer() (domain.Release, bool)
+}
+
 type backendJSON struct {
 	Reachable bool   `json:"reachable"`
 	Version   string `json:"version,omitzero"`
@@ -93,8 +103,11 @@ type serverJSON struct {
 	MetadataLanguage     domain.LanguageTag  `json:"metadata_language"`
 	CertificationCountry domain.CountryCode  `json:"certification_country,omitzero"`
 	ReleaseCheck         domain.ReleaseCheck `json:"release_check"`
-	Postgres             backendJSON         `json:"postgres"`
-	Valkey               backendJSON         `json:"valkey"`
+	// NewerRelease is the latest release where it is newer than this node's, found while the release
+	// check is on; absent otherwise.
+	NewerRelease *releaseJSON `json:"newer_release,omitzero"`
+	Postgres     backendJSON  `json:"postgres"`
+	Valkey       backendJSON  `json:"valkey"`
 }
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
@@ -116,6 +129,9 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 	}
 	self := a.svc.Placer.Self()
 	out.Role, out.LimitSource = self.Role, self.LimitSource
+	if newer, ok := a.svc.Releases.Newer(); ok {
+		out.NewerRelease = &releaseJSON{newer.Version, uri(newer.URL)}
+	}
 	out.Postgres = a.backend(r, "postgres", a.svc.Postgres)
 	out.Valkey = a.backend(r, "valkey", a.svc.Valkey)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)

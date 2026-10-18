@@ -9252,6 +9252,11 @@ export interface components {
             status: number;
             title: string;
         };
+        Release: {
+            /** Format: uri */
+            url: string;
+            version: string;
+        };
         /** @enum {string} */
         ReleaseCheck: "on" | "off";
         Reset: {
@@ -9358,6 +9363,7 @@ export interface components {
             listen: string;
             metadata_language: string;
             name: string;
+            newer_release?: components["schemas"]["Release"] | null;
             /** Format: uuid */
             node_id: string;
             os: string;

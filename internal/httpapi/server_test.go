@@ -33,6 +33,15 @@ func (f fakeBackend) Version(context.Context) (string, error) {
 
 func (f fakeBackend) Nodes(context.Context) ([]domain.Node, error) { return f.nodes, nil }
 
+type fakeReleases struct{ newer *domain.Release }
+
+func (f fakeReleases) Newer() (domain.Release, bool) {
+	if f.newer == nil {
+		return domain.Release{}, false
+	}
+	return *f.newer, true
+}
+
 func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	node := uuid.NewV7()
 	seen := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
@@ -43,6 +52,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 			Tools:    media.Tools{FFmpeg: media.Tool{Path: "/usr/bin/ffmpeg", Version: "8.0"}, Chromaprint: true},
 			CacheDir: t.TempDir(), BackupDir: t.TempDir() + "/missing",
 		},
+		Releases: fakeReleases{},
 		Postgres: fakeBackend{version: "18.1"},
 		Valkey:   fakeBackend{version: "9.0.0"},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node {
@@ -73,6 +83,17 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	}
 	if got.Postgres != (backendJSON{true, "18.1"}) || got.Valkey != (backendJSON{true, "9.0.0"}) {
 		t.Errorf("backends = %+v, %+v", got.Postgres, got.Valkey)
+	}
+	if got.NewerRelease != nil {
+		t.Errorf("newer release = %+v, want none", got.NewerRelease)
+	}
+	svc.Releases = fakeReleases{&domain.Release{Version: "v0.7.0", URL: "https://github.com/o/p/releases/tag/v0.7.0"}}
+	got = serverJSON{}
+	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+		t.Fatalf("with a newer release: %d %s", rec.Code, rec.Body)
+	}
+	if got.NewerRelease == nil || *got.NewerRelease != (releaseJSON{"v0.7.0", "https://github.com/o/p/releases/tag/v0.7.0"}) {
+		t.Errorf("newer release = %+v, want v0.7.0 and its page", got.NewerRelease)
 	}
 	svc.Valkey = fakeBackend{}
 	got = serverJSON{}
