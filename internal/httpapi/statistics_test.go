@@ -47,6 +47,7 @@ func TestAnAdminReadsWhatWasWatched(t *testing.T) {
 		{memberToken, "/api/v1/admin/statistics", http.StatusForbidden, ""},
 		{goodToken, "/api/v1/admin/statistics?days=0", http.StatusBadRequest, "days is a number from 1 to 3650"},
 		{goodToken, "/api/v1/admin/statistics?zone=Mars/Olympus", http.StatusBadRequest, "time zone"},
+		{goodToken, "/api/v1/admin/statistics?zone=Local", http.StatusBadRequest, "time zone"},
 		{goodToken, "/api/v1/admin/statistics?profile=oliver", http.StatusBadRequest, "profile is not an id"},
 	} {
 		req := httptest.NewRequest(http.MethodGet, tc.target, nil)

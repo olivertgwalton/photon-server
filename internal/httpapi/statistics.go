@@ -68,7 +68,8 @@ func (a *API) adminStatistics(w http.ResponseWriter, r *http.Request) {
 	zone := time.UTC
 	if name := r.URL.Query().Get("zone"); name != "" {
 		where, err := time.LoadLocation(name)
-		if err != nil {
+		// "Local" is this server's own zone to Go, and no zone's name to the database.
+		if err != nil || name == "Local" {
 			writeProblem(w, a.logger, codeInvalidParameter, "zone is a time zone's name, such as Europe/London")
 			return
 		}
