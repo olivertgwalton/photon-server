@@ -1,9 +1,9 @@
 ---
 title: "Install natively"
-summary: "Run photon-server without Docker: the Mac app, the Linux desktop app, or a download for Linux, macOS or Windows."
+summary: "Run photon-server without Docker: the Mac app, the Windows app, the Linux desktop app, or a download for Linux, macOS or Windows."
 ---
 
-If you would rather not use [Docker](02-install-docker.md), there are three other ways to run
+If you would rather not use [Docker](02-install-docker.md), there are four other ways to run
 photon-server. All of them are on the
 [releases page](https://github.com/olivertgwalton/photon-server/releases). By the end, the server
 is running and ready to [set up](04-first-run.md).
@@ -11,13 +11,14 @@ is running and ready to [set up](04-first-run.md).
 | Choose | If you have | It runs the database for you |
 | --- | --- | --- |
 | The Mac app (the `.dmg`) | A Mac with Apple silicon, macOS 13 or later | Yes |
+| The Windows app (the `_setup.exe`) | A Windows 10 or 11 PC with an Intel or AMD processor | Yes |
 | The Linux desktop app (the `.flatpak`) | A Linux desktop | Yes |
 | A download (the `.tar.gz` or `.zip`) | Linux, macOS or Windows, and you are comfortable running a database yourself | No |
 
 Pick the file that matches your machine: `arm64` for Apple silicon and other ARM machines, `amd64`
 for Intel and AMD.
 
-> **Note:** The Mac app and the Linux desktop app run only while you are logged in. For a server
+> **Note:** The Mac app, the Windows app and the Linux desktop app run only while you are logged in. For a server
 > that runs from the moment the machine starts, use Docker, or a download set up as a service.
 
 ## macOS: the Mac app
@@ -40,6 +41,27 @@ and your browser opens the **Set up** page.
 | Quit Photon | Stops the server. |
 
 The Mac app uses the Mac's own video hardware to convert video.
+
+## Windows: the Windows app
+
+1. Open the `_setup.exe` file. It installs Photon for your Windows account, so it doesn't ask for
+   an administrator.
+2. The download isn't signed, so Windows may say it protected your PC. Choose **More info**, then
+   **Run anyway**.
+
+When it finishes, Photon starts and appears in the notification area at the right of the taskbar.
+It may be hidden under the arrow there. The first time, it prepares its database, which takes a
+moment. Windows then asks whether photon-server may use the network: allow it on private
+networks, so your other devices can reach it. When Photon's menu says **Running**, choose
+**Open Photon** and your browser opens the **Set up** page.
+
+Click Photon's icon for its menu, which has the same items as the Mac app's, with
+**Start at Sign-in** for **Start at Login**. Opening Photon from the Start menu again opens the web
+app.
+
+It reads libraries on your drives and on network shares you have mapped. It uses an NVIDIA, Intel
+or AMD graphics card to convert video where it can. To remove it, uninstall **Photon** in
+Settings › Apps. That leaves its database, in case you install it again.
 
 ## Linux: the Flatpak
 
@@ -126,8 +148,8 @@ See **Good to know** below for two things to set.
 ### Start it on Windows
 
 Valkey does not run on Windows by itself, so on Windows it is usually easier to use
-[Docker Desktop](02-install-docker.md). The download suits you if you already run PostgreSQL on
-Windows and can run Valkey in WSL (Windows' built-in Linux) or Docker.
+[the Windows app](#windows-the-windows-app), which carries its own. The download suits you if you
+already run PostgreSQL on Windows and can run Valkey in WSL (Windows' built-in Linux) or Docker.
 
 1. Unpack the download.
 2. Set `PHOTON_DATABASE_URL` and `PHOTON_VALKEY_URL` as environment variables, as in the Linux
@@ -166,13 +188,15 @@ That file is never trimmed, so check its size now and then.
 
 - **Stopping is gentle.** On a download or the Windows service, stopping the server lets anyone
   watching finish their film or episode, for up to two hours. Stop it a second time to stop it at
-  once. The Mac app, and the Linux desktop app stopped with the command above, stop at once.
+  once. The Mac app, the Windows app, and the Linux desktop app stopped with the command above,
+  stop at once.
 - **Restarts after a restore.** When you restore a backup, the server stops itself so it can be
-  started again on the restored database. Docker, both apps and the Windows service above do this
+  started again on the restored database. Docker, the apps and the Windows service above do this
   for you. If you use systemd or another service manager, have it restart the server whenever it
   stops with an error, and give it up to two hours to stop.
 - **Where the files are.** The Mac app keeps its database in
-  `~/Library/Application Support/Photon` and its logs in `~/Library/Logs/Photon`. The Linux
+  `~/Library/Application Support/Photon` and its logs in `~/Library/Logs/Photon`. The Windows app
+  keeps both in `%LOCALAPPDATA%\Photon`, and itself in `%LOCALAPPDATA%\Programs\Photon`. The Linux
   desktop app keeps its database in `~/.var/app/io.github.olivertgwalton.Photon/data/photon`.
 - Every setting and command the server understands is in
   [Configuration](../08-reference/01-configuration.md).

@@ -14,7 +14,7 @@ you.
 | Linux, Intel/AMD or ARM | [Docker](02-install-docker.md), the [Linux desktop app](03-install-natively.md#linux-the-flatpak), or a [download](03-install-natively.md#the-archives) |
 | Mac with Apple silicon, macOS 13 or later | The [Mac app](03-install-natively.md#macos-the-mac-app), or a download |
 | Mac with an Intel processor | A download |
-| Windows | Docker Desktop, or a download (harder: see below) |
+| Windows 10 or 11, Intel/AMD | The [Windows app](03-install-natively.md#windows-the-windows-app), Docker Desktop, or a download (harder: see below) |
 
 A NAS that can run Docker works the same way as a Linux machine.
 
