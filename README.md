@@ -31,9 +31,12 @@ with one library: API latency and throughput, page data and memory.
 ## Deploy
 
 The image is `ghcr.io/olivertgwalton/photon-server` (amd64 and arm64), run with PostgreSQL and
-Valkey by the compose file in [docs/01-get-started/02-install-docker.md](docs/01-get-started/02-install-docker.md). Each release also has a Flatpak
-for Linux and a macOS app in a DMG, each carrying its own database, and archives for Linux, macOS
-and Windows, which the same guide installs.
+Valkey by the compose file in [docs/01-get-started/02-install-docker.md](docs/01-get-started/02-install-docker.md).
+
+Without Docker, each release also has a Mac app in a DMG, a Windows installer and a Linux Flatpak,
+each carrying its own database and running while you are logged in, and archives for Linux, macOS
+and Windows for a database you run yourself.
+[docs/01-get-started/03-install-natively.md](docs/01-get-started/03-install-natively.md) installs each one.
 
 Open `http://<server>:8640` from the server's local network to set it up: the first admin, the
 server's name, its libraries and how it is reached from outside. Setup is open only while the
