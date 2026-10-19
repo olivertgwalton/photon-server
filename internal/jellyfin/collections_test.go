@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -66,7 +67,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		}
 		return id
 	}
-	library("Films", "Alien", "Aliens", "Heat")
+	filmsLib := library("Films", "Alien", "Aliens", "Heat")
 	docs := library("Documentaries", "Senna")
 	shorts := library("Shorts", "Pilot")
 	collection("Alien Collection", "Alien", "Aliens")
@@ -198,5 +199,38 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	get("pst_kid", "/Items?parentId="+view, &kidsView)
 	if got := names(kidsView); len(got) != 1 || got[0] != "Racing" {
 		t.Errorf("the kid's view of collections holds %v, want Racing alone", got)
+	}
+
+	// A library's wall shows a box set in place of its films, as Jellyfin's "Group movies into
+	// collections" does; an app's CollapseBoxSetItems has its own say, and a filtered wall lists
+	// the films.
+	wall := func(params string) []string {
+		t.Helper()
+		var r result
+		get("pst_ada", "/Items?parentId="+guid(filmsLib.ID)+"&recursive=true&includeItemTypes=Movie&sortBy=SortName"+params, &r)
+		if r.TotalRecordCount != len(r.Items) {
+			t.Errorf("%s: %d items of %d", params, len(r.Items), r.TotalRecordCount)
+		}
+		return names(r)
+	}
+	for params, want := range map[string][]string{
+		"":                           {"Alien Collection", "Heat"},
+		"&collapseBoxSetItems=false": {"Alien", "Aliens", "Heat"},
+		"&CollapseBoxSetItems=true&nameStartsWith=A": {"Alien", "Aliens"},
+	} {
+		if got := wall(params); !slices.Equal(got, want) {
+			t.Errorf("the films%s = %v, want %v", params, got, want)
+		}
+	}
+	if err := st.SetLibrary(ctx, filmsLib.ID, store.LibraryChange{BoxSets: domain.BoxSetsExpanded}); err != nil {
+		t.Fatal(err)
+	}
+	for params, want := range map[string][]string{
+		"":                          {"Alien", "Aliens", "Heat"},
+		"&collapseBoxSetItems=true": {"Alien Collection", "Heat"},
+	} {
+		if got := wall(params); !slices.Equal(got, want) {
+			t.Errorf("the films of a library expanding box sets%s = %v, want %v", params, got, want)
+		}
 	}
 }

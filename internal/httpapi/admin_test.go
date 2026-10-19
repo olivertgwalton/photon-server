@@ -91,6 +91,7 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	}
 	f.libs[i].SubtitleMatch = cmp.Or(c.SubtitleMatch, f.libs[i].SubtitleMatch)
 	f.libs[i].MissingCopies = cmp.Or(c.MissingCopies, f.libs[i].MissingCopies)
+	f.libs[i].BoxSets = cmp.Or(c.BoxSets, f.libs[i].BoxSets)
 	return nil
 }
 
@@ -262,6 +263,9 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_match": "perfect"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "bin"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "forget"}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "grouped"}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "expanded"}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "beside"}`, http.StatusOK},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + added.ID.String() + "/missing", "", http.StatusOK},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/missing", "", http.StatusNotFound},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/scan", "", http.StatusAccepted},

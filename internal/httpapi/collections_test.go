@@ -27,6 +27,7 @@ type fakeCollections struct {
 	rule   store.SmartRule
 	list   store.ListRef
 	listed []domain.Listed
+	boxSet domain.CollectionBoxSet
 }
 
 func (fakeCollections) Collections(_ context.Context, lib, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
@@ -116,6 +117,14 @@ func (f *fakeCollections) AddMembers(_ context.Context, id uuid.UUID, items []uu
 		return nil
 	}
 	return store.ErrNotFound
+}
+
+func (f *fakeCollections) SetBoxSet(_ context.Context, id uuid.UUID, mode domain.CollectionBoxSet) error {
+	if id != alienSet && id != mySet {
+		return store.ErrNotFound
+	}
+	f.boxSet = mode
+	return nil
 }
 
 func (fakeCollections) RemoveCollection(_ context.Context, id uuid.UUID) error {
@@ -216,6 +225,12 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 		{memberToken, http.MethodPost, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusForbidden, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + mySet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPost, "/api/v1/admin/collections/" + alienSet.String() + "/members", `{"item_ids": ["` + shows.String() + `"]}`, http.StatusConflict, ""},
+		// Any collection, a provider's too, says how a library's wall shows it.
+		{memberToken, http.MethodPatch, "/api/v1/admin/collections/" + alienSet.String(), `{"box_set": "expanded"}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPatch, "/api/v1/admin/collections/" + alienSet.String(), `{"box_set": "hidden"}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPatch, "/api/v1/admin/collections/" + alienSet.String(), `{}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPatch, "/api/v1/admin/collections/" + uuid.NewV7().String(), `{"box_set": "expanded"}`, http.StatusNotFound, ""},
+		{goodToken, http.MethodPatch, "/api/v1/admin/collections/" + alienSet.String(), `{"box_set": "beside"}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + alienSet.String(), "", http.StatusConflict, ""},
 		{goodToken, http.MethodDelete, "/api/v1/admin/collections/" + mySet.String(), "", http.StatusNoContent, ""},
 	} {
@@ -235,6 +250,9 @@ func TestCollectionsAreBrowsedAndAnAdminsAreKept(t *testing.T) {
 	}
 	if c.list.ID != "8136" || len(c.listed) != 1 || c.listed[0].IDs[domain.ProviderTMDB] != "348" {
 		t.Errorf("list kept: %+v of %+v, want TMDB's 8136 read", c.list, c.listed)
+	}
+	if c.boxSet != domain.CollectionBeside {
+		t.Errorf("box set kept: %q, want beside", c.boxSet)
 	}
 	if c.rule.Sort != domain.SortRating || len(c.rule.Filter.Resolutions) != 1 {
 		t.Errorf("rule kept: %+v, want 4K by rating", c.rule)

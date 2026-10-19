@@ -256,7 +256,35 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change how a library's wall shows a collection, whoever made it
+         * @description Admin only.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         trace?: never;
     };
     "/api/v1/admin/collections/{id}/members": {
@@ -7664,6 +7692,7 @@ export interface components {
         };
         AdminLibrary: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
+            box_sets: components["schemas"]["BoxSetMode"];
             certification_country?: string;
             deletion: components["schemas"]["MediaDeletion"];
             discover?: components["schemas"]["FieldSource"];
@@ -7691,6 +7720,7 @@ export interface components {
         };
         AdminLibraryListing: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
+            box_sets: components["schemas"]["BoxSetMode"];
             certification_country?: string;
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
@@ -7796,6 +7826,8 @@ export interface components {
             node_name: string;
             restoring?: components["schemas"]["Restore"] | null;
         };
+        /** @enum {string} */
+        BoxSetMode: "collapsed" | "expanded" | "beside";
         BrowsedFolder: {
             name: string;
             path: string;
@@ -7966,6 +7998,8 @@ export interface components {
             };
             tasks: components["schemas"]["TaskFinished"][];
         };
+        /** @enum {string} */
+        CollectionBoxSet: "library" | "collapsed" | "expanded" | "beside";
         CollectionCard: {
             blurhashes?: {
                 [key: string]: string;
@@ -7975,6 +8009,9 @@ export interface components {
             /** Format: uuid */
             poster?: string;
             title: string;
+        };
+        CollectionChange: {
+            box_set: components["schemas"]["CollectionBoxSet"];
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user" | "smart" | "list";
@@ -8554,6 +8591,7 @@ export interface components {
         };
         LibraryChange: {
             artwork_language?: components["schemas"]["ArtworkLanguage"];
+            box_sets?: components["schemas"]["BoxSetMode"];
             certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];
@@ -9680,6 +9718,7 @@ export interface components {
             blurhashes?: {
                 [key: string]: string;
             };
+            box_set?: components["schemas"]["CollectionBoxSet"];
             certificate?: string;
             certification_country?: string;
             collections?: components["schemas"]["CollectionCard"][];

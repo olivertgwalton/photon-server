@@ -6,7 +6,9 @@ import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
+import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { moved } from "#lib/rows.js";
 import { ruleQuery, wallSearch } from "#lib/wall.js";
@@ -14,6 +16,7 @@ import { ruleQuery, wallSearch } from "#lib/wall.js";
 const api = client();
 
 type Card = components["schemas"]["Card"];
+type BoxSet = components["schemas"]["CollectionBoxSet"];
 
 let { data } = $props();
 
@@ -35,6 +38,13 @@ function remove() {
 		api.DELETE("/api/v1/admin/collections/{id}", path),
 		`${data.collection.title} was removed.`,
 		"/settings/server/collections",
+	);
+}
+
+function showAs(box_set: BoxSet) {
+	return act(
+		api.PATCH("/api/v1/admin/collections/{id}", { ...path, body: { box_set } }),
+		"Saved.",
 	);
 }
 
@@ -123,6 +133,27 @@ function caption(card: Card) {
 			{/if}
 		</p>
 	</div>
+
+	<Field.Field>
+		<Field.Label for="collection-box-set">On a library's wall</Field.Label>
+		<Choice
+			id="collection-box-set"
+			options={[
+				{ value: "library", label: "As the library shows box sets" },
+				{ value: "collapsed", label: "One tile for the collection" },
+				{ value: "beside", label: "The collection and each title" },
+				{ value: "expanded", label: "Each title on its own" },
+			]}
+			value={data.collection.box_set ?? "library"}
+			onchange={showAs}
+			class="w-full sm:w-72"
+		/>
+		<Field.Description>
+			One tile for the collection shows two or more of a library's titles in it
+			as the collection in their place; the collection and each title adds it
+			beside them. A filtered library shows each title.
+		</Field.Description>
+	</Field.Field>
 
 	<form onsubmit={save} class="grid gap-4">
 		<ol class="divide-line border-line divide-y rounded-lg border">

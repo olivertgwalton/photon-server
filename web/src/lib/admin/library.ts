@@ -77,6 +77,7 @@ export function libraryChange(
 		title_language: String(
 			form.get("title_language"),
 		) as Schemas["TitleLanguage"],
+		box_sets: String(form.get("box_sets")) as Schemas["BoxSetMode"],
 		refresh_days: Number(form.get("refresh_days")),
 		subtitle_languages: form.getAll("subtitle_languages").map(String),
 		subtitle_match: String(

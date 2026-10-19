@@ -35,6 +35,7 @@ const tv: Schemas["AdminLibrary"] = {
 	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
+	box_sets: "collapsed",
 	subtitle_languages: [],
 	subtitle_match: "release",
 };
@@ -53,6 +54,7 @@ const fields: [string, string][] = [
 	["certification_country", "server"],
 	["artwork_language", "any"],
 	["title_language", "original"],
+	["box_sets", "beside"],
 	["subtitle_languages", "fr"],
 	["subtitle_languages", "pt-BR"],
 	["subtitle_match", "any"],
@@ -89,6 +91,7 @@ test("a kind's sources are sent only where what they ask changed", () => {
 		certification_country: "",
 		artwork_language: "any",
 		title_language: "original",
+		box_sets: "beside",
 		subtitle_languages: ["fr", "pt-BR"],
 		subtitle_match: "any",
 	});

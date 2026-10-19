@@ -112,6 +112,7 @@ const films: Schemas["AdminLibrary"] = {
 	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
+	box_sets: "collapsed",
 	subtitle_languages: ["fr"],
 	subtitle_match: "release",
 };
@@ -266,6 +267,7 @@ const collection: Schemas["TitlePage"] = {
 	title: "Lighthouse Films",
 	added_at: "2026-10-01T20:00:00Z",
 	origin: "user",
+	box_set: "library",
 };
 
 // A smart collection saved from the films library's filters, once one is.
@@ -930,6 +932,11 @@ export async function admin(
 					headers: { "Content-Type": "application/problem+json" },
 				},
 			);
+		case "PATCH /api/v1/admin/collections/t-box":
+			collection.box_set = (
+				(await request.json()) as Schemas["CollectionChange"]
+			).box_set;
+			return done();
 		case "PUT /api/v1/admin/collections/t-box/members":
 		case "POST /api/v1/admin/collections/t-box/members":
 		case "POST /api/v1/admin/collections/t-smart/members":
