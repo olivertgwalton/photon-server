@@ -64,7 +64,7 @@ const defaults = {
 	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
-	box_sets: "collapsed",
+	box_sets: "expanded",
 	subtitle_match: "release",
 } as const;
 
@@ -513,9 +513,9 @@ const refreshOptions = $derived(
 						name="box_sets"
 						value={library?.box_sets ?? defaults.box_sets}
 						options={[
+							{ value: "expanded", label: "Each title on its own" },
 							{ value: "collapsed", label: "One tile for the set" },
 							{ value: "beside", label: "The set and each title" },
-							{ value: "expanded", label: "Each title on its own" },
 						]}
 					/>
 					<Field.Description>
