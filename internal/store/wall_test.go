@@ -485,6 +485,9 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	if got := wall(WallPage{}); len(got) != 10 || slices.Contains(got, "Harry Potter Collection") {
 		t.Errorf("the wall of a library expanding box sets = %q, want its ten films", got)
 	}
+	if got := wall(WallPage{Sort: domain.SortReleased, BoxSets: domain.BoxSetsBeside}); len(got) != 11 || got[2] != potter[0] || got[3] != "Harry Potter Collection" {
+		t.Errorf("the wall asked for box sets beside their films, oldest first = %q, want the box set beside its first film", got)
+	}
 	if got := wall(WallPage{BoxSets: domain.BoxSetsCollapsed}); len(got) != 3 {
 		t.Errorf("the wall asked for collapsed = %q, want the box set in place of its films", got)
 	}

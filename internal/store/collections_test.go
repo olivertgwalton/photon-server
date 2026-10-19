@@ -628,6 +628,8 @@ func TestACollectionSaysHowAWallShowsIt(t *testing.T) {
 		{"as the library expands them", domain.BoxSetsExpanded, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionAsLibrary}, "", []string{"Alien", "Aliens", "Heat", "Ran", "Thief"}},
 		{"an app asking for them collapsed", domain.BoxSetsExpanded, map[uuid.UUID]domain.CollectionBoxSet{mann: domain.CollectionExpanded}, domain.BoxSetsCollapsed, []string{"Alien Anthology", "Michael Mann", "Ran"}},
 		{"an app asking for them expanded", domain.BoxSetsCollapsed, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionCollapsed}, domain.BoxSetsExpanded, []string{"Alien", "Aliens", "Heat", "Ran", "Thief"}},
+		{"beside their titles in a library showing both", domain.BoxSetsBeside, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionAsLibrary, mann: domain.CollectionAsLibrary}, "", []string{"Alien", "Alien Anthology", "Aliens", "Heat", "Michael Mann", "Ran", "Thief"}},
+		{"one beside its titles in a collapsing library", domain.BoxSetsCollapsed, map[uuid.UUID]domain.CollectionBoxSet{mann: domain.CollectionBeside}, "", []string{"Alien Anthology", "Heat", "Michael Mann", "Ran", "Thief"}},
 	} {
 		if err := s.SetLibrary(ctx, lib.ID, LibraryChange{BoxSets: step.library}); err != nil {
 			t.Fatal(err)
@@ -640,10 +642,20 @@ func TestACollectionSaysHowAWallShowsIt(t *testing.T) {
 		if got := wall(step.boxes); !reflect.DeepEqual(got, step.want) {
 			t.Errorf("%s: the wall shows %q, want %q", step.name, got, step.want)
 		}
+		if step.boxes == "" {
+			letters, err := s.Letters(ctx, lib.ID, uuid.UUID{}, domain.WallTitles, WallFilter{})
+			counted := 0
+			for _, l := range letters {
+				counted += l.Count
+			}
+			if err != nil || counted != len(step.want) {
+				t.Errorf("%s: the letters count %d, %v; want %d", step.name, counted, err, len(step.want))
+			}
+		}
 	}
-	page, err := s.Title(ctx, uuid.UUID{}, alien)
-	if err != nil || page.BoxSet != domain.CollectionCollapsed {
-		t.Errorf("the anthology's page says it is shown %q, %v; want collapsed", page.BoxSet, err)
+	page, err := s.Title(ctx, uuid.UUID{}, mann)
+	if err != nil || page.BoxSet != domain.CollectionBeside {
+		t.Errorf("Michael Mann's page says it is shown %q, %v; want beside", page.BoxSet, err)
 	}
 	if err := s.SetBoxSet(ctx, ids["Heat"], domain.CollectionCollapsed); !errors.Is(err, ErrNotFound) {
 		t.Errorf("setting a film's box set: %v, want ErrNotFound", err)

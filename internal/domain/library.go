@@ -146,31 +146,34 @@ func MissingCopies() []MissingCopy {
 }
 
 // BoxSetMode is how a library's wall shows the titles of a box set: collapsed into one tile for
-// the set, as Jellyfin's "Group movies into collections" and Plex's collection setting do, or each
-// title on its own. A filtered wall shows its titles alone either way.
+// the set, as Jellyfin's "Group movies into collections" and Plex's collection setting do; each
+// title on its own; or the set's tile beside its titles, as Plex's "Show collection and its items".
+// A filtered wall shows its titles alone whichever.
 type BoxSetMode string
 
 const (
 	BoxSetsCollapsed BoxSetMode = "collapsed"
 	BoxSetsExpanded  BoxSetMode = "expanded"
+	BoxSetsBeside    BoxSetMode = "beside"
 )
 
 func BoxSetModes() []BoxSetMode {
-	return []BoxSetMode{BoxSetsCollapsed, BoxSetsExpanded}
+	return []BoxSetMode{BoxSetsCollapsed, BoxSetsExpanded, BoxSetsBeside}
 }
 
 // CollectionBoxSet is how a library's wall shows a collection, as Plex's collection mode: as the
-// library shows its box sets, or collapsed or expanded whatever it does.
+// library shows its box sets, or collapsed, expanded or beside its titles whatever it does.
 type CollectionBoxSet string
 
 const (
 	CollectionAsLibrary CollectionBoxSet = "library"
 	CollectionCollapsed CollectionBoxSet = "collapsed"
 	CollectionExpanded  CollectionBoxSet = "expanded"
+	CollectionBeside    CollectionBoxSet = "beside"
 )
 
 func CollectionBoxSets() []CollectionBoxSet {
-	return []CollectionBoxSet{CollectionAsLibrary, CollectionCollapsed, CollectionExpanded}
+	return []CollectionBoxSet{CollectionAsLibrary, CollectionCollapsed, CollectionExpanded, CollectionBeside}
 }
 
 type Library struct {
