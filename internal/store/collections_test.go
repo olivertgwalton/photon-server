@@ -155,6 +155,9 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetLibrary(ctx, lib.ID, LibraryChange{BoxSets: domain.BoxSetsCollapsed}); err != nil {
+		t.Fatal(err)
+	}
 	ids := map[string]uuid.UUID{}
 	for _, title := range []string{"Alien", "Aliens", "Heat"} {
 		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{

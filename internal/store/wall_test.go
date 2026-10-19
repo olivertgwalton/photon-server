@@ -398,6 +398,9 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{BoxSets: domain.BoxSetsCollapsed}); err != nil {
+		t.Fatal(err)
+	}
 	potter := []string{
 		"Harry Potter and the Philosopher's Stone", "Harry Potter and the Chamber of Secrets",
 		"Harry Potter and the Prisoner of Azkaban", "Harry Potter and the Goblet of Fire",
