@@ -14,8 +14,8 @@ library to see each title, or set its **Box sets** to **Each title on its own** 
 [libraries](02-libraries.md)).
 
 One collection can go its own way: on its page at Settings › Server › **Collections**, set **On a
-library's wall** to **One tile for the collection** or **Each title on its own**, whatever its
-libraries do. **As the library shows box sets** is the default.
+library's wall** to **One tile for the collection**, **The collection and each title** or **Each
+title on its own**, whatever its libraries do. **As the library shows box sets** is the default.
 
 Everyone sees only the titles of a collection they are allowed to see. A profile limited to some
 libraries or age ratings finds only those titles in it.
