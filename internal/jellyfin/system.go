@@ -4,7 +4,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/olivertgwalton/photon-server/internal/peer"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // publicInfo is Jellyfin's PublicSystemInfo, which an app reads first and anyone may.
@@ -67,11 +67,6 @@ type endpointInfo struct {
 }
 
 func (a *API) endpoint(w http.ResponseWriter, r *http.Request) {
-	n, err := a.svc.Network.Network(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	client := a.svc.Reach.Client(r).Unmap()
-	a.writeJSON(w, endpointInfo{IsLocal: client.IsLoopback(), IsInNetwork: peer.LocalIn(n.LocalNetworks, client)})
+	in := a.svc.Reach.Network(r) == domain.NetworkLocal
+	a.writeJSON(w, endpointInfo{IsLocal: in && a.svc.Reach.Client(r).IsLoopback(), IsInNetwork: in})
 }

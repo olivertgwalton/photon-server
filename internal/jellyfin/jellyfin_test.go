@@ -736,7 +736,8 @@ func TestTheWebAppIsToldItHasNoFallbackFonts(t *testing.T) {
 }
 
 // An app is told whether it is on the server's machine and its networks, which Jellyfin's web
-// app needs to know before it measures its bitrate rather than stream at 1.5 Mbps.
+// app needs to know before it measures its bitrate rather than stream at 1.5 Mbps. One reaching it
+// through a proxy not trusted is on neither, wherever that proxy is.
 func TestAnAppIsToldWhetherItIsOnTheServersNetwork(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
 		Auth: fakeAuth{pairing: new(kv.PairingState)}, Network: fakeNetwork{},
@@ -747,9 +748,14 @@ func TestAnAppIsToldWhetherItIsOnTheServersNetwork(t *testing.T) {
 		{"127.0.0.1:5000", `{"IsLocal":true,"IsInNetwork":true}`},
 		{"192.168.1.20:5000", `{"IsLocal":false,"IsInNetwork":true}`},
 		{"203.0.113.9:5000", `{"IsLocal":false,"IsInNetwork":false}`},
+		{"127.0.0.1:5000 via proxy", `{"IsLocal":false,"IsInNetwork":false}`},
 	} {
 		r := httptest.NewRequest(http.MethodGet, "/System/Endpoint", nil)
 		r.Header.Set("Authorization", `MediaBrowser Token="pst_device"`)
+		if proxy, ok := strings.CutSuffix(tc.from, " via proxy"); ok {
+			tc.from = proxy
+			r.Header.Set("X-Forwarded-For", "203.0.113.9")
+		}
 		r.RemoteAddr = tc.from
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
