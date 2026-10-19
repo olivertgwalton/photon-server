@@ -25,6 +25,7 @@ type collections interface {
 	SetMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
 	AddMembers(ctx context.Context, collection uuid.UUID, items []uuid.UUID) error
 	RemoveCollection(ctx context.Context, collection uuid.UUID) error
+	SetBoxSet(ctx context.Context, collection uuid.UUID, mode domain.CollectionBoxSet) error
 }
 
 // allCollections answers a page of every collection the profile is shown, by title: what the
@@ -174,6 +175,31 @@ func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type collectionChangeJSON struct {
+	// BoxSet is how a library's wall shows it: library, as the library shows its box sets;
+	// collapsed, as one tile in place of its titles; or expanded, its titles each on their own.
+	BoxSet domain.CollectionBoxSet `json:"box_set"`
+}
+
+// setCollection changes how a library's wall shows a collection, whoever made it.
+func (a *API) setCollection(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req collectionChangeJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	if req.BoxSet == "" {
+		writeProblem(w, a.logger, codeInvalidBody, "box_set is missing")
+		return
+	}
+	if !a.answered(w, r, a.svc.Collections.SetBoxSet(r.Context(), id, req.BoxSet)) {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // checkedRule refuses a rule whose check, as a smart collection's or a smart playlist's, says it
 // cannot be kept.
 func (a *API) checkedRule(w http.ResponseWriter, err error) bool {
@@ -313,6 +339,11 @@ func (a *API) collectionsRoutes() []route {
 			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,
 			summary: "Read a list collection's list again now, and keep the titles of it the library has",
 			status:  http.StatusNoContent, handle: a.syncList,
+		},
+		{
+			pattern: "PATCH /api/v1/admin/collections/{id}", access: admin,
+			summary: "Change how a library's wall shows a collection, whoever made it",
+			body:    collectionChangeJSON{}, status: http.StatusNoContent, handle: a.setCollection,
 		},
 		{
 			pattern: "DELETE /api/v1/admin/collections/{id}", access: admin,

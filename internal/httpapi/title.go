@@ -59,8 +59,10 @@ type titlePageJSON struct {
 	Rule *store.SmartRule `json:"rule,omitzero"`
 	List *store.ListRef   `json:"list,omitzero"`
 	// LibraryIDs are the libraries a smart or list collection reads.
-	LibraryIDs   []uuid.UUID         `json:"library_ids,omitzero"`
-	EpisodeOrder domain.EpisodeOrder `json:"episode_order,omitzero"`
+	LibraryIDs []uuid.UUID `json:"library_ids,omitzero"`
+	// BoxSet is how a library's wall shows a collection: library, collapsed or expanded.
+	BoxSet       domain.CollectionBoxSet `json:"box_set,omitzero"`
+	EpisodeOrder domain.EpisodeOrder     `json:"episode_order,omitzero"`
 	// EpisodeGroup is the TMDB episode group a show in the group order is numbered by.
 	EpisodeGroup string `json:"episode_group,omitzero"`
 	// MetadataLanguage, CertificationCountry and TitleLanguage are a film's or show's own, over its
@@ -295,7 +297,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
-		Origin:      p.Origin, Rule: p.Rule, List: p.List, LibraryIDs: p.Libraries, EpisodeOrder: p.EpisodeOrder, EpisodeGroup: p.EpisodeGroup,
+		Origin:      p.Origin, Rule: p.Rule, List: p.List, LibraryIDs: p.Libraries, BoxSet: p.BoxSet, EpisodeOrder: p.EpisodeOrder, EpisodeGroup: p.EpisodeGroup,
 		MetadataLanguage: domain.LanguageTag(p.Locale.Language), CertificationCountry: domain.CountryCode(p.Locale.Country), TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd, AirsBeforeSeason: p.AirsBeforeSeason,
 		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,
