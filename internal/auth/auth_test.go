@@ -588,6 +588,61 @@ func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 	}
 }
 
+// A redemption hashes only a password behind a good code, and only through the shared bounded
+// hasher: so a flood of wrong codes costs no memory, and a flood of right ones waits for a slot
+// rather than each taking 64 MiB of its own. Both are why a small server survives the flood.
+func TestRedeemingIsBoundedAndSkipsHashingAWrongCode(t *testing.T) {
+	svc, st := newService(t)
+	ctx := t.Context()
+	oliver := addOliver(t, svc, st)
+	code, err := svc.StartReset(ctx, "Oliver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range concurrentHashes {
+		svc.hasher.slots <- struct{}{}
+	}
+	type result struct {
+		id  uuid.UUID
+		err error
+	}
+
+	// A wrong code is refused without ever reaching the saturated hasher.
+	wrong := make(chan result, 1)
+	go func() {
+		id, err := svc.RedeemReset(ctx, "ZZZZ-ZZZZ", "battery staple")
+		wrong <- result{id, err}
+	}()
+	select {
+	case r := <-wrong:
+		if !errors.Is(r.err, ErrResetNotFound) {
+			t.Fatalf("a wrong code with the hasher full: %v, want it refused", r.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a wrong code blocked on the saturated hasher instead of being refused")
+	}
+
+	// A right code waits for a free slot rather than hash on a limiter of its own.
+	done := make(chan result, 1)
+	go func() {
+		id, err := svc.RedeemReset(ctx, code, "battery staple")
+		done <- result{id, err}
+	}()
+	select {
+	case r := <-done:
+		t.Fatalf("a redemption hashed without waiting for a free slot: %v, %v", r.id, r.err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	<-svc.hasher.slots
+	select {
+	case r := <-done:
+		if r.err != nil || r.id != oliver.ID {
+			t.Fatalf("redeeming after a slot freed: %v, %v", r.id, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a redemption never finished after a slot freed")
+	}
+}
 
 // A profile a provider's account was given has no password: none signs in as it, not even an empty
 // one, until it sets its first, which asks for no current password.
