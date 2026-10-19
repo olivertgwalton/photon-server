@@ -236,6 +236,41 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	}
 }
 
+// A file overwritten with other bytes is a new copy in its old copy's place, as riven re-pointing a
+// .strm is, and the old copy goes rather than waiting as missing. Bytes moved off a path in the
+// same scan as others land on it keep their copy.
+func TestAReplacedFileReplacesItsCopy(t *testing.T) {
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.scan()
+	f.put("Heat (1995)/Heat (1995).mkv", "HEAT")
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM versions`); n != 1 {
+		t.Errorf("%d copies after the file was overwritten, want 1", n)
+	}
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
+		t.Error("the overwritten copy is kept as missing")
+	}
+
+	var version string
+	if err := f.db.QueryRow(t.Context(), `SELECT id::text FROM versions`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(f.root, "Heat (1995)", "Heat (1995).mkv"),
+		filepath.Join(f.root, "Heat (1995)", "Heat (1995) - Remastered.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 2 {
+		t.Errorf("%d copies after a move and a new file in its place, want 2", n)
+	}
+	if n := f.count(`SELECT count(*) FROM versions v JOIN parts p ON p.version_id = v.id JOIN part_files pf ON pf.part_id = p.id
+		WHERE v.id::text = '` + version + `' AND pf.rel_path = 'Heat (1995)/Heat (1995) - Remastered.mkv'`); n != 1 {
+		t.Error("the moved bytes lost their copy")
+	}
+}
+
 // A library that forgets its copies on no disk loses the removed file's copy there and then, and
 // the title left with nothing with it, where Plex's trash emptied after every scan would.
 func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
