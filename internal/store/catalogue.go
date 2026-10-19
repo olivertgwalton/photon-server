@@ -245,16 +245,28 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 
 // FinishScan settles a library after every folder of a scan has been seen, scopes being the
 // folders it read with everything under them ("." for the whole library). present holds every
-// video and subtitle path the walk found, skipped folders included. A path in scope no longer
-// present stops being a place to read its part, or is a subtitle no longer there; a version with a
-// part left nowhere is marked missing (kept, so an unmounted disk does not cost its titles), and
-// one whose every part is somewhere is not. A title left with no version is removed, then a season
+// video and subtitle path the walk found, skipped folders included. A version whose every path now
+// holds other bytes is removed. A path in scope no longer present stops being a place to read its
+// part, or is a subtitle no longer there; a version with a part left nowhere is marked missing
+// (kept, so an unmounted disk does not cost its titles), and one whose every part is somewhere is
+// not. A title left with no version is removed, then a season
 // and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
 // answers the titles whose copies went missing or came back, and those removed.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
 	var changed Changed
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		changed = Changed{}
+		// A version every part of which was somewhere at the last scan, and is nowhere before this
+		// one takes away the paths no longer present, lost each path to a save that found other
+		// bytes there: it was replaced, not lost with a disk, so it goes as Jellyfin's item at that
+		// path is read again.
+		replaced, err := queryColumn[uuid.UUID](ctx, tx, `
+			DELETE FROM versions v WHERE v.library_id = $1 AND v.missing_since IS NULL
+				AND NOT EXISTS (SELECT 1 FROM parts p JOIN part_files f ON f.part_id = p.id WHERE p.version_id = v.id)
+			RETURNING v.item_id`, lib)
+		if err != nil {
+			return err
+		}
 		// A fetched subtitle is kept in no folder of the library.
 		for _, from := range []string{"part_files WHERE", "subtitle_files WHERE body IS NULL AND"} {
 			_, err := tx.Exec(ctx, `DELETE FROM `+from+` library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3"),
@@ -274,6 +286,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		if err != nil {
 			return err
 		}
+		updated = append(updated, replaced...)
 		var missing domain.MissingCopy
 		if err := tx.QueryRow(ctx, `SELECT missing_copies FROM libraries WHERE id = $1`, lib).Scan(&missing); err != nil {
 			return err
