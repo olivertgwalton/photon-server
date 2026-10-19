@@ -835,9 +835,11 @@ test("a collection says how a library's wall shows it", async ({ page }) => {
 			r.method() === "PATCH" && r.url().endsWith("/admin/collections/t-box"),
 	);
 	await shown.click();
-	await page.getByRole("option", { name: "Each title on its own" }).click();
-	expect((await changed).postDataJSON()).toEqual({ box_set: "expanded" });
-	await expect(shown).toHaveText("Each title on its own");
+	await page
+		.getByRole("option", { name: "The collection and each title" })
+		.click();
+	expect((await changed).postDataJSON()).toEqual({ box_set: "beside" });
+	await expect(shown).toHaveText("The collection and each title");
 });
 
 test("a collection is made from a list a provider offers", async ({ page }) => {

@@ -7827,7 +7827,7 @@ export interface components {
             restoring?: components["schemas"]["Restore"] | null;
         };
         /** @enum {string} */
-        BoxSetMode: "collapsed" | "expanded";
+        BoxSetMode: "collapsed" | "expanded" | "beside";
         BrowsedFolder: {
             name: string;
             path: string;
@@ -7999,7 +7999,7 @@ export interface components {
             tasks: components["schemas"]["TaskFinished"][];
         };
         /** @enum {string} */
-        CollectionBoxSet: "library" | "collapsed" | "expanded";
+        CollectionBoxSet: "library" | "collapsed" | "expanded" | "beside";
         CollectionCard: {
             blurhashes?: {
                 [key: string]: string;

@@ -514,13 +514,15 @@ const refreshOptions = $derived(
 						value={library?.box_sets ?? defaults.box_sets}
 						options={[
 							{ value: "collapsed", label: "One tile for the set" },
+							{ value: "beside", label: "The set and each title" },
 							{ value: "expanded", label: "Each title on its own" },
 						]}
 					/>
 					<Field.Description>
 						One tile for the set shows two or more titles of a collection, such
-						as a film series, as the collection in their place. A filtered
-						library shows each title.
+						as a film series, as the collection in their place. The set and each
+						title adds the collection beside them. A filtered library shows each
+						title.
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>

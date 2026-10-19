@@ -141,6 +141,7 @@ function caption(card: Card) {
 			options={[
 				{ value: "library", label: "As the library shows box sets" },
 				{ value: "collapsed", label: "One tile for the collection" },
+				{ value: "beside", label: "The collection and each title" },
 				{ value: "expanded", label: "Each title on its own" },
 			]}
 			value={data.collection.box_set ?? "library"}
@@ -149,7 +150,8 @@ function caption(card: Card) {
 		/>
 		<Field.Description>
 			One tile for the collection shows two or more of a library's titles in it
-			as the collection in their place. A filtered library shows each title.
+			as the collection in their place; the collection and each title adds it
+			beside them. A filtered library shows each title.
 		</Field.Description>
 	</Field.Field>
 
