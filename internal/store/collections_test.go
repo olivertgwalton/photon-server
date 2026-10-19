@@ -145,9 +145,10 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	}
 }
 
-// A library's wall shows its titles alone, those in a collection among them: its collections are
-// listed beside it, in its tab and the Collections view.
-func TestALibrarysWallShowsItsTitlesAlone(t *testing.T) {
+// A library's wall shows an admin's collection in place of the titles it holds, as it does a
+// provider's box set, and a filtered wall the titles; its collections are listed beside it too, in
+// its tab and the Collections view.
+func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
@@ -197,8 +198,8 @@ func TestALibrarysWallShowsItsTitlesAlone(t *testing.T) {
 		}
 		return titles
 	}
-	if got := wall(WallFilter{}); !reflect.DeepEqual(got, []string{"Alien", "Aliens", "Heat"}) {
-		t.Errorf("the wall shows %q, want the films alone", got)
+	if got := wall(WallFilter{}); !reflect.DeepEqual(got, []string{"Alien Anthology", "Heat"}) {
+		t.Errorf("the wall shows %q, want the anthology in place of its films", got)
 	}
 	if got := wall(WallFilter{StartsWith: "A"}); !reflect.DeepEqual(got, []string{"Alien", "Aliens"}) {
 		t.Errorf("filtered to A: the wall shows %q, want the films alone", got)

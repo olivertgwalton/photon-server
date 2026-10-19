@@ -65,6 +65,8 @@ func (r SmartRule) page() WallPage {
 		Kind: r.Kind,
 		Sort: sort, Order: cmp.Or(r.Order, sort.DefaultOrder()),
 		RatingSite: cmp.Or(r.Filter.RatingSite, domain.SiteIMDb), Filter: r.Filter,
+		// A rule finds titles, never the box sets they are in.
+		BoxSets: domain.BoxSetsExpanded,
 	}
 }
 

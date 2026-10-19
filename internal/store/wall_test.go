@@ -262,7 +262,7 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 		t.Helper()
 		p.Profile, p.Kind, p.Limit = cmp.Or(p.Profile, oliver.ID), domain.WallEpisodes, 100
 		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, p)
-		if err != nil || int(total) != len(cards) {
+		if err != nil || int(total) != p.Offset+len(cards) {
 			t.Fatalf("%+v: %d of %d, %v", p, len(cards), total, err)
 		}
 		return titles(cards)
@@ -381,5 +381,101 @@ func TestAMixedLibrarysWallHoldsFilmsAndShows(t *testing.T) {
 	}
 	if got := titles(domain.WallTitles); !slices.Equal(got, []string{"Heat"}) {
 		t.Errorf("after The Wire left the list: %v", got)
+	}
+}
+
+// A library's wall shows a box set as one tile in place of the films it holds there, as Jellyfin's
+// "Group movies into collections" does; a filtered wall, or a library set to expand them, shows the
+// films themselves. A set with one film in the library is no set on its wall.
+func TestAWallCollapsesABoxSet(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uhd, err := s.AddLibrary(ctx, "Films in 4K", domain.LibraryMovies, "/srv/4k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	potter := []string{
+		"Harry Potter and the Philosopher's Stone", "Harry Potter and the Chamber of Secrets",
+		"Harry Potter and the Prisoner of Azkaban", "Harry Potter and the Goblet of Fire",
+		"Harry Potter and the Order of the Phoenix", "Harry Potter and the Half-Blood Prince",
+		"Harry Potter and the Deathly Hallows: Part 1", "Harry Potter and the Deathly Hallows: Part 2",
+	}
+	type film struct {
+		lib   uuid.UUID
+		title string
+		set   *domain.Grouping
+	}
+	var all []film
+	for _, title := range potter {
+		all = append(all, film{films.ID, title, &domain.Grouping{ID: "1241", Title: "Harry Potter Collection"}})
+	}
+	alien := &domain.Grouping{ID: "8091", Title: "Alien Collection"}
+	all = append(all, film{films.ID, "Heat", nil}, film{films.ID, "Alien", alien}, film{uhd.ID, "Aliens", alien})
+	for _, f := range all {
+		id := addItem(t, s, model.Item{
+			LibraryID: &f.lib, Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title, SortTitle: sortTitle(f.title), Folder: f.title,
+		})
+		m := domain.Metadata{Title: f.title}
+		if f.set != nil {
+			m.Collections = []domain.Grouping{*f.set}
+		}
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A page of the wall, failing where it says there are other than all it holds.
+	wall := func(p WallPage) []string {
+		t.Helper()
+		p.Sort, p.Limit = cmp.Or(p.Sort, domain.SortTitle), cmp.Or(p.Limit, 100)
+		cards, total, err := s.Wall(ctx, []uuid.UUID{films.ID}, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		whole, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: p.Sort, Filter: p.Filter, BoxSets: p.BoxSets, Limit: 100})
+		if err != nil || int(total) != len(whole) {
+			t.Fatalf("wall: %d cards of %d, %v; want a total of %d", len(cards), total, err, len(whole))
+		}
+		out := []string{}
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	if got, want := wall(WallPage{}), []string{"Alien", "Harry Potter Collection", "Heat"}; !slices.Equal(got, want) {
+		t.Errorf("the wall = %q, want the eight films as one box set, and the Alien film alone", got)
+	}
+	for _, sort := range domain.WallSorts() {
+		for _, order := range []domain.Order{domain.Ascending, domain.Descending} {
+			full := wall(WallPage{Sort: sort, Order: order})
+			var paged []string
+			for offset := range len(full) {
+				paged = append(paged, wall(WallPage{Sort: sort, Order: order, Offset: offset, Limit: 1})...)
+			}
+			if !slices.Equal(paged, full) || !slices.Contains(full, "Harry Potter Collection") {
+				t.Errorf("%s %s: paging by one gave %q, want %q with the box set", sort, order, paged, full)
+			}
+		}
+	}
+	letters, err := s.Letters(ctx, films.ID, uuid.UUID{}, domain.WallTitles, WallFilter{})
+	if want := []Letter{{"A", 1}, {"H", 2}}; err != nil || !slices.Equal(letters, want) {
+		t.Errorf("its letters = %v, %v; want %v, counting the box set once", letters, err, want)
+	}
+	filtered := wall(WallPage{Filter: WallFilter{StartsWith: "H"}})
+	if want := slices.Sorted(slices.Values(append(slices.Clone(potter), "Heat"))); !slices.Equal(slices.Sorted(slices.Values(filtered)), want) {
+		t.Errorf("the wall of H = %q, want each of the eight films and Heat", filtered)
+	}
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{BoxSets: domain.BoxSetsExpanded}); err != nil {
+		t.Fatal(err)
+	}
+	if got := wall(WallPage{}); len(got) != 10 || slices.Contains(got, "Harry Potter Collection") {
+		t.Errorf("the wall of a library expanding box sets = %q, want its ten films", got)
+	}
+	if got := wall(WallPage{BoxSets: domain.BoxSetsCollapsed}); len(got) != 3 {
+		t.Errorf("the wall asked for collapsed = %q, want the box set in place of its films", got)
 	}
 }
