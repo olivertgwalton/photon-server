@@ -69,20 +69,25 @@ function formatCode(typed: string) {
 			<Field.Group>
 				<p class="text-ink text-sm">
 					<span class="font-medium">{waiting.device}</span>
-					({waiting.client}) asked for code
-					<span class="font-mono">{waiting.user_code}</span>
+					({waiting.client}) asked
 					{relative(waiting.asked_at, Date.now())}, from
 					{waiting.network === "local"
 						? "your network"
 						: "outside your network"}.
+				</p>
+				<!-- RFC 8628 3.3.1: a code that arrived in a link is checked against the device's own. -->
+				<p class="text-ink text-sm">
+					Sign it in only if the device in front of you shows
+					<span class="font-mono text-base font-medium"
+						>{waiting.user_code}</span
+					>.
 				</p>
 				{#if waiting.network === "remote"}
 					<Alert.Root variant="destructive">
 						<ShieldAlertIcon />
 						<Alert.Title>This device isn't on your network</Alert.Title>
 						<Alert.Description>
-							Sign it in only if you can see it showing this code. If someone
-							sent you this link, signing in gives them your account.
+							If someone sent you this link, signing in gives them your account.
 						</Alert.Description>
 					</Alert.Root>
 				{/if}

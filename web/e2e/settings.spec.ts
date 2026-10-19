@@ -226,6 +226,9 @@ test("a TV is linked by the code it shows, once its asking is seen", async ({
 	await expect(
 		page.locator("p", { hasText: "from your network" }),
 	).toBeVisible();
+	await expect(
+		page.locator("p", { hasText: "the device in front of you shows" }),
+	).toContainText("BCDF-GHJK");
 	await expect(page.getByText("This device isn't on your network")).toHaveCount(
 		0,
 	);
@@ -244,6 +247,9 @@ test("a code asked for from outside warns before it is approved", async ({
 	await expect(
 		page.getByText("This device isn't on your network"),
 	).toBeVisible();
+	await expect(
+		page.locator("p", { hasText: "the device in front of you shows" }),
+	).toContainText("LMNP-QRST");
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Cancel" }).click();
 	await expect(page.getByLabel("Code")).toBeVisible();
