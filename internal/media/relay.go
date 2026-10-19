@@ -1,6 +1,8 @@
 package media
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -109,6 +112,11 @@ func (r *relay) serve(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	body := bufio.NewReader(resp.Body)
+	if fromStart(req) && playlist(body) {
+		http.Error(w, "the media is a playlist of more addresses, which the server does not fetch", http.StatusBadGateway)
+		return
+	}
 	for _, h := range relayed {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
@@ -116,9 +124,27 @@ func (r *relay) serve(w http.ResponseWriter, req *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	// A reader that hangs up ends the copy, and there is no answer left to give it.
-	if _, err := io.Copy(w, resp.Body); err != nil {
+	if _, err := io.Copy(w, body); err != nil {
 		return
 	}
+}
+
+// fromStart is whether req reads the media from its first byte, as a tool does to find its format.
+func fromStart(req *http.Request) bool {
+	rng := req.Header.Get("Range")
+	return req.Method == http.MethodGet && (rng == "" || strings.HasPrefix(rng, "bytes=0-"))
+}
+
+// playlist is whether media begins as HLS's or DASH's list of further addresses does. A tool reading
+// one fetches those itself, past the relay's guard, so a provider could have it read the server's
+// own networks; no container a film is in begins so.
+func playlist(body *bufio.Reader) bool {
+	head, err := body.Peek(512)
+	if err != nil && len(head) == 0 {
+		return false
+	}
+	head = bytes.TrimLeft(head, " \t\r\n\ufeff")
+	return bytes.HasPrefix(head, []byte("#EXTM3U")) || bytes.HasPrefix(head, []byte("<"))
 }
 
 // client is the guarded client for media a provider at host from offers.
