@@ -76,7 +76,7 @@ func (a *API) findPairing(w http.ResponseWriter, r *http.Request) {
 	if !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(auth.SessionOf(r.Context()).Profile.ID)) {
 		return
 	}
-	p, err := a.svc.Auth.WaitingPairing(r.Context(), req.UserCode)
+	p, err := a.svc.Auth.WaitingPairing(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.UserCode)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -85,12 +85,18 @@ func (a *API) findPairing(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// approvePairing spends no approval on a code the profile found, as finding it spent one.
 func (a *API) approvePairing(w http.ResponseWriter, r *http.Request) {
 	var req approvalJSON
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(auth.SessionOf(r.Context()).Profile.ID)) {
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	found, err := a.svc.Auth.FoundPairing(r.Context(), profile, req.UserCode)
+	if a.answered(w, r, err) {
+		return
+	}
+	if !found && !a.allowed(w, r, auth.ApprovalsPerProfile, auth.ApprovalKey(profile)) {
 		return
 	}
 	d, err := a.svc.Auth.ApprovePairing(r.Context(), auth.SessionOf(r.Context()), req.UserCode)

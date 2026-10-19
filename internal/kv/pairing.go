@@ -81,17 +81,19 @@ func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.U
 	return Pairing{Device: vals[0], Client: vals[1], Profile: profile, Identity: identity}, true, nil
 }
 
-// waiting reads a pairing that names no network as asked from outside, the reading that warns.
+// waiting reads a pairing that names no network as asked from outside, the reading that warns, and
+// keeps who found it.
 var waiting = valkey.NewLuaScript(`
 if redis.call('HEXISTS', KEYS[1], 'profile') == 1 then return false end
 local fields = redis.call('HMGET', KEYS[1], 'device', 'client', 'style', 'network')
 if not fields[1] then return false end
+redis.call('HSET', KEYS[1], 'found', ARGV[1])
 return {fields[1], fields[2], fields[3] or '', fields[4] or 'remote', tostring(redis.call('PTTL', KEYS[1]))}`)
 
-// WaitingPairing reads the pairing waiting under userCode for someone about to approve it, without
+// WaitingPairing reads the pairing waiting under userCode for finder, about to approve it, without
 // approving it. ok is false for a code that is unknown, expired or already approved.
-func (k *KV) WaitingPairing(ctx context.Context, userCode string) (p Pairing, remaining time.Duration, ok bool, err error) {
-	vals, err := waiting.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, nil).AsStrSlice()
+func (k *KV) WaitingPairing(ctx context.Context, userCode string, finder uuid.UUID) (p Pairing, remaining time.Duration, ok bool, err error) {
+	vals, err := waiting.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{finder.String()}).AsStrSlice()
 	if valkey.IsValkeyNil(err) {
 		return Pairing{}, 0, false, nil
 	}
@@ -104,6 +106,15 @@ func (k *KV) WaitingPairing(ctx context.Context, userCode string) (p Pairing, re
 	}
 	p = Pairing{Device: vals[0], Client: vals[1], Style: vals[2], Network: domain.ClientNetwork(vals[3])}
 	return p, time.Duration(ms) * time.Millisecond, true, nil
+}
+
+// FoundBy is whether profile was the last to find the pairing waiting under userCode.
+func (k *KV) FoundBy(ctx context.Context, userCode string, profile uuid.UUID) (bool, error) {
+	found, err := k.client.Do(ctx, k.client.B().Hget().Key(k.pairingKey(userCode)).Field("found").Build()).ToString()
+	if valkey.IsValkeyNil(err) {
+		return false, nil
+	}
+	return found == profile.String(), err
 }
 
 var status = valkey.NewLuaScript(`

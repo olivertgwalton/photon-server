@@ -102,9 +102,11 @@ func (fakeAuth) ApprovePairing(context.Context, domain.Session, string) (auth.De
 	return auth.Device{}, auth.ErrPairingNotFound
 }
 
-func (fakeAuth) WaitingPairing(context.Context, string) (auth.Pairing, error) {
+func (fakeAuth) WaitingPairing(context.Context, uuid.UUID, string) (auth.Pairing, error) {
 	return auth.Pairing{}, auth.ErrPairingNotFound
 }
+
+func (fakeAuth) FoundPairing(context.Context, uuid.UUID, string) (bool, error) { return false, nil }
 
 func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret string) (domain.Profile, error) {
 	if target == oliver.ID && secret != "correct horse" {

@@ -213,18 +213,29 @@ func TestAWaitingPairingIsSeenBeforeItIsApproved(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		p, err := svc.WaitingPairing(t.Context(), strings.ToLower(start.UserCode))
+		p, err := svc.WaitingPairing(t.Context(), oliver.ID, strings.ToLower(start.UserCode))
 		if err != nil || p.Device != tv || p.Network != domain.NetworkRemote || p.UserCode != start.UserCode || time.Since(p.Started).Abs() > 5*time.Second {
 			t.Fatalf("waiting: %+v, %v", p, err)
 		}
 	}
+	// The profile that found the code has spent an approval on it; another, or a code nobody
+	// found, has not.
+	if found, err := svc.FoundPairing(t.Context(), oliver.ID, start.UserCode); err != nil || !found {
+		t.Errorf("found by its finder: %v, %v", found, err)
+	}
+	if found, err := svc.FoundPairing(t.Context(), uuid.NewV7(), start.UserCode); err != nil || found {
+		t.Errorf("found by another profile: %v, %v", found, err)
+	}
+	if found, err := svc.FoundPairing(t.Context(), oliver.ID, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && (err != nil || found) {
+		t.Errorf("a code nobody found: %v, %v", found, err)
+	}
 	if _, err := svc.ApprovePairing(t.Context(), domain.Session{Profile: oliver}, start.UserCode); err != nil {
 		t.Fatalf("approving a code that was looked at: %v", err)
 	}
-	if _, err := svc.WaitingPairing(t.Context(), start.UserCode); !errors.Is(err, ErrPairingNotFound) {
+	if _, err := svc.WaitingPairing(t.Context(), oliver.ID, start.UserCode); !errors.Is(err, ErrPairingNotFound) {
 		t.Errorf("an approved code was still waiting (err %v)", err)
 	}
-	if _, err := svc.WaitingPairing(t.Context(), "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && !errors.Is(err, ErrPairingNotFound) {
+	if _, err := svc.WaitingPairing(t.Context(), oliver.ID, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && !errors.Is(err, ErrPairingNotFound) {
 		t.Errorf("a code nobody was shown was found (err %v)", err)
 	}
 }

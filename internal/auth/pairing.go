@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -127,11 +128,11 @@ type Pairing struct {
 	Network  domain.ClientNetwork
 }
 
-// WaitingPairing is the pairing waiting for userCode, for whoever is about to approve it to see
-// what they would sign in.
-func (s *Service) WaitingPairing(ctx context.Context, userCode string) (Pairing, error) {
+// WaitingPairing is the pairing waiting for userCode, for finder, about to approve it, to see what
+// it would sign in.
+func (s *Service) WaitingPairing(ctx context.Context, finder uuid.UUID, userCode string) (Pairing, error) {
 	code := typedCode(userCode)
-	p, remaining, ok, err := s.kv.WaitingPairing(ctx, code)
+	p, remaining, ok, err := s.kv.WaitingPairing(ctx, code, finder)
 	if err != nil {
 		return Pairing{}, err
 	}
@@ -142,6 +143,12 @@ func (s *Service) WaitingPairing(ctx context.Context, userCode string) (Pairing,
 		Device: Device{Name: p.Device, Client: p.Client}, UserCode: CodeStyle(p.Style).shown(code),
 		Started: time.Now().Add(remaining - pairingTTL), Network: p.Network,
 	}, nil
+}
+
+// FoundPairing is whether profile found the pairing waiting for userCode, and so has spent an
+// approval on it already.
+func (s *Service) FoundPairing(ctx context.Context, profile uuid.UUID, userCode string) (bool, error) {
+	return s.kv.FoundBy(ctx, typedCode(userCode), profile)
 }
 
 // PairingStatus answers a television asking whether its code is approved yet, without handing out
