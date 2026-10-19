@@ -234,7 +234,7 @@ function current(href: string) {
 >
 	<nav
 		aria-label="Settings"
-		class="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto"
+		class="no-scrollbar min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto"
 	>
 		<search class="mb-4">
 			<form onsubmit={first}>
