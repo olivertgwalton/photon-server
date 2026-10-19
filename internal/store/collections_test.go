@@ -571,3 +571,81 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 		t.Errorf("watched = %v; want the pilot and season 2's opener, and season 1 not, its second unwatched", watched)
 	}
 }
+
+// A collection says how a library's wall shows it, as Plex's collection mode does: as the library
+// shows its box sets, or collapsed or expanded whatever the library does. An app that asks says how
+// every one is shown.
+func TestACollectionSaysHowAWallShowsIt(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]uuid.UUID{}
+	for _, title := range []string{"Alien", "Aliens", "Heat", "Thief", "Ran"} {
+		ids[title] = addItem(t, s, model.Item{
+			LibraryID: &lib.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
+		})
+	}
+	set := func(title string, members ...string) uuid.UUID {
+		id, err := s.AddCollection(ctx, title)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var in []uuid.UUID
+		for _, m := range members {
+			in = append(in, ids[m])
+		}
+		if err := s.SetMembers(ctx, id, in); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	alien, mann := set("Alien Anthology", "Alien", "Aliens"), set("Michael Mann", "Heat", "Thief")
+	wall := func(boxes domain.BoxSetMode) []string {
+		t.Helper()
+		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, BoxSets: boxes})
+		if err != nil || int(total) != len(cards) {
+			t.Fatalf("%d cards of %d, %v", len(cards), total, err)
+		}
+		var titles []string
+		for _, c := range cards {
+			titles = append(titles, c.Title)
+		}
+		return titles
+	}
+	for _, step := range []struct {
+		name    string
+		library domain.BoxSetMode
+		sets    map[uuid.UUID]domain.CollectionBoxSet
+		boxes   domain.BoxSetMode
+		want    []string
+	}{
+		{"as the library collapses them", domain.BoxSetsCollapsed, nil, "", []string{"Alien Anthology", "Michael Mann", "Ran"}},
+		{"one expanded in a collapsing library", domain.BoxSetsCollapsed, map[uuid.UUID]domain.CollectionBoxSet{mann: domain.CollectionExpanded}, "", []string{"Alien Anthology", "Heat", "Ran", "Thief"}},
+		{"one collapsed in an expanding library", domain.BoxSetsExpanded, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionCollapsed}, "", []string{"Alien Anthology", "Heat", "Ran", "Thief"}},
+		{"as the library expands them", domain.BoxSetsExpanded, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionAsLibrary}, "", []string{"Alien", "Aliens", "Heat", "Ran", "Thief"}},
+		{"an app asking for them collapsed", domain.BoxSetsExpanded, map[uuid.UUID]domain.CollectionBoxSet{mann: domain.CollectionExpanded}, domain.BoxSetsCollapsed, []string{"Alien Anthology", "Michael Mann", "Ran"}},
+		{"an app asking for them expanded", domain.BoxSetsCollapsed, map[uuid.UUID]domain.CollectionBoxSet{alien: domain.CollectionCollapsed}, domain.BoxSetsExpanded, []string{"Alien", "Aliens", "Heat", "Ran", "Thief"}},
+	} {
+		if err := s.SetLibrary(ctx, lib.ID, LibraryChange{BoxSets: step.library}); err != nil {
+			t.Fatal(err)
+		}
+		for id, mode := range step.sets {
+			if err := s.SetBoxSet(ctx, id, mode); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := wall(step.boxes); !reflect.DeepEqual(got, step.want) {
+			t.Errorf("%s: the wall shows %q, want %q", step.name, got, step.want)
+		}
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, alien)
+	if err != nil || page.BoxSet != domain.CollectionCollapsed {
+		t.Errorf("the anthology's page says it is shown %q, %v; want collapsed", page.BoxSet, err)
+	}
+	if err := s.SetBoxSet(ctx, ids["Heat"], domain.CollectionCollapsed); !errors.Is(err, ErrNotFound) {
+		t.Errorf("setting a film's box set: %v, want ErrNotFound", err)
+	}
+}

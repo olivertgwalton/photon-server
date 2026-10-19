@@ -159,6 +159,20 @@ func BoxSetModes() []BoxSetMode {
 	return []BoxSetMode{BoxSetsCollapsed, BoxSetsExpanded}
 }
 
+// CollectionBoxSet is how a library's wall shows a collection, as Plex's collection mode: as the
+// library shows its box sets, or collapsed or expanded whatever it does.
+type CollectionBoxSet string
+
+const (
+	CollectionAsLibrary CollectionBoxSet = "library"
+	CollectionCollapsed CollectionBoxSet = "collapsed"
+	CollectionExpanded  CollectionBoxSet = "expanded"
+)
+
+func CollectionBoxSets() []CollectionBoxSet {
+	return []CollectionBoxSet{CollectionAsLibrary, CollectionCollapsed, CollectionExpanded}
+}
+
 type Library struct {
 	ID    uuid.UUID
 	Name  string

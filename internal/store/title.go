@@ -43,6 +43,8 @@ type TitlePage struct {
 	Rule      *SmartRule
 	List      *ListRef
 	Libraries []uuid.UUID
+	// BoxSet is how a library's wall shows a collection.
+	BoxSet domain.CollectionBoxSet
 	// EpisodeOrder is the order a show's episode files are numbered in, and EpisodeGroup the TMDB
 	// episode group in OrderGroup.
 	EpisodeOrder domain.EpisodeOrder
@@ -272,8 +274,8 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 	case domain.ItemCollection:
 		var source, list *string
 		var missing int
-		err = s.pool.QueryRow(ctx, `SELECT origin, rule, list_source, list_id, list_missing, libraries FROM collections WHERE item_id = $1`, item.ID).
-			Scan(&p.Origin, &p.Rule, &source, &list, &missing, &p.Libraries)
+		err = s.pool.QueryRow(ctx, `SELECT origin, rule, list_source, list_id, list_missing, libraries, box_set FROM collections WHERE item_id = $1`, item.ID).
+			Scan(&p.Origin, &p.Rule, &source, &list, &missing, &p.Libraries, &p.BoxSet)
 		if source != nil && list != nil {
 			p.List = &ListRef{Source: domain.FieldSource(*source), ID: *list, Missing: missing}
 		}

@@ -361,6 +361,16 @@ func (s *Store) RemoveCollection(ctx context.Context, collection uuid.UUID) erro
 	})
 }
 
+// SetBoxSet sets how a library's wall shows a collection, whoever made it; ErrNotFound for no
+// collection.
+func (s *Store) SetBoxSet(ctx context.Context, collection uuid.UUID, mode domain.CollectionBoxSet) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE collections SET box_set = $2 WHERE item_id = $1`, collection, mode)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
 // userCollection answers the libraries a collection made as one of made reads, where it is a
 // smart or list collection; ErrNotFound for no collection, and ErrNotUserCollection for one made
 // otherwise.

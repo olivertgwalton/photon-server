@@ -246,7 +246,8 @@ func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
 	if s := query(r, "nameStartsWith"); s != "" {
 		p.Filter.StartsWith = strings.ToUpper(s[:1])
 	}
-	// An app's "Group movies into collections" setting, where it sends it, over the library's.
+	// An app's "Group movies into collections" setting, where it sends it, over the collection's and
+	// the library's.
 	switch strings.ToLower(query(r, "collapseBoxSetItems")) {
 	case "true":
 		p.BoxSets = domain.BoxSetsCollapsed

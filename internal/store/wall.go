@@ -72,7 +72,8 @@ type WallPage struct {
 	// RatingSite is whose rating SortRating sorts by.
 	RatingSite domain.RatingSite
 	Filter     WallFilter
-	// BoxSets is how it shows box sets; each library's own way where it says nothing.
+	// BoxSets is how it shows every box set; where it says nothing, as each collection's own mode
+	// says, else its library's.
 	BoxSets domain.BoxSetMode
 	Offset  int
 	Limit   int
@@ -203,12 +204,14 @@ func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	return where, args, err
 }
 
-// wallWhere is wallQuery with box sets shown as boxes says, each library's own way where it says
-// nothing: where it collapses them, where's titles leave out those boxed, and boxed is the WHERE,
-// over items, of the box sets in their place. Each kind of item a library's wall lists is its own
-// arm, which lets the wall's sort indexes read a page in order.
+// wallWhere is wallQuery with box sets shown as boxes says, every one; where it says nothing, as
+// each collection's own mode says, else its library's. Where some are collapsed, where's titles
+// leave out those boxed, and boxed is the WHERE, over items, of the box sets in their place. Each
+// kind of item a library's wall lists is its own arm, which lets the wall's sort indexes read a
+// page in order.
 func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter, boxes domain.BoxSetMode) (where, boxed string, args pgx.NamedArgs, err error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, kind, box_sets FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
+	rows, err := s.pool.Query(ctx, `SELECT id, kind, box_sets, EXISTS (SELECT 1 FROM collections WHERE box_set = 'collapsed')
+		FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -219,22 +222,21 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	filter := f.where(args, row)
 	// Each library's titles are what its kind makes them.
 	var arms []string
-	boxedLibs, boxedKinds := []uuid.UUID{}, []domain.ItemKind{}
+	boxedLibs, boxedKinds, collapsedLibs := []uuid.UUID{}, []domain.ItemKind{}, []uuid.UUID{}
 	var id uuid.UUID
 	var kind domain.LibraryKind
 	var mode domain.BoxSetMode
-	found, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode}, func() error {
-		// A filtered wall answers titles alone, as Jellyfin's does: a box set has no genre or year.
-		collapsed := cmp.Or(boxes, mode) == domain.BoxSetsCollapsed && filter == "" && wall != domain.WallEpisodes
+	var setCollapsed, collapsing bool
+	found, err := pgx.ForEachRow(rows, []any{&id, &kind, &mode, &setCollapsed}, func() error {
+		collapsing = collapsing || mode == domain.BoxSetsCollapsed || setCollapsed
+		if mode == domain.BoxSetsCollapsed {
+			collapsedLibs = append(collapsedLibs, id)
+		}
 		for _, item := range wall.Of(kind) {
 			n := strconv.Itoa(len(arms))
 			args["lib"+n], args["kind"+n] = id, item
-			arm := `items.library_id = @lib` + n + ` AND items.kind = @kind` + n
-			if collapsed {
-				boxedLibs, boxedKinds = append(boxedLibs, id), append(boxedKinds, item)
-				arm += ` AND items.id NOT IN (SELECT m.item_id FROM collection_members m WHERE m.collection_id IN (` + boxedSets + `))`
-			}
-			arms = append(arms, `(`+arm+`)`)
+			arms = append(arms, `(items.library_id = @lib`+n+` AND items.kind = @kind`+n+`)`)
+			boxedLibs, boxedKinds = append(boxedLibs, id), append(boxedKinds, item)
 		}
 		return nil
 	})
@@ -244,22 +246,37 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	if int(found.RowsAffected()) != len(libs) {
 		return "", "", nil, ErrNotFound
 	}
-	if len(boxedLibs) > 0 {
-		args["boxed_libs"], args["boxed_kinds"] = boxedLibs, boxedKinds
-		// Seeing a box set's titles, the profile sees it.
-		boxed = `WHERE items.kind = 'collection' AND items.id IN (` + boxedSets + `)`
+	where = `WHERE items.library_id = ANY(@libs)
+		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + cmp.Or(strings.Join(arms, " OR "), "false") + `))` + filter
+	// A filtered wall answers titles alone, as Jellyfin's does: a box set has no genre or year.
+	if boxes == domain.BoxSetsExpanded || filter != "" || wall == domain.WallEpisodes || !collapsing && boxes == "" {
+		return where, "", args, nil
 	}
-	return `WHERE items.library_id = ANY(@libs)
-		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + cmp.Or(strings.Join(arms, " OR "), "false") + `))` + filter, boxed, args, nil
+	args["boxed_libs"], args["boxed_kinds"], args["collapsed_libs"] = boxedLibs, boxedKinds, collapsedLibs
+	args["boxes"] = (*domain.BoxSetMode)(nil)
+	if boxes != "" {
+		args["boxes"] = &boxes
+	}
+	// Seeing a box set's titles, the profile sees it.
+	return where + ` AND items.id NOT IN (SELECT b.item_id FROM (` + boxedTitles + `) b WHERE b.collection_id IN (` + boxedSets + `))`,
+		`WHERE items.kind = 'collection' AND items.id IN (` + boxedSets + `)`, args, nil
 }
 
+// boxedTitles are the titles of @boxed_libs and @boxed_kinds the profile may see in the
+// collections the wall collapses, by collection. The viewer is made once: joined, it was made
+// again for every title, ten times the time.
+const boxedTitles = `WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v)
+	SELECT m.collection_id, m.item_id
+	FROM collection_members m JOIN collections c ON c.item_id = m.collection_id JOIN items t ON t.id = m.item_id, seer
+	WHERE (t.library_id, t.kind) IN (SELECT * FROM unnest(CAST(@boxed_libs AS uuid[]), CAST(@boxed_kinds AS text[])))
+		AND coalesce(CAST(@boxes AS text), nullif(c.box_set, 'library'),
+			CASE WHEN t.library_id = ANY(@collapsed_libs) THEN 'collapsed' END) = 'collapsed'
+		AND sees(seer.v, t)`
+
 // boxedSets are the collections a collapsed wall shows in place of their titles: those holding
-// minShown of the titles of @boxed_libs and @boxed_kinds the profile may see. A box set is in no
-// library, so it is on each wall where it boxes enough of the titles.
-var boxedSets = `SELECT m.collection_id FROM collection_members m JOIN items boxed ON boxed.id = m.item_id, viewer(@profile) bv
-	WHERE (boxed.library_id, boxed.kind) IN (SELECT * FROM unnest(CAST(@boxed_libs AS uuid[]), CAST(@boxed_kinds AS text[])))
-		AND sees(bv, boxed)
-	GROUP BY m.collection_id HAVING count(*) >= ` + strconv.Itoa(minShown)
+// minShown of boxedTitles. A box set is in no library, so it is on each wall where it boxes enough
+// of the titles.
+var boxedSets = `SELECT b.collection_id FROM (` + boxedTitles + `) b GROUP BY b.collection_id HAVING count(*) >= ` + strconv.Itoa(minShown)
 
 // wallRows are the items a wall pages, as from; the row of them whose letter, genres, studios and
 // certificate a title has, an episode's being its show's; and whether the viewer v sees one.
