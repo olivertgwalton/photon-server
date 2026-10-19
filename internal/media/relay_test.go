@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -89,6 +90,63 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 	}
 	if code, _ := get(t, in, ""); code != http.StatusNotFound {
 		t.Errorf("closed, the relay answered %d, want 404", code)
+	}
+}
+
+// playlistAt serves, as a provider's media, a list naming a segment at internal, which counts each
+// request it is sent. Its type is HLS's, without which FFmpeg reads no list at an address with no
+// .m3u8 in it, as the relay's has none.
+func playlistAt(t *testing.T, list string) (Input, *atomic.Int32) {
+	t.Helper()
+	var hits atomic.Int32
+	internal := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits.Add(1) }))
+	t.Cleanup(internal.Close)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		if _, err := io.WriteString(w, strings.ReplaceAll(list, "INTERNAL", internal.URL)); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(provider.Close)
+	at, err := url.Parse(provider.URL + "/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := Relayed(at, strings.TrimPrefix(provider.URL, "http://"), "Heat (1995).mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { in.Close() })
+	return in, &hits
+}
+
+const (
+	hlsList  = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nINTERNAL/secret.ts\n#EXT-X-ENDLIST\n"
+	dashList = "\ufeff<?xml version=\"1.0\"?>\n<MPD><Period><BaseURL>INTERNAL/</BaseURL></Period></MPD>\n"
+)
+
+// A provider answering with a playlist would have whatever reads it fetch the addresses it lists
+// itself, past the relay's guard, so the relay refuses it.
+func TestARelayedPlaylistIsRefused(t *testing.T) {
+	for name, list := range map[string]string{"HLS": hlsList, "DASH": dashList} {
+		in, _ := playlistAt(t, list)
+		for _, rng := range []string{"", "bytes=0-"} {
+			if code, _ := get(t, in, rng); code != http.StatusBadGateway {
+				t.Errorf("%s from %q answered %d, want 502", name, rng, code)
+			}
+		}
+	}
+}
+
+// ffprobe reading a provider's playlist through the relay fetches nothing it lists.
+func TestAToolReadingARelayedPlaylistFetchesNothingItLists(t *testing.T) {
+	tools := ffprobe(t)
+	in, hits := playlistAt(t, hlsList)
+	if _, err := tools.Probe(t.Context(), in); err == nil {
+		t.Error("a playlist was probed as media")
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("ffprobe fetched an address the playlist listed %d times", n)
 	}
 }
 
