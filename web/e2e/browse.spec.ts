@@ -70,6 +70,31 @@ test("a library's wall pages as it scrolls and jumps to a letter", async ({
 	await expect(wall.getByRole("link", { name: /Hilm 244/ })).toBeVisible();
 });
 
+test("a wall drawn again at another width says nothing to the console", async ({
+	page,
+}) => {
+	// The wall takes its height from the width it is told, so measuring during
+	// the browser's own round of observers leaves that round undelivered.
+	const shouted = () =>
+		page.evaluate(() => (window as unknown as { shouted: string[] }).shouted);
+	await page.addInitScript(() => {
+		const heard: string[] = [];
+		Object.assign(window, { shouted: heard });
+		window.addEventListener("error", (e) => heard.push(e.message));
+	});
+	await logIn(page, "/libraries/l-films");
+	const first = page
+		.getByRole("list", { name: "Films" })
+		.getByRole("listitem")
+		.first();
+	const wide = await first.boundingBox();
+	await page.setViewportSize({ width: 900, height: 800 });
+	await expect
+		.poll(async () => (await first.boundingBox())?.width)
+		.not.toBe(wide?.width);
+	expect(await shouted()).toEqual([]);
+});
+
 test("a library offers its collections only where it keeps some", async ({
 	page,
 }) => {
