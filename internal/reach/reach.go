@@ -89,10 +89,12 @@ func (r *Reach) now() *state {
 // Client is the client a request came from, as a trusted proxy says.
 func (r *Reach) Client(req *http.Request) netip.Addr { return r.now().proxies.Client(req) }
 
-// Network is which of the server's networks a request's client is on, by its local networks.
+// Network is which of the server's networks a request's client is on, by its local networks. A
+// request naming its client through a proxy not trusted is remote: that proxy may pass on a client
+// from anywhere.
 func (r *Reach) Network(req *http.Request) domain.ClientNetwork {
 	s := r.now()
-	if peer.LocalIn(s.local, s.proxies.Client(req)) {
+	if !s.proxies.Untrusted(req) && peer.LocalIn(s.local, s.proxies.Client(req)) {
 		return domain.NetworkLocal
 	}
 	return domain.NetworkRemote

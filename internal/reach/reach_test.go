@@ -61,3 +61,33 @@ func TestANodeTakesUpHowTheServerIsReachedAsItIsTold(t *testing.T) {
 		<-done
 	})
 }
+
+// A playback through a proxy the server does not trust is remote, though the proxy is on its
+// network, and local once an admin trusts it to name a client there.
+func TestAPlaybackThroughAProxyNotTrustedIsRemote(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "172.18.0.2:5000"
+	for _, tc := range []struct {
+		trusted   string
+		forwarded string
+		want      domain.ClientNetwork
+	}{
+		{"", "203.0.113.9", domain.NetworkRemote},
+		{"", "192.168.1.20", domain.NetworkRemote},
+		{"172.16.0.0/12", "203.0.113.9", domain.NetworkRemote},
+		{"172.16.0.0/12", "192.168.1.20", domain.NetworkLocal},
+	} {
+		var n domain.Network
+		if tc.trusted != "" {
+			n.TrustedProxies = []netip.Prefix{netip.MustParsePrefix(tc.trusted)}
+		}
+		r, err := New(t.Context(), &kept{n: n}, nil, slog.New(slog.DiscardHandler))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("X-Forwarded-For", tc.forwarded)
+		if got := r.Network(req); got != tc.want {
+			t.Errorf("trusting %q, forwarded for %s: %s, want %s", tc.trusted, tc.forwarded, got, tc.want)
+		}
+	}
+}
