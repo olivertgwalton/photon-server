@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -119,7 +120,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	change := store.ProfileChange{Role: req.Role}
+	change := store.ProfileChange{Role: req.Role, Keep: auth.SessionOf(r.Context()).ID}
 	if req.Name != "" {
 		var ok bool
 		if change.Name, ok = domain.ProfileName(req.Name); !ok {

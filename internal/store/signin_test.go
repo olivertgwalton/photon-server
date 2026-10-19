@@ -301,3 +301,49 @@ func TestASessionIsFoundByItsIDWhileItLasts(t *testing.T) {
 		t.Errorf("a session signed out: %v, want ErrNotFound", err)
 	}
 }
+
+// A password an admin sets signs the profile out of its every device, as one it changes itself
+// does, but leaves the admin's own session when the profile is theirs.
+func TestAPasswordAnAdminSetsSignsTheProfilesDevicesOut(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	ada, err := s.AddProfile(ctx, "Ada", domain.RoleAdmin, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Hour)
+	open := func(p domain.Profile, token string) uuid.UUID {
+		id, err := s.CreateSession(ctx, NewSession{Kind: domain.SessionDevice, ProfileID: p.ID, TokenHash: []byte(token), ExpiresAt: &expires})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	stolen, laptop, phone := open(kid, "stolen"), open(ada, "laptop"), open(ada, "phone")
+
+	if _, err := s.SetProfile(ctx, kid.ID, ProfileChange{Name: "Teen", Keep: laptop}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SessionByID(ctx, stolen, time.Now()); err != nil {
+		t.Errorf("a rename signed the profile out: %v", err)
+	}
+	if _, err := s.SetProfile(ctx, kid.ID, ProfileChange{PasswordHash: "new", Keep: laptop}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SessionByID(ctx, stolen, time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a device kept signed in after an admin set the password: %v", err)
+	}
+	if _, err := s.SetProfile(ctx, ada.ID, ProfileChange{PasswordHash: "new", Keep: laptop}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SessionByID(ctx, laptop, time.Now()); err != nil {
+		t.Errorf("the admin setting their own password was signed out: %v", err)
+	}
+	if _, _, err := s.SessionByID(ctx, phone, time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the admin's other device kept signed in: %v", err)
+	}
+}

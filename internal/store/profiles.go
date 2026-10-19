@@ -317,10 +317,13 @@ type ProfileChange struct {
 	Name         string
 	Role         domain.Role
 	PasswordHash string
+	// Keep is the session setting the password, left signed in when it is the profile's own.
+	Keep uuid.UUID
 }
 
-// SetProfile renames a profile, changes its role, and sets its password. The server keeps an
-// admin. A manager by changes only a profile it keeps, and not into an admin or a manager.
+// SetProfile renames a profile, changes its role, and sets its password, signing out its every
+// device but Keep as ChangePassword does. The server keeps an admin. A manager by changes only a
+// profile it keeps, and not into an admin or a manager.
 func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange, by *uuid.UUID) (domain.Profile, error) {
 	var out domain.Profile
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -343,6 +346,11 @@ func (s *Store) SetProfile(ctx context.Context, id uuid.UUID, c ProfileChange, b
 		if _, err := tx.Exec(ctx, `UPDATE profiles SET name = $2, role = $3, password_hash = $4 WHERE id = $1`,
 			row.ID, row.Name, row.Role, row.PasswordHash); err != nil {
 			return err
+		}
+		if c.PasswordHash != "" {
+			if _, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2 AND kind = 'device'`, row.ID, c.Keep); err != nil {
+				return err
+			}
 		}
 		out = profile(row)
 		return nil
