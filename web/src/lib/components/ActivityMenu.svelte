@@ -43,9 +43,14 @@ const running = $derived(working + state.playbacks.length);
 		>
 			<ActivityIcon class="size-5 motion-safe:animate-pulse" />
 		</Popover.Trigger>
+		<!-- This sits in a sticky header, so the page scrolling moves it in the
+			document but not on screen. Positioned against the document the menu
+			would need placing again every frame, and lag behind the scroll; against
+			the viewport it needs placing only once. -->
 		<Popover.Content
 			align="end"
 			class="grid w-80 grid-cols-1 gap-3"
+			strategy="fixed"
 			role="dialog"
 			aria-label="Activity"
 		>
