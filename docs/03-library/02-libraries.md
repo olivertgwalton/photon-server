@@ -58,6 +58,7 @@ To change a library's settings, choose **Edit** beside it at Settings › Server
 | **Theme music** | Where shows' tunes come from. Default: **Local files only**. See [theme music](11-theme-music.md). |
 | **Metadata language** | The language for titles, descriptions and pictures. Default: **Server default**, set at Settings › Server › General. |
 | **Titles** | **In its language** (the default) shows names in the library's language. **As first named** keeps each title's original name. |
+| **Box sets** | **One tile for the set** (the default) shows two or more titles of a collection as the collection in their place, as Jellyfin's "Group movies into collections" does. **Each title on its own** lists them all. A filtered library always lists each title. See [collections](07-collections.md). |
 | **Pictures** | **In its language first** (the default) prefers posters in your language. **The most liked, any language** takes the most popular. |
 | **Certification country** | Which country's age ratings to show, which parental controls use. Default: **Automatic**. |
 | **Media deletion** | Whether an admin can delete files from the web app. Default: **Not allowed**. See below. |

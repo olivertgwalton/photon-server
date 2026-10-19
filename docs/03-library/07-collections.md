@@ -7,6 +7,11 @@ A collection is a box set of titles, such as every Bond film or your Christmas f
 collection can hold titles from any of your libraries. You find collections under **Collections**
 in the sidebar, and in each library that holds some of their titles.
 
+Where a library holds two or more titles of a collection, its wall shows one tile for the
+collection in their place, such as one **Harry Potter Collection** for all eight films. Filter the
+library to see each title, or set its **Box sets** to **Each title on its own** (see
+[libraries](02-libraries.md)).
+
 Everyone sees only the titles of a collection they are allowed to see. A profile limited to some
 libraries or age ratings finds only those titles in it.
 
