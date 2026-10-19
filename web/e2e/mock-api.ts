@@ -1796,6 +1796,20 @@ const server_ = Bun.serve<Socket>({
 			case "DELETE /api/v1/profile/sign-in-providers/pocket-id":
 				pocketID.account = undefined;
 				return none();
+			case "POST /api/v1/auth/pairings/find": {
+				const body = (await request.json()) as Schemas["Approval"];
+				const code = body.user_code.replace(/[- ]/g, "").toUpperCase();
+				if (code !== "BCDFGHJK" && code !== "LMNPQRST") {
+					return problem(404, "pairing_not_found", "Not Found");
+				}
+				return Response.json({
+					device: "Living Room",
+					client: "Photon for tvOS",
+					user_code: `${code.slice(0, 4)}-${code.slice(4)}`,
+					asked_at: new Date(Date.now() - 60_000).toISOString(),
+					network: code === "BCDFGHJK" ? "local" : "remote",
+				} satisfies Schemas["WaitingPairing"]);
+			}
 			case "POST /api/v1/auth/pairings/approvals": {
 				const body = (await request.json()) as Schemas["Approval"];
 				if (body.user_code.replace(/[- ]/g, "").toUpperCase() !== "BCDFGHJK") {
