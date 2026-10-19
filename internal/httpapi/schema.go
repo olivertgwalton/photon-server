@@ -55,6 +55,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.Milestone]():           values(domain.Milestones()),
 	reflect.TypeFor[domain.Keep]():                values(domain.Keeps()),
 	reflect.TypeFor[domain.SignInMethod]():        values(domain.SignInMethods()),
+	reflect.TypeFor[domain.ClientNetwork]():       values(domain.ClientNetworks()),
 	reflect.TypeFor[domain.Provisioning]():        values(domain.Provisionings()),
 	reflect.TypeFor[domain.Recheck]():             values(domain.Rechecks()),
 	reflect.TypeFor[domain.ItemKind]():            values(domain.ItemKinds()),

@@ -42,6 +42,8 @@ const (
 	NetworkRemote ClientNetwork = "remote"
 )
 
+func ClientNetworks() []ClientNetwork { return []ClientNetwork{NetworkLocal, NetworkRemote} }
+
 // URLFor is where a client on network reaches n itself: its local URL, or its public URL where it
 // has none, for one on a local network, and its public URL for one elsewhere. Empty is nowhere.
 func (n Node) URLFor(network ClientNetwork) string {

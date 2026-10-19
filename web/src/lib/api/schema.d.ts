@@ -3719,6 +3719,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/pairings/find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Find the pairing waiting for a code, to show what approving it would sign in and whether it was asked for from outside the server's networks */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WaitingPairing"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password-resets": {
         parameters: {
             query?: never;
@@ -7896,6 +7937,8 @@ export interface components {
         Claim: {
             code: string;
         };
+        /** @enum {string} */
+        ClientNetwork: "local" | "remote";
         ClientProfile: {
             audio: components["schemas"]["AudioSupport"][];
             containers: string[];
@@ -9918,6 +9961,14 @@ export interface components {
             webhook_formats: {
                 [key: string]: string;
             };
+        };
+        WaitingPairing: {
+            /** Format: date-time */
+            asked_at: string;
+            client: string;
+            device: string;
+            network: components["schemas"]["ClientNetwork"];
+            user_code: string;
         };
         WallFilter: {
             certificates?: string[];

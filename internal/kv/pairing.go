@@ -24,7 +24,9 @@ type Pairing struct {
 	Device string
 	Client string
 	// Style is how its user code is written, which auth names.
-	Style   string
+	Style string
+	// Network is where the device asked from, for whoever approves it to see.
+	Network domain.ClientNetwork
 	Profile uuid.UUID
 	// Identity is the account behind the session that approved it, which the device's goes with.
 	Identity domain.SignInIdentity
@@ -41,13 +43,13 @@ const (
 
 var start = valkey.NewLuaScript(`
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
-redis.call('HSET', KEYS[1], 'secret', ARGV[1], 'device', ARGV[2], 'client', ARGV[3], 'style', ARGV[5])
+redis.call('HSET', KEYS[1], 'secret', ARGV[1], 'device', ARGV[2], 'client', ARGV[3], 'style', ARGV[5], 'network', ARGV[6])
 redis.call('EXPIRE', KEYS[1], ARGV[4])
 return 1`)
 
 func (k *KV) StartPairing(ctx context.Context, userCode string, secretHash []byte, p Pairing, ttl time.Duration) error {
 	created, err := start.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{
-		hex.EncodeToString(secretHash), p.Device, p.Client, strconv.Itoa(int(ttl.Seconds())), p.Style,
+		hex.EncodeToString(secretHash), p.Device, p.Client, strconv.Itoa(int(ttl.Seconds())), p.Style, string(p.Network),
 	}).AsInt64()
 	if err != nil {
 		return err
@@ -77,6 +79,42 @@ func (k *KV) ApprovePairing(ctx context.Context, userCode string, profile uuid.U
 		return Pairing{}, false, err
 	}
 	return Pairing{Device: vals[0], Client: vals[1], Profile: profile, Identity: identity}, true, nil
+}
+
+// waiting reads a pairing that names no network as asked from outside, the reading that warns, and
+// keeps who found it.
+var waiting = valkey.NewLuaScript(`
+if redis.call('HEXISTS', KEYS[1], 'profile') == 1 then return false end
+local fields = redis.call('HMGET', KEYS[1], 'device', 'client', 'style', 'network')
+if not fields[1] then return false end
+redis.call('HSET', KEYS[1], 'found', ARGV[1])
+return {fields[1], fields[2], fields[3] or '', fields[4] or 'remote', tostring(redis.call('PTTL', KEYS[1]))}`)
+
+// WaitingPairing reads the pairing waiting under userCode for finder, about to approve it, without
+// approving it. ok is false for a code that is unknown, expired or already approved.
+func (k *KV) WaitingPairing(ctx context.Context, userCode string, finder uuid.UUID) (p Pairing, remaining time.Duration, ok bool, err error) {
+	vals, err := waiting.Exec(ctx, k.client, []string{k.pairingKey(userCode)}, []string{finder.String()}).AsStrSlice()
+	if valkey.IsValkeyNil(err) {
+		return Pairing{}, 0, false, nil
+	}
+	if err != nil || len(vals) != 5 {
+		return Pairing{}, 0, false, err
+	}
+	ms, err := strconv.ParseInt(vals[4], 10, 64)
+	if err != nil {
+		return Pairing{}, 0, false, err
+	}
+	p = Pairing{Device: vals[0], Client: vals[1], Style: vals[2], Network: domain.ClientNetwork(vals[3])}
+	return p, time.Duration(ms) * time.Millisecond, true, nil
+}
+
+// FoundBy is whether profile was the last to find the pairing waiting under userCode.
+func (k *KV) FoundBy(ctx context.Context, userCode string, profile uuid.UUID) (bool, error) {
+	found, err := k.client.Do(ctx, k.client.B().Hget().Key(k.pairingKey(userCode)).Field("found").Build()).ToString()
+	if valkey.IsValkeyNil(err) {
+		return false, nil
+	}
+	return found == profile.String(), err
 }
 
 var status = valkey.NewLuaScript(`

@@ -209,20 +209,55 @@ test("a show's episode plays its theme once the profile asks for theme music", a
 	await expect(tune).toHaveAttribute("src", "/api/v1/themes/th-small-show");
 });
 
-test("a TV is linked by the code it shows", async ({ page }) => {
+test("a TV is linked by the code it shows, once its asking is seen", async ({
+	page,
+}) => {
 	await logIn(page, "/settings/link");
 	await expectAccessible(page);
 	const code = page.getByLabel("Code");
 	await code.fill("ZZZZ-ZZZZ");
-	await page.getByRole("button", { name: "Link" }).click();
+	await page.getByRole("button", { name: "Continue" }).click();
 	await expect(page.getByRole("alert")).toHaveText(
 		/No device is showing that code/,
 	);
 
 	await code.fill("bcdf-ghjk");
-	await page.getByRole("button", { name: "Link" }).click();
+	await page.getByRole("button", { name: "Continue" }).click();
+	await expect(
+		page.locator("p", { hasText: "from your network" }),
+	).toBeVisible();
+	await expect(
+		page.locator("p", { hasText: "the device in front of you shows" }),
+	).toContainText("BCDF-GHJK");
+	await expect(page.getByText("This device isn't on your network")).toHaveCount(
+		0,
+	);
+	await expectAccessible(page);
+	await page.getByRole("button", { name: /^Sign it in as/ }).click();
 	await expect(page.getByRole("status")).toHaveText(
-		"Living Room (Photon for tvOS) is signed in.",
+		/Living Room\s+\(Photon for tvOS\) is signed in\./,
+	);
+});
+
+test("a code asked for from outside warns before it is approved", async ({
+	page,
+}) => {
+	await logIn(page, "/settings/link?code=LMNPQRST");
+	await page.getByRole("button", { name: "Continue" }).click();
+	await expect(
+		page.getByText("This device isn't on your network"),
+	).toBeVisible();
+	await expect(
+		page.locator("p", { hasText: "the device in front of you shows" }),
+	).toContainText("LMNP-QRST");
+	await expectAccessible(page);
+	await page.getByRole("button", { name: "Cancel" }).click();
+	await expect(page.getByLabel("Code")).toBeVisible();
+	await expect(page.getByRole("status")).toHaveCount(0);
+	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { name: /^Sign it in as/ }).click();
+	await expect(page.getByRole("status")).toHaveText(
+		/Living Room\s+\(Photon for tvOS\) is signed in\./,
 	);
 });
 
@@ -296,9 +331,10 @@ test("the address a TV shows fills in its code", async ({ page }) => {
 	await logIn(page, "/link?code=BCDF-GHJK");
 	await expect(page).toHaveURL("/settings/link?code=BCDF-GHJK");
 	await expect(page.getByLabel("Code")).toHaveValue("BCDF-GHJK");
-	await page.getByRole("button", { name: "Link" }).click();
+	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { name: /^Sign it in as/ }).click();
 	await expect(page.getByRole("status")).toHaveText(
-		"Living Room (Photon for tvOS) is signed in.",
+		/Living Room\s+\(Photon for tvOS\) is signed in\./,
 	);
 });
 

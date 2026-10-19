@@ -158,7 +158,7 @@ func TestPairingATelevision(t *testing.T) {
 	}
 	approver := domain.Session{Profile: phone}
 
-	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters, domain.NetworkLocal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,12 +203,49 @@ func TestPairingATelevision(t *testing.T) {
 	}
 }
 
+// Whoever is about to approve a code sees what it would sign in and whether it was asked for from
+// outside, without approving it, and a code once approved is found no more.
+func TestAWaitingPairingIsSeenBeforeItIsApproved(t *testing.T) {
+	svc, st := newService(t)
+	oliver := addOliver(t, svc, st)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters, domain.NetworkRemote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		p, err := svc.WaitingPairing(t.Context(), oliver.ID, strings.ToLower(start.UserCode))
+		if err != nil || p.Device != tv || p.Network != domain.NetworkRemote || p.UserCode != start.UserCode || time.Since(p.Started).Abs() > 5*time.Second {
+			t.Fatalf("waiting: %+v, %v", p, err)
+		}
+	}
+	// The profile that found the code has spent an approval on it; another, or a code nobody
+	// found, has not.
+	if found, err := svc.FoundPairing(t.Context(), oliver.ID, start.UserCode); err != nil || !found {
+		t.Errorf("found by its finder: %v, %v", found, err)
+	}
+	if found, err := svc.FoundPairing(t.Context(), uuid.NewV7(), start.UserCode); err != nil || found {
+		t.Errorf("found by another profile: %v, %v", found, err)
+	}
+	if found, err := svc.FoundPairing(t.Context(), oliver.ID, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && (err != nil || found) {
+		t.Errorf("a code nobody found: %v, %v", found, err)
+	}
+	if _, err := svc.ApprovePairing(t.Context(), domain.Session{Profile: oliver}, start.UserCode); err != nil {
+		t.Fatalf("approving a code that was looked at: %v", err)
+	}
+	if _, err := svc.WaitingPairing(t.Context(), oliver.ID, start.UserCode); !errors.Is(err, ErrPairingNotFound) {
+		t.Errorf("an approved code was still waiting (err %v)", err)
+	}
+	if _, err := svc.WaitingPairing(t.Context(), oliver.ID, "ZZZZ-ZZZZ"); start.UserCode != "ZZZZ-ZZZZ" && !errors.Is(err, ErrPairingNotFound) {
+		t.Errorf("a code nobody was shown was found (err %v)", err)
+	}
+}
+
 // A television may ask whether it is approved as often as it likes without taking its token, and
 // without its asking slowing the poll that takes it.
 func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 	svc, st := newService(t)
 	oliver := addOliver(t, svc, st)
-	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters, domain.NetworkLocal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +290,7 @@ func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 func TestPairingByDigits(t *testing.T) {
 	svc, st := newService(t)
 	oliver := addOliver(t, svc, st)
-	start, err := svc.StartPairing(t.Context(), tv, CodeDigits)
+	start, err := svc.StartPairing(t.Context(), tv, CodeDigits, domain.NetworkLocal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +315,7 @@ func TestPairingByDigits(t *testing.T) {
 
 func TestPairingPollsAreRateLimited(t *testing.T) {
 	svc, _ := newService(t)
-	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
+	start, err := svc.StartPairing(t.Context(), tv, CodeLetters, domain.NetworkLocal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,7 +764,7 @@ func TestATelevisionPairedBySignInGoesWithTheAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	start, err := svc.StartPairing(ctx, tv, CodeLetters)
+	start, err := svc.StartPairing(ctx, tv, CodeLetters, domain.NetworkLocal)
 	if err != nil {
 		t.Fatal(err)
 	}

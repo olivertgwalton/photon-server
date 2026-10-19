@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -63,7 +64,8 @@ type PairingStart struct {
 	ExpiresIn  time.Duration
 }
 
-func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (PairingStart, error) {
+// StartPairing waits for d, asking from network, to be approved by a code in style.
+func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle, network domain.ClientNetwork) (PairingStart, error) {
 	for range 5 {
 		code, err := style.newCode()
 		if err != nil {
@@ -72,7 +74,7 @@ func (s *Service) StartPairing(ctx context.Context, d Device, style CodeStyle) (
 		secret := make([]byte, 32)
 		rand.Read(secret)
 		deviceSecret := base64.RawURLEncoding.EncodeToString(secret)
-		err = s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style)}, pairingTTL)
+		err = s.kv.StartPairing(ctx, code, hashToken(deviceSecret), kv.Pairing{Device: d.Name, Client: d.Client, Style: string(style), Network: network}, pairingTTL)
 		if errors.Is(err, kv.ErrUserCodeTaken) {
 			continue
 		}
@@ -117,11 +119,36 @@ func (s *Service) ApprovePairing(ctx context.Context, approver domain.Session, u
 	return Device{Name: p.Device, Client: p.Client}, nil
 }
 
-// A Pairing is what waits on a code: the television that asked, the code it shows, and when.
+// A Pairing is what waits on a code: the television that asked, the code it shows, and when and
+// from where it asked.
 type Pairing struct {
 	Device   Device
 	UserCode string
 	Started  time.Time
+	Network  domain.ClientNetwork
+}
+
+// WaitingPairing is the pairing waiting for userCode, for finder, about to approve it, to see what
+// it would sign in.
+func (s *Service) WaitingPairing(ctx context.Context, finder uuid.UUID, userCode string) (Pairing, error) {
+	code := typedCode(userCode)
+	p, remaining, ok, err := s.kv.WaitingPairing(ctx, code, finder)
+	if err != nil {
+		return Pairing{}, err
+	}
+	if !ok {
+		return Pairing{}, ErrPairingNotFound
+	}
+	return Pairing{
+		Device: Device{Name: p.Device, Client: p.Client}, UserCode: CodeStyle(p.Style).shown(code),
+		Started: time.Now().Add(remaining - pairingTTL), Network: p.Network,
+	}, nil
+}
+
+// FoundPairing is whether profile found the pairing waiting for userCode, and so has spent an
+// approval on it already.
+func (s *Service) FoundPairing(ctx context.Context, profile uuid.UUID, userCode string) (bool, error) {
+	return s.kv.FoundBy(ctx, typedCode(userCode), profile)
 }
 
 // PairingStatus answers a television asking whether its code is approved yet, without handing out
