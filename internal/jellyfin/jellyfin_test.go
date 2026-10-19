@@ -110,7 +110,7 @@ func (f fakeAuth) SignOut(_ context.Context, id uuid.UUID) error {
 }
 
 // StartPairing refuses photon's letters: Swiftfin takes six digits and nothing else.
-func (f fakeAuth) StartPairing(_ context.Context, _ auth.Device, style auth.CodeStyle) (auth.PairingStart, error) {
+func (f fakeAuth) StartPairing(_ context.Context, _ auth.Device, style auth.CodeStyle, _ domain.ClientNetwork) (auth.PairingStart, error) {
 	if style != auth.CodeDigits {
 		return auth.PairingStart{}, errors.ErrUnsupported
 	}

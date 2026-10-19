@@ -47,7 +47,7 @@ func (p profiles) Session(_ context.Context, id uuid.UUID) (domain.Session, erro
 
 func (profiles) SignOut(context.Context, uuid.UUID) error { return nil }
 
-func (profiles) StartPairing(context.Context, auth.Device, auth.CodeStyle) (auth.PairingStart, error) {
+func (profiles) StartPairing(context.Context, auth.Device, auth.CodeStyle, domain.ClientNetwork) (auth.PairingStart, error) {
 	return auth.PairingStart{}, errors.ErrUnsupported
 }
 
