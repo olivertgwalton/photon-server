@@ -21,7 +21,8 @@ import (
 const sessionCookie = "photon_session"
 
 // crossOrigin refuses a browser's write from another site. Only a cookie needs it: a page on
-// another site can make a browser send its cookie, never a bearer token.
+// another site can make a browser send its cookie, never a bearer token, and can sign a browser
+// in to a profile of its own choosing.
 var crossOrigin = http.NewCrossOriginProtection()
 
 // requireSession admits a request carrying a valid device token in its Authorization header, or in
@@ -172,6 +173,10 @@ func (a *API) keepSession(w http.ResponseWriter, r *http.Request, token string) 
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	if err := crossOrigin.Check(r); err != nil {
+		writeProblem(w, a.logger, codeForbidden, "a write from another site")
+		return
+	}
 	var req loginRequest
 	if !a.decode(w, r, &req) {
 		return
