@@ -248,6 +248,11 @@ test("a code asked for from outside warns before it is approved", async ({
 	await page.getByRole("button", { name: "Cancel" }).click();
 	await expect(page.getByLabel("Code")).toBeVisible();
 	await expect(page.getByRole("status")).toHaveCount(0);
+	await page.getByRole("button", { name: "Continue" }).click();
+	await page.getByRole("button", { name: /^Sign it in as/ }).click();
+	await expect(page.getByRole("status")).toHaveText(
+		/Living Room\s+\(Photon for tvOS\) is signed in\./,
+	);
 });
 
 test("a profile links its Trakt account by the code Trakt gives it", async ({

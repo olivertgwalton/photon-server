@@ -2,7 +2,6 @@
 import ShieldAlertIcon from "@lucide/svelte/icons/shield-alert";
 import { relative } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import * as Alert from "#lib/components/ui/alert/index.js";
@@ -11,10 +10,12 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields } from "#lib/form.js";
+import { attempt } from "#lib/signin.js";
 import { page } from "$app/state";
 
 let { data } = $props();
 let message = $state<string>();
+let pending = $state(false);
 let waiting = $state.raw<components["schemas"]["WaitingPairing"]>();
 let linked = $state.raw<components["schemas"]["Device"]>();
 
@@ -23,22 +24,28 @@ let linked = $state.raw<components["schemas"]["Device"]>();
 async function find(event: SubmitEvent) {
 	const code = fields(event).get("code");
 	linked = undefined;
-	const { data: pairing, error } = await client().POST(
-		"/api/v1/auth/pairings/find",
-		{ body: { user_code: String(code) } },
+	pending = true;
+	const settled = await attempt(
+		client().POST("/api/v1/auth/pairings/find", {
+			body: { user_code: String(code) },
+		}),
 	);
-	message = error ? problemMessage(error) : undefined;
-	waiting = pairing;
+	pending = false;
+	message = settled.message;
+	waiting = settled.answer?.data;
 }
 
 async function approve() {
 	if (!waiting) return;
-	const { data: device, error } = await client().POST(
-		"/api/v1/auth/pairings/approvals",
-		{ body: { user_code: waiting.user_code } },
+	pending = true;
+	const settled = await attempt(
+		client().POST("/api/v1/auth/pairings/approvals", {
+			body: { user_code: waiting.user_code },
+		}),
 	);
-	message = error ? problemMessage(error) : undefined;
-	linked = device;
+	pending = false;
+	message = settled.message;
+	linked = settled.answer?.data;
 	waiting = undefined;
 }
 
@@ -81,9 +88,12 @@ function formatCode(typed: string) {
 				{/if}
 				<Field.Error errors={[{ message }]} />
 				<div class="flex gap-2">
-					<Button onclick={approve}>Sign it in as {data.me.name}</Button>
+					<Button onclick={approve} disabled={pending}>
+						Sign it in as {data.me.name}
+					</Button>
 					<Button
 						variant="outline"
+						disabled={pending}
 						onclick={() => {
 							waiting = undefined;
 							message = undefined;
@@ -126,7 +136,7 @@ function formatCode(typed: string) {
 							notice.
 						</p>
 					{/if}
-					<Button type="submit">Continue</Button>
+					<Button type="submit" disabled={pending}>Continue</Button>
 				</Field.Group>
 			</form>
 		{/if}
