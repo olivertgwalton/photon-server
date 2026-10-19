@@ -90,6 +90,20 @@ test("an admin's settings are one place: their account, then the server", async 
 	await expect(page.getByText("That device is signed out.")).toBeVisible();
 });
 
+test("the settings list reaches its last link in a short window", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 600 });
+	await logIn(page, "/settings/server/general");
+	const nav = page.getByRole("navigation", { name: "Settings" });
+	const last = nav.getByRole("link", { name: "API keys" });
+	await expect(last).not.toBeInViewport();
+	// The list scrolls on its own: the page it sits beside stays where it is.
+	await last.scrollIntoViewIfNeeded();
+	await expect(last).toBeInViewport();
+	expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("the dashboard's old addresses lead to its new ones", async ({ page }) => {
 	await logIn(page, "/admin/libraries");
 	await expect(page).toHaveURL("/settings/server/libraries");
