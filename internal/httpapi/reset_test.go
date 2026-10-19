@@ -20,19 +20,26 @@ func resetAPI(log *bytes.Buffer) *API {
 func askReset(t *testing.T, api *API, target, from, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+	if proxy, ok := strings.CutSuffix(from, " via proxy"); ok {
+		from = proxy
+		req.Header.Set("X-Forwarded-For", "203.0.113.9")
+	}
 	req.RemoteAddr = from + ":50000"
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	return rec
 }
 
-// A reset is asked for from the server's network alone, and answered the same whether or not a
-// profile has the name; only the server's log has the code.
+// A reset is asked for from the server's network alone, not through a proxy it does not trust,
+// and answered the same whether or not a profile has the name; only the server's log has the code.
 func TestAResetsCodeIsWrittenToTheLogAlone(t *testing.T) {
 	var log bytes.Buffer
 	api := resetAPI(&log)
 	if rec := askReset(t, api, "/api/v1/auth/password-resets", "203.0.113.9", `{"name":"Oliver"}`); rec.Code != http.StatusForbidden {
 		t.Errorf("asked from the internet: %d, want 403", rec.Code)
+	}
+	if rec := askReset(t, api, "/api/v1/auth/password-resets", "192.168.1.2 via proxy", `{"name":"Oliver"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("asked through a proxy not trusted: %d, want 403", rec.Code)
 	}
 	known := askReset(t, api, "/api/v1/auth/password-resets", "192.168.1.20", `{"name":"Oliver"}`)
 	unknown := askReset(t, api, "/api/v1/auth/password-resets", "192.168.1.20", `{"name":"Nobody"}`)
