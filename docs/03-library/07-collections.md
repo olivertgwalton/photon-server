@@ -8,9 +8,14 @@ collection can hold titles from any of your libraries. You find collections unde
 in the sidebar, and in each library that holds some of their titles.
 
 Where a library holds two or more titles of a collection, its wall shows one tile for the
-collection in their place, such as one **Harry Potter Collection** for all eight films. Filter the
+collection in their place, such as one **Harry Potter Collection** for all eight films. The tile
+is dated by the collection's first film, so it sorts by release date among the rest. Filter the
 library to see each title, or set its **Box sets** to **Each title on its own** (see
 [libraries](02-libraries.md)).
+
+One collection can go its own way: on its page at Settings › Server › **Collections**, set **On a
+library's wall** to **One tile for the collection** or **Each title on its own**, whatever its
+libraries do. **As the library shows box sets** is the default.
 
 Everyone sees only the titles of a collection they are allowed to see. A profile limited to some
 libraries or age ratings finds only those titles in it.
