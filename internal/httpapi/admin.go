@@ -124,8 +124,9 @@ type adminLibraryJSON struct {
 	// TitleLanguage is which title it gives its films and shows: localized, in its language; or
 	// original, in the title's own.
 	TitleLanguage domain.TitleLanguage `json:"title_language"`
-	// BoxSets is how its wall shows a box set's titles: collapsed, into one tile for the set; or
-	// expanded, each on its own. A filtered wall shows the titles either way.
+	// BoxSets is how its wall shows a box set's titles: collapsed, into one tile for the set;
+	// expanded, each on its own; or beside, the set's tile among them. A filtered wall shows the
+	// titles alone whichever.
 	BoxSets domain.BoxSetMode `json:"box_sets"`
 	// SubtitleLanguages are the languages it fetches subtitles in for copies with none in them,
 	// as BCP 47 tags; none is no fetching. SubtitleMatch is which it takes: release, one made for
@@ -351,7 +352,7 @@ type libraryChangeJSON struct {
 	ArtworkLanguage domain.ArtworkLanguage `json:"artwork_language,omitzero"`
 	// TitleLanguage is which title it gives its films and shows; changing it describes them again.
 	TitleLanguage domain.TitleLanguage `json:"title_language,omitzero"`
-	// BoxSets is how its wall shows a box set's titles: collapsed, or expanded.
+	// BoxSets is how its wall shows a box set's titles: collapsed, expanded, or beside.
 	BoxSets domain.BoxSetMode `json:"box_sets,omitzero"`
 	// SubtitleLanguages replace the languages it fetches subtitles in; [] is none.
 	SubtitleLanguages []domain.LanguageTag `json:"subtitle_languages,omitzero"`

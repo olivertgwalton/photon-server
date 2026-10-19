@@ -177,7 +177,8 @@ func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
 
 type collectionChangeJSON struct {
 	// BoxSet is how a library's wall shows it: library, as the library shows its box sets;
-	// collapsed, as one tile in place of its titles; or expanded, its titles each on their own.
+	// collapsed, as one tile in place of its titles; expanded, its titles each on their own; or
+	// beside, its tile among its titles.
 	BoxSet domain.CollectionBoxSet `json:"box_set"`
 }
 

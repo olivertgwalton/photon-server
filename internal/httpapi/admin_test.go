@@ -265,6 +265,7 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "forget"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "grouped"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "expanded"}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "beside"}`, http.StatusOK},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + added.ID.String() + "/missing", "", http.StatusOK},
 		{http.MethodDelete, "/api/v1/admin/libraries/" + uuid.NewV7().String() + "/missing", "", http.StatusNotFound},
 		{http.MethodPost, "/api/v1/admin/libraries/" + added.ID.String() + "/scan", "", http.StatusAccepted},

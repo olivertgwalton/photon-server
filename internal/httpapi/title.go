@@ -60,7 +60,7 @@ type titlePageJSON struct {
 	List *store.ListRef   `json:"list,omitzero"`
 	// LibraryIDs are the libraries a smart or list collection reads.
 	LibraryIDs []uuid.UUID `json:"library_ids,omitzero"`
-	// BoxSet is how a library's wall shows a collection: library, collapsed or expanded.
+	// BoxSet is how a library's wall shows a collection: library, collapsed, expanded or beside.
 	BoxSet       domain.CollectionBoxSet `json:"box_set,omitzero"`
 	EpisodeOrder domain.EpisodeOrder     `json:"episode_order,omitzero"`
 	// EpisodeGroup is the TMDB episode group a show in the group order is numbered by.
