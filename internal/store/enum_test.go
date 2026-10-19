@@ -39,6 +39,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"missing_copy":             names(domain.MissingCopies()),
 		"artwork_language":         names(domain.ArtworkLanguages()),
 		"title_language":           names(domain.TitleLanguages()),
+		"box_set_mode":             names(domain.BoxSetModes()),
 		"subtitle_match":           names(domain.SubtitleMatches()),
 		"theme_lookup":             names(domain.ThemeLookups()),
 		"theme_source":             names(domain.ThemeSources()),

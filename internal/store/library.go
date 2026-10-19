@@ -25,7 +25,7 @@ var (
 // statement that reads whole rows.
 const (
 	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_copies,
-		metadata_language, certification_country, artwork_language, title_language, subtitle_languages, subtitle_match`
+		metadata_language, certification_country, artwork_language, title_language, box_sets, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
 
@@ -171,6 +171,8 @@ type LibraryChange struct {
 	ArtworkLanguage domain.ArtworkLanguage
 	// TitleLanguage is which title it gives its films and shows; changing it describes them again.
 	TitleLanguage domain.TitleLanguage
+	// BoxSets is how its wall shows the titles of a box set.
+	BoxSets domain.BoxSetMode
 	// SubtitleLanguages, where not nil, are those it fetches subtitles in; empty is none.
 	SubtitleLanguages []language.Tag
 	SubtitleMatch     domain.SubtitleMatch
@@ -340,6 +342,11 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 			return err
 		}
 	}
+	if change.BoxSets != "" {
+		if err := setColumn(ctx, tx, id, "box_sets", change.BoxSets); err != nil {
+			return err
+		}
+	}
 	if change.SubtitleLanguages != nil {
 		tags := make([]string, len(change.SubtitleLanguages))
 		for i, t := range change.SubtitleLanguages {
@@ -450,7 +457,7 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion, MissingCopies: r.MissingCopies,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},
-		Titles: r.TitleLanguage, SubtitleLanguages: tags(r.SubtitleLanguages), SubtitleMatch: r.SubtitleMatch,
+		Titles: r.TitleLanguage, BoxSets: r.BoxSets, SubtitleLanguages: tags(r.SubtitleLanguages), SubtitleMatch: r.SubtitleMatch,
 	}
 }
 

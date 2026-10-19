@@ -145,6 +145,20 @@ func MissingCopies() []MissingCopy {
 	return []MissingCopy{MissingKept, MissingForgotten}
 }
 
+// BoxSetMode is how a library's wall shows the titles of a box set: collapsed into one tile for
+// the set, as Jellyfin's "Group movies into collections" and Plex's collection setting do, or each
+// title on its own. A filtered wall shows its titles alone either way.
+type BoxSetMode string
+
+const (
+	BoxSetsCollapsed BoxSetMode = "collapsed"
+	BoxSetsExpanded  BoxSetMode = "expanded"
+)
+
+func BoxSetModes() []BoxSetMode {
+	return []BoxSetMode{BoxSetsCollapsed, BoxSetsExpanded}
+}
+
 type Library struct {
 	ID    uuid.UUID
 	Name  string
@@ -177,6 +191,8 @@ type Library struct {
 	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
 	Locale Locale
 	Titles TitleLanguage
+	// BoxSets is how its wall shows the titles of a box set.
+	BoxSets BoxSetMode
 	// SubtitleLanguages are those it fetches subtitles in for copies that have none in them; none
 	// is no fetching.
 	SubtitleLanguages []language.Tag
