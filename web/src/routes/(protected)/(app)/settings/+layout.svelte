@@ -225,7 +225,10 @@ function current(href: string) {
 <div
 	class="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10"
 >
-	<nav aria-label="Settings" class="min-w-0 lg:sticky lg:top-20 lg:self-start">
+	<nav
+		aria-label="Settings"
+		class="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto"
+	>
 		<search class="mb-4">
 			<form onsubmit={first}>
 				<Input
