@@ -55,6 +55,13 @@ func (fakeAuth) SetUp(_ context.Context, _, password string, _ auth.Device) (str
 	return goodToken, oliver, nil
 }
 
+func (fakeAuth) HashPassword(_ context.Context, password string) (string, error) {
+	if len(password) < 8 {
+		return "", auth.ErrPasswordTooShort
+	}
+	return "$argon2id$fake", nil
+}
+
 // StartReset has a code for Oliver alone.
 func (fakeAuth) StartReset(_ context.Context, name string) (string, error) {
 	if name == "Oliver" {

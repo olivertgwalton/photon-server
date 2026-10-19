@@ -71,7 +71,7 @@ func (s *Service) ChangePassword(ctx context.Context, session domain.Session, cu
 			return ErrWrongSecret
 		}
 	}
-	hash, err := HashPassword(ctx, password)
+	hash, err := s.HashPassword(ctx, password)
 	if err != nil {
 		return err
 	}

@@ -42,9 +42,8 @@ func (s *Service) StartReset(ctx context.Context, name string) (code string, err
 // device, as a password changed for fear of who knows it must. The code is used once, and not by a
 // password refused for being too short.
 func (s *Service) RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error) {
-	hash, err := HashPassword(ctx, password)
-	if err != nil {
-		return uuid.UUID{}, err
+	if len([]rune(password)) < minPasswordLen {
+		return uuid.UUID{}, ErrPasswordTooShort
 	}
 	profile, ok, err := s.kv.TakeReset(ctx, hashToken(typedCode(code)))
 	if err != nil {
@@ -52,6 +51,10 @@ func (s *Service) RedeemReset(ctx context.Context, code, password string) (uuid.
 	}
 	if !ok {
 		return uuid.UUID{}, ErrResetNotFound
+	}
+	hash, err := s.hasher.Hash(ctx, password)
+	if err != nil {
+		return uuid.UUID{}, err
 	}
 	return profile, s.store.ChangePassword(ctx, profile, hash, uuid.UUID{})
 }
