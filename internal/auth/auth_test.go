@@ -42,9 +42,9 @@ func newService(t *testing.T) (*Service, *store.Store) {
 	return svc, st
 }
 
-func addOliver(t *testing.T, st *store.Store) domain.Profile {
+func addOliver(t *testing.T, svc *Service, st *store.Store) domain.Profile {
 	t.Helper()
-	hash, err := HashPassword(t.Context(), "correct horse")
+	hash, err := svc.HashPassword(t.Context(), "correct horse")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ var tv = Device{Name: "Living room", Client: "Photon tvOS"}
 
 func TestSignInAndOut(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addOliver(t, st)
+	oliver := addOliver(t, svc, st)
 
 	for _, c := range []struct{ name, password string }{
 		{"Oliver", "wrong"}, {"Nobody", "correct horse"},
@@ -101,7 +101,7 @@ func TestSignInAndOut(t *testing.T) {
 
 func TestExpiredSessionsAreRefused(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
+	addOliver(t, svc, st)
 	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func b64(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
 
 func TestPairingATelevision(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
+	addOliver(t, svc, st)
 	_, phone, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: "iPhone", Client: "Photon iOS"})
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func TestPairingATelevision(t *testing.T) {
 // without its asking slowing the poll that takes it.
 func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addOliver(t, st)
+	oliver := addOliver(t, svc, st)
 	start, err := svc.StartPairing(t.Context(), tv, CodeLetters)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestAPairingsStatusIsReadWithoutHandingItOut(t *testing.T) {
 // handed out as any other.
 func TestPairingByDigits(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addOliver(t, st)
+	oliver := addOliver(t, svc, st)
 	start, err := svc.StartPairing(t.Context(), tv, CodeDigits)
 	if err != nil {
 		t.Fatal(err)
@@ -300,8 +300,8 @@ func TestPairingPollsAreRateLimited(t *testing.T) {
 
 func TestSwitchingProfiles(t *testing.T) {
 	svc, st := newService(t)
-	admin := addOliver(t, st)
-	hash, err := HashPassword(t.Context(), "kid's password")
+	admin := addOliver(t, svc, st)
+	hash, err := svc.HashPassword(t.Context(), "kid's password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,10 +376,10 @@ func TestSwitchingProfiles(t *testing.T) {
 // Each profile sees its own devices; a manager its users' too; an admin every one.
 func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
+	addOliver(t, svc, st)
 	add := func(name, password string, role domain.Role, by *uuid.UUID) domain.Profile {
 		t.Helper()
-		hash, err := HashPassword(t.Context(), password)
+		hash, err := svc.HashPassword(t.Context(), password)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -447,8 +447,8 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 
 func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
-	hash, err := HashPassword(t.Context(), "guest's password")
+	addOliver(t, svc, st)
+	hash, err := svc.HashPassword(t.Context(), "guest's password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +507,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 
 func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 	svc, st := newService(t)
-	oliver := addOliver(t, st)
+	oliver := addOliver(t, svc, st)
 	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
@@ -559,7 +559,7 @@ func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 	svc, st := newService(t)
 	ctx := t.Context()
-	oliver := addOliver(t, st)
+	oliver := addOliver(t, svc, st)
 	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", tv)
 	if err != nil {
 		t.Fatal(err)
@@ -588,11 +588,12 @@ func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 	}
 }
 
+
 // A profile a provider's account was given has no password: none signs in as it, not even an empty
 // one, until it sets its first, which asks for no current password.
 func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
+	addOliver(t, svc, st)
 	ctx := t.Context()
 	err := st.SetSignInProvider(ctx, domain.SignInProvider{
 		Slug: "id", Name: "ID", Issuer: "https://id.example.com", ClientID: "photon", Provisioning: domain.ProvisionCreate,
@@ -648,7 +649,7 @@ func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
 // signs the television out too, and the session that approved it.
 func TestATelevisionPairedBySignInGoesWithTheAccount(t *testing.T) {
 	svc, st := newService(t)
-	addOliver(t, st)
+	addOliver(t, svc, st)
 	ctx := t.Context()
 	err := st.SetSignInProvider(ctx, domain.SignInProvider{
 		Slug: "id", Name: "ID", Issuer: "https://id.example.com", ClientID: "photon", Provisioning: domain.ProvisionLink, Recheck: domain.RecheckAtSignIn,

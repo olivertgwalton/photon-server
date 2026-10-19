@@ -46,12 +46,13 @@ func New(ctx context.Context, st *store.Store, k *kv.KV) (*Service, error) {
 	return &Service{store: st, kv: k, hasher: h, dummy: dummy}, nil
 }
 
-// HashPassword hashes a new password for storing, refusing one too short to be one.
-func HashPassword(ctx context.Context, password string) (string, error) {
+// HashPassword hashes a new password for storing, refusing one too short to be one. It hashes
+// through the service's shared hasher, so a flood of these cannot exhaust a small server's memory.
+func (s *Service) HashPassword(ctx context.Context, password string) (string, error) {
 	if len([]rune(password)) < minPasswordLen {
 		return "", ErrPasswordTooShort
 	}
-	return newHasher(1).Hash(ctx, password)
+	return s.hasher.Hash(ctx, password)
 }
 
 type Device struct {
@@ -91,7 +92,7 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 
 // SetUp adds the server's first profile, an admin, and signs in the device that set it up.
 func (s *Service) SetUp(ctx context.Context, name, password string, device Device) (string, domain.Profile, error) {
-	hash, err := HashPassword(ctx, password)
+	hash, err := s.HashPassword(ctx, password)
 	if err != nil {
 		return "", domain.Profile{}, err
 	}

@@ -42,7 +42,7 @@ func (s *Service) StartReset(ctx context.Context, name string) (code string, err
 // device, as a password changed for fear of who knows it must. The code is used once, and not by a
 // password refused for being too short.
 func (s *Service) RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error) {
-	hash, err := HashPassword(ctx, password)
+	hash, err := s.HashPassword(ctx, password)
 	if err != nil {
 		return uuid.UUID{}, err
 	}

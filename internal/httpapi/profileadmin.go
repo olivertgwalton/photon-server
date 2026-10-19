@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"uuid"
 
-	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -89,7 +88,7 @@ func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Name = name
-	hash, err := auth.HashPassword(r.Context(), req.Password)
+	hash, err := a.svc.Auth.HashPassword(r.Context(), req.Password)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -130,7 +129,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Password != nil {
 		var err error
-		if change.PasswordHash, err = auth.HashPassword(r.Context(), *req.Password); a.answered(w, r, err) {
+		if change.PasswordHash, err = a.svc.Auth.HashPassword(r.Context(), *req.Password); a.answered(w, r, err) {
 			return
 		}
 	}
