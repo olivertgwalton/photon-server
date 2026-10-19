@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
@@ -203,8 +204,17 @@ func (s *Store) Members(ctx context.Context, profile, collection uuid.UUID) ([]C
 	return s.cards(ctx, profile, rows)
 }
 
-// origins answers who made each collection among rows.
-func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]domain.CollectionOrigin, error) {
+// boxSet is who made a collection, and when its first title came out, which it is dated by as
+// Jellyfin dates a box set: the earliest of its titles' release dates, else of their years.
+type boxSet struct {
+	ItemID   uuid.UUID
+	Origin   domain.CollectionOrigin
+	Released *time.Time
+	Year     *int
+}
+
+// boxSets answers each collection among rows as a boxSet.
+func (s *Store) boxSets(ctx context.Context, rows []*model.Item) (map[uuid.UUID]boxSet, error) {
 	var in []uuid.UUID
 	for _, r := range rows {
 		if r.Kind == domain.ItemCollection {
@@ -214,8 +224,27 @@ func (s *Store) origins(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 	if len(in) == 0 {
 		return nil, nil
 	}
-	return queryMap[uuid.UUID, domain.CollectionOrigin](ctx, s.pool,
-		`SELECT item_id, origin FROM collections WHERE item_id = ANY($1)`, in)
+	sets, err := queryStructs[boxSet](ctx, s.pool, `
+		SELECT c.item_id, c.origin, min(t.release_date) AS released,
+			coalesce(extract(year FROM min(t.release_date))::int, min(t.year)) AS year
+		FROM collections c LEFT JOIN collection_members m ON m.collection_id = c.item_id LEFT JOIN items t ON t.id = m.item_id
+		WHERE c.item_id = ANY($1) GROUP BY c.item_id`, in)
+	out := make(map[uuid.UUID]boxSet, len(sets))
+	for _, set := range sets {
+		out[set.ItemID] = set
+	}
+	return out, err
+}
+
+// firstReleased is when the collection items' first title came out, as a key of the wall sorted
+// in dir: undated, it goes last whichever way, as released_asc and released_desc pad a title.
+func firstReleased(dir string) string {
+	pad := "'9999-12-31'"
+	if dir == "DESC" {
+		pad = "'0001-01-01'"
+	}
+	return `(SELECT coalesce(min(t.release_date), make_date(min(t.year), 1, 1), ` + pad + `)
+		FROM collection_members m JOIN items t ON t.id = m.item_id WHERE m.collection_id = items.id)`
 }
 
 // collectionsOf answers the shown collections a title is in, or its season or show is, by title,

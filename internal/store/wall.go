@@ -96,13 +96,19 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 		// WHERE, the box sets' rows in no library cost the titles' index its order, and the wall a
 		// sort of the whole library.
 		_, key, nulls := p.sortKey(args)
+		outer := `ORDER BY wall_key ` + p.dir() + nulls + `, items.id ` + p.dir()
 		args["end"] = p.Offset + p.Limit
-		arm := func(where string) string {
+		arm := func(where, key, order string) string {
 			return `(SELECT ` + itemColumnsOf("items") + `, ` + key + ` AS wall_key FROM items ` + where + ` ` + order + ` LIMIT @end)`
 		}
+		// A box set is as old as its first title, as Jellyfin dates one.
+		setKey := key
+		if p.Sort == domain.SortReleased {
+			setKey = firstReleased(p.dir())
+		}
 		count = `SELECT (` + count + `) + (SELECT count(*) FROM items ` + boxed + `)`
-		page = `SELECT ` + itemColumns + ` FROM (` + arm(where) + ` UNION ALL ` + arm(boxed) + `) items
-			ORDER BY wall_key ` + p.dir() + nulls + `, id ` + p.dir() + ` OFFSET @offset LIMIT @limit`
+		page = `SELECT ` + itemColumnsOf("items") + ` FROM (` + arm(where, key, order) + ` UNION ALL ` + arm(boxed, setKey, outer) + `) items
+			` + outer + ` OFFSET @offset LIMIT @limit`
 	}
 	var rows []*model.Item
 	total, err := s.counted(ctx, count, args, func(ctx context.Context) (err error) {
@@ -332,7 +338,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		hashes   map[uuid.UUID]string
 		states   map[uuid.UUID]TitleState
 		lengths  map[uuid.UUID]onDisk
-		origins  map[uuid.UUID]domain.CollectionOrigin
+		sets     map[uuid.UUID]boxSet
 		ratings  map[uuid.UUID][]domain.Rating
 		posters  []shownPoster
 	)
@@ -353,7 +359,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		return err
 	})
 	g.Go(func() (err error) {
-		origins, err = s.origins(gctx, rows)
+		sets, err = s.boxSets(gctx, rows)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -378,10 +384,13 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			EpisodeNumber: r.EpisodeNumber, EpisodeEnd: r.EpisodeEnd, Thumb: first(pictures[r.ID][domain.ArtworkThumb]),
 			SeasonPoster: seasonPoster(pictures, r, shows[r.ID]), ShowThumb: showThumb(pictures, r, shows[r.ID]),
 			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
-			Origin: origins[r.ID], Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
+			Origin: sets[r.ID].Origin, Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 		}
 		c := &cards[n]
+		if set, ok := sets[r.ID]; ok {
+			c.Year, c.ReleaseDate = deref(set.Year), deref(set.Released)
+		}
 		c.Blurhashes = blurhashesOf(hashes, c.Poster, c.Backdrop, c.Thumb, c.Logo, c.SeasonPoster, c.ShowThumb)
 	}
 	return cards, nil

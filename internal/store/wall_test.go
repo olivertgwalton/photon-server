@@ -407,19 +407,21 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	type film struct {
 		lib   uuid.UUID
 		title string
+		year  int
 		set   *domain.Grouping
 	}
 	var all []film
-	for _, title := range potter {
-		all = append(all, film{films.ID, title, &domain.Grouping{ID: "1241", Title: "Harry Potter Collection"}})
+	potterSet := &domain.Grouping{ID: "1241", Title: "Harry Potter Collection"}
+	for n, title := range potter {
+		all = append(all, film{films.ID, title, []int{2001, 2002, 2004, 2005, 2007, 2009, 2010, 2011}[n], potterSet})
 	}
 	alien := &domain.Grouping{ID: "8091", Title: "Alien Collection"}
-	all = append(all, film{films.ID, "Heat", nil}, film{films.ID, "Alien", alien}, film{uhd.ID, "Aliens", alien})
+	all = append(all, film{films.ID, "Heat", 1995, nil}, film{films.ID, "Alien", 1979, alien}, film{uhd.ID, "Aliens", 1986, alien})
 	for _, f := range all {
 		id := addItem(t, s, model.Item{
 			LibraryID: &f.lib, Kind: domain.ItemMovie, Title: f.title, ScanTitle: f.title, SortTitle: sortTitle(f.title), Folder: f.title,
 		})
-		m := domain.Metadata{Title: f.title}
+		m := domain.Metadata{Title: f.title, Year: f.year, ReleaseDate: time.Date(f.year, 11, 16, 0, 0, 0, 0, time.UTC)}
 		if f.set != nil {
 			m.Collections = []domain.Grouping{*f.set}
 		}
@@ -460,6 +462,14 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 				t.Errorf("%s %s: paging by one gave %q, want %q with the box set", sort, order, paged, full)
 			}
 		}
+	}
+	// A box set is dated by its first film, as Jellyfin dates one.
+	if got := wall(WallPage{Sort: domain.SortReleased, Order: domain.Descending}); !slices.Equal(got, []string{"Harry Potter Collection", "Heat", "Alien"}) {
+		t.Errorf("the wall newest first = %q, want the box set as of its first film, 2001", got)
+	}
+	cards, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortTitle, Offset: 1, Limit: 1})
+	if err != nil || len(cards) != 1 || cards[0].Year != 2001 || cards[0].ReleaseDate.Year() != 2001 {
+		t.Errorf("the box set's card = %+v, %v; want it dated 2001", cards, err)
 	}
 	letters, err := s.Letters(ctx, films.ID, uuid.UUID{}, domain.WallTitles, WallFilter{})
 	if want := []Letter{{"A", 1}, {"H", 2}}; err != nil || !slices.Equal(letters, want) {
