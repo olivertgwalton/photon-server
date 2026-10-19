@@ -417,8 +417,12 @@ func (a *API) requireLocalNetwork(next http.Handler) http.Handler {
 	})
 }
 
-// local is whether the client is on the server's local networks.
+// local is whether the client is on the server's local networks. A request naming its client
+// through a proxy not trusted is not: that proxy may pass on a client from anywhere.
 func (a *API) local(r *http.Request) (bool, error) {
+	if a.svc.Reach.Untrusted(r) {
+		return false, nil
+	}
 	n, err := a.svc.Network.Network(r.Context())
 	if err != nil {
 		return false, err

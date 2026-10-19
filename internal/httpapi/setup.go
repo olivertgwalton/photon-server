@@ -47,9 +47,6 @@ func (a *API) setupState(r *http.Request) (setupState, error) {
 	if err != nil || has {
 		return setupDone, err
 	}
-	if a.svc.Reach.Untrusted(r) {
-		return setupLocalOnly, nil
-	}
 	local, err := a.local(r)
 	if err != nil || !local {
 		return setupLocalOnly, err

@@ -417,6 +417,25 @@ func TestTheCookieIsRefusedForAnotherSitesWrites(t *testing.T) {
 	}
 }
 
+// A page on another site cannot sign a browser in to a profile of its choosing with a form, though
+// a sign-in carries no cookie yet.
+func TestASignInFromAnotherSiteIsRefused(t *testing.T) {
+	for origin, want := range map[string]int{
+		"http://photon.test":   http.StatusOK,
+		"https://evil.example": http.StatusForbidden,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "http://photon.test/api/v1/auth/login", strings.NewReader(
+			`{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"cookie"}`))
+		req.Header.Set("Content-Type", "text/plain")
+		req.Header.Set("Origin", origin)
+		rec := httptest.NewRecorder()
+		newAPI(nil).ServeHTTP(rec, req)
+		if rec.Code != want || want == http.StatusForbidden && !strings.Contains(rec.Body.String(), "a write from another site") {
+			t.Errorf("from %s: %d %s, want %d", origin, rec.Code, rec.Body, want)
+		}
+	}
+}
+
 // A page on another site cannot open the events socket with the browser's cookie and read what it
 // tells, though its handshake is a GET.
 func TestTheCookieIsRefusedForAnotherSitesSocket(t *testing.T) {

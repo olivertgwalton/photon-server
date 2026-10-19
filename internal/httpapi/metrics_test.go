@@ -35,6 +35,7 @@ func TestMetricsAreAnsweredOnlyOnLocalNetworks(t *testing.T) {
 	}{
 		{"127.0.0.1:5000", "", http.StatusOK},
 		{"192.168.1.20:5000", "", http.StatusOK},
+		{"192.168.1.20:5000", "203.0.113.9", http.StatusNotFound},
 		{"203.0.113.9:5000", "", http.StatusNotFound},
 		{"203.0.113.9:5000", "127.0.0.1", http.StatusNotFound},
 		{"10.0.0.2:5000", "192.168.1.20", http.StatusOK},
