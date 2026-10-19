@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"iter"
 	"maps"
+	"net"
 	"net/http"
 	"runtime"
 	"slices"
@@ -25,6 +26,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 const (
@@ -56,9 +58,30 @@ type Cache struct {
 
 func New(blobs objects, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) *Cache {
 	return &Cache{
-		blobs: blobs, http: &http.Client{Timeout: fetchFor}, resizing: make(chan struct{}, runtime.NumCPU()),
+		blobs: blobs, http: &http.Client{Timeout: fetchFor, CheckRedirect: guardRedirect}, resizing: make(chan struct{}, runtime.NumCPU()),
 		hashed: hashed,
 	}
+}
+
+// guardRedirect refuses a redirect to an address on the server's own networks: a provider may name
+// a public URL that redirects to a private one, which a plain client would follow and fetch from
+// the server's networks. The direct URL a provider names is its own to point where it likes, as
+// the relay fetches a provider's media from its own host; a redirect away from it is not.
+func guardRedirect(req *http.Request, via []*http.Request) error {
+	// net/http's own default stops after ten; setting CheckRedirect drops it, so it is kept.
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(req.Context(), "ip", req.URL.Hostname())
+	if err != nil {
+		return err
+	}
+	for _, ip := range ips {
+		if !media.Public(ip) {
+			return fmt.Errorf("%w: %s", media.ErrNotPublic, req.URL.Hostname())
+		}
+	}
+	return nil
 }
 
 // File answers the picture with id, fetching it from url the first time it is asked for.

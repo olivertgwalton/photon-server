@@ -22,7 +22,34 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
+
+// A provider may name a public picture URL that redirects to the server's own networks; the
+// redirect is not followed, so the server does not fetch from one.
+func TestAPictureRedirectingToTheServersNetworkIsRefused(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
+		t.Fatal(err)
+	}
+	var reached atomic.Int32
+	private := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.Header().Set("Content-Type", "image/png")
+		reply(t, w, poster.Bytes())
+	}))
+	t.Cleanup(private.Close)
+	provider := httptest.NewServer(http.RedirectHandler(private.URL+"/secret.png", http.StatusFound))
+	t.Cleanup(provider.Close)
+
+	c := newCache(t, t.TempDir(), nil)
+	if _, err := c.File(t.Context(), uuid.NewV7(), provider.URL+"/poster.png"); !errors.Is(err, media.ErrNotPublic) {
+		t.Errorf("%v, want the redirect to a private address refused", err)
+	}
+	if n := reached.Load(); n != 0 {
+		t.Errorf("the private server was reached %d times, want never", n)
+	}
+}
 
 func TestAPictureIsFetchedOnceAndHashed(t *testing.T) {
 	var poster bytes.Buffer
