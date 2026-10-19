@@ -123,6 +123,17 @@
 	--radius-2xl: calc(var(--radius) * 1.8);
 }
 
+/* A list that scrolls without a bar to say so; the bar only crowds a column
+   already beside the page it scrolls. Safari before 18.2 and the TV browsers
+   need the pseudo-element. */
+@utility no-scrollbar {
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
