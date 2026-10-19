@@ -7664,6 +7664,7 @@ export interface components {
         };
         AdminLibrary: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
+            box_sets: components["schemas"]["BoxSetMode"];
             certification_country?: string;
             deletion: components["schemas"]["MediaDeletion"];
             discover?: components["schemas"]["FieldSource"];
@@ -7691,6 +7692,7 @@ export interface components {
         };
         AdminLibraryListing: {
             artwork_language: components["schemas"]["ArtworkLanguage"];
+            box_sets: components["schemas"]["BoxSetMode"];
             certification_country?: string;
             counts: components["schemas"]["Counts"];
             deletion: components["schemas"]["MediaDeletion"];
@@ -7796,6 +7798,8 @@ export interface components {
             node_name: string;
             restoring?: components["schemas"]["Restore"] | null;
         };
+        /** @enum {string} */
+        BoxSetMode: "collapsed" | "expanded";
         BrowsedFolder: {
             name: string;
             path: string;
@@ -8554,6 +8558,7 @@ export interface components {
         };
         LibraryChange: {
             artwork_language?: components["schemas"]["ArtworkLanguage"];
+            box_sets?: components["schemas"]["BoxSetMode"];
             certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
             keyframes?: components["schemas"]["KeyframeMode"];

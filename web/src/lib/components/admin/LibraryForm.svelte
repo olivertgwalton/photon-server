@@ -64,6 +64,7 @@ const defaults = {
 	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
+	box_sets: "collapsed",
 	subtitle_match: "release",
 } as const;
 
@@ -503,6 +504,23 @@ const refreshOptions = $derived(
 					<Field.Description>
 						As first named keeps a film's or show's original title, its write-up
 						still in its language.
+					</Field.Description>
+				</Field.Field>
+				<Field.Field>
+					<Field.Label for="{id}-library-box-sets">Box sets</Field.Label>
+					<Choice
+						id="{id}-library-box-sets"
+						name="box_sets"
+						value={library?.box_sets ?? defaults.box_sets}
+						options={[
+							{ value: "collapsed", label: "One tile for the set" },
+							{ value: "expanded", label: "Each title on its own" },
+						]}
+					/>
+					<Field.Description>
+						One tile for the set shows two or more titles of a collection, such
+						as a film series, as the collection in their place. A filtered
+						library shows each title.
 					</Field.Description>
 				</Field.Field>
 				<Field.Field>

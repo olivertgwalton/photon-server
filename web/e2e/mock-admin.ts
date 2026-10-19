@@ -112,6 +112,7 @@ const films: Schemas["AdminLibrary"] = {
 	missing_copies: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
+	box_sets: "collapsed",
 	subtitle_languages: ["fr"],
 	subtitle_match: "release",
 };
