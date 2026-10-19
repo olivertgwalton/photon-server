@@ -825,6 +825,21 @@ test("a filtered library is kept as a smart collection, and its filters changed 
 	await expect(page).toHaveURL("/settings/server/collections/t-smart");
 });
 
+test("a collection says how a library's wall shows it", async ({ page }) => {
+	await logIn(page, "/settings/server/collections/t-box");
+	const shown = page.getByLabel("On a library's wall");
+	await expect(shown).toHaveText("As the library shows box sets");
+	await expectAccessible(page);
+	const changed = page.waitForRequest(
+		(r) =>
+			r.method() === "PATCH" && r.url().endsWith("/admin/collections/t-box"),
+	);
+	await shown.click();
+	await page.getByRole("option", { name: "Each title on its own" }).click();
+	expect((await changed).postDataJSON()).toEqual({ box_set: "expanded" });
+	await expect(shown).toHaveText("Each title on its own");
+});
+
 test("a collection is made from a list a provider offers", async ({ page }) => {
 	await logIn(page, "/settings/server/collections");
 	await page.getByRole("button", { name: "Browse lists" }).click();

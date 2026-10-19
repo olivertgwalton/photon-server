@@ -256,7 +256,35 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change how a library's wall shows a collection, whoever made it
+         * @description Admin only.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CollectionChange"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         trace?: never;
     };
     "/api/v1/admin/collections/{id}/members": {
@@ -7970,6 +7998,8 @@ export interface components {
             };
             tasks: components["schemas"]["TaskFinished"][];
         };
+        /** @enum {string} */
+        CollectionBoxSet: "library" | "collapsed" | "expanded";
         CollectionCard: {
             blurhashes?: {
                 [key: string]: string;
@@ -7979,6 +8009,9 @@ export interface components {
             /** Format: uuid */
             poster?: string;
             title: string;
+        };
+        CollectionChange: {
+            box_set: components["schemas"]["CollectionBoxSet"];
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user" | "smart" | "list";
@@ -9685,6 +9718,7 @@ export interface components {
             blurhashes?: {
                 [key: string]: string;
             };
+            box_set?: components["schemas"]["CollectionBoxSet"];
             certificate?: string;
             certification_country?: string;
             collections?: components["schemas"]["CollectionCard"][];
