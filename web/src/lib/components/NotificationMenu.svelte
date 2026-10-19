@@ -50,9 +50,14 @@ let open = $state(false);
 			<BellIcon class="size-5" />
 		{/if}
 	</Popover.Trigger>
+	<!-- The bell sits in a sticky header, so the page scrolling moves it in the
+		document but not on screen. Positioned against the document the menu
+		would need placing again every frame, and lag behind the scroll; against
+		the viewport it needs placing only once. -->
 	<Popover.Content
 		align="end"
 		class="grid w-88 max-w-[calc(100vw-1.5rem)] grid-cols-1 gap-1 p-2"
+		strategy="fixed"
 		role="dialog"
 		aria-label="Notifications"
 	>

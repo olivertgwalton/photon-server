@@ -161,3 +161,31 @@ test("a page a push opened clears its notification", async ({ page }) => {
 		page.getByRole("button", { name: "Notifications", exact: true }),
 	).toBeVisible();
 });
+
+test("the open bell menu stays under the bell as the page scrolls", async ({
+	page,
+}) => {
+	// A short window, so the home page has somewhere to scroll.
+	await page.setViewportSize({ width: 1024, height: 400 });
+	await logIn(page);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	await expect(
+		page.getByRole("dialog", { name: "Notifications" }),
+	).toBeVisible();
+	// Measured in the frame the scroll lands in: a menu placed against the
+	// document is left behind until it is placed again, which on a real scroll
+	// is a menu sliding away from its bell.
+	const gaps = await page.evaluate(() =>
+		[300, 900, 1800].map((y) => {
+			window.scrollTo(0, y);
+			const bell = document
+				.querySelector('button[aria-label^="Notifications"]')
+				?.getBoundingClientRect();
+			const menu = document
+				.querySelector('[role="dialog"][aria-label="Notifications"]')
+				?.getBoundingClientRect();
+			return Math.round((menu?.top ?? 0) - (bell?.bottom ?? 0));
+		}),
+	);
+	for (const gap of gaps) expect(Math.abs(gap)).toBeLessThan(16);
+});
