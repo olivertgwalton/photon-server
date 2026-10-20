@@ -188,11 +188,12 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if picked != nil && picked.delivery == domain.SubtitleSidecar {
 		chosen.SubtitleFile = &picked.file
 	}
+	log := a.logger.With(slog.String("item", item.String()), slog.String("play_session", session.String()))
 	// Video is encoded on the node the transcode will be placed on, so it decides by what that
 	// node encodes; where no node encodes, this one decides, and a copy it would encode is refused.
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if err != nil {
-		a.logger.ErrorContext(r.Context(), "jellyfin transcode not placed", slog.Any("err", err))
+		log.ErrorContext(r.Context(), "jellyfin transcode not placed", slog.Any("err", err))
 		return
 	}
 	encoder := a.svc.Placer.Self()
@@ -207,7 +208,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		err = a.svc.Placer.Refuse(candidates, nil)
 	}
 	if err != nil {
-		a.logger.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
+		log.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
 		return
 	}
 	if d.Video == nil {
@@ -218,7 +219,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS, Renditions: p.renditions(),
 	}, req.AllowVideoStreamCopy, req.AllowAudioStreamCopy)
 	if err != nil {
-		a.logger.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
+		log.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
 		return
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
