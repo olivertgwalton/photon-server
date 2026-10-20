@@ -43,5 +43,5 @@ Search only shows what your profile is allowed to see.
 
 ## Titles the server doesn't have
 
-If the server takes requests, a search also shows, under **Not on** *server* **yet**, films and
+If the server takes requests, a search also shows, under **Not in library**, films and
 shows that none of its libraries has. See [ask for a title](07-requests.md).

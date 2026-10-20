@@ -82,9 +82,6 @@ function scope(library: string) {
 	{/if}
 
 	{#if data.results?.requestable.items.length}
-		<RequestableRail
-			cards={data.results.requestable.items}
-			server={data.server}
-		/>
+		<RequestableRail cards={data.results.requestable.items} />
 	{/if}
 </div>

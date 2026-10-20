@@ -6,6 +6,7 @@ import DownloadIcon from "@lucide/svelte/icons/download";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import FilmIcon from "@lucide/svelte/icons/film";
+import HandIcon from "@lucide/svelte/icons/hand";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import InfoIcon from "@lucide/svelte/icons/info";
 import LibraryBigIcon from "@lucide/svelte/icons/library-big";
@@ -16,6 +17,7 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { toast } from "svelte-sonner";
+import { act } from "#lib/act.js";
 import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
@@ -260,6 +262,23 @@ const accent = $derived(
 const logo = $derived(art("logo"));
 const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
 const poster = $derived(art("poster"));
+
+// A title the server lacks, asked for from here; asked, it says so until the
+// reader goes to another.
+let asked = $derived.by(() => {
+	id;
+	return false;
+});
+let asking = $state(false);
+async function ask() {
+	asking = true;
+	const done = await act(
+		client().POST("/api/v1/requests", { body: { title_id: t.id } }),
+		`Asked for ${t.title}.`,
+	);
+	asking = false;
+	if (done) asked = true;
+}
 </script>
 
 <svelte:head>
@@ -385,190 +404,220 @@ const poster = $derived(art("poster"));
 				/>
 			{/if}
 
-			<div class="flex flex-wrap items-center gap-2">
-				{#if playable && chosen}
+			{#if data.asking}
+				<!-- A title the server lacks: asked for in Play's place, and nothing
+					else of a title the server holds. -->
+				<div class="grid justify-items-start gap-2">
 					<Button
-						href={playHref(t.id, choice)}
 						size="lg"
 						class="rounded-full px-5"
+						disabled={asking || asked}
+						onclick={ask}
 					>
-						<PlayIcon class="fill-current" />
-						{position ? `Resume from ${timecode(position)}` : "Play"}
+						{#if asked}
+							<CheckIcon />Asked for
+						{:else}
+							<HandIcon />Ask for it
+						{/if}
 					</Button>
-					{#if position}
+					<p class="text-ink-2 text-sm">
+						{asked
+							? "You'll be told when it's added."
+							: "It isn't in the library yet. You'll be told when it's added."}
+					</p>
+				</div>
+			{:else}
+				<div class="flex flex-wrap items-center gap-2">
+					{#if playable && chosen}
 						<Button
-							href={playHref(t.id, { ...choice, t: 0 })}
+							href={playHref(t.id, choice)}
+							size="lg"
+							class="rounded-full px-5"
+						>
+							<PlayIcon class="fill-current" />
+							{position ? `Resume from ${timecode(position)}` : "Play"}
+						</Button>
+						{#if position}
+							<Button
+								href={playHref(t.id, { ...choice, t: 0 })}
+								variant="ghost"
+								class={glass}
+								size="lg"
+							>
+								<RotateCcwIcon />From the beginning
+							</Button>
+						{/if}
+					{:else if t.fetching}
+						<!-- A remote title whose provider is fetching its copy plays once it has it. -->
+						<p class="text-ink-2 text-sm">
+							Being fetched. It plays once its provider has it; look again in a
+							few minutes.
+						</p>
+					{:else if data.next}
+						{@const next = data.next}
+						<Button
+							href={playHref(next.id)}
+							size="lg"
+							class="rounded-full px-5"
+						>
+							<PlayIcon class="fill-current" />
+							{next.state?.position_ms ? "Resume" : "Play"}
+							{episodeLabel(
+								next.season_number,
+								next.episode_number,
+								next.episode_end,
+							)}
+						</Button>
+					{/if}
+					{#if shuffles}
+						{@const id = shuffles}
+						<Button
+							variant="ghost"
+							class={glass}
+							size="icon-lg"
+							aria-label="Shuffle"
+							title="Shuffle"
+							onclick={() => shuffle(id)}
+						>
+							<ShuffleIcon />
+						</Button>
+					{/if}
+					{#if trailer}
+						<Button
+							href={playHref(trailer.id)}
 							variant="ghost"
 							class={glass}
 							size="lg"
 						>
-							<RotateCcwIcon />From the beginning
+							<FilmIcon />Trailer
 						</Button>
 					{/if}
-				{:else if t.fetching}
-					<!-- A remote title whose provider is fetching its copy plays once it has it. -->
-					<p class="text-ink-2 text-sm">
-						Being fetched. It plays once its provider has it; look again in a
-						few minutes.
-					</p>
-				{:else if data.next}
-					{@const next = data.next}
-					<Button href={playHref(next.id)} size="lg" class="rounded-full px-5">
-						<PlayIcon class="fill-current" />
-						{next.state?.position_ms ? "Resume" : "Play"}
-						{episodeLabel(
-							next.season_number,
-							next.episode_number,
-							next.episode_end,
-						)}
-					</Button>
-				{/if}
-				{#if shuffles}
-					{@const id = shuffles}
+					{#if t.kind !== "collection"}
+						<Button
+							variant="ghost"
+							class={glass}
+							size="icon-lg"
+							aria-pressed={watched}
+							aria-label="Watched"
+							title={watched ? "Mark as unwatched" : "Mark as watched"}
+							onclick={() => setMark(t.id, "watched", !watched)}
+						>
+							<CheckIcon class={watched ? "stroke-3" : "text-ink-3"} />
+						</Button>
+					{/if}
 					<Button
 						variant="ghost"
 						class={glass}
 						size="icon-lg"
-						aria-label="Shuffle"
-						title="Shuffle"
-						onclick={() => shuffle(id)}
+						aria-pressed={favourite}
+						aria-label="Favourite"
+						title={favourite ? "Remove from favourites" : "Add to favourites"}
+						onclick={() => setMark(t.id, "favourite", !favourite)}
 					>
-						<ShuffleIcon />
+						<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
 					</Button>
-				{/if}
-				{#if trailer}
-					<Button
-						href={playHref(trailer.id)}
-						variant="ghost"
-						class={glass}
-						size="lg"
-					>
-						<FilmIcon />Trailer
-					</Button>
-				{/if}
-				{#if t.kind !== "collection"}
-					<Button
-						variant="ghost"
-						class={glass}
-						size="icon-lg"
-						aria-pressed={watched}
-						aria-label="Watched"
-						title={watched ? "Mark as unwatched" : "Mark as watched"}
-						onclick={() => setMark(t.id, "watched", !watched)}
-					>
-						<CheckIcon class={watched ? "stroke-3" : "text-ink-3"} />
-					</Button>
-				{/if}
-				<Button
-					variant="ghost"
-					class={glass}
-					size="icon-lg"
-					aria-pressed={favourite}
-					aria-label="Favourite"
-					title={favourite ? "Remove from favourites" : "Add to favourites"}
-					onclick={() => setMark(t.id, "favourite", !favourite)}
-				>
-					<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
-				</Button>
-				{#if t.kind !== "collection"}
-					<Button
-						variant="ghost"
-						class={glass}
-						size="icon-lg"
-						aria-pressed={watchlisted}
-						aria-label="Watchlist"
-						title={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
-						onclick={() => setMark(t.id, "watchlist", !watchlisted)}
-					>
-						<BookmarkIcon class={watchlisted ? "fill-current" : "text-ink-3"} />
-					</Button>
-				{/if}
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({
-							props,
-						})}
-							<Button
-								variant="ghost"
-								class={glass}
-								size="icon-lg"
-								aria-label="More"
-								{...props}
-							>
-								<EllipsisIcon />
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="start" class="w-56">
-						{#if t.kind !== "extra"}
-							<DropdownMenu.Item
-								onSelect={() => shell.pickPlaylist([t.id], titleWithShow(t))}
-							>
-								<ListPlusIcon />Add to playlist…
-							</DropdownMenu.Item>
-						{/if}
-						{#if playable && chosen}
-							<DropdownMenu.Item onSelect={() => (download = true)}>
-								<DownloadIcon />Download…
-							</DropdownMenu.Item>
-						{/if}
-						{#if chosen && (t.kind === "movie" || t.kind === "episode")}
-							<DropdownMenu.Item
-								onSelect={() => shell.findSubtitles(t.id, titleWithShow(t))}
-							>
-								<CaptionsIcon />Find subtitles…
-							</DropdownMenu.Item>
-						{/if}
-						{#if t.versions?.length}
-							<DropdownMenu.Item onSelect={() => (mediaInfo = true)}>
-								<InfoIcon />Media info
-							</DropdownMenu.Item>
-						{/if}
-						{#if admin}
-							<DropdownMenu.Separator />
-							<DropdownMenu.Group>
-								<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
-								{#if t.kind !== "collection" && t.kind !== "extra"}
-									<DropdownMenu.Item
-										onSelect={() =>
-											shell.pickCollection(t.id, titleWithShow(t))}
-									>
-										<LibraryBigIcon />Add to collection…
-									</DropdownMenu.Item>
-								{/if}
-								{#each adminTools as [tool, name] (tool)}
-									<DropdownMenu.Item
-										onSelect={() =>
-											goto(`/settings/server/titles/${t.id}#${tool}`)}
-									>
-										<WrenchIcon />{name}
-									</DropdownMenu.Item>
-								{/each}
-								{#if refreshable(t.kind)}
-									<DropdownMenu.Item
-										onSelect={() =>
-											shell.refreshMetadata("title", t.id, titleWithShow(t))}
-									>
-										<RefreshCwIcon />Refresh metadata…
-									</DropdownMenu.Item>
-								{/if}
-							</DropdownMenu.Group>
-						{/if}
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-				{#if t.themes?.length}
-					{@const themes = t.themes}
-					<svelte:boundary>
-						{#if await data.themeMusic}
-							<!-- An episode of the same show goes on with the tune already playing. -->
-							<ThemeTune {themes} />
-						{/if}
-						{#snippet pending()}
-							<!-- Silent until the profile's answer comes. -->
-						{/snippet}
-					</svelte:boundary>
-				{/if}
-			</div>
+					{#if t.kind !== "collection"}
+						<Button
+							variant="ghost"
+							class={glass}
+							size="icon-lg"
+							aria-pressed={watchlisted}
+							aria-label="Watchlist"
+							title={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
+							onclick={() => setMark(t.id, "watchlist", !watchlisted)}
+						>
+							<BookmarkIcon
+								class={watchlisted ? "fill-current" : "text-ink-3"}
+							/>
+						</Button>
+					{/if}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({
+								props,
+							})}
+								<Button
+									variant="ghost"
+									class={glass}
+									size="icon-lg"
+									aria-label="More"
+									{...props}
+								>
+									<EllipsisIcon />
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start" class="w-56">
+							{#if t.kind !== "extra"}
+								<DropdownMenu.Item
+									onSelect={() => shell.pickPlaylist([t.id], titleWithShow(t))}
+								>
+									<ListPlusIcon />Add to playlist…
+								</DropdownMenu.Item>
+							{/if}
+							{#if playable && chosen}
+								<DropdownMenu.Item onSelect={() => (download = true)}>
+									<DownloadIcon />Download…
+								</DropdownMenu.Item>
+							{/if}
+							{#if chosen && (t.kind === "movie" || t.kind === "episode")}
+								<DropdownMenu.Item
+									onSelect={() => shell.findSubtitles(t.id, titleWithShow(t))}
+								>
+									<CaptionsIcon />Find subtitles…
+								</DropdownMenu.Item>
+							{/if}
+							{#if t.versions?.length}
+								<DropdownMenu.Item onSelect={() => (mediaInfo = true)}>
+									<InfoIcon />Media info
+								</DropdownMenu.Item>
+							{/if}
+							{#if admin}
+								<DropdownMenu.Separator />
+								<DropdownMenu.Group>
+									<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
+									{#if t.kind !== "collection" && t.kind !== "extra"}
+										<DropdownMenu.Item
+											onSelect={() =>
+												shell.pickCollection(t.id, titleWithShow(t))}
+										>
+											<LibraryBigIcon />Add to collection…
+										</DropdownMenu.Item>
+									{/if}
+									{#each adminTools as [tool, name] (tool)}
+										<DropdownMenu.Item
+											onSelect={() =>
+												goto(`/settings/server/titles/${t.id}#${tool}`)}
+										>
+											<WrenchIcon />{name}
+										</DropdownMenu.Item>
+									{/each}
+									{#if refreshable(t.kind)}
+										<DropdownMenu.Item
+											onSelect={() =>
+												shell.refreshMetadata("title", t.id, titleWithShow(t))}
+										>
+											<RefreshCwIcon />Refresh metadata…
+										</DropdownMenu.Item>
+									{/if}
+								</DropdownMenu.Group>
+							{/if}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+					{#if t.themes?.length}
+						{@const themes = t.themes}
+						<svelte:boundary>
+							{#if await data.themeMusic}
+								<!-- An episode of the same show goes on with the tune already playing. -->
+								<ThemeTune {themes} />
+							{/if}
+							{#snippet pending()}
+								<!-- Silent until the profile's answer comes. -->
+							{/snippet}
+						</svelte:boundary>
+					{/if}
+				</div>
+			{/if}
 
 			{#if playable && t.versions?.length}
 				<PlayChoices
@@ -626,7 +675,11 @@ const poster = $derived(art("poster"));
 	{/if}
 
 	{#if credits.length}
-		<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
+		<Rail
+			title="Cast & crew"
+			items={credits}
+			href={data.asking ? undefined : `/titles/${t.id}/cast`}
+		>
 			{#snippet card(
 				credit: (typeof credits)[number],
 			)}
@@ -701,12 +754,15 @@ const poster = $derived(art("poster"));
 					{#if people.length}
 						<dt class="text-ink-3">{name}</dt>
 						<dd class="text-ink">
-							{#each people as person, i (person.person_id)}
-								{i ? ", " : ""}<a
-									href="/people/{person.person_id}"
-									class="hover:underline"
-									>{person.name}</a
-								>
+							{#each people as person, i (person.id)}
+								{i ? ", " : ""}
+								{#if person.person_id}
+									<a href="/people/{person.person_id}" class="hover:underline"
+										>{person.name}</a
+									>
+								{:else}
+									{person.name}
+								{/if}
 							{/each}
 						</dd>
 					{/if}

@@ -2,7 +2,8 @@
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 
-// A person, by their photograph, or their initial where there is none.
+// A person, by their photograph, or their initial where there is none; one
+// with no id, whom the server does not know, opens nothing.
 let {
 	id,
 	name,
@@ -10,7 +11,7 @@ let {
 	blurhashes,
 	caption,
 }: {
-	id: string;
+	id?: string;
 	name: string;
 	photo?: string;
 	blurhashes?: Record<string, string>;
@@ -18,7 +19,11 @@ let {
 } = $props();
 </script>
 
-<a href="/people/{id}" class="group block outline-none">
+<svelte:element
+	this={id ? "a" : "div"}
+	href={id ? `/people/${id}` : undefined}
+	class="group block outline-none"
+>
 	<span
 		class="card-frame block aspect-2/3"
 		style={photo ? blurStyle(blurhashes?.[photo]) : undefined}
@@ -44,4 +49,4 @@ let {
 			{/if}
 		</span>
 	</span>
-</a>
+</svelte:element>

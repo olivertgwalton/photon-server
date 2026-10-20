@@ -51,20 +51,23 @@ export function fold<T>(
 }
 
 // A title's cast and crew, one per person, by the copy with a photograph,
-// its directors first.
+// its directors first. Someone a title to ask for credits whom the server does
+// not know has no person to open, and is told apart by name.
 export function castOf(credits: components["schemas"]["CreditRef"][]) {
 	const directed = (f: Folded<unknown>) =>
 		f.kinds.includes("director") ? 0 : 1;
+	const key = (c: components["schemas"]["CreditRef"]) =>
+		c.person_id ?? `name:${c.name}`;
 	return fold(
 		credits,
-		(c) => c.person_id,
+		key,
 		(c) => c.kind,
 		(c) => c.role,
 	)
 		.sort((a, b) => directed(a) - directed(b))
 		.map((f) => ({
 			...(f.all.find((c) => c.photo) ?? f.all[0]),
-			id: f.all[0].person_id,
+			id: key(f.all[0]),
 			kinds: f.kinds,
 			said: f.said,
 		}));
