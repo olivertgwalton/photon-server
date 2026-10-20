@@ -30,7 +30,7 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	run := &run{cancel: cancel, part: s.plan[n].Part, first: n, at: n, more: make(chan struct{}, 1)}
 	s.run = run
-	go func() {
+	s.runs.Go(func() {
 		err := r.produce(ctx, s, run)
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -72,7 +72,7 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 				}
 			}
 		}
-	}()
+	})
 }
 
 func closed(c chan struct{}) bool {

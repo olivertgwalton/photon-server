@@ -173,12 +173,18 @@ type session struct {
 	playlists map[string]string
 	subtitles []*subtitle
 
+	// runs are those under way, replaced or not; the folder is removed once they have ended.
+	runs sync.WaitGroup
+
 	mu       sync.Mutex
 	ready    map[int]chan struct{}
 	failed   map[int]error
 	inits    map[int]chan struct{}
 	run      *run
 	furthest int
+	// ended is set as the session is closed, after which no run is started: a request that found it
+	// before then answers as though it had not.
+	ended bool
 	// cued and cueFailed are as ready and failed, for every embedded subtitle's cues of a segment.
 	// They are kept with the cues, never forgotten as segments are.
 	cued      map[int]chan struct{}
@@ -334,6 +340,7 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 		return
 	}
 	s.mu.Lock()
+	s.ended = true
 	if s.run != nil {
 		s.run.cancel()
 	}
@@ -343,8 +350,10 @@ func (r *Remuxer) Close(playback uuid.UUID) {
 	}
 }
 
-// remove removes the session's folder and what is in it.
+// remove removes the session's folder and what is in it once its runs have ended: Windows removes
+// no file a run or its ffmpeg still has open.
 func (s *session) remove() error {
+	s.runs.Wait()
 	return errors.Join(s.root.Close(), os.RemoveAll(s.dir))
 }
 
