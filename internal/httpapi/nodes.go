@@ -214,8 +214,7 @@ func askNode[T any](ctx context.Context, a *API, n domain.Node, path string, wit
 	if err != nil {
 		return answer, err
 	}
-	a.svc.NodeKey.Sign(req, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.svc.NodeKey.Do(req, nil)
 	if err != nil {
 		return answer, err
 	}

@@ -49,7 +49,6 @@ type Placer struct {
 	local    opener
 	delivers delivering
 	key      nodecall.Key
-	client   *http.Client
 	refusals *prometheus.CounterVec
 
 	mu     sync.Mutex
@@ -60,7 +59,7 @@ type Placer struct {
 // this one's remuxes on local and counting every playback it delivers on delivers.
 func NewPlacer(a adverts, self func() domain.Node, local opener, delivers delivering, key nodecall.Key) *Placer {
 	return &Placer{
-		adverts: a, self: self, local: local, delivers: delivers, key: key, client: &http.Client{Timeout: openWithin}, refusals: newRefusals(),
+		adverts: a, self: self, local: local, delivers: delivers, key: key, refusals: newRefusals(),
 		opened: map[uuid.UUID]time.Time{},
 	}
 }
@@ -239,13 +238,14 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 	if err != nil {
 		return err
 	}
+	ctx, cancel := context.WithTimeout(ctx, openWithin)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, node.Address+RemotePath(playback), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	p.key.Sign(req, body)
-	resp, err := p.client.Do(req)
+	resp, err := p.key.Do(req, body)
 	if err != nil {
 		return fmt.Errorf("node %s: %w", node.Name, err)
 	}
