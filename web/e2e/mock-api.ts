@@ -24,6 +24,94 @@ const kids: Schemas["Profile"] = { id: "p-kids", name: "Kids", role: "user" };
 
 const server: Schemas["Info"] = { id: "s-1", name: "Den", version: "v1.0.0" };
 
+// What a library of films' search finds that the server does not hold, for
+// people to ask for; and what has been asked for, Kids' Dune waiting.
+const requestable: Schemas["Card"][] = [
+	{
+		id: "d-arrival",
+		kind: "movie",
+		title: "Arrival",
+		year: 2016,
+		overview: "A linguist is asked to talk to visitors.",
+		added_at: "2026-10-01T00:00:00Z",
+	},
+];
+const asks: Schemas["Request"][] = [
+	{
+		id: "r-dune",
+		profile_id: "p-kids",
+		profile: "Kids",
+		library_id: "l-films",
+		kind: "movie",
+		title: "Dune",
+		year: 2021,
+		ids: { tmdb: "438631" },
+		state: "pending",
+		asked_at: "2026-10-18T09:00:00Z",
+	},
+];
+
+// Requests, a profile's own and an admin's to decide, as the server keeps
+// them: a title is asked for once, and an admin's is approved at once.
+async function requests(
+	request: Request,
+	url: URL,
+	route: string,
+	me: Schemas["Profile"],
+): Promise<Response | undefined> {
+	const page = (items: Schemas["Request"][]) =>
+		Response.json({
+			items,
+			offset: 0,
+			total: items.length,
+		} satisfies Schemas["RequestPage"]);
+	if (route === "GET /api/v1/requests")
+		return page(asks.filter((r) => r.profile_id === me.id));
+	if (route === "POST /api/v1/requests") {
+		const { title_id } = (await request.json()) as Schemas["Ask"];
+		const found = requestable.find((c) => c.id === title_id);
+		if (!found) return problem(404, "not_found", "Not Found");
+		if (asks.some((r) => r.title === found.title))
+			return problem(409, "conflict", "the title has been asked for already");
+		const r: Schemas["Request"] = {
+			id: `r-${found.id}`,
+			profile_id: me.id,
+			profile: me.name,
+			library_id: "l-films",
+			kind: found.kind,
+			title: found.title,
+			year: found.year,
+			ids: { tmdb: "329865" },
+			state: me.role === "admin" ? "approved" : "pending",
+			asked_at: new Date().toISOString(),
+		};
+		asks.unshift(r);
+		return Response.json(r, { status: 201 });
+	}
+	if (route === "GET /api/v1/admin/requests") {
+		if (me.role === "user") return problem(403, "forbidden", "Forbidden");
+		const state = url.searchParams.get("state");
+		return page(asks.filter((r) => !state || r.state === state));
+	}
+	const decided = url.pathname.match(
+		/^\/api\/v1\/admin\/requests\/([^/]+)\/(approve|decline)$/,
+	);
+	if (request.method === "POST" && decided) {
+		const r = asks.find((x) => x.id === decided[1]);
+		if (!r) return problem(404, "not_found", "Not Found");
+		r.state = decided[2] === "approve" ? "approved" : "declined";
+		return Response.json(r);
+	}
+	const gone = route.match(/^DELETE \/api\/v1\/requests\/([^/]+)$/);
+	if (gone) {
+		const i = asks.findIndex((r) => r.id === gone[1] && r.profile_id === me.id);
+		if (i < 0) return problem(404, "not_found", "Not Found");
+		asks.splice(i, 1);
+		return new Response(null, { status: 204 });
+	}
+	return undefined;
+}
+
 const libraries: Schemas["LibraryList"] = {
 	items: [
 		{ id: "l-films", name: "Films", kind: "movies" },
@@ -1361,6 +1449,8 @@ const server_ = Bun.serve<Socket>({
 			);
 		}
 		if (!me) return problem(401, "unauthenticated", "Unauthorized");
+		const asked = await requests(request, url, route, me);
+		if (asked) return asked;
 
 		const title = url.pathname.match(
 			/^\/api\/v1\/titles\/([^/]+)(\/play|\/next)?$/,
@@ -1713,7 +1803,11 @@ const server_ = Bun.serve<Socket>({
 						total: found.length,
 					},
 					people: { items: people, offset: 0, total: people.length },
-					requestable: { items: [] },
+					requestable: {
+						items: requestable
+							.filter((c) => c.title.toLowerCase().includes(q))
+							.map(card),
+					},
 				} satisfies Schemas["Search"]);
 			}
 			case `GET /api/v1/people/${person}`:

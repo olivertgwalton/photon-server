@@ -72,3 +72,5 @@ device, the page changes by itself. There is no need to refresh.
 - [Watching](05-watching.md): the player, subtitles, skipping, casting and downloads.
 - [Your settings](06-your-settings.md): your profile, playback, Home's rows, notifications,
   devices, linking a TV, sign-in and trackers.
+- [Ask for a title](07-requests.md): asking for what the server doesn't have, and deciding what
+  people ask for.

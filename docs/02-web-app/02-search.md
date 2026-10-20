@@ -40,3 +40,8 @@ If nothing is found, the page says **Nothing here matches**.
 > the server does not have yet. Opening one adds it to the library.
 
 Search only shows what your profile is allowed to see.
+
+## Titles the server doesn't have
+
+If the server takes requests, a search also shows, under **Not on** *server* **yet**, films and
+shows that none of its libraries has. See [ask for a title](07-requests.md).

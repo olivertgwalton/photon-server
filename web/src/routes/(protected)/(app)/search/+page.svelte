@@ -3,6 +3,7 @@ import { withQuery } from "#lib/address.js";
 import Choice from "#lib/components/Choice.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import Rail from "#lib/components/Rail.svelte";
+import RequestableRail from "#lib/components/RequestableRail.svelte";
 import { byKind } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
@@ -15,7 +16,8 @@ const groups = $derived(byKind(data.results?.titles.items ?? [], words.kinds));
 const nothing = $derived(
 	data.results &&
 		!data.results.titles.items.length &&
-		!data.results.people.items.length,
+		!data.results.people.items.length &&
+		!data.results.requestable.items.length,
 );
 
 function scope(library: string) {
@@ -77,5 +79,12 @@ function scope(library: string) {
 				<PersonCard {...person} />
 			{/snippet}
 		</Rail>
+	{/if}
+
+	{#if data.results?.requestable.items.length}
+		<RequestableRail
+			cards={data.results.requestable.items}
+			server={data.server}
+		/>
 	{/if}
 </div>
