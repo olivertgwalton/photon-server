@@ -95,18 +95,13 @@ func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error
 // may search. An admin's request is approved as it is asked, and sent where its library says.
 func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (Request, error) {
 	seasons = slices.Compact(slices.Sorted(slices.Values(seasons)))
-	if len(seasons) == 0 {
-		seasons = nil
-	}
+	args := pgx.NamedArgs{"profile": profile, "id": discovery, "seasons": seasons}
 	var id uuid.UUID
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var held bool
 		err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM external_ids e JOIN items i ON i.id = e.item_id
-				WHERE e.provider = d.provider AND e.value = d.value AND i.kind = d.kind)
-			FROM discoveries d JOIN libraries l ON l.id = d.library_id, viewer($2) v
-			WHERE d.id = $1 AND l.media = 'folder' AND l.discover_source IS NOT NULL AND v.max_age IS NULL
-				AND (v.libraries IS NULL OR l.id = ANY (v.libraries))`, discovery, profile).Scan(&held)
+				WHERE e.provider = d.provider AND e.value = d.value AND i.kind = d.kind) `+mayAsk, args).Scan(&held)
 		if err != nil {
 			return found(err)
 		}
@@ -116,12 +111,12 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 		var state domain.RequestState
 		err = tx.QueryRow(ctx, `
 			INSERT INTO requests (profile_id, library_id, kind, provider, value, title, year, seasons, state, decided_by, decided_at)
-			SELECT p.id, d.library_id, d.kind, d.provider, d.value, d.title, d.year, $3,
+			SELECT p.id, d.library_id, d.kind, d.provider, d.value, d.title, d.year, @seasons,
 				CASE p.role WHEN 'admin' THEN 'approved' ELSE 'pending' END,
 				CASE p.role WHEN 'admin' THEN p.id END,
 				CASE p.role WHEN 'admin' THEN now() END
-			FROM discoveries d, profiles p WHERE d.id = $1 AND p.id = $2
-			RETURNING id, state`, discovery, profile, seasons).Scan(&id, &state)
+			FROM discoveries d, profiles p WHERE d.id = @id AND p.id = @profile
+			RETURNING id, state`, args).Scan(&id, &state)
 		if err != nil || state != domain.RequestApproved {
 			return err
 		}
