@@ -120,6 +120,7 @@ var problems = []struct {
 	{err: store.ErrLibraryExists, code: codeConflict, ownWords: true},
 	{err: store.ErrRemoteUntouched, code: codeConflict, ownWords: true},
 	{err: store.ErrHoldsNothing, code: codeConflict, ownWords: true},
+	{err: store.ErrRemoteRequests, code: codeConflict, ownWords: true},
 	{err: store.ErrAskedFor, code: codeConflict, ownWords: true},
 	{err: store.ErrAlreadyHeld, code: codeConflict, ownWords: true},
 	{err: store.ErrDecided, code: codeConflict, ownWords: true},

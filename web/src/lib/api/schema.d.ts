@@ -7949,6 +7949,7 @@ export interface components {
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"];
             root?: string;
             sources: components["schemas"]["KindSources"][];
             streams?: components["schemas"]["FieldSource"];
@@ -7978,6 +7979,7 @@ export interface components {
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"];
             root?: string;
             sources: components["schemas"]["KindSources"][];
             streams?: components["schemas"]["FieldSource"];
@@ -8851,6 +8853,7 @@ export interface components {
             previews?: components["schemas"]["PreviewLevel"];
             refresh_days?: number | null;
             remote_extras?: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"] | null;
             sources?: components["schemas"]["KindSourcesChange"][];
             subtitle_languages?: string[];
             subtitle_match?: components["schemas"]["SubtitleMatch"];

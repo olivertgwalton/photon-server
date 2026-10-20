@@ -94,14 +94,16 @@ type countsJSON struct {
 
 // adminLibraryJSON is a library as an admin sees it: where it is and how it is kept.
 type adminLibraryJSON struct {
-	ID           uuid.UUID              `json:"id"`
-	Name         string                 `json:"name"`
-	Kind         domain.LibraryKind     `json:"kind"`
-	Media        domain.LibraryMedia    `json:"media"`
-	Root         string                 `json:"root,omitzero"`
-	List         *store.ListRef         `json:"list,omitzero"`
-	Streams      domain.FieldSource     `json:"streams,omitzero"`
-	Discover     domain.FieldSource     `json:"discover,omitzero"`
+	ID       uuid.UUID           `json:"id"`
+	Name     string              `json:"name"`
+	Kind     domain.LibraryKind  `json:"kind"`
+	Media    domain.LibraryMedia `json:"media"`
+	Root     string              `json:"root,omitzero"`
+	List     *store.ListRef      `json:"list,omitzero"`
+	Streams  domain.FieldSource  `json:"streams,omitzero"`
+	Discover domain.FieldSource  `json:"discover,omitzero"`
+	// Requests is the provider a library of files' approved requests are sent to.
+	Requests     domain.FieldSource     `json:"requests,omitzero"`
 	Sources      []kindSourcesJSON      `json:"sources"`
 	RemoteExtras []domain.ExtraKind     `json:"remote_extras"`
 	Monitor      domain.Monitor         `json:"monitor"`
@@ -152,6 +154,7 @@ type rankedSourceJSON struct {
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	j := adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Media: l.Media, Root: l.Root, Streams: l.StreamSource, Discover: l.DiscoverSource,
+		Requests:     l.RequestSource,
 		Sources:      []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
@@ -371,6 +374,9 @@ type libraryChangeJSON struct {
 	// Discover replaces the provider whose search finds it titles it does not hold; "" is none,
 	// which a remote library holding no list's titles cannot be left with.
 	Discover *domain.FieldSource `json:"discover,omitzero"`
+	// Requests replaces the provider a library of files' approved requests are sent to, one that
+	// fetches titles; "" is none, for an admin to fetch them by hand.
+	Requests *domain.FieldSource `json:"requests,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -440,6 +446,13 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	change.Discover = req.Discover
+	if to := req.Requests; to != nil && *to != "" {
+		if p, ok, err := a.svc.Providers.Get(r.Context(), *to); err != nil || !ok || !answers[provider.Requester](p, domain.CapabilityRequest) {
+			writeProblem(w, a.logger, codeInvalidBody, string(*to)+" fetches no titles")
+			return
+		}
+	}
+	change.Requests = req.Requests
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
 		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
 		return

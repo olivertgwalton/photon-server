@@ -366,8 +366,8 @@ it on already answers as it did. Answer `{}` once the plugin has taken it on.
 {}
 ```
 
-A library sends its requests to the plugin once an admin names it under the library's
-**Requests go to**, and a request is sent once an admin, or the manager that keeps the profile that
+A library sends its requests to the plugin once an admin names it as where they go (the library's
+`requests`), and a request is sent once an admin, or the manager that keeps the profile that
 asked, approves it. A `4xx` marks the request failed with the plugin's words, for an admin to
 approve again or decline; a `5xx`, a timeout or no answer is tried again later. The library holds
 the title once a scan finds it in its folder: the plugin is never asked how it is getting on.
