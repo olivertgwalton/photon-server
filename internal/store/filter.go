@@ -185,17 +185,21 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	// or a show's episodes'. Each kind and site is asked whether any of those titles holds one,
 	// rather than every copy and rating of the library being read.
 	from, row, seen := wallRows(wall)
-	// An episode's copies are its own; a title's are its extras' and its episodes' too.
+	// An episode's copies are its own; a title's are its extras' and its episodes' too. A title's
+	// genres, studios and certificate are its own, and an episode's its show's, read once from each
+	// show the episodes are of: copied to each episode, they were most of the facets' time.
 	owner := "coalesce(p.parent_id, e.parent_id, e.id)"
+	described, about := row+".genres, "+row+".studios, "+row+".certificate", "titles"
 	if wall == domain.WallEpisodes {
 		owner = "e.id"
+		described, about = row+".id AS show", "(SELECT genres, studios, certificate FROM items WHERE id IN (SELECT show FROM titles))"
 	}
 	var widths []int
 	// Genres and studios are ordered by their letters, accents and case aside, as a reader reads
 	// them, whatever collation the database was made with.
 	err = s.pool.QueryRow(ctx, `
 		WITH titles AS MATERIALIZED (
-			SELECT items.id, `+row+`.genres, `+row+`.studios, items.year, `+row+`.certificate FROM `+from+`
+			SELECT items.id, items.year, `+described+` FROM `+from+`
 			JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
 			viewer(@profile) v
 			WHERE `+seen+`
@@ -210,10 +214,10 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 					AND c.video_range IS NOT DISTINCT FROM k.video_range AND c.width IS NOT DISTINCT FROM k.width)
 		)
 		SELECT
-			(SELECT array_agg(g ORDER BY lower(unaccent(g)), g) FROM (SELECT DISTINCT jsonb_array_elements_text(genres) g FROM titles) d),
+			(SELECT array_agg(g ORDER BY lower(unaccent(g)), g) FROM (SELECT DISTINCT jsonb_array_elements_text(genres) g FROM `+about+` t) d),
 			(SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM titles WHERE year IS NOT NULL),
-			(SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM titles WHERE certificate IS NOT NULL),
-			(SELECT array_agg(st ORDER BY lower(unaccent(st)), st) FROM (SELECT DISTINCT jsonb_array_elements_text(studios) st FROM titles) d),
+			(SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM `+about+` t WHERE certificate IS NOT NULL),
+			(SELECT array_agg(st ORDER BY lower(unaccent(st)), st) FROM (SELECT DISTINCT jsonb_array_elements_text(studios) st FROM `+about+` t) d),
 			(SELECT array_agg(DISTINCT video_range) FROM copies WHERE video_range IS NOT NULL),
 			(SELECT array_agg(DISTINCT width) FROM copies WHERE width IS NOT NULL),
 			(SELECT array_agg(s.site) FROM unnest(CAST(@sites AS text[])) s (site)
