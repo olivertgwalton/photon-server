@@ -68,26 +68,33 @@ func down(err error) bool {
 // first: one that knows shows by TheTVDB's ids, as Sonarr and riven do, is sent that too. A source
 // that cannot say leaves the title with the id it was found under.
 func known(ctx context.Context, ps providers, lib domain.Library, loc domain.Locale, w domain.Wanted, log *slog.Logger) (map[domain.Provider]string, error) {
-	p, ok, err := ps.Get(ctx, lib.DiscoverSource)
-	if err != nil || !ok {
+	m, asked, err := description(ctx, ps, lib, loc, w.Kind, w.IDs[domain.Provider(lib.DiscoverSource)])
+	switch {
+	case !asked:
 		return w.IDs, err
-	}
-	d, describes := provider.As[provider.Describer](p, domain.CapabilityDescribe)
-	if !describes {
-		return w.IDs, nil
-	}
-	m, _, err := d.Describe(ctx, loc, w.Kind, w.IDs[domain.Provider(lib.DiscoverSource)], domain.SeasonRequest{Scope: domain.SeasonsNumbered})
-	if down(err) {
+	case down(err):
 		return nil, err
-	}
-	if err != nil {
+	case err != nil:
 		log.WarnContext(ctx, "a requested title's ids could not be read", slog.String("provider", string(lib.DiscoverSource)), slog.Any("err", err))
 		return w.IDs, nil
 	}
-	ids := maps.Clone(m.IDs)
-	if ids == nil {
-		ids = map[domain.Provider]string{}
-	}
+	ids := map[domain.Provider]string{}
+	maps.Copy(ids, m.IDs)
 	maps.Copy(ids, w.IDs)
 	return ids, nil
+}
+
+// description is the title as the library's search source describes it, and whether it was
+// asked: a source that is missing or cannot describe is not.
+func description(ctx context.Context, ps providers, lib domain.Library, loc domain.Locale, kind domain.ItemKind, id string) (domain.Metadata, bool, error) {
+	p, ok, err := ps.Get(ctx, lib.DiscoverSource)
+	if err != nil || !ok {
+		return domain.Metadata{}, false, err
+	}
+	d, describes := provider.As[provider.Describer](p, domain.CapabilityDescribe)
+	if !describes {
+		return domain.Metadata{}, false, nil
+	}
+	m, _, err := d.Describe(ctx, loc, kind, id, domain.SeasonRequest{Scope: domain.SeasonsNumbered})
+	return m, true, err
 }

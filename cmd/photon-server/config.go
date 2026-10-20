@@ -68,38 +68,21 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 // metadataProviders runs TMDB before TheTVDB, AniList, AniDB, OMDb and fanart.tv, as its match may
 // give them an id to find a title by.
 func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
+	settingsOf := func(source domain.FieldSource) provider.Settings {
+		return func(ctx context.Context) (map[string]string, error) { return st.ProviderSettings(ctx, source) }
+	}
 	return provider.NewRegistry(plugins.Load,
-		tmdb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceTMDB)
-		}, cache),
-		tvdb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceTVDB)
-		}, cache),
+		tmdb.New(settingsOf(domain.SourceTMDB), cache),
+		tvdb.New(settingsOf(domain.SourceTVDB), cache),
 		anilist.New(st, cache),
-		anidb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceAniDB)
-		}, st, cache),
-		mdblist.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceMDBList)
-		}, cache),
-		omdb.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceOMDb)
-		}, cache),
-		fanart.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceFanart)
-		}, cache),
-		opensubtitles.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceOpenSubtitles)
-		}, cache),
-		riven.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceRiven)
-		}),
-		radarr.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceRadarr)
-		}),
-		sonarr.New(func(ctx context.Context) (map[string]string, error) {
-			return st.ProviderSettings(ctx, domain.SourceSonarr)
-		}),
+		anidb.New(settingsOf(domain.SourceAniDB), st, cache),
+		mdblist.New(settingsOf(domain.SourceMDBList), cache),
+		omdb.New(settingsOf(domain.SourceOMDb), cache),
+		fanart.New(settingsOf(domain.SourceFanart), cache),
+		opensubtitles.New(settingsOf(domain.SourceOpenSubtitles), cache),
+		riven.New(settingsOf(domain.SourceRiven)),
+		radarr.New(settingsOf(domain.SourceRadarr)),
+		sonarr.New(settingsOf(domain.SourceSonarr)),
 	)
 }
 

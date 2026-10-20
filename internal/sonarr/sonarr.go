@@ -104,12 +104,10 @@ func (c *Client) Request(ctx context.Context, w domain.Wanted) error {
 		return nil
 	}
 	seasons := make([]season, len(show.Seasons))
-	monitored := false
 	for i, s := range show.Seasons {
 		seasons[i] = season{SeasonNumber: s.SeasonNumber, Monitored: asked(s.SeasonNumber)}
-		monitored = monitored || seasons[i].Monitored
 	}
-	if !monitored {
+	if !slices.ContainsFunc(seasons, func(s season) bool { return s.Monitored }) {
 		return fmt.Errorf("sonarr knows none of seasons %v of the show", w.Seasons)
 	}
 	profile, folder, err := api.Place(ctx)

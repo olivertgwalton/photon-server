@@ -6,7 +6,6 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -51,16 +50,8 @@ func (p *Pages) describe(ctx context.Context, a store.Askable) error {
 	if err != nil {
 		return err
 	}
-	found, ok, err := p.providers.Get(ctx, lib.DiscoverSource)
-	if err != nil || !ok {
-		return err
-	}
-	d, describes := provider.As[provider.Describer](found, domain.CapabilityDescribe)
-	if !describes {
-		return nil
-	}
-	m, _, err := d.Describe(ctx, lib.Locale.Or(p.server()), a.Kind, a.Value, domain.SeasonRequest{Scope: domain.SeasonsNumbered})
-	if err != nil {
+	m, asked, err := description(ctx, p.providers, lib, lib.Locale.Or(p.server()), a.Kind, a.Value)
+	if !asked || err != nil {
 		return err
 	}
 	return p.st.KeepDescription(ctx, a.ID, m)

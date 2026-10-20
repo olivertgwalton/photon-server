@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -66,41 +67,34 @@ func (c Client) header() http.Header { return http.Header{"X-Api-Key": {c.key}} 
 // Place is where a title is added: the id of the quality profile an admin named, ignoring case,
 // and the root folder at the path an admin named; the first of each where none is.
 func (c Client) Place(ctx context.Context) (profile int, folder string, err error) {
-	var profiles []struct {
+	type qualityProfile struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
+	var profiles []qualityProfile
 	if err := c.Get(ctx, "/api/v3/qualityprofile", nil, &profiles); err != nil {
 		return 0, "", err
 	}
 	name := c.set[profileSetting]
-	i := first(len(profiles), name, func(i int) string { return profiles[i].Name })
+	i := slices.IndexFunc(profiles, func(p qualityProfile) bool { return name == "" || strings.EqualFold(p.Name, name) })
 	if i < 0 {
 		return 0, "", fmt.Errorf("%s has no quality profile named %q", c.api.Name, name)
 	}
-	var folders []struct {
+	type rootFolder struct {
 		Path string `json:"path"`
 	}
+	var folders []rootFolder
 	if err := c.Get(ctx, "/api/v3/rootfolder", nil, &folders); err != nil {
 		return 0, "", err
 	}
 	path := strings.TrimSuffix(c.set[folderSetting], "/")
-	j := first(len(folders), path, func(i int) string { return strings.TrimSuffix(folders[i].Path, "/") })
+	j := slices.IndexFunc(folders, func(f rootFolder) bool {
+		return path == "" || strings.EqualFold(strings.TrimSuffix(f.Path, "/"), path)
+	})
 	if j < 0 {
 		return 0, "", fmt.Errorf("%s has no root folder at %q", c.api.Name, c.set[folderSetting])
 	}
 	return profiles[i].ID, folders[j].Path, nil
-}
-
-// first is the index of the one of n named name, ignoring case, or 0 where name is "" and there is
-// one; -1 for none.
-func first(n int, name string, of func(int) string) int {
-	for i := range n {
-		if name == "" || strings.EqualFold(of(i), name) {
-			return i
-		}
-	}
-	return -1
 }
 
 // said is a refusal in its words, as it answers what it will not do: a list of what it found wrong
