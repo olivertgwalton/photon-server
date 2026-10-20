@@ -8,20 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
+	"github.com/olivertgwalton/photon-server/internal/arr"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
-)
-
-const (
-	addressSetting = "address"
-	keySetting     = "api_key"
-	profileSetting = "quality_profile"
-	folderSetting  = "root_folder"
 )
 
 // Client asks the Radarr at the address an admin sets.
@@ -36,22 +28,8 @@ func New(settings provider.Settings) *Client {
 func (c *Client) Info() provider.Info {
 	return provider.Info{
 		ID: domain.SourceRadarr, Name: "Radarr", Kinds: []domain.ItemKind{domain.ItemMovie},
-		Settings: []provider.Setting{
-			{Key: addressSetting, Name: "Address, such as http://radarr:7878", Required: true},
-			{Key: keySetting, Name: "API key", Secret: true, Required: true},
-			{Key: profileSetting, Name: "Quality profile, by name; Radarr's first where unset"},
-			{Key: folderSetting, Name: "Root folder, by path; Radarr's first where unset"},
-		},
+		Settings: arr.Settings("Radarr", "http://radarr:7878"),
 	}
-}
-
-type qualityProfile struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
-type rootFolder struct {
-	Path string `json:"path"`
 }
 
 type movie struct {
@@ -80,75 +58,20 @@ func (c *Client) Request(ctx context.Context, w domain.Wanted) error {
 	if err != nil {
 		return errors.New("radarr knows a film by its TMDB id, and this one has none")
 	}
-	set, err := c.settings(ctx)
+	api, err := arr.New(ctx, "radarr", c.settings)
 	if err != nil {
 		return err
 	}
-	if set[addressSetting] == "" || set[keySetting] == "" {
-		return provider.ErrNotConfigured
-	}
-	api := radarr{provider.Client{Name: "radarr", Base: set[addressSetting]}, set[keySetting]}
 	var had []json.RawMessage
-	if err := api.get(ctx, "/api/v3/movie", url.Values{"tmdbId": {strconv.Itoa(tmdb)}}, &had); err != nil || len(had) > 0 {
+	if err := api.Get(ctx, "/api/v3/movie", url.Values{"tmdbId": {strconv.Itoa(tmdb)}}, &had); err != nil || len(had) > 0 {
 		return err
 	}
-	var profiles []qualityProfile
-	if err := api.get(ctx, "/api/v3/qualityprofile", nil, &profiles); err != nil {
+	profile, folder, err := api.Place(ctx)
+	if err != nil {
 		return err
 	}
-	profile, ok := named(profiles, set[profileSetting], func(p qualityProfile) string { return p.Name })
-	if !ok {
-		return fmt.Errorf("radarr has no quality profile named %q", set[profileSetting])
-	}
-	var folders []rootFolder
-	if err := api.get(ctx, "/api/v3/rootfolder", nil, &folders); err != nil {
-		return err
-	}
-	folder, ok := named(folders, strings.TrimSuffix(set[folderSetting], "/"), func(f rootFolder) string { return strings.TrimSuffix(f.Path, "/") })
-	if !ok {
-		return fmt.Errorf("radarr has no root folder at %q", set[folderSetting])
-	}
-	_, err = api.Bytes(ctx, provider.Request{Method: http.MethodPost, Path: "/api/v3/movie", Header: api.header(), Body: movie{
-		Title: w.Title, TMDBID: tmdb, Year: w.Year, QualityProfileID: profile.ID, RootFolderPath: folder.Path,
+	return api.Post(ctx, "/api/v3/movie", movie{
+		Title: w.Title, TMDBID: tmdb, Year: w.Year, QualityProfileID: profile, RootFolderPath: folder,
 		Monitored: true, MinimumAvailability: "released", AddOptions: addOptions{SearchForMovie: true},
-	}})
-	return said(err)
-}
-
-// named answers the one of all named name, ignoring case, or the first where name is "".
-func named[T any](all []T, name string, of func(T) string) (T, bool) {
-	for _, v := range all {
-		if name == "" || strings.EqualFold(of(v), name) {
-			return v, true
-		}
-	}
-	var none T
-	return none, false
-}
-
-type radarr struct {
-	provider.Client
-	key string
-}
-
-func (r radarr) header() http.Header { return http.Header{"X-Api-Key": {r.key}} }
-
-func (r radarr) get(ctx context.Context, path string, q url.Values, out any) error {
-	return said(r.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q, Header: r.header()}, out))
-}
-
-// said is a refusal in Radarr's words, as it answers what it will not do: a list of what it found
-// wrong with what it was sent.
-func said(err error) error {
-	refusal, refused := errors.AsType[*provider.Refusal](err)
-	if !refused || refusal.Code >= http.StatusInternalServerError {
-		return err
-	}
-	var wrong []struct {
-		ErrorMessage string `json:"errorMessage"`
-	}
-	if json.Unmarshal(refusal.Body, &wrong) != nil || len(wrong) == 0 || wrong[0].ErrorMessage == "" {
-		return err
-	}
-	return fmt.Errorf("radarr: %s: %w", wrong[0].ErrorMessage, err)
+	})
 }

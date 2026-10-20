@@ -39,13 +39,13 @@ func (f *fakeRadarr) serve(t *testing.T) *httptest.Server {
 			}
 			answer([]any{})
 		case "GET /api/v3/qualityprofile":
-			answer([]qualityProfile{{ID: 4, Name: "HD-1080p"}, {ID: 5, Name: "Ultra-HD"}})
+			answer([]map[string]any{{"id": 4, "name": "HD-1080p"}, {"id": 5, "name": "Ultra-HD"}})
 		case "GET /api/v3/rootfolder":
 			if f.missing {
 				answer([]any{})
 				return
 			}
-			answer([]rootFolder{{Path: "/movies/"}, {Path: "/movies-4k/"}})
+			answer([]map[string]any{{"path": "/movies/"}, {"path": "/movies-4k/"}})
 		case "POST /api/v3/movie":
 			if f.refuse != "" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -69,7 +69,7 @@ func (f *fakeRadarr) serve(t *testing.T) *httptest.Server {
 
 func client(srv *httptest.Server, set map[string]string) *Client {
 	return New(func(context.Context) (map[string]string, error) {
-		all := map[string]string{addressSetting: srv.URL, keySetting: "k3y"}
+		all := map[string]string{"address": srv.URL, "api_key": "k3y"}
 		maps.Copy(all, set)
 		return all, nil
 	})
@@ -92,7 +92,7 @@ func TestRadarrIsAskedForAFilmALibraryLacks(t *testing.T) {
 	}
 
 	f.added = nil
-	if err := client(srv, map[string]string{profileSetting: "ultra-hd", folderSetting: "/movies-4k"}).Request(t.Context(), inception); err != nil {
+	if err := client(srv, map[string]string{"quality_profile": "ultra-hd", "root_folder": "/movies-4k"}).Request(t.Context(), inception); err != nil {
 		t.Fatal(err)
 	}
 	if f.added == nil || f.added.QualityProfileID != 5 || f.added.RootFolderPath != "/movies-4k/" {
@@ -113,7 +113,7 @@ func TestRadarrIsAskedForAFilmALibraryLacks(t *testing.T) {
 		want   string
 	}{
 		"refused":    {f: &fakeRadarr{refuse: "This movie has already been added"}, wanted: inception, want: "This movie has already been added"},
-		"no profile": {set: map[string]string{profileSetting: "SD"}, f: &fakeRadarr{}, wanted: inception, want: `no quality profile named "SD"`},
+		"no profile": {set: map[string]string{"quality_profile": "SD"}, f: &fakeRadarr{}, wanted: inception, want: `no quality profile named "SD"`},
 		"no folder":  {f: &fakeRadarr{missing: true}, wanted: inception, want: "no root folder"},
 		"no TMDB id": {f: &fakeRadarr{}, wanted: domain.Wanted{Kind: domain.ItemMovie, IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt1375666"}}, want: "TMDB id"},
 		"not a film": {f: &fakeRadarr{}, wanted: domain.Wanted{Kind: domain.ItemShow, IDs: map[domain.Provider]string{domain.ProviderTMDB: "1396"}}, want: "not a show"},
