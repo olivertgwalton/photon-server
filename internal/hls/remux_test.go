@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 	"uuid"
@@ -746,6 +747,60 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	got, err := io.ReadAll(f)
 	if err != nil || !bytes.Equal(got, init) {
 		t.Errorf("init holds %d bytes (%v), want the %d ffmpeg wrote", len(got), err, len(init))
+	}
+}
+
+// A playback closed has its remux ended, its ffmpeg with it, and its folder gone, as Close returns:
+// nothing is left writing into, or holding open, a folder taken away.
+func TestAClosedRemuxHasEndedAndLeftNothing(t *testing.T) {
+	fixture, err := filepath.Abs("testdata/fragments.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, init, err := readInit(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", "echo $$ > '"+pidFile+"'\nhead -c "+strconv.Itoa(len(init))+" '"+fixture+"'\nexec sleep 60\n")
+	dir := t.TempDir()
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, dir, t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: opening(fixture), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
+		Video: domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	f, err := r.Init(ctx, playback, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	pid, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(pid)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Close(playback)
+	// A process ended but not yet waited for still answers a signal.
+	if p, err := os.FindProcess(n); err == nil && p.Signal(syscall.Signal(0)) == nil {
+		t.Error("ffmpeg is still there as Close returns; want the run ended")
+	}
+	if _, err := os.Stat(filepath.Join(dir, playback.String())); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the playback's folder: %v, want it removed", err)
 	}
 }
 

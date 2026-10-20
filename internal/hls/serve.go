@@ -137,6 +137,10 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 		return nil, ErrNoRemux
 	}
 	s.mu.Lock()
+	if s.ended {
+		s.mu.Unlock()
+		return nil, ErrNoRemux
+	}
 	wait := waiter(s.inits, part)
 	if !closed(wait) && (s.run == nil || s.run.part != part) {
 		r.start(ctx, s, n)
@@ -232,6 +236,10 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 	}
 	asked := time.Now()
 	s.mu.Lock()
+	if s.ended {
+		s.mu.Unlock()
+		return nil, ErrNoRemux
+	}
 	s.furthest = max(s.furthest, n)
 	if err := s.forget(n - behind); err != nil {
 		r.log.WarnContext(ctx, "segment not removed", slog.String("dir", s.dir), slog.Any("err", err))
