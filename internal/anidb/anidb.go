@@ -233,8 +233,12 @@ func (c *Client) ask(ctx context.Context, aid int) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if data, err = io.ReadAll(r); err != nil {
+		// The cap on what was sent does not bound what it unzips to.
+		if data, err = io.ReadAll(io.LimitReader(r, provider.MaxAnswer+1)); err != nil {
 			return nil, err
+		}
+		if len(data) > provider.MaxAnswer {
+			return nil, fmt.Errorf("anidb: anime %d: unzips to more than %d bytes", aid, provider.MaxAnswer)
 		}
 	}
 	if bytes.Contains(data, []byte("<error")) && bytes.Contains(data, []byte("banned")) {
