@@ -25,9 +25,6 @@ type requestablePages interface {
 	Page(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 }
 
-// maxRequestsLimit is as many requests as a page holds.
-const maxRequestsLimit = 100
-
 type requestJSON struct {
 	ID        uuid.UUID       `json:"id"`
 	ProfileID uuid.UUID       `json:"profile_id"`
@@ -103,7 +100,7 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 
 // ownRequests answers a page of the signed-in profile's requests, newest first.
 func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
-	offset, limit, ok := a.paging(w, r, maxRequestsLimit)
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
@@ -132,7 +129,7 @@ func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r, maxRequestsLimit)
+	offset, limit, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
