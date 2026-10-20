@@ -38,8 +38,17 @@ func NewKey(signingKey []byte) (Key, error) {
 	return Key{key: k}, err
 }
 
-// Sign signs r, which carries body, for within from now.
-func (k Key) Sign(r *http.Request, body []byte) { k.signUntil(r, body, time.Now().Add(within)) }
+// client follows no redirect: one would carry the signature to wherever it points, to be used
+// again until it runs out.
+var client = &http.Client{
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// Do signs r, which carries body, for within from now, and sends it.
+func (k Key) Do(r *http.Request, body []byte) (*http.Response, error) {
+	k.signUntil(r, body, time.Now().Add(within))
+	return client.Do(r) //nolint:gosec // G704: the address a node of this cluster advertises
+}
 
 func (k Key) signUntil(r *http.Request, body []byte, until time.Time) {
 	exp := strconv.FormatInt(until.Unix(), 10)
