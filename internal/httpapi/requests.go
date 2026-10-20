@@ -57,14 +57,6 @@ func requestOf(r store.Request) requestJSON {
 	}
 }
 
-func requestsOf(rs []store.Request) []requestJSON {
-	out := make([]requestJSON, len(rs))
-	for i, r := range rs {
-		out[i] = requestOf(r)
-	}
-	return out
-}
-
 // askJSON is a title a search answered as requestable, by its id there, and of a show the seasons
 // asked for, every one where none is.
 type askJSON struct {
@@ -108,7 +100,7 @@ func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{requestsOf(rs), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{nonNil(each(rs, requestOf)), offset, total})
 }
 
 func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +129,7 @@ func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{requestsOf(rs), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{nonNil(each(rs, requestOf)), offset, total})
 }
 
 func (a *API) approveRequest(w http.ResponseWriter, r *http.Request) {
