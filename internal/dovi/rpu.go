@@ -11,6 +11,9 @@ var ErrNotProfile7 = errors.New("dovi: not a profile 7 RPU")
 
 var errShort = errors.New("dovi: RPU ends early")
 
+// layerDepth is the bit depth of both layers, the only one libdovi takes.
+const layerDepth = 10
+
 // The fixed part of an uncompressed DM payload: YCbCr to RGB, then RGB to LMS, coefficients.
 const ycc, lms = 9*16 + 3*32, 9 * 16
 
@@ -50,14 +53,21 @@ func Profile81(nal []byte) ([]byte, error) {
 	c.coefLen = 32
 	switch c.coefType {
 	case 0:
-		c.coefLen = int(r.ue())
+		// libdovi's bounds: past them it refuses an RPU, as this does.
+		n := r.ue()
+		if n > 23 {
+			return nil, fmt.Errorf("dovi: coefficient_log2_denom %d", n)
+		}
+		c.coefLen = int(n)
 	case 1:
 	default:
 		return nil, fmt.Errorf("dovi: coefficient_data_type %d", c.coefType)
 	}
 	r.skip(2 + 1) // vdr_rpu_normalized_idc, bl_video_full_range_flag
-	c.blDepth = int(r.ue()) + 8
-	c.elDepth = int(r.ue()&0xff) + 8
+	blDepth, elDepth := r.ue()+8, r.ue()&0xff+8
+	if blDepth != layerDepth || elDepth != layerDepth {
+		return nil, fmt.Errorf("dovi: base and enhancement layer depths %d and %d", blDepth, elDepth)
+	}
 	vdrDepth := r.ue() + 8
 	r.skip(1)
 	compressed := r.bits(3) == 1
@@ -91,12 +101,11 @@ func Profile81(nal []byte) ([]byte, error) {
 
 // conversion is an RPU being read and its conversion being written.
 type conversion struct {
-	rpu              []byte
-	r                *reader
-	w                *writer
-	coefType         uint64
-	coefLen          int
-	blDepth, elDepth int
+	rpu      []byte
+	r        *reader
+	w        *writer
+	coefType uint64
+	coefLen  int
 }
 
 // copy writes the bits read since from as they are.
@@ -117,13 +126,13 @@ func (c *conversion) mapping(at int) error {
 		if n > 9 {
 			return fmt.Errorf("dovi: %d pivots", n)
 		}
-		r.skip(n * c.blDepth)
+		r.skip(n * layerDepth)
 		pieces[i] = n - 1
 	}
 	pivots := r.at
-	r.skip(3 + 2*c.blDepth) // nlq_method_idc, nlq_pred_pivot_value
-	r.ue()                  // num_x_partitions_minus1
-	r.ue()                  // num_y_partitions_minus1
+	r.skip(3 + 2*layerDepth) // nlq_method_idc, nlq_pred_pivot_value
+	r.ue()                   // num_x_partitions_minus1
+	r.ue()                   // num_y_partitions_minus1
 	curves := r.at
 	for _, n := range pieces {
 		for range n {
@@ -133,7 +142,7 @@ func (c *conversion) mapping(at int) error {
 	curvesEnd := r.at
 	mel := true
 	for range 3 {
-		mel = r.bits(c.elDepth) == 0 && mel                        // nlq_offset
+		mel = r.bits(layerDepth) == 0 && mel                       // nlq_offset
 		mel = r.coef(c.coefType, c.coefLen) == [2]uint64{1} && mel // vdr_in_max
 		mel = r.coef(c.coefType, c.coefLen) == [2]uint64{} && mel  // linear_deadzone_slope
 		mel = r.coef(c.coefType, c.coefLen) == [2]uint64{} && mel  // linear_deadzone_threshold
@@ -148,8 +157,8 @@ func (c *conversion) mapping(at int) error {
 	w.copy(c.rpu, at, ids)
 	for range 3 {
 		w.ue(0)
-		w.bits(0, c.blDepth)
-		w.bits(1023, c.blDepth)
+		w.bits(0, layerDepth)
+		w.bits(1023, layerDepth)
 	}
 	w.ue(0)
 	w.ue(0)
@@ -318,10 +327,11 @@ func (r *reader) fail(err error) {
 }
 
 func (r *reader) skip(n int) {
-	if r.at+n > len(r.b)*8 {
+	if n < 0 || r.at+n > len(r.b)*8 {
 		r.fail(errShort)
+		n = len(r.b)*8 - r.at
 	}
-	r.at = min(r.at+n, len(r.b)*8)
+	r.at += n
 }
 
 func (r *reader) bits(n int) uint64 {
