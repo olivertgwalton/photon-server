@@ -101,15 +101,23 @@ var rowQueries = map[domain.HomeRow]string{
 	// The titles the profile has not begun by the IMDb rating their cards show, as the wall sorts
 	// by it, leaving out a rating too few voted for where its site counts votes. The ratings are
 	// read down their index, each kept if it is its title's shown one, so only as many titles as
-	// the row takes are tried. It is asked for as a value, not as no better one existing: Postgres
+	// the row takes are tried: each rating's title is asked after in a lateral subquery that
+	// OFFSET 0 keeps from being flattened, as joined Postgres judged every rated title and sorted
+	// them all. The shown one is asked for as a value, not as no better one existing: Postgres
 	// turns the latter into an anti join, and for a limited profile, whose few titles it
-	// misjudges, it ran that over every rating of every title, a minute for a large library.
+	// misjudges, it ran that over every rating of every title, a minute for a large library. The
+	// viewer is made once: once the plan was cached, Postgres made it again for every title.
 	domain.RowTopRatedUnwatched: `
-		SELECT ` + itemColumns + ` FROM ratings r JOIN items ON items.id = r.item_id
+		WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v)
+		SELECT ` + itemColumnsOf("items") + ` FROM ratings r
+		CROSS JOIN LATERAL (
+			SELECT items.* FROM items
+			WHERE items.id = r.item_id AND items.library_id = @lib AND items.kind IN ('movie', 'show')
+				AND r.source = (SELECT o.source FROM ranked_ratings(items) o WHERE o.site = r.site)
+				AND NOT ` + begun + ` AND EXISTS (SELECT 1 FROM seer WHERE sees(seer.v, items))
+			OFFSET 0
+		) items
 		WHERE r.site = '` + string(domain.SiteIMDb) + `' AND (r.votes IS NULL OR r.votes >= ` + strconv.Itoa(leastVotes) + `)
-			AND r.source = (SELECT o.source FROM ranked_ratings(items) o WHERE o.site = r.site)
-			AND items.library_id = @lib AND items.kind IN ('movie', 'show') AND NOT ` + begun + `
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY r.score DESC, r.item_id DESC LIMIT @limit`,
 }
 
