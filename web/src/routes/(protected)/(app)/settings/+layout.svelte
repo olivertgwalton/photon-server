@@ -7,6 +7,7 @@ import ChartColumnIcon from "@lucide/svelte/icons/chart-column";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
+import HandIcon from "@lucide/svelte/icons/hand";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import HouseIcon from "@lucide/svelte/icons/house";
 import ImportIcon from "@lucide/svelte/icons/import";
@@ -61,6 +62,13 @@ const you: [string, string, Component, string][] = [
 		"trakt simkl anilist scrobble link account",
 	],
 ];
+// What people ask for, which an admin and a manager decide.
+const requests: [string, string, Component, string] = [
+	"/settings/requests",
+	"Requests",
+	HandIcon,
+	"ask asked approve decline waiting",
+];
 const server: [string, string, Component, string][] = [
 	[
 		"/settings/server",
@@ -87,6 +95,7 @@ const server: [string, string, Component, string][] = [
 		UsersIcon,
 		"users household role password access add profile",
 	],
+	requests,
 	[
 		"/settings/server/sign-in",
 		"Sign-in",
@@ -158,7 +167,8 @@ const server: [string, string, Component, string][] = [
 	],
 	["/settings/server/keys", "API keys", KeyRoundIcon, "tokens scripts revoke"],
 ];
-// A manager keeps profiles, and nothing else of the server's.
+// A manager keeps profiles, and decides what they ask for, and nothing else of
+// the server's.
 const manages: [string, string, Component, string][] = [
 	[
 		"/settings/profiles",
@@ -166,6 +176,7 @@ const manages: [string, string, Component, string][] = [
 		UsersIcon,
 		"users household role password access add profile",
 	],
+	requests,
 ];
 const groups = $derived(
 	data.me.role === "admin"

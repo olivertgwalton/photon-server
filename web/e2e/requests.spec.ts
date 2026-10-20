@@ -31,3 +31,18 @@ test("a title the server lacks is asked for from a search, and listed as asked",
 		page.getByText("the title has been asked for already"),
 	).toBeVisible();
 });
+
+test("an admin approves what another profile asked for", async ({ page }) => {
+	await logIn(page, "/settings/requests");
+	const dune = page
+		.getByRole("main")
+		.getByRole("listitem")
+		.filter({ hasText: "Dune" });
+	await expect(dune).toContainText("asked by Kids");
+	await expectAccessible(page);
+	await dune.getByRole("button", { name: "Approve Dune" }).click();
+	await expect(page.getByText("Dune is approved.")).toBeVisible();
+	await expect(
+		page.getByRole("listitem").filter({ hasText: "Dune" }),
+	).toHaveCount(0);
+});

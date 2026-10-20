@@ -194,3 +194,19 @@ test("each kind offers the built-ins the server says it may rank and the provide
 	]);
 	expect(offered("images", "movie").map((s) => s.id)).toEqual(["tmdb", "omdb"]);
 });
+
+test("a library of files sends who may ask for what, and where it goes, where they changed", () => {
+	const asking = { ...tv, discover: "tmdb" as Schemas["FieldSource"] };
+	const change = libraryChange(
+		form([...fields, ["discover", "tmdb"], ["requests", "riven"]]),
+		asking,
+	);
+	expect(change.discover).toBeUndefined();
+	expect(change.requests).toBe("riven");
+	const off = libraryChange(
+		form([...fields, ["discover", ""], ["requests", ""]]),
+		asking,
+	);
+	expect(off.discover).toBe("");
+	expect(off.requests).toBeUndefined();
+});
