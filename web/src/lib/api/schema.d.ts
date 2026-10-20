@@ -8750,7 +8750,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push" | "send_request";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -9623,7 +9623,7 @@ export interface components {
             total: number;
         };
         /** @enum {string} */
-        RequestState: "pending" | "approved" | "declined";
+        RequestState: "pending" | "approved" | "declined" | "sent" | "failed";
         Reset: {
             name: string;
         };

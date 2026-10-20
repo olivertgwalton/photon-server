@@ -192,6 +192,9 @@ type Library struct {
 	// library's become its own as they are opened, and a library of files' a profile may ask for.
 	// None for a library that searches nothing.
 	DiscoverSource FieldSource
+	// RequestSource is the provider a library of files' approved requests are sent to; none for
+	// one whose requests an admin fetches by hand.
+	RequestSource FieldSource
 	// Sources rank where each kind of item it holds takes its metadata and pictures from.
 	Sources []KindSources
 	// RemoteExtras are the kinds of video it keeps links to from its providers.

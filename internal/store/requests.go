@@ -17,7 +17,8 @@ var (
 	ErrAskedFor = errors.New("the title has been asked for already")
 	// ErrAlreadyHeld is a title asked for that a library has come to hold since it was found.
 	ErrAlreadyHeld = errors.New("a library holds the title already")
-	// ErrDecided is a request withdrawn or decided once an admin or manager has decided it.
+	// ErrDecided is a request withdrawn once an admin or manager has decided it, or decided again
+	// unless it failed where it was sent.
 	ErrDecided = errors.New("the request has been decided already")
 	// ErrFilmSeasons is a film asked for by seasons.
 	ErrFilmSeasons = errors.New("a film has no seasons: seasons are a show's")
@@ -94,7 +95,7 @@ func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error
 
 // AskFor asks, for a profile, for a title a library of files' search found for it, of a show the
 // seasons given, every one where none is: ErrNotFound for no such find of a library the profile
-// may search. An admin's request is approved as it is asked.
+// may search. An admin's request is approved as it is asked, and sent where its library says.
 func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (Request, error) {
 	seasons = slices.Compact(slices.Sorted(slices.Values(seasons)))
 	if len(seasons) == 0 {
@@ -115,14 +116,19 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 		if held {
 			return ErrAlreadyHeld
 		}
-		return tx.QueryRow(ctx, `
+		var state domain.RequestState
+		err = tx.QueryRow(ctx, `
 			INSERT INTO requests (profile_id, library_id, kind, provider, value, title, year, seasons, state, decided_by, decided_at)
 			SELECT p.id, d.library_id, d.kind, d.provider, d.value, d.title, d.year, $3,
 				CASE p.role WHEN 'admin' THEN 'approved' ELSE 'pending' END,
 				CASE p.role WHEN 'admin' THEN p.id END,
 				CASE p.role WHEN 'admin' THEN now() END
 			FROM discoveries d, profiles p WHERE d.id = $1 AND p.id = $2
-			RETURNING id`, discovery, profile, seasons).Scan(&id)
+			RETURNING id, state`, discovery, profile, seasons).Scan(&id, &state)
+		if err != nil || state != domain.RequestApproved {
+			return err
+		}
+		return send(ctx, tx, id)
 	})
 	switch {
 	case violates(err, uniqueViolation):
@@ -186,28 +192,76 @@ func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) erro
 	return nil
 }
 
-// DecideRequest approves or declines a request while it waits, as decider, for the reason given
-// where it is declined: of any profile's for an admin, by nil, or of the users a manager keeps.
-// ErrNotFound for none of those, ErrDecided once it is decided.
+// DecideRequest approves or declines a request while it waits, or once it failed where it was sent,
+// as decider, for the reason given where it is declined: of any profile's for an admin, by nil, or
+// of the users a manager keeps. One approved is sent where its library says. ErrNotFound for none
+// of those, ErrDecided once it is decided otherwise.
 func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (Request, error) {
 	var was domain.RequestState
-	err := s.pool.QueryRow(ctx, `
-		WITH kept AS (
-			SELECT r.id, r.state FROM requests r JOIN profiles p ON p.id = r.profile_id
-			WHERE r.id = $1 AND ($2::uuid IS NULL OR (p.managed_by = $2 AND p.role = 'user'))
-		), decided AS (
-			UPDATE requests r SET state = $4, reason = nullif($5, ''), decided_by = $3, decided_at = now()
-			FROM kept WHERE r.id = kept.id AND kept.state = 'pending' RETURNING kept.state
-		)
-		SELECT coalesce((SELECT state FROM decided), (SELECT state FROM kept), '')`,
-		id, by, decider, state, reason).Scan(&was)
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			WITH kept AS (
+				SELECT r.id, r.state FROM requests r JOIN profiles p ON p.id = r.profile_id
+				WHERE r.id = $1 AND ($2::uuid IS NULL OR (p.managed_by = $2 AND p.role = 'user'))
+			), decided AS (
+				UPDATE requests r SET state = $4, reason = nullif($5, ''), decided_by = $3, decided_at = now()
+				FROM kept WHERE r.id = kept.id AND kept.state IN ('pending', 'failed') RETURNING kept.state
+			)
+			SELECT coalesce((SELECT state FROM decided), (SELECT state FROM kept), '')`,
+			id, by, decider, state, reason).Scan(&was)
+		if err != nil || !decidable(was) || state != domain.RequestApproved {
+			return err
+		}
+		return send(ctx, tx, id)
+	})
 	switch {
 	case err != nil:
 		return Request{}, err
 	case was == "":
 		return Request{}, ErrNotFound
-	case was != domain.RequestPending:
+	case !decidable(was):
 		return Request{}, ErrDecided
 	}
 	return s.request(ctx, s.pool, id)
+}
+
+func decidable(s domain.RequestState) bool {
+	return s == domain.RequestPending || s == domain.RequestFailed
+}
+
+// send queues an approved request to be sent where its library's requests go, if anywhere.
+func send(ctx context.Context, tx db, id uuid.UUID) error {
+	var sends bool
+	err := tx.QueryRow(ctx, `
+		SELECT l.request_source IS NOT NULL FROM requests r JOIN libraries l ON l.id = r.library_id WHERE r.id = $1`,
+		id).Scan(&sends)
+	if err != nil || !sends {
+		return err
+	}
+	return enqueue(ctx, tx, domain.JobSendRequest, id)
+}
+
+// Sending is an approved request as it is sent: the title it wants, and the library whose requests
+// go somewhere. False for a request decided otherwise since, or whose library now sends none.
+func (s *Store) Sending(ctx context.Context, id uuid.UUID) (domain.Wanted, domain.Library, bool, error) {
+	r, err := s.request(ctx, s.pool, id)
+	if errors.Is(err, ErrNotFound) || err == nil && r.State != domain.RequestApproved {
+		return domain.Wanted{}, domain.Library{}, false, nil
+	}
+	if err != nil {
+		return domain.Wanted{}, domain.Library{}, false, err
+	}
+	lib, err := s.Library(ctx, r.Library)
+	if err != nil || lib.RequestSource == "" {
+		return domain.Wanted{}, domain.Library{}, false, err
+	}
+	w := domain.Wanted{ID: r.ID, Kind: r.Kind, IDs: map[domain.Provider]string{r.Provider: r.Value}, Title: r.Title, Year: r.Year, Seasons: r.Seasons}
+	return w, lib, true, nil
+}
+
+// SentRequest records where an approved request was sent: sent, or failed, saying why. A request
+// decided otherwise meanwhile is left as it is.
+func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.RequestState, reason string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason)
+	return err
 }

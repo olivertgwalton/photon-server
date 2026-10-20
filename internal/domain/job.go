@@ -35,10 +35,12 @@ const (
 	JobSegments JobKind = "segments"
 	// JobPush pushes a profile's notifications to the browsers subscribed for it.
 	JobPush JobKind = "push"
+	// JobSendRequest sends an approved request to where its library's requests go.
+	JobSendRequest JobKind = "send_request"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush, JobSendRequest}
 }
 
 type JobState string
@@ -89,14 +91,15 @@ type Job struct {
 }
 
 // About is the title, season or library a job is about, where its subject is one; a part's
-// keyframes or previews, a download's conversion, a webhook's delivery and an import are neither.
+// keyframes or previews, a download's conversion, a webhook's delivery, an import and a request
+// are neither.
 func (j Job) About() (item, library uuid.UUID) {
 	switch j.Kind {
 	case JobIdentify, JobMarkers, JobTheme, JobSegments:
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory, JobPush:
+	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory, JobPush, JobSendRequest:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }
