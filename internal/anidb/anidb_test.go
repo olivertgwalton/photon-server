@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -179,5 +180,23 @@ func TestATitleIsMatchedByItsAniDBIDAloneWhereTheListsDoNotNameIt(t *testing.T) 
 	}
 	if got, err := c.Match(t.Context(), domain.Locale{}, domain.ItemShow, provider.Hints{IDs: map[domain.Provider]string{domain.ProviderTVDB: "121361"}}); err != nil || got != "" {
 		t.Errorf("a show the lists do not name: %q, %v; want no match", got, err)
+	}
+}
+
+func TestAnAnswerThatUnzipsPastTheCapIsRefused(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		z := gzip.NewWriter(w)
+		if _, err := z.Write(make([]byte, provider.MaxAnswer+1)); err != nil {
+			t.Error(err)
+		}
+		if err := z.Close(); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := New(registered, fakeLists{}, &valkey{kept: map[string][]byte{}})
+	c.api.Base = srv.URL
+	if _, _, err := c.Describe(t.Context(), domain.Locale{}, domain.ItemShow, "13241", domain.SeasonRequest{}); err == nil || !strings.Contains(err.Error(), "unzips to more than") {
+		t.Errorf("a gzip bomb: %v; want it refused", err)
 	}
 }

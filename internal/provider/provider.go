@@ -41,15 +41,15 @@ var (
 	ErrQuota = errors.New("provider: today's quota is used")
 )
 
-// maxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
+// MaxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
 // in memory; a long show described whole is the largest.
-const maxAnswer = 8 << 20
+const MaxAnswer = 8 << 20
 
 // builtinHTTP is the built-in providers' HTTP client.
 var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
 
 // Client asks a provider for JSON, as every provider is asked: after its share of Limit where
-// Limits is set, again after a 429 as the provider says (send), and reading at most maxAnswer. A
+// Limits is set, again after a 429 as the provider says (send), and reading at most MaxAnswer. A
 // request goes to Base and nowhere else: what a caller names is a path under it. An error names
 // Name and the path, never the address, which may carry a key.
 type Client struct {
@@ -124,12 +124,12 @@ func (c Client) Bytes(ctx context.Context, r Request) ([]byte, error) {
 		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, r.Path, ErrUnreached, err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxAnswer+1))
 	switch {
 	case err != nil:
 		return nil, fmt.Errorf("%s %s: %w: %w", c.Name, r.Path, ErrUnreached, err)
-	case len(data) > maxAnswer:
-		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, r.Path, maxAnswer)
+	case len(data) > MaxAnswer:
+		return nil, fmt.Errorf("%s %s: answered more than %d bytes", c.Name, r.Path, MaxAnswer)
 	case resp.StatusCode < 200 || resp.StatusCode > 299:
 		return nil, fmt.Errorf("%s %s: %w", c.Name, r.Path, &Refusal{Code: resp.StatusCode, Status: resp.Status, Body: data})
 	}
