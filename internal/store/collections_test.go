@@ -275,6 +275,10 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	}
 	// Empty, it is in the Collections view alone, holding no library's titles.
 	agree(uuid.UUID{}, 1, map[uuid.UUID]int{films.ID: 0, other.ID: 0})
+	if found, _, err := s.Search(ctx, SearchQuery{Text: "alien collection", Limit: 10}); err != nil ||
+		slices.ContainsFunc(found, func(c Card) bool { return c.Kind == domain.ItemCollection }) {
+		t.Errorf("searching for the set of one = %+v, %v; want it not found", found, err)
+	}
 	if err := s.SetMembers(ctx, sunday, []uuid.UUID{alien}); err != nil {
 		t.Fatal(err)
 	}

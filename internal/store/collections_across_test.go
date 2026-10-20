@@ -16,7 +16,7 @@ import (
 
 // A collection is in no library, as a Jellyfin box set: it holds the titles of any, a provider's
 // is made once whichever libraries its films are in, and each library lists and finds the
-// collections holding its titles.
+// collections holding its titles: a provider's once it holds two of them.
 func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -37,7 +37,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 		title string
 		lib   uuid.UUID
 		set   bool
-	}{{"Alien", films.ID, true}, {"Heat", films.ID, false}, {"Aliens", uhd.ID, true}} {
+	}{{"Alien", films.ID, true}, {"Alien 3", films.ID, true}, {"Heat", films.ID, false}, {"Aliens", uhd.ID, true}} {
 		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{
 			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
@@ -76,7 +76,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 		t.Errorf("the Collections view = %q, %v; want TMDB's box set once, and the admin's", got, err)
 	}
 	for lib, want := range map[uuid.UUID][]string{
-		films.ID: {"Alien Collection", "Weekend"}, uhd.ID: {"Alien Collection"}, shows.ID: {"Weekend"},
+		films.ID: {"Alien Collection", "Weekend"}, uhd.ID: {}, shows.ID: {"Weekend"},
 	} {
 		listed, _, err := s.Collections(ctx, lib, uuid.UUID{}, 0, 10)
 		if got := titles(listed); err != nil || !slices.Equal(got, want) {
@@ -89,7 +89,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 		t.Fatal(err)
 	}
 	members, err := s.Members(ctx, uuid.UUID{}, smart)
-	if got := titles(members); err != nil || !slices.Equal(got, []string{"Alien", "Aliens"}) {
+	if got := titles(members); err != nil || !slices.Equal(got, []string{"Alien", "Alien 3", "Aliens"}) {
 		t.Errorf("a smart collection of two libraries holds %q, %v; want both libraries' A films", got, err)
 	}
 	found, _, err := s.Search(ctx, SearchQuery{Text: "weekend", Library: shows.ID, Limit: 10})
