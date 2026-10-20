@@ -59,13 +59,15 @@ const versionOf = `SELECT 1 FROM (
 	) t JOIN versions v ON v.item_id = t.id WHERE v.missing_since IS NULL`
 
 // begun is whether the profile given as @profile has watched or started a film, or an episode of a
-// show. The titles it has begun are read from its own watch states once, rather than each of a
-// show's episodes looked up in them. A film has no show, and that NULL kept would leave NOT begun
-// true of nothing.
-const begun = `items.id IN (SELECT t.id FROM watch_state w JOIN items e ON e.id = w.item_id
-	LEFT JOIN items season ON season.id = e.parent_id, LATERAL (VALUES (e.id), (season.parent_id)) t (id)
-	WHERE w.profile_id = @profile AND e.kind IN ('movie', 'episode') AND (w.watched_at IS NOT NULL OR w.position_ms > 0)
-		AND t.id IS NOT NULL)`
+// show. A show is asked of the counts kept of its episodes: one with none of them watched or
+// played is not begun, one with any watched is, and only one with episodes played but none
+// watched has its episodes looked up for one under way.
+const begun = `CASE WHEN items.kind = 'show' THEN EXISTS (SELECT 1 FROM watched_counts c
+		WHERE c.profile_id = @profile AND c.group_id = items.id AND (c.watched > 0 OR EXISTS (SELECT 1 FROM items season
+			JOIN items e ON e.parent_id = season.id JOIN watch_state w ON w.item_id = e.id AND w.profile_id = @profile
+			WHERE season.parent_id = items.id AND e.kind = 'episode' AND w.position_ms > 0)))
+	ELSE items.kind IN ('movie', 'episode') AND EXISTS (SELECT 1 FROM watch_state w
+		WHERE w.profile_id = @profile AND w.item_id = items.id AND (w.watched_at IS NOT NULL OR w.position_ms > 0)) END`
 
 // where is the conditions, each led by AND, that narrow a statement over items to what the filter
 // lets through, for the profile args holds as @profile; it adds the values they take to args. A
@@ -144,7 +146,11 @@ func markSQL(m domain.Mark) string {
 	case domain.MarkUnwatched:
 		return unwatched
 	case domain.MarkInProgress:
-		return unwatched + ` AND ` + begun
+		// A film or an episode is under way when its one watch state is played part way and not
+		// watched, which is a single lookup rather than one for each half.
+		return `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
+			ELSE items.kind IN ('movie', 'episode') AND EXISTS (SELECT 1 FROM watch_state w
+				WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NULL AND w.position_ms > 0) END`
 	case domain.MarkFavourite:
 		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
 	case domain.MarkWatchlist:
