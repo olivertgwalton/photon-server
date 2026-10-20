@@ -119,6 +119,7 @@ var problems = []struct {
 	{err: store.ErrNoNext, code: codeNotFound, ownWords: true},
 	{err: store.ErrLibraryExists, code: codeConflict, ownWords: true},
 	{err: store.ErrRemoteUntouched, code: codeConflict, ownWords: true},
+	{err: store.ErrHoldsNothing, code: codeConflict, ownWords: true},
 	{err: store.ErrProfileExists, code: codeConflict, ownWords: true},
 	{err: store.ErrPluginExists, code: codeConflict, ownWords: true},
 	{err: store.ErrNotUserCollection, code: codeConflict, ownWords: true},

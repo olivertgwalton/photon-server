@@ -92,7 +92,7 @@ func (a *API) searched(ctx context.Context, q store.SearchQuery) ([]store.Card, 
 	if err != nil || q.Offset > 0 || q.Library != (uuid.UUID{}) {
 		return cards, int(total), err
 	}
-	found, err := a.svc.Discover.Find(ctx, q.Profile, q.Text, q.Kinds)
+	found, err := a.svc.Discover.Find(ctx, q.Profile, domain.MediaRemote, q.Text, q.Kinds)
 	if err != nil {
 		return nil, 0, err
 	}

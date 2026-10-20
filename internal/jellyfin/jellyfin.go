@@ -52,7 +52,7 @@ type copies interface {
 
 // discover finds remote libraries titles they do not hold yet.
 type discover interface {
-	Find(ctx context.Context, profile uuid.UUID, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
+	Find(ctx context.Context, profile uuid.UUID, media domain.LibraryMedia, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
 }
 
 // ensureCopies gives a remote film or episode the copies its provider offers as an app opens or

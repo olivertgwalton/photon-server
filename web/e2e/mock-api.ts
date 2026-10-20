@@ -1705,6 +1705,7 @@ const server_ = Bun.serve<Socket>({
 						total: found.length,
 					},
 					people: { items: people, offset: 0, total: people.length },
+					requestable: { items: [] },
 				} satisfies Schemas["Search"]);
 			}
 			case `GET /api/v1/people/${person}`:

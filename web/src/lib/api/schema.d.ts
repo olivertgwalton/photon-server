@@ -8594,6 +8594,7 @@ export interface components {
             box_sets?: components["schemas"]["BoxSetMode"];
             certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"] | null;
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             metadata_language?: string | null;
@@ -9408,6 +9409,7 @@ export interface components {
         ScanPhase: "reading" | "removing";
         Search: {
             people: components["schemas"]["PersonRefPage"];
+            requestable: components["schemas"]["CardList"];
             titles: components["schemas"]["CardPage"];
         };
         /** @enum {string} */

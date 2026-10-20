@@ -42,7 +42,10 @@ func (s streaming) Ensure(ctx context.Context, item uuid.UUID) error {
 // discovered is what a remote library's search finds, whatever is searched for.
 type discovered []store.Discovery
 
-func (d discovered) Find(context.Context, uuid.UUID, string, []domain.ItemKind) ([]store.Discovery, error) {
+func (d discovered) Find(_ context.Context, _ uuid.UUID, media domain.LibraryMedia, _ string, _ []domain.ItemKind) ([]store.Discovery, error) {
+	if media != domain.MediaRemote {
+		return nil, nil
+	}
 	return d, nil
 }
 

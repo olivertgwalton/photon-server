@@ -3,6 +3,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"uuid"
 
@@ -66,7 +67,7 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 		t.Errorf("an id nothing found: %v, %v", held, err)
 	}
 
-	if libs, err := s.Discoverable(ctx, uuid.UUID{}); err != nil || len(libs) != 1 || libs[0].Source != domain.SourceTMDB {
+	if libs, err := s.Discoverable(ctx, uuid.UUID{}, domain.MediaRemote); err != nil || len(libs) != 1 || libs[0].Source != domain.SourceTMDB {
 		t.Errorf("searched libraries %+v, %v; want Found", libs, err)
 	}
 	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
@@ -77,7 +78,7 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if libs, err := s.Discoverable(ctx, kid.ID); err != nil || len(libs) != 0 {
+	if libs, err := s.Discoverable(ctx, kid.ID, domain.MediaRemote); err != nil || len(libs) != 0 {
 		t.Errorf("a profile held to 12 searches %+v, %v; want none", libs, err)
 	}
 }
@@ -110,5 +111,52 @@ func TestAFindKeepsItsFullPoster(t *testing.T) {
 	}
 	if pic, err := s.Picture(ctx, again[0].Poster); err != nil || pic.URL != arrival.FullPoster {
 		t.Errorf("its new poster is %+v, %v", pic, err)
+	}
+}
+
+// A library of files searches a provider once an admin names one, and its finds are titles to ask
+// for: opening one makes no title of it, and a search of remote libraries passes it over. A remote
+// library cannot be left holding nothing.
+func TestALibraryOfFilesSearchesForTitlesToAskFor(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if libs, err := s.Discoverable(ctx, uuid.UUID{}, domain.MediaFolder); err != nil || len(libs) != 0 {
+		t.Fatalf("before a provider is named it searches %+v, %v", libs, err)
+	}
+	tmdb := domain.SourceTMDB
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Discover: &tmdb}); err != nil {
+		t.Fatal(err)
+	}
+	if libs, err := s.Discoverable(ctx, uuid.UUID{}, domain.MediaFolder); err != nil || len(libs) != 1 || libs[0].ID != films.ID {
+		t.Errorf("libraries of files searched %+v, %v; want Films", libs, err)
+	}
+	if libs, err := s.Discoverable(ctx, uuid.UUID{}, domain.MediaRemote); err != nil || len(libs) != 0 {
+		t.Errorf("remote libraries searched %+v, %v; want none", libs, err)
+	}
+	saved, err := s.SaveDiscoveries(ctx, films.ID, domain.ItemMovie, domain.ProviderTMDB, []domain.Candidate{{ID: "27205", Title: "Inception", Year: 2010}})
+	if err != nil || len(saved) != 1 {
+		t.Fatalf("found %+v, %v", saved, err)
+	}
+	if held, err := s.HoldDiscovered(ctx, saved[0].ID); err != nil || held {
+		t.Errorf("opening a library of files' find: %v, %v; want no title made of it", held, err)
+	}
+	none := domain.FieldSource("")
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Discover: &none}); err != nil {
+		t.Fatal(err)
+	}
+	if libs, err := s.Discoverable(ctx, uuid.UUID{}, domain.MediaFolder); err != nil || len(libs) != 0 {
+		t.Errorf("with its provider taken away it searches %+v, %v", libs, err)
+	}
+
+	found, err := s.AddRemoteLibrary(ctx, "Found", domain.LibraryMovies, Remote{DiscoverSource: tmdb, StreamSource: domain.PluginSource("riven")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, found.ID, LibraryChange{Discover: &none}); !errors.Is(err, ErrHoldsNothing) {
+		t.Errorf("a remote library left with no list and no search: %v, want ErrHoldsNothing", err)
 	}
 }
