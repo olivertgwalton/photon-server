@@ -57,11 +57,11 @@ func aShowWithATheme(t *testing.T) (st *store.Store, ada domain.Profile, show, e
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	episodes, err := st.Episodes(ctx, ada.ID, cards[0].ID)
+	episodes, err := st.Episodes(ctx, ada.ID, cards[0])
 	if err != nil || len(episodes) != 1 {
 		t.Fatal(episodes, err)
 	}
-	return st, ada, cards[0].ID, episodes[0].ID
+	return st, ada, cards[0], episodes[0].ID
 }
 
 // themeResult is Jellyfin's ThemeMediaResult as an app reads it.

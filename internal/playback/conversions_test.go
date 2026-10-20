@@ -79,11 +79,11 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := st.Playable(ctx, owner.ID, cards[0].ID, uuid.UUID{})
+	c, err := st.Playable(ctx, owner.ID, cards[0], uuid.UUID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return st, cards[0].ID, c.Parts[0].ID
+	return st, cards[0], c.Parts[0].ID
 }
 
 // slots is a node's transcode slots, at most one at once.

@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// listChunk is how many of a list's items are read and written at a time. An app that sets no
+// listChunk is how many of a list's items are drawn and written at a time. An app that sets no
 // Limit is answered the whole list, as Jellyfin answers it, so a reply holds no more than this
-// many items at once however long the list.
-const listChunk = 250
+// many items at once however long the list. Fewer, and a library's worth of chunks costs more
+// round trips to the database than the reply saves.
+const listChunk = 2500
 
 // list writes cards as items, with their copies, whether each downloads, trickplay, chapters and
 // providers' ids where the app asked for them: read for the whole page at once.
@@ -68,31 +70,53 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 
 // writeList writes a page of cards as a queryResult, listChunk items at a time.
 func (a *API) writeList(w http.ResponseWriter, r *http.Request, cards []store.Card, total, start int, l listed) {
+	a.writeChunks(w, r, len(cards), total, start, func(ctx context.Context, from, to int) ([]item, error) {
+		return a.list(ctx, cards[from:to], l)
+	})
+}
+
+// writeTitles writes the titles ids names as a queryResult, drawing listChunk of them at a time. A
+// title gone before its chunk is drawn is left out.
+func (a *API) writeTitles(w http.ResponseWriter, r *http.Request, ids []uuid.UUID, total, start int, l listed) {
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	a.writeChunks(w, r, len(ids), total, start, func(ctx context.Context, from, to int) ([]item, error) {
+		cards, err := a.svc.Catalogue.Cards(ctx, profile, ids[from:to])
+		if err != nil {
+			return nil, err
+		}
+		return a.list(ctx, cards, l)
+	})
+}
+
+// writeChunks writes the items chunk answers for n places as a queryResult, listChunk at a time.
+func (a *API) writeChunks(w http.ResponseWriter, r *http.Request, n, total, start int, chunk func(ctx context.Context, from, to int) ([]item, error)) {
 	ctx := r.Context()
-	items, err := a.list(ctx, cards[:min(listChunk, len(cards))], l)
+	read := func(from int) ([]item, error) { return chunk(ctx, from, min(from+listChunk, n)) }
+	items, err := read(0)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	a.write(w, []byte(`{"Items":[`))
-	for n := 0; ; {
+	written := 0
+	for from := 0; ; {
 		for i := range items {
 			// By pointer, an item encodes as it does in a slice: by its fields' pointer methods too.
 			body, err := json.Marshal(&items[i])
 			if err != nil {
 				a.abort(r, err)
 			}
-			if n > 0 {
+			if written > 0 {
 				a.write(w, []byte{','})
 			}
 			a.write(w, body)
-			n++
+			written++
 		}
-		if n == len(cards) {
+		if from += listChunk; from >= n {
 			break
 		}
-		if items, err = a.list(ctx, cards[n:min(n+listChunk, len(cards))], l); err != nil {
+		if items, err = read(from); err != nil {
 			a.abort(r, err)
 		}
 	}

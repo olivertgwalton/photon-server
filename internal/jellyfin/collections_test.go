@@ -48,7 +48,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			films[f] = cards[0].ID
+			films[f] = cards[0]
 		}
 		return lib
 	}

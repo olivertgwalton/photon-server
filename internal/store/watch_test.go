@@ -113,7 +113,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	if err := s.Favourite(ctx, oliver.ID, show); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 5})
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 5})
 	if err != nil || len(cards) != 1 || cards[0].State.FavouriteAt == nil || cards[0].State.Unwatched != 3 {
 		t.Errorf("card = %+v, %v; want a favourite with three left", cards, err)
 	}
@@ -396,7 +396,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	}
 
 	for _, lib := range []uuid.UUID{kids.ID, shows.ID} {
-		if wall, _, err := s.Wall(ctx, []uuid.UUID{lib}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Limit: 10}); err != nil || len(wall) != 1 {
+		if wall, _, err := s.wallCards(ctx, []uuid.UUID{lib}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Limit: 10}); err != nil || len(wall) != 1 {
 			t.Errorf("library %v lists %d shows (%v), want its own", lib, len(wall), err)
 		}
 	}
@@ -551,7 +551,7 @@ func TestAShowsEpisodesLeftFollowItsScans(t *testing.T) {
 	}
 	left := func() int {
 		t.Helper()
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
 		if err != nil || len(cards) != 1 {
 			t.Fatalf("wall = %+v, %v", cards, err)
 		}

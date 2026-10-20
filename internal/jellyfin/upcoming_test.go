@@ -51,7 +51,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	if err != nil || len(shows) != 1 {
 		t.Fatal(shows, err)
 	}
-	show := shows[0].ID
+	show := shows[0]
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	if err := st.SaveIdentity(ctx, show, domain.SourceTMDB, domain.Metadata{}, map[int]domain.SeasonMetadata{1: {Episodes: map[int]domain.Metadata{
 		1: {Title: "Good News About Hell", ReleaseDate: today},

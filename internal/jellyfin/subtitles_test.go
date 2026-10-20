@@ -149,7 +149,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	film = cards[0].ID
+	film = cards[0]
 	versions, err := st.Versions(ctx, []uuid.UUID{film})
 	if err != nil {
 		t.Fatal(err)

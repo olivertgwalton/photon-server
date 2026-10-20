@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"uuid"
@@ -45,8 +46,26 @@ func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid
 	return nil
 }
 
+// walled keeps the cards a fake answered by id, for Cards to draw.
+var walled sync.Map
+
+func wallOf(c store.Card) []uuid.UUID {
+	walled.Store(c.ID, c)
+	return []uuid.UUID{c.ID}
+}
+
+func (fakeCatalogue) Cards(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]store.Card, error) {
+	var out []store.Card
+	for _, id := range ids {
+		if c, ok := walled.Load(id); ok {
+			out = append(out, c.(store.Card))
+		}
+	}
+	return out, nil
+}
+
 // Wall answers one card titled after the page it was asked for, of 120 in all.
-func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
+func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error) {
 	if len(libs) != 1 || libs[0] != films {
 		return nil, 0, store.ErrNotFound
 	}
@@ -57,7 +76,7 @@ func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage)
 	if f := p.Filter; f.MinRating > 0 || len(f.Genres) > 0 || len(f.Marks) > 0 || len(f.Years) > 0 {
 		title += fmt.Sprintf(" %v %v %v %s>=%v", f.Genres, f.Marks, f.Years, f.RatingSite, f.MinRating)
 	}
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}}, 120, nil
+	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}), 120, nil
 }
 
 func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, _ domain.WallKind, f store.WallFilter) ([]store.Letter, error) {
@@ -491,8 +510,8 @@ func (ratedCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage
 	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}, nil
 }
 
-func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]store.Card, int64, error) {
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}}, 1, nil
+func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]uuid.UUID, int64, error) {
+	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}), 1, nil
 }
 
 func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID, domain.WallKind) (store.Facets, error) {

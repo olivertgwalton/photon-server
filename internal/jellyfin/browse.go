@@ -18,7 +18,7 @@ import (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
@@ -304,12 +304,12 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		a.internal(w, r, err)
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
+	titles, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeList(w, r, cards, int(total), l.start, l)
+	a.writeTitles(w, r, titles, int(total), l.start, l)
 }
 
 // children answers what is in a collection, a show or a season: a collection's titles; a show's

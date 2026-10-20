@@ -43,9 +43,20 @@ func (l longLibrary) LibrariesSeen(context.Context, uuid.UUID) ([]*store.SeenLib
 	return []*store.SeenLibrary{{ID: l.lib, Name: "Films", Kind: domain.LibraryMovies}}, nil
 }
 
-func (l longLibrary) Wall(_ context.Context, _ []uuid.UUID, p store.WallPage) ([]store.Card, int64, error) {
-	cards := l.cards[min(p.Offset, len(l.cards)):min(p.Offset+p.Limit, len(l.cards))]
-	return cards, int64(len(l.cards)), nil
+func (l longLibrary) Wall(_ context.Context, _ []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error) {
+	var ids []uuid.UUID
+	for _, c := range l.cards[min(p.Offset, len(l.cards)):min(p.Offset+p.Limit, len(l.cards))] {
+		ids = append(ids, c.ID)
+	}
+	return ids, int64(len(l.cards)), nil
+}
+
+func (l longLibrary) Cards(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]store.Card, error) {
+	out := make([]store.Card, len(ids))
+	for n, id := range ids {
+		out[n] = l.cards[l.nth(id)]
+	}
+	return out, nil
 }
 
 func (l longLibrary) nth(id uuid.UUID) int {

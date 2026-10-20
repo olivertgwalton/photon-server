@@ -134,7 +134,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	heat := cards[0].ID
+	heat := cards[0]
 	versions, err := st.Versions(ctx, []uuid.UUID{heat})
 	if err != nil {
 		t.Fatal(err)
@@ -812,7 +812,7 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	heat := cards[0].ID
+	heat := cards[0]
 	versions, err := st.Versions(ctx, []uuid.UUID{heat})
 	if err != nil || len(versions[heat]) != 2 {
 		t.Fatal(versions, err)

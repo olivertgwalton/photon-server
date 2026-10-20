@@ -61,7 +61,7 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := st.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{
+		if err := st.SaveIdentity(ctx, cards[0], domain.SourceTMDB, domain.Metadata{
 			Title: f.title, Certificate: f.cert, Year: f.year, Genres: f.genres, Studios: []string{f.studio},
 		}, nil); err != nil {
 			t.Fatal(err)

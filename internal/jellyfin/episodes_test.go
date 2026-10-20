@@ -60,7 +60,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 		if err != nil || len(shows) != 1 {
 			t.Fatal(shows, err)
 		}
-		if err := st.SaveIdentity(ctx, shows[0].ID, domain.SourceTMDB, domain.Metadata{Title: show}, map[int]domain.SeasonMetadata{1: {Episodes: meta}}); err != nil {
+		if err := st.SaveIdentity(ctx, shows[0], domain.SourceTMDB, domain.Metadata{Title: show}, map[int]domain.SeasonMetadata{1: {Episodes: meta}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -112,7 +112,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 	if err != nil || len(shows) != 2 {
 		t.Fatal(shows, err)
 	}
-	seasons, err := st.Seasons(ctx, ada.ID, shows[1].ID)
+	seasons, err := st.Seasons(ctx, ada.ID, shows[1])
 	if err != nil || len(seasons) != 1 {
 		t.Fatal(seasons, err)
 	}

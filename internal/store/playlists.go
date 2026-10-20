@@ -27,11 +27,11 @@ type PlaylistSummary struct {
 	UpdatedAt  time.Time
 }
 
-// PlaylistEntry is one entry of a playlist: its own id, and the title it plays. A smart playlist's
-// entries are its rule's findings rather than rows of its own, so each has no id.
+// PlaylistEntry is one entry of a playlist: its own id, and the title it plays, which Cards draws. A
+// smart playlist's entries are its rule's findings rather than rows of its own, so each has no id.
 type PlaylistEntry struct {
-	ID   uuid.UUID
-	Card Card
+	ID    uuid.UUID
+	Title uuid.UUID
 }
 
 // playlistRow is a playlist as its table holds it, its library and rule unset where it has none.
@@ -110,25 +110,9 @@ func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID
 	if err != nil {
 		return nil, 0, err
 	}
-	in := make([]uuid.UUID, len(entries))
-	for n, x := range entries {
-		in[n] = x.ItemID
-	}
-	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, in)
-	if err != nil {
-		return nil, 0, err
-	}
-	cards, err := s.cards(ctx, profile, rows)
-	if err != nil {
-		return nil, 0, err
-	}
-	byID := map[uuid.UUID]Card{}
-	for _, c := range cards {
-		byID[c.ID] = c
-	}
 	out := make([]PlaylistEntry, len(entries))
 	for n, x := range entries {
-		out[n] = PlaylistEntry{ID: x.ID, Card: byID[x.ItemID]}
+		out[n] = PlaylistEntry{ID: x.ID, Title: x.ItemID}
 	}
 	return out, total, nil
 }
@@ -267,16 +251,16 @@ func (s *Store) SetPlaylistRule(ctx context.Context, profile, playlist uuid.UUID
 
 // smartEntries answers a page of what a smart playlist's rule finds now, and how many it finds.
 func (s *Store) smartEntries(ctx context.Context, profile, lib uuid.UUID, rule SmartRule, offset, limit int) ([]PlaylistEntry, int64, error) {
-	cards, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
+	ids, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
 	if err != nil {
 		return nil, 0, err
 	}
 	if rule.Limit > 0 {
 		total = min(total, int64(rule.Limit))
 	}
-	out := make([]PlaylistEntry, len(cards))
-	for n, c := range cards {
-		out[n] = PlaylistEntry{Card: c}
+	out := make([]PlaylistEntry, len(ids))
+	for n, id := range ids {
+		out[n] = PlaylistEntry{Title: id}
 	}
 	return out, total, nil
 }

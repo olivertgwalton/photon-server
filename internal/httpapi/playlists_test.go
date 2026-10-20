@@ -85,7 +85,7 @@ func (fakePlaylists) PlaylistEntries(_ context.Context, profile, playlist uuid.U
 	if err := own(profile, playlist); err != nil {
 		return nil, 0, err
 	}
-	return []store.PlaylistEntry{{ID: entry, Card: store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat"}}}, int64(offset + 1), nil
+	return []store.PlaylistEntry{{ID: entry, Title: wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat"})[0]}}, int64(offset + 1), nil
 }
 
 func (fakePlaylists) AddToPlaylist(_ context.Context, profile, playlist uuid.UUID, _ []uuid.UUID) error {
@@ -111,7 +111,7 @@ func (fakePlaylists) RemovePlaylist(_ context.Context, profile, playlist uuid.UU
 
 func TestAProfileKeepsItsPlaylists(t *testing.T) {
 	p := &fakePlaylists{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Playlists: p, Events: &fakeEvents{}})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, Playlists: p, Events: &fakeEvents{}})
 	base := "/api/v1/playlists/" + nightIn.String()
 	smart := "/api/v1/playlists/" + unwatched.String()
 	for _, tc := range []struct {

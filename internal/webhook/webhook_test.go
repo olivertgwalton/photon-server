@@ -209,7 +209,7 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 	if err != nil || len(shows) != 1 {
 		t.Fatal(shows, err)
 	}
-	seasons, err := st.Seasons(ctx, uuid.UUID{}, shows[0].ID)
+	seasons, err := st.Seasons(ctx, uuid.UUID{}, shows[0])
 	if err != nil || len(seasons) != 1 {
 		t.Fatal(seasons, err)
 	}
@@ -250,7 +250,7 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := body.Title; got.Kind != domain.ItemEpisode || got.IDs[domain.ProviderIMDb] != "tt11650328" || got.Season != 1 || got.Episode != 2 ||
-		got.Show.ID != shows[0].ID || got.Show.Title != "Severance" || got.Show.Year != 2022 || got.Show.IDs[domain.ProviderTVDB] != "371980" {
+		got.Show.ID != shows[0] || got.Show.Title != "Severance" || got.Show.Year != 2022 || got.Show.IDs[domain.ProviderTVDB] != "371980" {
 		t.Errorf("title = %s", rx.got[0].body)
 	}
 }
