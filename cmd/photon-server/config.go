@@ -26,6 +26,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/radarr"
 	"github.com/olivertgwalton/photon-server/internal/riven"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/tmdb"
@@ -91,6 +92,9 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 		}, cache),
 		riven.New(func(ctx context.Context) (map[string]string, error) {
 			return st.ProviderSettings(ctx, domain.SourceRiven)
+		}),
+		radarr.New(func(ctx context.Context) (map[string]string, error) {
+			return st.ProviderSettings(ctx, domain.SourceRadarr)
 		}),
 	)
 }
