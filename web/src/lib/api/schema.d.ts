@@ -6879,45 +6879,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/requestable/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A title a search answered as requestable, as a title's page draws it */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TitlePage"];
-                    };
-                };
-                default: components["responses"]["Problem"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/requests": {
         parameters: {
             query?: never;
@@ -7264,7 +7225,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A title's page */
+        /** A title's page, or one a search found for the profile to ask for */
         get: {
             parameters: {
                 query?: never;
@@ -10076,6 +10037,7 @@ export interface components {
             ratings?: components["schemas"]["RatingRef"][];
             /** Format: date */
             release_date?: string;
+            requestable?: boolean;
             rule?: components["schemas"]["SmartRule"] | null;
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;

@@ -9,17 +9,14 @@ import type { LayoutLoad } from "./$types";
 // drawn as its page would be from what its provider says of it.
 export const load: LayoutLoad = async ({ fetch, params, depends }) => {
 	depends(keys.title(params.id), keys.userdata);
-	const api = client(fetch);
-	const path = { params: { path: { id: params.id } } };
-	const held = await api.GET("/api/v1/titles/{id}", path);
-	const asking = held.response.status === 404;
 	const title = await need(
-		asking ? api.GET("/api/v1/requestable/{id}", path) : Promise.resolve(held),
+		client(fetch).GET("/api/v1/titles/{id}", {
+			params: { path: { id: params.id } },
+		}),
 	);
 	return {
 		title,
-		// Whether it is a title to ask for rather than one the server holds.
-		asking,
+		asking: title.requestable === true,
 		// One card per person, whatever they did on it.
 		cast: castOf(title.credits ?? []),
 		extras: extrasOf(title),
