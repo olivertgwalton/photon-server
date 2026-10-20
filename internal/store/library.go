@@ -371,12 +371,12 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 		}
 	}
 	if change.Discover != nil {
-		if err := setColumn(ctx, tx, id, "discover_source", orNull(*change.Discover)); err != nil {
+		if err := setColumn(ctx, tx, id, "discover_source", optional(*change.Discover)); err != nil {
 			return err
 		}
 	}
 	if change.Requests != nil {
-		if err := setColumn(ctx, tx, id, "request_source", orNull(*change.Requests)); err != nil {
+		if err := setColumn(ctx, tx, id, "request_source", optional(*change.Requests)); err != nil {
 			return err
 		}
 	}
@@ -384,14 +384,6 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 		return setColumn(ctx, tx, id, "subtitle_match", change.SubtitleMatch)
 	}
 	return nil
-}
-
-// orNull is a source to set, nil for none.
-func orNull(s domain.FieldSource) *domain.FieldSource {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 func setColumn(ctx context.Context, tx db, id uuid.UUID, column string, v any) error {
