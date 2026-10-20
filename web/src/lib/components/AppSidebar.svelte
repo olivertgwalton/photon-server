@@ -3,6 +3,7 @@ import BookmarkIcon from "@lucide/svelte/icons/bookmark";
 import CalendarDaysIcon from "@lucide/svelte/icons/calendar-days";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
+import HandIcon from "@lucide/svelte/icons/hand";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import HouseIcon from "@lucide/svelte/icons/house";
 import LibraryBigIcon from "@lucide/svelte/icons/library-big";
@@ -27,9 +28,15 @@ type PluginPage = components["schemas"]["PluginPage"];
 let {
 	libraries,
 	collections,
+	requests,
 	pages,
-}: { libraries: Library[]; collections: boolean; pages: PluginPage[] } =
-	$props();
+}: {
+	libraries: Library[];
+	collections: boolean;
+	// Whether the profile has asked for anything.
+	requests: boolean;
+	pages: PluginPage[];
+} = $props();
 
 const sidebar = Sidebar.useSidebar();
 // While on, each library is dragged into place by its grip, or moved by the
@@ -217,6 +224,9 @@ function current(href: string) {
 					{@render item("/playlists", "Playlists", ListVideoIcon)}
 					{@render item("/history", "History", RotateCcwClockIcon)}
 					{@render item("/downloads", "Downloads", DownloadIcon)}
+					{#if requests}
+						{@render item("/requests", "Requests", HandIcon)}
+					{/if}
 				</Sidebar.Menu>
 			</Sidebar.Group>
 			{#if pages.length}

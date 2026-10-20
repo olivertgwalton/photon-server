@@ -42,6 +42,7 @@ $effect(() => connectLive(admin ? stream : undefined));
 	<AppSidebar
 		libraries={data.libraries}
 		collections={data.collections}
+		requests={data.requests}
 		pages={data.pages}
 	/>
 	<Sidebar.Inset>
