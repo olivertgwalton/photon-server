@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log/slog"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -29,4 +30,23 @@ func WithSession(ctx context.Context, s domain.Session) context.Context {
 func SessionOf(ctx context.Context) domain.Session {
 	s, _ := ctx.Value(sessionKey{}).(domain.Session)
 	return s
+}
+
+// LogHandler adds to every record logged with a request's context the profile and session it was
+// signed in as.
+type LogHandler struct{ slog.Handler }
+
+func (h LogHandler) Handle(ctx context.Context, r slog.Record) error {
+	if s := SessionOf(ctx); s.ID != (uuid.UUID{}) {
+		r.AddAttrs(slog.String("profile", s.Profile.ID.String()), slog.String("session", s.ID.String()))
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h LogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return LogHandler{h.Handler.WithAttrs(attrs)}
+}
+
+func (h LogHandler) WithGroup(name string) slog.Handler {
+	return LogHandler{h.Handler.WithGroup(name)}
 }
