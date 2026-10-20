@@ -441,7 +441,7 @@ func TestRecentlyReleased(t *testing.T) {
 func TestTopRatedUnwatched(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	admin, kid := homeLibraries(t, s, []string{"Best", "Few Votes", "Watched", "Started", "Other Site", "Good"}, []string{"Begun", "Fresh"})
+	admin, kid := homeLibraries(t, s, []string{"Best", "Few Votes", "Watched", "Started", "Other Site", "Good"}, []string{"Begun", "Under Way", "Put Back", "Fresh"})
 	for _, r := range []struct {
 		title, source, site string
 		score               float32
@@ -454,6 +454,8 @@ func TestTopRatedUnwatched(t *testing.T) {
 		{"Started", "omdb", "imdb", 87, nil},
 		{"Other Site", "tmdb", "tmdb", 99, nil},
 		{"Begun", "tmdb", "imdb", 86, nil},
+		{"Under Way", "tmdb", "imdb", 85, nil},
+		{"Put Back", "tmdb", "imdb", 80, nil},
 		{"Fresh", "tmdb", "imdb", 75, nil},
 		{"Good", "tmdb", "imdb", 65, nil},
 	} {
@@ -472,8 +474,18 @@ func TestTopRatedUnwatched(t *testing.T) {
 	if err := s.MarkWatched(ctx, admin, titled("Begun S1E1"), nil); err != nil {
 		t.Fatal(err)
 	}
+	// A show with an episode under way and none watched is begun; one whose episode was put back
+	// to the start is not.
+	for _, ep := range []string{"Under Way S1E1", "Put Back S1E1"} {
+		if _, err := saveProgress(ctx, s, admin, titled(ep), 20*time.Minute, domain.ReachStart, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.ClearProgress(ctx, admin, titled("Put Back S1E1")); err != nil {
+		t.Fatal(err)
+	}
 
-	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Best", "Good", "Fresh"}; !slices.Equal(got, want) {
+	if got, want := homeRow(t, s, admin, domain.RowTopRatedUnwatched), []string{"Best", "Good", "Put Back", "Fresh"}; !slices.Equal(got, want) {
 		t.Errorf("top rated = %v, want %v: each library's by IMDb, nothing begun or rated by too few", got, want)
 	}
 	if got, want := homeRow(t, s, kid, domain.RowTopRatedUnwatched), []string{"Best", "Watched", "Started", "Good"}; !slices.Equal(got, want) {
