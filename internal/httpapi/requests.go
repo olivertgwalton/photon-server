@@ -10,7 +10,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
-	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 type requests interface {
@@ -72,28 +71,13 @@ func requestsOf(rs []store.Request) []requestJSON {
 // askJSON is a title a search answered as requestable, by its id there, and of a show the seasons
 // asked for, every one where none is.
 type askJSON struct {
-	TitleID uuid.UUID `json:"title_id"`
-	Seasons []int     `json:"seasons,omitzero"`
+	RequestableID uuid.UUID `json:"requestable_id"`
+	Seasons       []int     `json:"seasons,omitzero"`
 }
 
 type declineJSON struct {
 	// Reason is why, for the one who asked; optional.
 	Reason string `json:"reason,omitzero"`
-}
-
-// requestablePage answers a title a search answered as requestable as a title's page is drawn,
-// its cast and pictures as its provider describes it: no title of the server's, it has no
-// copies, seasons or state, and plays nothing.
-func (a *API) requestablePage(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	page, err := a.svc.RequestablePages.Page(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answeredAs(w, r, err, "no title a search answered as requestable in the last day has that id") {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page, words.Negotiate(w, r)))
 }
 
 // askFor asks for a title a library of files' search found, as the profile signed in.
@@ -102,16 +86,16 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.TitleID == (uuid.UUID{}) {
-		writeProblem(w, a.logger, codeInvalidBody, "title_id is a title a search answered as requestable")
+	if req.RequestableID == (uuid.UUID{}) {
+		writeProblem(w, a.logger, codeInvalidBody, "requestable_id is a title a search answered as requestable")
 		return
 	}
 	if slices.ContainsFunc(req.Seasons, func(n int) bool { return n < 0 }) {
 		writeProblem(w, a.logger, codeInvalidBody, "seasons are numbers from 0, a show's specials")
 		return
 	}
-	asked, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.TitleID, req.Seasons)
-	if a.answeredAs(w, r, err, "title_id is a title a search answered as requestable, found in the last day") {
+	asked, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.RequestableID, req.Seasons)
+	if a.answeredAs(w, r, err, "requestable_id is a title a search answered as requestable, found in the last day") {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, requestOf(asked))
@@ -189,11 +173,6 @@ func (a *API) requestsRoutes() []route {
 			pattern: "POST /api/v1/requests", access: signedIn,
 			summary: "Ask for a title a search answered as requestable; an admin's is approved at once",
 			body:    askJSON{}, status: http.StatusCreated, reply: requestJSON{}, handle: a.askFor,
-		},
-		{
-			pattern: "GET /api/v1/requestable/{id}", access: signedIn,
-			summary: "A title a search answered as requestable, as a title's page draws it",
-			status:  http.StatusOK, reply: titlePageJSON{}, handle: a.requestablePage,
 		},
 		{
 			pattern: "GET /api/v1/requests", access: signedIn, summary: "Page the profile's requests, newest first",

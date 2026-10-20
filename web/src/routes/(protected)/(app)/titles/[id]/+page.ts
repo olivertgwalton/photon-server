@@ -11,18 +11,6 @@ export const load: PageLoad = async ({ fetch, params, parent, depends }) => {
 	const api = client(fetch);
 	const path = { params: { path: { id: params.id } } };
 	const { title, asking } = await parent();
-	// A title to ask for is no title of the server's: it has nothing more to ask.
-	if (asking) {
-		return {
-			members: undefined,
-			next: undefined,
-			seasonEpisodes: undefined,
-			show: undefined,
-			seasons: undefined,
-			themeMusic: false,
-			similar: undefined,
-		};
-	}
 	// A season has no page of its own: it opens on the episode it is at, with
 	// its season beside it to pick another.
 	if (title.kind === "season") {
@@ -35,7 +23,7 @@ export const load: PageLoad = async ({ fetch, params, parent, depends }) => {
 			? need(api.GET("/api/v1/titles/{id}/members", path))
 			: undefined,
 		// A show plays the episode the profile is at; finished, none.
-		title.kind === "show"
+		title.kind === "show" && !asking
 			? api.GET("/api/v1/titles/{id}/next", path).then(({ data }) => data)
 			: undefined,
 		// An episode is shown among the rest of its season, to pick another.
@@ -71,7 +59,7 @@ export const load: PageLoad = async ({ fetch, params, parent, depends }) => {
 			: false,
 		// Not awaited: the page is drawn before the server has looked.
 		similar:
-			title.kind === "movie" || title.kind === "show"
+			(title.kind === "movie" || title.kind === "show") && !asking
 				? similarOf(api, title.id)
 				: showSimilar,
 	};

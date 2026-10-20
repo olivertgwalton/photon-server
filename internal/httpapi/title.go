@@ -38,7 +38,10 @@ type titlePageJSON struct {
 	ID uuid.UUID `json:"id"`
 	// Fetching is a remote film or episode whose provider is fetching a copy: it plays once the
 	// provider has it, a while from now.
-	Fetching      bool                       `json:"fetching,omitzero"`
+	Fetching bool `json:"fetching,omitzero"`
+	// Requestable is a title no library holds that a search found for the profile to ask for,
+	// drawn as its provider describes it: it has no copies, seasons or state, and plays nothing.
+	Requestable   bool                       `json:"requestable,omitzero"`
 	LibraryID     *uuid.UUID                 `json:"library_id,omitzero"`
 	Kind          domain.ItemKind            `json:"kind"`
 	Title         string                     `json:"title"`

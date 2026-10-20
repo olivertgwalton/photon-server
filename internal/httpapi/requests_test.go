@@ -66,16 +66,16 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 		return rec
 	}
 
-	rec := do(http.MethodPost, "/api/v1/requests", memberToken, `{"title_id":"`+inception.String()+`"}`)
+	rec := do(http.MethodPost, "/api/v1/requests", memberToken, `{"requestable_id":"`+inception.String()+`"}`)
 	var asked requestJSON
 	if err := json.Unmarshal(rec.Body.Bytes(), &asked); rec.Code != http.StatusCreated || err != nil ||
 		asked.Title != "Inception" || asked.IDs[domain.ProviderTMDB] != "27205" || asked.State != domain.RequestPending {
 		t.Errorf("asked: %d %s", rec.Code, rec.Body)
 	}
 	for body, want := range map[string]int{
-		`{"title_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
-		`{"title_id":"` + inception.String() + `","seasons":[1]}`:  http.StatusBadRequest,
-		`{"title_id":"` + inception.String() + `","seasons":[-1]}`: http.StatusBadRequest,
+		`{"requestable_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
+		`{"requestable_id":"` + inception.String() + `","seasons":[1]}`:  http.StatusBadRequest,
+		`{"requestable_id":"` + inception.String() + `","seasons":[-1]}`: http.StatusBadRequest,
 		`{}`: http.StatusBadRequest,
 	} {
 		if rec := do(http.MethodPost, "/api/v1/requests", memberToken, body); rec.Code != want {
@@ -99,5 +99,39 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	}
 	if rec := do(http.MethodGet, "/api/v1/admin/requests?state=waiting", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("requests in no state: %d, want 400", rec.Code)
+	}
+}
+
+// fakeRequestablePages has Inception found for asking.
+type fakeRequestablePages struct{}
+
+func (fakeRequestablePages) Page(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
+	if id != inception {
+		return store.TitlePage{}, store.ErrNotFound
+	}
+	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Inception"}, nil
+}
+
+// A title a search found to ask for opens at its id as one a library holds does, marked for asking;
+// an id neither is is not found.
+func TestATitleToAskForOpensAsATitle(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, RequestablePages: fakeRequestablePages{},
+	})
+	get := func(id uuid.UUID) (int, string) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+id.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+memberToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	if code, body := get(films); code != http.StatusOK || !strings.Contains(body, `"title":"Heat"`) || strings.Contains(body, `"requestable"`) {
+		t.Errorf("a title held: %d %s, want Heat, not to ask for", code, body)
+	}
+	if code, body := get(inception); code != http.StatusOK || !strings.Contains(body, `"title":"Inception"`) || !strings.Contains(body, `"requestable":true`) {
+		t.Errorf("a title to ask for: %d %s, want Inception, to ask for", code, body)
+	}
+	if code, body := get(uuid.NewV7()); code != http.StatusNotFound || !strings.Contains(body, `"code":"not_found"`) {
+		t.Errorf("an id of neither: %d %s, want not found", code, body)
 	}
 }

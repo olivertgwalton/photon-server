@@ -321,6 +321,11 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", copied))
 	}
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
+	// One no library holds may be a title a search found for the profile to ask for.
+	requestable := errors.Is(err, store.ErrNotFound)
+	if requestable {
+		page, err = a.svc.RequestablePages.Page(r.Context(), profile, id)
+	}
 	if a.answered(w, r, err) {
 		return
 	}
@@ -333,6 +338,7 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 	page.SignChapterImages(func(path string) string { return a.svc.Signer.Sign(path, until) })
 	out := titlePageOf(page, words.Negotiate(w, r))
 	out.Fetching = errors.Is(copied, remote.ErrFetching)
+	out.Requestable = requestable
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
@@ -549,7 +555,7 @@ func (a *API) catalogueRoutes() []route {
 			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.similar,
 		},
 		{
-			pattern: "GET /api/v1/titles/{id}", access: signedIn, summary: "A title's page",
+			pattern: "GET /api/v1/titles/{id}", access: signedIn, summary: "A title's page, or one a search found for the profile to ask for",
 			status: http.StatusOK, reply: titlePageJSON{}, handle: a.title,
 		},
 		{

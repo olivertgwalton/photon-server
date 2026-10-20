@@ -67,17 +67,18 @@ async function requests(
 		} satisfies Schemas["RequestPage"]);
 	if (route === "GET /api/v1/requests")
 		return page(asks.filter((r) => r.profile_id === me.id));
-	const lacking = route.match(/^GET \/api\/v1\/requestable\/([^/]+)$/);
+	const lacking = requestable.find(
+		(c) => route === `GET /api/v1/titles/${c.id}`,
+	);
 	if (lacking) {
-		const found = requestable.find((c) => c.id === lacking[1]);
-		if (!found) return problem(404, "not_found", "Not Found");
 		// As its provider describes it, one of its people known to the server.
 		return Response.json({
-			id: found.id,
-			kind: found.kind,
-			title: found.title,
-			year: found.year,
-			overview: found.overview,
+			id: lacking.id,
+			requestable: true,
+			kind: lacking.kind,
+			title: lacking.title,
+			year: lacking.year,
+			overview: lacking.overview,
 			tagline: "Why are they here?",
 			genres: ["Science Fiction"],
 			ids: { tmdb: "329865", imdb: "tt2543164" },
@@ -85,12 +86,12 @@ async function requests(
 				{ person_id: person, name: "Ada Lane", kind: "actor", role: "Louise" },
 				{ name: "Jeremy Renner", kind: "actor", role: "Ian" },
 			],
-			added_at: found.added_at,
+			added_at: lacking.added_at,
 		} satisfies Schemas["TitlePage"]);
 	}
 	if (route === "POST /api/v1/requests") {
-		const { title_id } = (await request.json()) as Schemas["Ask"];
-		const found = requestable.find((c) => c.id === title_id);
+		const { requestable_id } = (await request.json()) as Schemas["Ask"];
+		const found = requestable.find((c) => c.id === requestable_id);
 		if (!found) return problem(404, "not_found", "Not Found");
 		if (asks.some((r) => r.title === found.title))
 			return problem(409, "conflict", "the title has been asked for already");
