@@ -164,10 +164,12 @@ const (
 	CapabilitySegments Capability = "segments"
 	// CapabilityPages is serving pages of its own the server's menus link to.
 	CapabilityPages Capability = "pages"
+	// CapabilityRequest is fetching titles a library lacks, which its profiles asked for.
+	CapabilityRequest Capability = "request"
 )
 
 func Capabilities() []Capability {
-	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents, CapabilitySegments, CapabilityPages}
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents, CapabilitySegments, CapabilityPages, CapabilityRequest}
 }
 
 // PluginProtocol is what a plugin speaks: photon's own protocol, or a Stremio addon's.

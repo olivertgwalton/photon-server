@@ -8143,7 +8143,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages" | "request";
         Card: {
             /** Format: date-time */
             added_at: string;

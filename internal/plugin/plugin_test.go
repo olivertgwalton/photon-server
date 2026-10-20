@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"golang.org/x/text/language"
 
@@ -229,5 +230,54 @@ func TestAPluginTimesACopysIntroAndCredits(t *testing.T) {
 	got, err := c.Segments(t.Context(), domain.SegmentQuery{Kind: domain.ItemEpisode, Season: 1, Episode: 3, Duration: 44 * time.Minute})
 	if err != nil || !slices.Equal(got, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 60_000, EndMS: 120_000}}) {
 		t.Errorf("markers = %+v %v, want the first intro alone", got, err)
+	}
+}
+
+// A plugin that fetches titles is asked for one by every id it is known by, the seasons asked for
+// and the request's id, and says why where it will not take it on.
+func TestAPluginIsAskedForATitleALibraryLacks(t *testing.T) {
+	var got pluginv1.RequestRequest
+	refuse := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/request/v1/request" {
+			t.Errorf("asked at %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+		}
+		if refuse {
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			if _, err := io.WriteString(w, `{"title": "Not found", "detail": "no show has that TVDB id"}`); err != nil {
+				t.Error(err)
+			}
+			return
+		}
+		writeJSON(t, w, pluginv1.RequestResponse{})
+	}))
+	defer srv.Close()
+	c := &client{
+		manifest: pluginv1.Manifest{ID: "fetcher", Capabilities: []pluginv1.Capability{{Name: "request", Version: 1}}},
+		speaks:   map[domain.Capability]int{domain.CapabilityRequest: 1}, base: srv.URL, http: srv.Client(),
+		settings: func(context.Context) (map[string]string, error) { return nil, nil },
+	}
+	if !slices.Contains(provider.Capabilities(c), domain.CapabilityRequest) {
+		t.Errorf("capabilities %v, want request", provider.Capabilities(c))
+	}
+	w := domain.Wanted{
+		ID: uuid.NewV7(), Kind: domain.ItemShow, Title: "Breaking Bad", Year: 2008, Seasons: []int{1, 2},
+		IDs: map[domain.Provider]string{domain.ProviderTMDB: "1396", domain.ProviderTVDB: "81189"},
+	}
+	if err := c.Request(t.Context(), w); err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != w.ID.String() || got.Kind != "show" || got.IDs["tvdb"] != "81189" || got.IDs["tmdb"] != "1396" ||
+		got.Title != "Breaking Bad" || got.Year != 2008 || !slices.Equal(got.Seasons, []int{1, 2}) {
+		t.Errorf("asked %+v", got)
+	}
+	refuse = true
+	err := c.Request(t.Context(), w)
+	if err == nil || !strings.Contains(err.Error(), "no show has that TVDB id") || errors.Is(err, provider.ErrUnavailable) {
+		t.Errorf("refused: %v, want its words, and no plugin that is down", err)
 	}
 }

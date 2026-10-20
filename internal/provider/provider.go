@@ -290,6 +290,13 @@ type Subtitler interface {
 	FetchSubtitle(ctx context.Context, id string) ([]byte, error)
 }
 
+// Requester fetches titles a library lacks, as Radarr, Sonarr and riven do: it answers once it has
+// taken a title on, or why not.
+type Requester interface {
+	Provider
+	Request(ctx context.Context, w domain.Wanted) error
+}
+
 // Partial is a provider that implements every capability's methods but answers only some of
 // them: a plugin, whose manifest says which.
 type Partial interface {
@@ -327,6 +334,8 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Subtitler](p, c)
 		case domain.CapabilitySegments:
 			_, ok = As[Segmenter](p, c)
+		case domain.CapabilityRequest:
+			_, ok = As[Requester](p, c)
 		case domain.CapabilityEvents, domain.CapabilityPages:
 			// Events are sent through the webhook queue, and pages are visited, not asked for: only a
 			// plugin has them.
