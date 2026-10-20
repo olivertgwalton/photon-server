@@ -72,8 +72,8 @@ func requestsOf(rs []store.Request) []requestJSON {
 // askJSON is a title a search answered as requestable, by its id there, and of a show the seasons
 // asked for, every one where none is.
 type askJSON struct {
-	TitleID uuid.UUID `json:"title_id"`
-	Seasons []int     `json:"seasons,omitzero"`
+	RequestableID uuid.UUID `json:"requestable_id"`
+	Seasons       []int     `json:"seasons,omitzero"`
 }
 
 type declineJSON struct {
@@ -102,16 +102,16 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.TitleID == (uuid.UUID{}) {
-		writeProblem(w, a.logger, codeInvalidBody, "title_id is a title a search answered as requestable")
+	if req.RequestableID == (uuid.UUID{}) {
+		writeProblem(w, a.logger, codeInvalidBody, "requestable_id is a title a search answered as requestable")
 		return
 	}
 	if slices.ContainsFunc(req.Seasons, func(n int) bool { return n < 0 }) {
 		writeProblem(w, a.logger, codeInvalidBody, "seasons are numbers from 0, a show's specials")
 		return
 	}
-	asked, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.TitleID, req.Seasons)
-	if a.answeredAs(w, r, err, "title_id is a title a search answered as requestable, found in the last day") {
+	asked, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.RequestableID, req.Seasons)
+	if a.answeredAs(w, r, err, "requestable_id is a title a search answered as requestable, found in the last day") {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, requestOf(asked))

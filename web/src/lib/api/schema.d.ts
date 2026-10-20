@@ -8067,9 +8067,9 @@ export interface components {
         /** @enum {string} */
         ArtworkLanguage: "localized" | "any";
         Ask: {
-            seasons?: number[];
             /** Format: uuid */
-            title_id: string;
+            requestable_id: string;
+            seasons?: number[];
         };
         Audio: {
             bitrate_kbps?: number;

@@ -89,8 +89,8 @@ async function requests(
 		} satisfies Schemas["TitlePage"]);
 	}
 	if (route === "POST /api/v1/requests") {
-		const { title_id } = (await request.json()) as Schemas["Ask"];
-		const found = requestable.find((c) => c.id === title_id);
+		const { requestable_id } = (await request.json()) as Schemas["Ask"];
+		const found = requestable.find((c) => c.id === requestable_id);
 		if (!found) return problem(404, "not_found", "Not Found");
 		if (asks.some((r) => r.title === found.title))
 			return problem(409, "conflict", "the title has been asked for already");

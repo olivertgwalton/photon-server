@@ -66,16 +66,16 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 		return rec
 	}
 
-	rec := do(http.MethodPost, "/api/v1/requests", memberToken, `{"title_id":"`+inception.String()+`"}`)
+	rec := do(http.MethodPost, "/api/v1/requests", memberToken, `{"requestable_id":"`+inception.String()+`"}`)
 	var asked requestJSON
 	if err := json.Unmarshal(rec.Body.Bytes(), &asked); rec.Code != http.StatusCreated || err != nil ||
 		asked.Title != "Inception" || asked.IDs[domain.ProviderTMDB] != "27205" || asked.State != domain.RequestPending {
 		t.Errorf("asked: %d %s", rec.Code, rec.Body)
 	}
 	for body, want := range map[string]int{
-		`{"title_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
-		`{"title_id":"` + inception.String() + `","seasons":[1]}`:  http.StatusBadRequest,
-		`{"title_id":"` + inception.String() + `","seasons":[-1]}`: http.StatusBadRequest,
+		`{"requestable_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
+		`{"requestable_id":"` + inception.String() + `","seasons":[1]}`:  http.StatusBadRequest,
+		`{"requestable_id":"` + inception.String() + `","seasons":[-1]}`: http.StatusBadRequest,
 		`{}`: http.StatusBadRequest,
 	} {
 		if rec := do(http.MethodPost, "/api/v1/requests", memberToken, body); rec.Code != want {

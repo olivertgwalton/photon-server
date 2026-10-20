@@ -273,7 +273,7 @@ let asking = $state(false);
 async function ask() {
 	asking = true;
 	const done = await act(
-		client().POST("/api/v1/requests", { body: { title_id: t.id } }),
+		client().POST("/api/v1/requests", { body: { requestable_id: t.id } }),
 		`Asked for ${t.title}.`,
 	);
 	asking = false;
