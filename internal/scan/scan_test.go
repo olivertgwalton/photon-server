@@ -1057,6 +1057,34 @@ func TestPicturesOfAShowItsSeasonsAndEpisodes(t *testing.T) {
 	check("show", "The Wire poster The Wire/poster.jpg")
 }
 
+func TestASeriesFolderThatCannotBeReadKeepsItsSeasonsPictures(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a folder whatever its mode")
+	}
+	f := newFixture(t, domain.LibraryShows)
+	f.put("The Wire/Season 1/The Wire S01E01.mkv", "e1")
+	f.put("The Wire/season01-poster.jpg", "s1root")
+	f.scan()
+	series := filepath.Join(f.root, "The Wire")
+	// Its season's folder can still be reached, but the series' cannot be listed.
+	if err := os.Chmod(series, 0o300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(series, 0o755); err != nil {
+			t.Error(err)
+		}
+	})
+	f.put("The Wire/Season 1/The Wire S01E02.mkv", "e2")
+	_, err := f.scanner.Scan(t.Context(), f.lib, []string{"The Wire/Season 1"}, func(domain.ScanProgress) {}, func(store.Changed) {})
+	if err == nil {
+		t.Error("scanning a season whose series' folder cannot be read succeeded")
+	}
+	if got, want := f.pictures("season"), []string{"Season 1 poster The Wire/season01-poster.jpg"}; !slices.Equal(got, want) {
+		t.Errorf("season pictures = %q, want %q", got, want)
+	}
+}
+
 func TestAScanTellsHowFarItHasGot(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")

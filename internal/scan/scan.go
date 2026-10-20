@@ -454,9 +454,11 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 		show.SeasonArtwork = pics.seasons
 		show.Themes = themesIn(folder)
 	case series != "" && season != nil:
-		show.SeasonArtwork = map[int][]domain.Artwork{
-			*season: append(pics.own, seasonPictures(lib.Root, series, *season)...),
+		inSeries, err := seasonPictures(lib.Root, series, *season)
+		if err != nil {
+			return store.Saved{}, err
 		}
+		show.SeasonArtwork = map[int][]domain.Artwork{*season: append(pics.own, inSeries...)}
 	}
 	var episodes []store.Episode
 	if holdsEpisodes(series, folder.Path) {
