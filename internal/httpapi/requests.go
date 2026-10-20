@@ -10,6 +10,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
+	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
 type requests interface {
@@ -18,6 +19,11 @@ type requests interface {
 	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, offset, limit int) ([]store.Request, int64, error)
 	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error
 	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error)
+}
+
+// requestablePages draws a title a profile may ask for as a title's page.
+type requestablePages interface {
+	Page(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 }
 
 // maxRequestsLimit is as many requests as a page holds.
@@ -73,6 +79,21 @@ type askJSON struct {
 type declineJSON struct {
 	// Reason is why, for the one who asked; optional.
 	Reason string `json:"reason,omitzero"`
+}
+
+// requestablePage answers a title a search answered as requestable as a title's page is drawn,
+// its cast and pictures as its provider describes it: no title of the server's, it has no
+// copies, seasons or state, and plays nothing.
+func (a *API) requestablePage(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	page, err := a.svc.RequestablePages.Page(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if a.answeredAs(w, r, err, "no title a search answered as requestable in the last day has that id") {
+		return
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, titlePageOf(page, words.Negotiate(w, r)))
 }
 
 // askFor asks for a title a library of files' search found, as the profile signed in.
@@ -168,6 +189,11 @@ func (a *API) requestsRoutes() []route {
 			pattern: "POST /api/v1/requests", access: signedIn,
 			summary: "Ask for a title a search answered as requestable; an admin's is approved at once",
 			body:    askJSON{}, status: http.StatusCreated, reply: requestJSON{}, handle: a.askFor,
+		},
+		{
+			pattern: "GET /api/v1/requestable/{id}", access: signedIn,
+			summary: "A title a search answered as requestable, as a title's page draws it",
+			status:  http.StatusOK, reply: titlePageJSON{}, handle: a.requestablePage,
 		},
 		{
 			pattern: "GET /api/v1/requests", access: signedIn, summary: "Page the profile's requests, newest first",

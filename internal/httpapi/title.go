@@ -271,7 +271,8 @@ type markerRefJSON struct {
 }
 
 type creditRefJSON struct {
-	PersonID   uuid.UUID         `json:"person_id"`
+	// PersonID is none for someone a title to ask for credits whom the server does not know.
+	PersonID   uuid.UUID         `json:"person_id,omitzero"`
 	Name       string            `json:"name"`
 	Kind       domain.CreditKind `json:"kind"`
 	Role       string            `json:"role,omitzero"`
