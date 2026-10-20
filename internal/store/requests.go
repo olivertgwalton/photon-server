@@ -85,15 +85,9 @@ func (r requestRow) request() Request {
 }
 
 func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error) {
-	rows, err := queryStructs[requestRow](ctx, q, `SELECT `+requestColumns+`
+	r, err := readRow[requestRow](ctx, q, `SELECT `+requestColumns+`
 		FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE r.id = $1`, id)
-	if err != nil {
-		return Request{}, err
-	}
-	if len(rows) == 0 {
-		return Request{}, ErrNotFound
-	}
-	return rows[0].request(), nil
+	return r.request(), err
 }
 
 // AskFor asks, for a profile, for a title a library of files' search found for it, of a show the
@@ -160,12 +154,12 @@ func (s *Store) RequestsKept(ctx context.Context, by *uuid.UUID, state domain.Re
 
 func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs) ([]Request, int64, error) {
 	const from = ` FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE `
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+from+where, args).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	rows, err := queryStructs[requestRow](ctx, s.pool, `SELECT `+requestColumns+from+where+`
-		ORDER BY r.asked_at DESC, r.id DESC OFFSET @offset LIMIT @limit`, args)
+	var rows []requestRow
+	total, err := s.counted(ctx, `SELECT count(*)`+from+where, args, func(ctx context.Context) (err error) {
+		rows, err = queryStructs[requestRow](ctx, s.pool, `SELECT `+requestColumns+from+where+`
+			ORDER BY r.asked_at DESC, r.id DESC OFFSET @offset LIMIT @limit`, args)
+		return err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
