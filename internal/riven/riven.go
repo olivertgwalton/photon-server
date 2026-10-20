@@ -105,9 +105,6 @@ func (c *Client) Request(ctx context.Context, w domain.Wanted) error {
 	err = api.Do(ctx, provider.Request{
 		Method: http.MethodPost, Path: "/graphql", Header: http.Header{"X-Api-Key": {set[keySetting]}}, Body: q,
 	}, &out)
-	if refusal, refused := errors.AsType[*provider.Refusal](err); errors.Is(err, provider.ErrUnreached) || refused && refusal.Code >= http.StatusInternalServerError {
-		return fmt.Errorf("%w: %w", provider.ErrUnavailable, err)
-	}
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"net/http"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -46,13 +47,21 @@ func Send(st sending, ps providers, server func() domain.Locale, log *slog.Logge
 		}
 		err = r.Request(ctx, w)
 		switch {
-		case errors.Is(err, provider.ErrUnavailable), ctx.Err() != nil:
+		case down(err), ctx.Err() != nil:
 			return err
 		case err != nil:
 			return st.SentRequest(ctx, id, domain.RequestFailed, err.Error())
 		}
 		return st.SentRequest(ctx, id, domain.RequestSent, "")
 	}
+}
+
+// down is a provider that could not take a request now, which is sent again later: one that never
+// answered, failed on its side, or is a plugin that is down.
+func down(err error) bool {
+	refusal, refused := errors.AsType[*provider.Refusal](err)
+	return errors.Is(err, provider.ErrUnavailable) || errors.Is(err, provider.ErrUnreached) ||
+		refused && refusal.Code >= http.StatusInternalServerError
 }
 
 // known is every id the library's search source knows the title by, the one it was found under
@@ -68,7 +77,7 @@ func known(ctx context.Context, ps providers, lib domain.Library, loc domain.Loc
 		return w.IDs, nil
 	}
 	m, _, err := d.Describe(ctx, loc, w.Kind, w.IDs[domain.Provider(lib.DiscoverSource)], domain.SeasonRequest{Scope: domain.SeasonsNumbered})
-	if errors.Is(err, provider.ErrUnavailable) {
+	if down(err) {
 		return nil, err
 	}
 	if err != nil {

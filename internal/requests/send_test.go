@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"testing"
 	"uuid"
 
@@ -85,6 +86,8 @@ func TestAnApprovedRequestIsSentToItsLibrarysFetcher(t *testing.T) {
 		{name: "taken on", fetcher: &fetcher{}, wantState: domain.RequestSent},
 		{name: "refused", fetcher: &fetcher{err: errors.New("plugin riven: 422: no release")}, wantState: domain.RequestFailed, wantReason: "plugin riven: 422: no release"},
 		{name: "down", fetcher: &fetcher{err: fmt.Errorf("riven: %w", provider.ErrUnavailable)}, wantErr: true, wantState: domain.RequestApproved},
+		{name: "unreached", fetcher: &fetcher{err: fmt.Errorf("riven /graphql: %w", provider.ErrUnreached)}, wantErr: true, wantState: domain.RequestApproved},
+		{name: "failing on its side", fetcher: &fetcher{err: fmt.Errorf("radarr: %w", &provider.Refusal{Code: http.StatusBadGateway, Status: "502 Bad Gateway"})}, wantErr: true, wantState: domain.RequestApproved},
 		{name: "fetches nothing", fetcher: tmdb{}, wantState: domain.RequestFailed, wantReason: "plugin:riven fetches no titles"},
 	} {
 		r := &request{lib: lib, state: domain.RequestApproved}
