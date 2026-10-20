@@ -256,9 +256,11 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	if boxes != "" {
 		args["boxes"] = &boxes
 	}
-	// Seeing a box set's titles, the profile sees it.
-	return where + ` AND items.id NOT IN (SELECT b.item_id FROM (` + boxedTitles + `) b
-			WHERE b.mode = 'collapsed' AND b.collection_id IN (` + boxedSets + `))`,
+	// Seeing a box set's titles, the profile sees it. Each set's titles are counted in one pass:
+	// as an IN of boxedSets, the sets were grouped again for every title in one, most of a page's time.
+	return where + ` AND items.id NOT IN (SELECT b.item_id FROM (SELECT b.item_id, b.mode,
+			count(*) OVER (PARTITION BY b.collection_id) AS shown FROM (` + boxedTitles + `) b) b
+			WHERE b.mode = 'collapsed' AND b.shown >= ` + strconv.Itoa(minShown) + `)`,
 		`WHERE items.kind = 'collection' AND items.id IN (` + boxedSets + `)`, args, nil
 }
 
