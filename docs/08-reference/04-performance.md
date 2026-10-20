@@ -129,11 +129,11 @@ From `docker stats`, in MiB. For the PostgreSQL containers this includes the pag
 
 ## Photon on its own
 
-Measured on 20 October 2026 on the same Mac mini, with the same library: 357 films and 85 shows. Photon ran as the macOS app, version 0.7.2-7 (af723673), with its own PostgreSQL 18 and Valkey. The other three servers are no longer installed there, so only photon was measured.
+Measured on 20 October 2026 on the same Mac mini, with the same library: 357 films and 85 shows. Photon ran as the macOS app, version 0.7.2-9 (4e997561), with its own PostgreSQL 18 and Valkey. The other three servers are no longer installed there, so only photon was measured.
 
 These numbers can't be set beside the tables above. Photon ran natively rather than in Docker, and the client ran on the same host rather than on a Docker network. The method is otherwise the same: 100 requests per endpoint after 10 warm-ups, on one kept-alive connection, back to back and at 10 a second; `ab -k -c 8 -n 800`, the median of three runs. Every request was made as an admin.
 
-The last six rows weren't measured on 11 October. They time pages whose queries changed in 0.7.2-7. On the version before it, the films wall filtered to what is in progress took 347 ms back to back and answered 7 requests a second, and the top rated films row took 6.9 ms.
+The last six rows weren't measured on 11 October. They time pages whose queries changed in 0.7.2-7. On 0.7.2-3, the films wall filtered to what is in progress took 347 ms back to back and answered 7 requests a second, and the top rated films row took 6.9 ms.
 
 ### Latency
 
@@ -141,23 +141,23 @@ p50 / p95 in milliseconds.
 
 | Endpoint | Back to back | Paced, 10 a second |
 |---|---|---|
-| Libraries | 0.29 / 0.47 | 1.6 / 2.4 |
-| Recently added films, 20 | 0.99 / 1.9 | 6.1 / 7.5 |
-| Continue watching, 20 | 0.90 / 1.4 | 8.8 / 11.9 |
-| Films A–Z, 60 | 4.9 / 6.5 | 26.0 / 31.1 |
-| Shows A–Z, 60 | 4.6 / 5.8 | 24.0 / 25.6 |
-| Search "star" | 1.2 / 1.6 | 8.7 / 11.9 |
-| Search "incep" | 0.81 / 0.85 | 6.3 / 7.6 |
-| Film page | 0.84 / 0.95 | 6.4 / 10.3 |
-| Show page | 1.0 / 1.2 | 6.9 / 8.9 |
-| Season 1's episodes | 1.0 / 1.2 | 7.0 / 7.7 |
-| Similar titles | 3.1 / 3.5 | 21.2 / 22.6 |
-| Next up, 20 | 2.5 / 4.0 | 20.1 / 25.5 |
-| Top rated films, 20 | 1.2 / 1.7 | 9.1 / 13.7 |
-| Top rated shows, 20 | 1.9 / 2.3 | 12.5 / 16.1 |
-| A person's page, 589 credits | 2.6 / 2.7 | 16.7 / 31.0 |
-| Films wall, in progress | 1.3 / 1.7 | 9.2 / 11.5 |
-| Episodes' filters | 23.5 / 24.3 | 39.3 / 41.5 |
+| Libraries | 0.15 / 0.17 | 1.7 / 1.9 |
+| Recently added films, 20 | 0.84 / 1.2 | 6.2 / 9.3 |
+| Continue watching, 20 | 0.81 / 1.3 | 6.2 / 9.7 |
+| Films A–Z, 60 | 4.2 / 4.5 | 14.6 / 18.3 |
+| Shows A–Z, 60 | 3.7 / 4.2 | 13.1 / 14.3 |
+| Search "star" | 1.5 / 1.9 | 5.6 / 7.7 |
+| Search "incep" | 0.82 / 0.93 | 4.4 / 6.3 |
+| Film page | 0.82 / 0.94 | 6.0 / 9.4 |
+| Show page | 1.0 / 1.1 | 7.4 / 15.5 |
+| Season 1's episodes | 1.1 / 1.2 | 7.0 / 7.7 |
+| Similar titles | 3.2 / 3.4 | 21.3 / 23.1 |
+| Next up, 20 | 2.5 / 4.1 | 20.4 / 24.8 |
+| Top rated films, 20 | 1.3 / 2.1 | 8.9 / 13.4 |
+| Top rated shows, 20 | 1.9 / 2.2 | 12.7 / 18.4 |
+| A person's page, 589 credits | 2.6 / 5.5 | 17.0 / 31.9 |
+| Films wall, in progress | 1.2 / 1.6 | 9.2 / 11.7 |
+| Episodes' filters | 22.3 / 23.0 | 39.4 / 41.2 |
 
 ### Page data
 
@@ -165,10 +165,10 @@ The calls the web app makes to draw each page. Each step's calls are sent togeth
 
 | Page | Calls | Time |
 |---|---|---|
-| Home | The libraries, the profile's preferences and its 10 rows of 20 | 9.0 / 10.3 |
-| Film page | The film, then its similar titles | 6.9 / 7.6 |
-| Show and season 1 | The show, then where the profile is in it, its similar titles and season 1 | 7.5 / 8.3 |
-| Films library | Its filters, then 100 titles and the letters | 11.7 / 12.8 |
+| Home | The libraries, the profile's preferences and its 10 rows of 20 | 8.9 / 10.2 |
+| Film page | The film, then its similar titles | 6.8 / 7.8 |
+| Show and season 1 | The show, then where the profile is in it, its similar titles and season 1 | 7.4 / 8.0 |
+| Films library | Its filters, then 100 titles and the letters | 10.4 / 11.0 |
 
 ### Throughput
 
@@ -176,27 +176,27 @@ The calls the web app makes to draw each page. Each step's calls are sent togeth
 
 | Endpoint | Requests a second |
 |---|---|
-| Libraries | 38,664 (0) |
-| Recently added films | 4,499 (2) |
-| Continue watching | 3,559 (2) |
-| Films A–Z, 60 | 700 (11) |
-| Shows A–Z, 60 | 817 (9) |
-| Search "star" | 2,255 (3) |
-| Search "incep" | 3,455 (2) |
-| Film page | 2,851 (3) |
-| Show page | 2,861 (3) |
-| Season 1's episodes | 3,032 (2) |
-| Similar titles | 1,485 (5) |
-| Next up | 914 (8) |
-| Top rated films | 3,158 (2) |
-| Top rated shows | 2,087 (4) |
-| A person's page | 931 (8) |
-| Films wall, in progress | 2,370 (3) |
-| Episodes' filters | 137 (57) |
+| Libraries | 38,007 (0) |
+| Recently added films | 4,428 (2) |
+| Continue watching | 4,143 (2) |
+| Films A–Z, 60 | 900 (9) |
+| Shows A–Z, 60 | 1,066 (7) |
+| Search "star" | 2,372 (3) |
+| Search "incep" | 3,312 (2) |
+| Film page | 3,299 (2) |
+| Show page | 2,942 (2) |
+| Season 1's episodes | 2,862 (2) |
+| Similar titles | 1,450 (5) |
+| Next up | 928 (8) |
+| Top rated films | 3,268 (2) |
+| Top rated shows | 1,965 (4) |
+| A person's page | 936 (8) |
+| Films wall, in progress | 2,446 (3) |
+| Episodes' filters | 139 (57) |
 
 ### Memory
 
 Measured with macOS's `footprint`, which counts memory PostgreSQL's processes share only once. It is not `docker stats` as above.
 
-- **Server.** About 115 MB at rest, and 135 MB at its peak across the whole run. Its processor use peaked at about 370%.
+- **Server.** 85–115 MB, and 137 MB at its peak across the whole run. Its processor use peaked at about 330%.
 - **PostgreSQL.** About 1.2 GB after the run, most of it pages of the database it had read.
