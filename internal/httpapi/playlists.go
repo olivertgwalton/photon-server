@@ -142,13 +142,29 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, offset, limit)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, offset, limit)
 	if a.answered(w, r, err) {
 		return
 	}
-	out := make([]entryJSON, len(entries))
+	titles := make([]uuid.UUID, len(entries))
 	for i, e := range entries {
-		out[i] = entryJSON{EntryID: e.ID, cardJSON: cardOf(e.Card)}
+		titles[i] = e.Title
+	}
+	cards, err := a.svc.Catalogue.Cards(r.Context(), profile, titles)
+	if a.answered(w, r, err) {
+		return
+	}
+	drawn := map[uuid.UUID]store.Card{}
+	for _, c := range cards {
+		drawn[c.ID] = c
+	}
+	// A title a playlist holds twice is drawn once and answered for both its entries.
+	out := []entryJSON{}
+	for _, e := range entries {
+		if c, ok := drawn[e.Title]; ok {
+			out = append(out, entryJSON{EntryID: e.ID, cardJSON: cardOf(c)})
+		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[entryJSON]{out, offset, total})
 }

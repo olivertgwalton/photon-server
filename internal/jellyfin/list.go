@@ -70,8 +70,8 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 
 // writeList writes a page of cards as a queryResult, listChunk items at a time.
 func (a *API) writeList(w http.ResponseWriter, r *http.Request, cards []store.Card, total, start int, l listed) {
-	a.writeChunks(w, r, len(cards), total, start, l, func(_ context.Context, from, to int) ([]store.Card, error) {
-		return cards[from:to], nil
+	a.writeChunks(w, r, len(cards), total, start, func(ctx context.Context, from, to int) ([]item, error) {
+		return a.list(ctx, cards[from:to], l)
 	})
 }
 
@@ -79,21 +79,19 @@ func (a *API) writeList(w http.ResponseWriter, r *http.Request, cards []store.Ca
 // title gone before its chunk is drawn is left out.
 func (a *API) writeTitles(w http.ResponseWriter, r *http.Request, ids []uuid.UUID, total, start int, l listed) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	a.writeChunks(w, r, len(ids), total, start, l, func(ctx context.Context, from, to int) ([]store.Card, error) {
-		return a.svc.Catalogue.Cards(ctx, profile, ids[from:to])
-	})
-}
-
-// writeChunks writes the n cards chunk draws as a queryResult, listChunk at a time.
-func (a *API) writeChunks(w http.ResponseWriter, r *http.Request, n, total, start int, l listed, chunk func(ctx context.Context, from, to int) ([]store.Card, error)) {
-	ctx := r.Context()
-	read := func(from int) ([]item, error) {
-		cards, err := chunk(ctx, from, min(from+listChunk, n))
+	a.writeChunks(w, r, len(ids), total, start, func(ctx context.Context, from, to int) ([]item, error) {
+		cards, err := a.svc.Catalogue.Cards(ctx, profile, ids[from:to])
 		if err != nil {
 			return nil, err
 		}
 		return a.list(ctx, cards, l)
-	}
+	})
+}
+
+// writeChunks writes the items chunk answers for n places as a queryResult, listChunk at a time.
+func (a *API) writeChunks(w http.ResponseWriter, r *http.Request, n, total, start int, chunk func(ctx context.Context, from, to int) ([]item, error)) {
+	ctx := r.Context()
+	read := func(from int) ([]item, error) { return chunk(ctx, from, min(from+listChunk, n)) }
 	items, err := read(0)
 	if err != nil {
 		a.internal(w, r, err)

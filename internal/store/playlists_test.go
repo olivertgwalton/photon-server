@@ -3,6 +3,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -11,6 +12,16 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
+
+// entryCard is the card of the title an entry plays.
+func (s *Store) entryCard(ctx context.Context, t *testing.T, profile uuid.UUID, e PlaylistEntry) Card {
+	t.Helper()
+	cards, err := s.Cards(ctx, profile, []uuid.UUID{e.Title})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	return cards[0]
+}
 
 func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	s := migrated(t)
@@ -59,9 +70,10 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 		}
 		var names []string
 		for _, e := range entries {
-			name := e.Card.Title
-			if e.Card.EpisodeNumber != nil {
-				name += string(rune('0' + *e.Card.EpisodeNumber))
+			card := s.entryCard(ctx, t, oliver.ID, e)
+			name := card.Title
+			if card.EpisodeNumber != nil {
+				name += string(rune('0' + *card.EpisodeNumber))
 			}
 			names = append(names, name)
 		}
@@ -169,9 +181,9 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 		out := []string{}
 		for _, e := range entries {
 			if e.ID != (uuid.UUID{}) {
-				t.Errorf("%s has an entry of its own, and a rule's finding has none", e.Card.Title)
+				t.Errorf("%s has an entry of its own, and a rule's finding has none", e.Title)
 			}
-			out = append(out, e.Card.Title)
+			out = append(out, s.entryCard(ctx, t, oliver.ID, e).Title)
 		}
 		return out, total
 	}
@@ -194,7 +206,7 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkWatched(ctx, oliver.ID, first[0].Card.ID, nil); err != nil {
+	if err := s.MarkWatched(ctx, oliver.ID, first[0].Title, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got, total := names(0, 50); !slices.Equal(got, []string{"Cosmos2", "Cosmos3"}) || total != 2 {
@@ -224,7 +236,7 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 
 	// Its entries are the rule's, so nothing else sets them.
 	for name, err := range map[string]error{
-		"add":    s.AddToPlaylist(ctx, oliver.ID, list, []uuid.UUID{first[0].Card.ID}),
+		"add":    s.AddToPlaylist(ctx, oliver.ID, list, []uuid.UUID{first[0].Title}),
 		"remove": s.RemoveFromPlaylist(ctx, oliver.ID, list, uuid.NewV7()),
 		"move":   s.MovePlaylistEntry(ctx, oliver.ID, list, uuid.NewV7(), 0),
 	} {

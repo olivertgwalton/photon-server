@@ -46,13 +46,12 @@ func (fakeCatalogue) SetLibraryOrder(_ context.Context, _ uuid.UUID, libs []uuid
 	return nil
 }
 
-// walled keeps the cards a fake's Wall answered, by the id it answered for each, for Cards to draw.
+// walled keeps the cards a fake answered by id, for Cards to draw.
 var walled sync.Map
 
 func wallOf(c store.Card) []uuid.UUID {
-	id := uuid.NewV7()
-	walled.Store(id, c)
-	return []uuid.UUID{id}
+	walled.Store(c.ID, c)
+	return []uuid.UUID{c.ID}
 }
 
 func (fakeCatalogue) Cards(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]store.Card, error) {

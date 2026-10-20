@@ -88,7 +88,8 @@ func (a *API) playlistItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l := listedOf(w, r)
-	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, l.start, l.limit)
+	profile := auth.SessionOf(r.Context()).Profile.ID
+	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, l.start, l.limit)
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -97,19 +98,38 @@ func (a *API) playlistItems(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	cards := make([]store.Card, len(entries))
+	a.writeChunks(w, r, len(entries), int(total), l.start, func(ctx context.Context, from, to int) ([]item, error) {
+		return a.entryItems(ctx, profile, entries[from:to], l)
+	})
+}
+
+// entryItems are a playlist's entries as items, each with its entry's id: a title it holds twice
+// is drawn once and answered for both entries, and one gone is left out.
+func (a *API) entryItems(ctx context.Context, profile uuid.UUID, entries []store.PlaylistEntry, l listed) ([]item, error) {
+	titles := make([]uuid.UUID, len(entries))
 	for n, e := range entries {
-		cards[n] = e.Card
+		titles[n] = e.Title
 	}
-	items, err := a.list(r.Context(), cards, l)
+	drawn, err := a.svc.Catalogue.Cards(ctx, profile, titles)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return nil, err
 	}
-	for n, e := range entries {
-		items[n].PlaylistItemID = guid(e.ID)
+	byID := map[uuid.UUID]store.Card{}
+	for _, c := range drawn {
+		byID[c.ID] = c
 	}
-	a.writeJSON(w, queryResult{Items: items, TotalRecordCount: int(total), StartIndex: l.start})
+	var cards []store.Card
+	var ids []uuid.UUID
+	for _, e := range entries {
+		if c, ok := byID[e.Title]; ok {
+			cards, ids = append(cards, c), append(ids, e.ID)
+		}
+	}
+	items, err := a.list(ctx, cards, l)
+	for n := range items {
+		items[n].PlaylistItemID = guid(ids[n])
+	}
+	return items, err
 }
 
 // sharing is whom a playlist is shared with, as Jellyfin's dtos to make or change one say. Photon's
@@ -253,7 +273,7 @@ func (a *API) playlist(w http.ResponseWriter, r *http.Request) {
 		ItemIDs    []string   `json:"ItemIds"`
 	}{Shares: []struct{}{}, ItemIDs: make([]string, len(entries))}
 	for n, e := range entries {
-		out.ItemIDs[n] = guid(e.Card.ID)
+		out.ItemIDs[n] = guid(e.Title)
 	}
 	a.writeJSON(w, out)
 }
