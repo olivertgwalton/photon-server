@@ -241,7 +241,7 @@ func (s *Sessions) Abandon(ctx context.Context, id uuid.UUID) error {
 // that have ended on any node. Every node sweeps; each playback is ended once.
 func (s *Sessions) Sweep(ctx context.Context) error {
 	// Read first: a stream opened after the playbacks are read is of a playback already among them.
-	served := append(s.streams.Playbacks(), s.directPlaybacks()...)
+	served := s.Playbacks()
 	all, err := s.live.Playbacks(ctx)
 	if err != nil {
 		return err
@@ -341,10 +341,20 @@ func (s *Sessions) close(id uuid.UUID) {
 	delete(s.delivered, id)
 }
 
-func (s *Sessions) directPlaybacks() []uuid.UUID {
+// Playbacks are those this node serves: its remuxes, the files it streams as they are, and those
+// it was given to deliver.
+func (s *Sessions) Playbacks() []uuid.UUID {
+	ids := map[uuid.UUID]bool{}
+	for _, id := range s.streams.Playbacks() {
+		ids[id] = true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append(slices.Collect(maps.Keys(s.direct)), slices.Collect(maps.Keys(s.delivered))...)
+	for id := range s.direct {
+		ids[id] = true
+	}
+	maps.Copy(ids, s.delivered)
+	return slices.Collect(maps.Keys(ids))
 }
 
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {

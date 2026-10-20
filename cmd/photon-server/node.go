@@ -388,7 +388,7 @@ func (n *node) serve(ctx context.Context) error {
 			endStreams(n.self, n.remuxer)
 			return
 		}
-		drain(context.WithoutCancel(ctx), n.self, n.remuxer, n.stops, drainFor, logger)
+		drain(context.WithoutCancel(ctx), n.self, n.sessions, n.stops, drainFor, logger)
 	})
 	if stopped, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok && err == nil {
 		return stopped
