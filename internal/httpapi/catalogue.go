@@ -215,9 +215,13 @@ type personRefJSON struct {
 
 // searchJSON is a page of the titles (films, shows, collections and episodes) and one of the
 // people found, both from the same offset; a page the kinds asked for leave out is empty.
+// Requestable are, in a search of every library's first page, the titles libraries of files'
+// providers find that no library holds, which a profile may ask for; they are no titles of the
+// server's, so no card of them is among Titles.
 type searchJSON struct {
-	Titles pageJSON[cardJSON]      `json:"titles"`
-	People pageJSON[personRefJSON] `json:"people"`
+	Titles      pageJSON[cardJSON]      `json:"titles"`
+	People      pageJSON[personRefJSON] `json:"people"`
+	Requestable listJSON[cardJSON]      `json:"requestable"`
 }
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
@@ -249,21 +253,23 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out := searchJSON{
-		Titles: pageJSON[cardJSON]{Items: []cardJSON{}, Offset: query.Offset},
-		People: pageJSON[personRefJSON]{Items: []personRefJSON{}, Offset: query.Offset},
+		Titles:      pageJSON[cardJSON]{Items: []cardJSON{}, Offset: query.Offset},
+		People:      pageJSON[personRefJSON]{Items: []personRefJSON{}, Offset: query.Offset},
+		Requestable: listJSON[cardJSON]{Items: []cardJSON{}},
 	}
 	ctx := r.Context()
 	var wg sync.WaitGroup
-	var titlesErr, peopleErr error
+	var titlesErr, peopleErr, requestableErr error
 	if len(kinds) == 0 || len(query.Kinds) > 0 {
+		everyLibrary := query.Offset == 0 && query.Library == (uuid.UUID{})
 		wg.Go(func() {
 			var cards []store.Card
 			cards, out.Titles.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
 			// A search of every library shows first, in its first page, what its remote libraries'
 			// providers find that they do not hold yet, which becomes theirs as it is opened.
-			if titlesErr == nil && query.Offset == 0 && query.Library == (uuid.UUID{}) {
+			if titlesErr == nil && everyLibrary {
 				var found []store.Discovery
-				found, titlesErr = a.svc.Discover.Find(ctx, query.Profile, query.Text, query.Kinds)
+				found, titlesErr = a.svc.Discover.Find(ctx, query.Profile, domain.MediaRemote, query.Text, query.Kinds)
 				for _, d := range found {
 					cards = append(cards, d.Card())
 				}
@@ -271,6 +277,17 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Titles.Items = cardsJSON(cards)
 		})
+		if everyLibrary {
+			wg.Go(func() {
+				var found []store.Discovery
+				found, requestableErr = a.svc.Discover.Find(ctx, query.Profile, domain.MediaFolder, query.Text, query.Kinds)
+				cards := make([]store.Card, len(found))
+				for i, d := range found {
+					cards[i] = d.Card()
+				}
+				out.Requestable.Items = cardsJSON(cards)
+			})
+		}
 	}
 	if findPeople {
 		wg.Go(func() {
@@ -283,7 +300,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	wg.Wait()
-	if err := errors.Join(titlesErr, peopleErr); err != nil {
+	if err := errors.Join(titlesErr, peopleErr, requestableErr); err != nil {
 		a.internal(w, r, err)
 		return
 	}

@@ -188,8 +188,9 @@ type Library struct {
 	ListSource   FieldSource
 	ListID       string
 	StreamSource FieldSource
-	// DiscoverSource is the provider whose search finds a remote library titles it does not hold
-	// yet, which become its own as they are opened; none for a library of its list's alone.
+	// DiscoverSource is the provider whose search finds it titles it does not hold yet: a remote
+	// library's become its own as they are opened, and a library of files' a profile may ask for.
+	// None for a library that searches nothing.
 	DiscoverSource FieldSource
 	// Sources rank where each kind of item it holds takes its metadata and pictures from.
 	Sources []KindSources

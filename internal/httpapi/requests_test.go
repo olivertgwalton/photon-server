@@ -1,0 +1,103 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
+)
+
+var inception = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000a1")
+
+// fakeRequests has Inception found for asking, already asked for once, and keeps who decided what,
+// over whose profiles.
+type fakeRequests struct {
+	by      *uuid.UUID
+	decider uuid.UUID
+	reason  string
+}
+
+func (*fakeRequests) AskFor(_ context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error) {
+	if discovery != inception {
+		return store.Request{}, store.ErrNotFound
+	}
+	if len(seasons) > 0 {
+		return store.Request{}, store.ErrFilmSeasons
+	}
+	return store.Request{ID: uuid.NewV7(), Profile: profile, Kind: domain.ItemMovie, Title: "Inception", Provider: domain.ProviderTMDB, Value: "27205", State: domain.RequestPending}, nil
+}
+
+func (*fakeRequests) Requests(context.Context, uuid.UUID, int, int) ([]store.Request, int64, error) {
+	return nil, 0, nil
+}
+
+func (*fakeRequests) RequestsKept(context.Context, *uuid.UUID, domain.RequestState, int, int) ([]store.Request, int64, error) {
+	return nil, 0, nil
+}
+
+func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) error {
+	return store.ErrDecided
+}
+
+func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error) {
+	f.by, f.decider, f.reason = by, decider, reason
+	return store.Request{ID: id, State: state, Reason: reason, DecidedBy: decider}, nil
+}
+
+// A profile asks for a title by the id a search answered it as requestable under; a film asked for
+// by seasons, or a request decided, is refused. A request is decided by an admin over every
+// profile, or by a manager over the users it keeps, and a user decides none.
+func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
+	f := &fakeRequests{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f})
+	do := func(method, target, token, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := do(http.MethodPost, "/api/v1/requests", memberToken, `{"title_id":"`+inception.String()+`"}`)
+	var asked requestJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &asked); rec.Code != http.StatusCreated || err != nil ||
+		asked.Title != "Inception" || asked.IDs[domain.ProviderTMDB] != "27205" || asked.State != domain.RequestPending {
+		t.Errorf("asked: %d %s", rec.Code, rec.Body)
+	}
+	for body, want := range map[string]int{
+		`{"title_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
+		`{"title_id":"` + inception.String() + `","seasons":[1]}`:  http.StatusBadRequest,
+		`{"title_id":"` + inception.String() + `","seasons":[-1]}`: http.StatusBadRequest,
+		`{}`: http.StatusBadRequest,
+	} {
+		if rec := do(http.MethodPost, "/api/v1/requests", memberToken, body); rec.Code != want {
+			t.Errorf("asked %s: %d %s, want %d", body, rec.Code, rec.Body, want)
+		}
+	}
+	if rec := do(http.MethodDelete, "/api/v1/requests/"+uuid.NewV7().String(), memberToken, ""); rec.Code != http.StatusConflict {
+		t.Errorf("a decided request taken back: %d, want 409", rec.Code)
+	}
+
+	id := uuid.NewV7().String()
+	if rec := do(http.MethodPost, "/api/v1/admin/requests/"+id+"/approve", memberToken, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("approved by a user: %d, want 403", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/api/v1/admin/requests/"+id+"/approve", goodToken, ""); rec.Code != http.StatusOK || f.by != nil || f.decider != oliver.ID {
+		t.Errorf("approved by an admin: %d, over %v as %v; want every profile's, as Oliver", rec.Code, f.by, f.decider)
+	}
+	rec = do(http.MethodPost, "/api/v1/admin/requests/"+id+"/decline", managerToken, `{"reason":"Not this week"}`)
+	if rec.Code != http.StatusOK || f.by == nil || *f.by != sam.ID || f.decider != sam.ID || f.reason != "Not this week" {
+		t.Errorf("declined by a manager: %d, over %v as %v for %q; want Sam's users, as Sam, saying why", rec.Code, f.by, f.decider, f.reason)
+	}
+	if rec := do(http.MethodGet, "/api/v1/admin/requests?state=waiting", goodToken, ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("requests in no state: %d, want 400", rec.Code)
+	}
+}

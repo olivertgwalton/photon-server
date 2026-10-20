@@ -2130,6 +2130,141 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/admin/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Page the requests of the profiles one keeps, newest first: every profile's for an admin
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only requests in this state. */
+                    state?: components["schemas"]["RequestState"];
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RequestPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a request while it waits
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Request"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/requests/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a request while it waits, saying why
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Decline"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Request"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/server": {
         parameters: {
             query?: never;
@@ -6744,6 +6879,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page the profile's requests, newest first */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RequestPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        /** Ask for a title a search answered as requestable; an admin's is approved at once */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Ask"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Request"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take back one of the profile's requests while it waits */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -7786,6 +8025,11 @@ export interface components {
         ArtworkKind: "poster" | "backdrop" | "logo" | "thumb" | "banner";
         /** @enum {string} */
         ArtworkLanguage: "localized" | "any";
+        Ask: {
+            seasons?: number[];
+            /** Format: uuid */
+            title_id: string;
+        };
         Audio: {
             bitrate_kbps?: number;
             channels?: number;
@@ -8108,6 +8352,9 @@ export interface components {
         };
         /** @enum {string} */
         Decision: "copy" | "transcode";
+        Decline: {
+            reason?: string;
+        };
         /** @enum {string} */
         Delivery: "proxy" | "redirect";
         Described: {
@@ -8594,6 +8841,7 @@ export interface components {
             box_sets?: components["schemas"]["BoxSetMode"];
             certification_country?: string | null;
             deletion?: components["schemas"]["MediaDeletion"];
+            discover?: components["schemas"]["FieldSource"] | null;
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             metadata_language?: string | null;
@@ -9344,6 +9592,38 @@ export interface components {
         };
         /** @enum {string} */
         ReleaseCheck: "on" | "off";
+        Request: {
+            /** Format: date-time */
+            asked_at: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by_id?: string;
+            /** Format: uuid */
+            id: string;
+            ids: {
+                [key: string]: string;
+            };
+            kind: components["schemas"]["ItemKind"];
+            /** Format: uuid */
+            library_id: string;
+            profile: string;
+            /** Format: uuid */
+            profile_id: string;
+            reason?: string;
+            seasons?: number[];
+            state: components["schemas"]["RequestState"];
+            title: string;
+            year?: number;
+        };
+        RequestPage: {
+            items: components["schemas"]["Request"][];
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
+        /** @enum {string} */
+        RequestState: "pending" | "approved" | "declined";
         Reset: {
             name: string;
         };
@@ -9408,6 +9688,7 @@ export interface components {
         ScanPhase: "reading" | "removing";
         Search: {
             people: components["schemas"]["PersonRefPage"];
+            requestable: components["schemas"]["CardList"];
             titles: components["schemas"]["CardPage"];
         };
         /** @enum {string} */

@@ -19,6 +19,8 @@ var (
 	// ErrRemoteUntouched is a remote library set to be watched, deleted from, or to forget the
 	// copies its provider no longer offers: it has no folder, and no scan ends for it.
 	ErrRemoteUntouched = errors.New("a remote library has no folder to watch, to delete files from, or to forget copies of")
+	// ErrHoldsNothing is a remote library left with neither a list nor a search to hold titles of.
+	ErrHoldsNothing = errors.New("a remote library holds a list's titles, what a search finds, or both")
 )
 
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
@@ -176,6 +178,9 @@ type LibraryChange struct {
 	// SubtitleLanguages, where not nil, are those it fetches subtitles in; empty is none.
 	SubtitleLanguages []language.Tag
 	SubtitleMatch     domain.SubtitleMatch
+	// Discover, where set, replaces the provider whose search finds it titles it does not hold;
+	// "" is none.
+	Discover *domain.FieldSource
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -243,6 +248,8 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		return ErrLibraryExists
 	case refusedBy(err, "remote_library_untouched"):
 		return ErrRemoteUntouched
+	case refusedBy(err, "library_holding"):
+		return ErrHoldsNothing
 	}
 	return err
 }
@@ -353,6 +360,15 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 			tags[i] = t.String()
 		}
 		if err := setColumn(ctx, tx, id, "subtitle_languages", tags); err != nil {
+			return err
+		}
+	}
+	if change.Discover != nil {
+		var source *domain.FieldSource
+		if *change.Discover != "" {
+			source = change.Discover
+		}
+		if err := setColumn(ctx, tx, id, "discover_source", source); err != nil {
 			return err
 		}
 	}

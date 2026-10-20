@@ -16,6 +16,6 @@ func (noCopies) Ensure(context.Context, uuid.UUID) error { return nil }
 // noDiscoveries is a server whose remote libraries search nothing.
 type noDiscoveries struct{}
 
-func (noDiscoveries) Find(context.Context, uuid.UUID, string, []domain.ItemKind) ([]store.Discovery, error) {
+func (noDiscoveries) Find(context.Context, uuid.UUID, domain.LibraryMedia, string, []domain.ItemKind) ([]store.Discovery, error) {
 	return nil, nil
 }

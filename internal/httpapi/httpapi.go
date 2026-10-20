@@ -135,6 +135,8 @@ type Services struct {
 	Preferences preferences
 	// Playlists are each profile's own.
 	Playlists playlists
+	// Requests are the titles profiles ask for that libraries of files lack.
+	Requests requests
 	// Notifications are each profile's of the films and episodes added that it follows.
 	Notifications notifications
 	// Push are the browsers each profile's notifications are pushed to, subscribed with PushKey.
@@ -327,6 +329,7 @@ func (a *API) routes() []route {
 		a.historyRoutes(),
 		a.statisticsRoutes(),
 		a.playlistsRoutes(),
+		a.requestsRoutes(),
 		a.editRoutes(),
 		a.artworkEditRoutes(),
 		a.markersRoutes(),

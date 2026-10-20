@@ -218,8 +218,9 @@ type addLibraryJSON struct {
 	// List is the list a remote library holds the titles of: one kept on a provider that keeps
 	// lists, by its id there, as a list collection names one.
 	List *store.ListRef `json:"list,omitzero"`
-	// Discover is a provider that searches, whose finds a search of the server shows as titles of
-	// a remote library, which become its own as they are opened.
+	// Discover is a provider that searches, whose finds a search of the server shows: as titles of
+	// a remote library, which become its own as they are opened; as titles a profile may ask a
+	// library of files for.
 	Discover domain.FieldSource `json:"discover,omitzero"`
 	Streams  domain.FieldSource `json:"streams,omitzero"`
 }
@@ -258,7 +259,17 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, a.logger, codeInvalidBody, "root is not a folder the server can read")
 			return
 		}
+		if req.Discover != "" {
+			if why := a.discoverRefused(r.Context(), req.Discover); why != "" {
+				writeProblem(w, a.logger, codeInvalidBody, why)
+				return
+			}
+		}
 		lib, err = a.svc.Libraries.AddLibrary(r.Context(), req.Name, req.Kind, root)
+		if err == nil && req.Discover != "" {
+			err = a.svc.Libraries.SetLibrary(r.Context(), lib.ID, store.LibraryChange{Discover: &req.Discover})
+			lib.DiscoverSource = req.Discover
+		}
 	}
 	if a.answered(w, r, err) {
 		return
@@ -300,8 +311,8 @@ func (a *API) remoteRefused(ctx context.Context, req addLibraryJSON) string {
 	return ""
 }
 
-// discoverRefused is why a provider cannot find a remote library titles, or "" where it can: it
-// searches, and files titles under ids of its own, which a title found is kept by.
+// discoverRefused is why a provider cannot find a library titles, or "" where it can: it searches,
+// and files titles under ids of its own, which a title found is kept by.
 func (a *API) discoverRefused(ctx context.Context, source domain.FieldSource) string {
 	_, plugin := source.Plugin()
 	if !plugin && !slices.Contains(domain.Providers(), domain.Provider(source)) {
@@ -357,6 +368,9 @@ type libraryChangeJSON struct {
 	// SubtitleLanguages replace the languages it fetches subtitles in; [] is none.
 	SubtitleLanguages []domain.LanguageTag `json:"subtitle_languages,omitzero"`
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match,omitzero"`
+	// Discover replaces the provider whose search finds it titles it does not hold; "" is none,
+	// which a remote library holding no list's titles cannot be left with.
+	Discover *domain.FieldSource `json:"discover,omitzero"`
 }
 
 type kindSourcesChangeJSON struct {
@@ -419,6 +433,13 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	change.MetadataLanguage, change.CertificationCountry = (*string)(req.MetadataLanguage), (*string)(req.CertificationCountry)
 	change.ArtworkLanguage, change.TitleLanguage = req.ArtworkLanguage, req.TitleLanguage
+	if d := req.Discover; d != nil && *d != "" {
+		if why := a.discoverRefused(r.Context(), *d); why != "" {
+			writeProblem(w, a.logger, codeInvalidBody, why)
+			return
+		}
+	}
+	change.Discover = req.Discover
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
 		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
 		return
@@ -511,51 +532,6 @@ func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-}
-
-type localesJSON struct {
-	// Languages a library may ask its metadata in, IETF tags: those TMDB has translations in.
-	Languages []domain.LanguageTag `json:"languages"`
-	// Countries a library may take its certificates from, ISO 3166-1 alpha-2 codes: those whose
-	// certificates the server can read for parental controls.
-	Countries []domain.CountryCode `json:"countries"`
-}
-
-// locales lists what a library may ask its metadata in, as Jellyfin's Localization cultures and
-// countries do.
-func (a *API) locales(w http.ResponseWriter, r *http.Request) {
-	countries, err := a.svc.Libraries.CertificateCountries(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, localesJSON{Languages: each(domain.MetadataLanguages(), func(s string) domain.LanguageTag { return domain.LanguageTag(s) }), Countries: each(countries, func(s string) domain.CountryCode { return domain.CountryCode(s) })})
-}
-
-// metadataLanguage is a metadata language as sent, written as its standard writes it, or why it is
-// refused; "" stays "", the one above's.
-func metadataLanguage(s string) (canonical, refusal string) {
-	if s == "" {
-		return "", ""
-	}
-	tag, err := language.Parse(s)
-	if err != nil {
-		return "", "metadata_language is an IETF language tag, such as en-GB"
-	}
-	return tag.String(), ""
-}
-
-// certificationCountry is a certification country as sent, written as its standard writes it, or
-// why it is refused; "" stays "", the one above's.
-func certificationCountry(s string) (canonical, refusal string) {
-	if s == "" {
-		return "", ""
-	}
-	region, err := language.ParseRegion(s)
-	if err != nil || !region.IsCountry() {
-		return "", "certification_country is an ISO 3166-1 alpha-2 country, such as GB"
-	}
-	return region.String(), ""
 }
 
 func (a *API) adminRoutes() []route {

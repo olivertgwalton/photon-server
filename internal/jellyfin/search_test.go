@@ -109,8 +109,8 @@ func TestAnAppSearchesByHints(t *testing.T) {
 // found finds one film in a remote library a search of every library is shown, and a film alone.
 type found struct{ d store.Discovery }
 
-func (f found) Find(_ context.Context, _ uuid.UUID, _ string, kinds []domain.ItemKind) ([]store.Discovery, error) {
-	if len(kinds) > 0 && !slices.Contains(kinds, domain.ItemMovie) {
+func (f found) Find(_ context.Context, _ uuid.UUID, media domain.LibraryMedia, _ string, kinds []domain.ItemKind) ([]store.Discovery, error) {
+	if media != domain.MediaRemote || len(kinds) > 0 && !slices.Contains(kinds, domain.ItemMovie) {
 		return nil, nil
 	}
 	return []store.Discovery{f.d}, nil

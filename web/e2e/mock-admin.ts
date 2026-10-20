@@ -1033,6 +1033,7 @@ export function adminTitles(route: string): Response | undefined {
 					total: 1,
 				},
 				people: { items: [], offset: 0, total: 0 },
+				requestable: { items: [] },
 			} satisfies Schemas["Search"]);
 	}
 	return undefined;

@@ -17,8 +17,9 @@ import (
 // discoveriesFor is how long a title a search found is kept for a profile to open.
 const discoveriesFor = 24 * time.Hour
 
-// Discovery is a title a provider's search found for a remote library that holds no title by its
-// id: shown as one of the library's, and made one as it is opened.
+// Discovery is a title a provider's search found for a library that no library holds a title by its
+// id of: for a remote library, shown as one of its own and made one as it is opened; for a library
+// of files, one a profile may ask for.
 type Discovery struct {
 	ID       uuid.UUID
 	Library  uuid.UUID
@@ -34,24 +35,24 @@ func (d Discovery) Card() Card {
 	return Card{ID: d.ID, Kind: d.Kind, Title: d.Title, Year: d.Year, Poster: d.Poster, Overview: d.Overview}
 }
 
-// Discoverable is a remote library a profile may see whose titles a provider's search finds.
+// Discoverable is a library a profile may see whose titles a provider's search finds.
 type Discoverable struct {
 	ID     uuid.UUID
 	Kind   domain.LibraryKind
 	Source domain.FieldSource
 }
 
-// Discoverable answers the remote libraries a profile may see that search a provider: none for a
-// profile held to an age, as a title found has no certificate until it is described.
-func (s *Store) Discoverable(ctx context.Context, profile uuid.UUID) ([]Discoverable, error) {
+// Discoverable answers the libraries of a media a profile may see that search a provider: none for
+// a profile held to an age, as a title found has no certificate until it is described.
+func (s *Store) Discoverable(ctx context.Context, profile uuid.UUID, media domain.LibraryMedia) ([]Discoverable, error) {
 	return queryStructs[Discoverable](ctx, s.pool, `
 		SELECT l.id, l.kind, l.discover_source AS source FROM libraries l, viewer($1) v
-		WHERE l.media = 'remote' AND l.discover_source IS NOT NULL AND v.max_age IS NULL
+		WHERE l.media = $2 AND l.discover_source IS NOT NULL AND v.max_age IS NULL
 			AND (v.libraries IS NULL OR l.id = ANY (v.libraries))
-		ORDER BY l.name`, profile)
+		ORDER BY l.name`, profile, media)
 }
 
-// SaveDiscoveries keeps what a provider's search found for a remote library, under fixed ids, and
+// SaveDiscoveries keeps what a provider's search found for a library, under fixed ids, and
 // answers those no library holds a title of by the provider's id. What was found a day ago goes.
 // A find's poster is the provider's full one, which the server sizes for each client as it does
 // any picture, under an id of its address, so a poster that changes is fetched anew.
@@ -107,9 +108,9 @@ func derived(what string, lib uuid.UUID, provider domain.Provider, id string) uu
 	return u
 }
 
-// HoldDiscovered makes a discovery a title of its library, under the discovery's id, named as it
-// was found and matched by the id it was found under. False for an id that is no discovery, or one
-// already held.
+// HoldDiscovered makes a remote library's discovery a title of it, under the discovery's id, named
+// as it was found and matched by the id it was found under. False for an id that is no such
+// discovery, or one already held.
 func (s *Store) HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error) {
 	var held bool
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -122,9 +123,10 @@ func (s *Store) HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error) 
 			Year     *int
 		}
 		err := tx.QueryRow(ctx, `
-			SELECT library_id, kind, provider, value, title, year FROM discoveries d
-			WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM items WHERE id = d.id)
-			FOR UPDATE`, id).Scan(&d.Library, &d.Kind, &d.Provider, &d.Value, &d.Title, &d.Year)
+			SELECT d.library_id, d.kind, d.provider, d.value, d.title, d.year
+			FROM discoveries d JOIN libraries l ON l.id = d.library_id AND l.media = 'remote'
+			WHERE d.id = $1 AND NOT EXISTS (SELECT 1 FROM items WHERE id = d.id)
+			FOR UPDATE OF d`, id).Scan(&d.Library, &d.Kind, &d.Provider, &d.Value, &d.Title, &d.Year)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

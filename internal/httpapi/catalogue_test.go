@@ -425,6 +425,46 @@ func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitleP
 	}, nil
 }
 
+// A search of every library's first page shows what a remote library's search finds among the
+// server's titles, which an app opens as any other, and what a library of files' search finds
+// apart, as titles to ask for; a later page, or a search of one library, shows neither.
+func TestASearchShowsTitlesToAskForApart(t *testing.T) {
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Copies: noCopies{}, Discover: findsOfEach{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, People: &fakePeople{},
+	})
+	search := func(query string) searchJSON {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/search"+query, nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		var got searchJSON
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("%s: %d %s", query, rec.Code, rec.Body)
+		}
+		return got
+	}
+	titles := func(cards []cardJSON) []string {
+		out := []string{}
+		for _, c := range cards {
+			out = append(out, c.Title)
+		}
+		return out
+	}
+	got := search("?q=e")
+	if !slices.Equal(titles(got.Titles.Items), []string{"e 00000000-0000-0000-0000-000000000000", "Inception"}) || got.Titles.Total != 2 {
+		t.Errorf("titles %v of %d, want what the server holds and the remote library's find", titles(got.Titles.Items), got.Titles.Total)
+	}
+	if !slices.Equal(titles(got.Requestable.Items), []string{"Heat"}) {
+		t.Errorf("titles to ask for %v, want the library of files' find", titles(got.Requestable.Items))
+	}
+	for _, query := range []string{"?q=e&offset=1", "?q=e&library=" + films.String()} {
+		if got := search(query); len(got.Requestable.Items) != 0 {
+			t.Errorf("%s: titles to ask for %v, want none", query, titles(got.Requestable.Items))
+		}
+	}
+}
+
 // A client shows a copy and its tracks by the names the server gives, in its reader's language,
 // and the answer says which language that is so no cache serves it to another reader.
 func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
