@@ -334,6 +334,10 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 	if err != nil || !slices.Equal(facets.Genres, []string{"Comedy", "Drama"}) || !slices.Equal(facets.Certificates, []string{"15", "18"}) {
 		t.Errorf("facets = %+v, %v; want their shows' genres and certificates", facets, err)
 	}
+	facets, err = s.Facets(ctx, []uuid.UUID{lib.ID}, teen.ID, domain.WallEpisodes)
+	if err != nil || !slices.Equal(facets.Genres, []string{"Comedy"}) || !slices.Equal(facets.Certificates, []string{"15"}) {
+		t.Errorf("facets kept to 15 = %+v, %v; want Archer's alone", facets, err)
+	}
 	if cards, total, err := s.wallCards(ctx, []uuid.UUID{films.ID}, WallPage{Kind: domain.WallEpisodes, Sort: domain.SortTitle, Limit: 10}); err != nil || total != 0 || len(cards) != 0 {
 		t.Errorf("a film library's episodes: %d of %d, %v; want none", len(cards), total, err)
 	}
