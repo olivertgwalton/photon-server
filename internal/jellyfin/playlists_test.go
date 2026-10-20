@@ -39,7 +39,7 @@ func newHousehold(t *testing.T) household {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}

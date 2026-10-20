@@ -82,7 +82,7 @@ func fixture(t *testing.T) (*store.Store, uuid.UUID, uuid.UUID, func(more ...int
 	}
 	t.Cleanup(st.Close)
 	ctx := t.Context()
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -53,11 +53,11 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 	t.Cleanup(st.Close)
 	ctx := t.Context()
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := st.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	other, err := st.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other", "")
 	if err != nil {
 		t.Fatal(err)
 	}

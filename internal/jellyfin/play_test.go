@@ -106,7 +106,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 			t.Fatal(err)
 		}
 	}
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -790,7 +790,7 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, t.TempDir())
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

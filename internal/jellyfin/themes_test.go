@@ -40,7 +40,7 @@ func aShowWithATheme(t *testing.T) (st *store.Store, ada domain.Profile, show, e
 	if err := os.WriteFile(filepath.Join(root, "Wire", "theme.mp3"), []byte("way down in the hole"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, root)
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

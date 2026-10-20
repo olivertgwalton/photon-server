@@ -67,7 +67,7 @@ func TestAnAppsSubtitlesFollowTheProfilesPreferences(t *testing.T) {
 func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 	ctx := t.Context()
 	st, ada, heat, _ := aFilm(t)
-	if _, err := st.AddLibrary(ctx, "Shows", domain.LibraryShows, t.TempDir()); err != nil {
+	if _, err := st.AddLibrary(ctx, "Shows", domain.LibraryShows, t.TempDir(), ""); err != nil {
 		t.Fatal(err)
 	}
 	bea, err := st.AddProfile(ctx, "Bea", domain.RoleUser, "hash", nil)

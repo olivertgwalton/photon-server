@@ -58,7 +58,7 @@ func filmToDownload(t *testing.T) (st *store.Store, item, part uuid.UUID) {
 	if err := os.WriteFile(filepath.Join(root, "L", "L.mkv"), []byte("film"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 	t.Helper()
 	s = migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestADownloadIsItsDevices(t *testing.T) {
 func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
 func TestADownloadNamesItsTitle(t *testing.T) {
 	s, film, part, profiles := downloadable(t)
 	ctx := t.Context()
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}

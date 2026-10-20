@@ -80,7 +80,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
 	root := t.TempDir()
-	lib, err := st.AddLibrary(t.Context(), "Films", domain.LibraryMovies, root)
+	lib, err := st.AddLibrary(t.Context(), "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,11 +19,11 @@ import (
 func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 func TestAnEpisodeIsBilledWithItsShowsCast(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestAnEpisodeIsBilledWithItsShowsCast(t *testing.T) {
 func TestTwoSourcesCreditingOneShowNameOneCast(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestTwoSourcesCreditingOneShowNameOneCast(t *testing.T) {
 func TestSomeoneOnTMDBKeepsTheirTMDBPicture(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestSomeoneOnTMDBKeepsTheirTMDBPicture(t *testing.T) {
 func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 func TestSimilarTitlesShareSomething(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestSimilarTitlesShareSomething(t *testing.T) {
 func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +506,7 @@ func TestSomeoneIsDescribedInTheLanguageTheirTitlesShare(t *testing.T) {
 	german := "de-DE"
 	film := func(library, title string) uuid.UUID {
 		t.Helper()
-		lib, err := s.AddLibrary(ctx, library, domain.LibraryMovies, "/srv/"+library)
+		lib, err := s.AddLibrary(ctx, library, domain.LibraryMovies, "/srv/"+library, "")
 		if err != nil {
 			t.Fatal(err)
 		}

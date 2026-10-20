@@ -121,11 +121,11 @@ func TestANameTooLongForItsNumberIsCutShort(t *testing.T) {
 func TestAProfileMadeForAnAccountSeesWhatItsProviderGives(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows"); err != nil {
+	if _, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", ""); err != nil {
 		t.Fatal(err)
 	}
 	p := pocketID("https://id.example.com")

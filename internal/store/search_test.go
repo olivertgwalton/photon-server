@@ -15,11 +15,11 @@ import (
 func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestSearchFindsATitleInSeveralLibrariesOnce(t *testing.T) {
 	var heats []uuid.UUID
 	var libs []uuid.UUID
 	for _, name := range []string{"Films", "4K"} {
-		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name, "")
 		if err != nil {
 			t.Fatal(err)
 		}

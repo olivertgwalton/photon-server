@@ -31,11 +31,11 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films"); err != nil {
+	if _, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", ""); err != nil {
 		t.Fatal(err)
 	}
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)

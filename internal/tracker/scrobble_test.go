@@ -44,7 +44,7 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}
 	}
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{heat}, nil); err != nil {
 		t.Fatal(err)
 	}
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -191,7 +191,7 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 	hub := events.New(st, k, uuid.NewV7(), func() string { return "den" }, log)
 	ctx := t.Context()
 
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

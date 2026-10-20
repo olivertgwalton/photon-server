@@ -40,9 +40,12 @@ func hasLibrary(ctx context.Context, q db, lib uuid.UUID) error {
 	return found(q.QueryRow(ctx, `SELECT 1 FROM libraries WHERE id = $1`, lib).Scan(&one))
 }
 
-// AddLibrary adds a library of the files under a folder.
-func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error) {
-	return s.addLibrary(ctx, kind, `INSERT INTO libraries (name, kind, root) VALUES ($1, $2, $3) RETURNING `+libraryColumns, name, kind, root)
+// AddLibrary adds a library of the files under a folder, whose search finds titles a profile may
+// ask for where discover names a provider.
+func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string, discover domain.FieldSource) (domain.Library, error) {
+	return s.addLibrary(ctx, kind, `
+		INSERT INTO libraries (name, kind, root, discover_source) VALUES ($1, $2, $3, nullif($4, '')) RETURNING `+libraryColumns,
+		name, kind, root, discover)
 }
 
 // Remote is where a remote library's titles come from and are played from: the titles of a list

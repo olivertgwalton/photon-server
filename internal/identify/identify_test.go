@@ -75,7 +75,7 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	}
 	defer st.Close()
 	ctx := t.Context()
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 	}
 	defer st.Close()
 	ctx := t.Context()
-	lib, err := st.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme")
+	lib, err := st.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestALibraryGivingOriginalTitlesNamesATitleAsItWasFirstNamed(t *testing.T) 
 	}
 	defer st.Close()
 	ctx := t.Context()
-	lib, err := st.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme")
+	lib, err := st.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme", "")
 	if err != nil {
 		t.Fatal(err)
 	}

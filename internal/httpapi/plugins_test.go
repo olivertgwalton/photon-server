@@ -159,7 +159,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 		t.Errorf("the key was answered back: %s", rec.Body)
 	}
 
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}

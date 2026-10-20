@@ -34,7 +34,7 @@ func lost(t *testing.T, markers domain.MarkerDetection, chapters ...domain.Chapt
 	t.Cleanup(st.Close)
 	ctx := t.Context()
 	root := t.TempDir()
-	lib, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, root)
+	lib, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Heat", "Heat.mkv"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

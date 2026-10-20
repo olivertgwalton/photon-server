@@ -50,7 +50,7 @@ func newHousehold(t *testing.T) household {
 			Facts: &domain.Facts{Duration: time.Hour},
 		}}}}
 	}
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func newHousehold(t *testing.T) household {
 			t.Fatal(err)
 		}
 	}
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

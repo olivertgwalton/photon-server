@@ -194,7 +194,7 @@ func TestKeyframesJobsWaitBehindWhatAReaderSees(t *testing.T) {
 	if kind := claim(); kind != domain.JobScanLibrary {
 		t.Errorf("claimed %s before the later scan", kind)
 	}
-	other, err := f.st.AddLibrary(t.Context(), "Other", domain.LibraryMovies, t.TempDir())
+	other, err := f.st.AddLibrary(t.Context(), "Other", domain.LibraryMovies, t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
