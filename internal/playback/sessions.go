@@ -202,7 +202,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	if !ended {
 		return "", ErrNoPlayback
 	}
-	s.close(p.ID)
+	s.Close(p.ID)
 	p.Position = position
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Length, p.Reached, nil)
 	if errors.Is(err, store.ErrNotFound) {
@@ -259,7 +259,7 @@ func (s *Sessions) Sweep(ctx context.Context) error {
 	}
 	for _, id := range served {
 		if !going[id] {
-			s.close(id)
+			s.Close(id)
 		}
 	}
 	return errors.Join(errs...)
@@ -329,8 +329,8 @@ func (s *Sessions) SetStreamLimit(limit int) {
 	s.streamLimit = limit
 }
 
-// close ends this node's streams of a playback: its remux, and the files it streams as they are.
-func (s *Sessions) close(id uuid.UUID) {
+// Close ends this node's streams of a playback: its remux, and the files it streams as they are.
+func (s *Sessions) Close(id uuid.UUID) {
 	s.streams.Close(id)
 	s.mu.Lock()
 	defer s.mu.Unlock()

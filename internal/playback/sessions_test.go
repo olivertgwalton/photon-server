@@ -253,6 +253,29 @@ func TestAFilePlayedAsItIsIsAmongANodesPlaybacks(t *testing.T) {
 	}
 }
 
+// Ending a node's streams, as a restore does, cuts off the files it streams as they are as well as
+// its remuxes.
+func TestEndingANodesStreamsCutsOffAFilePlayedAsItIs(t *testing.T) {
+	remuxed := uuid.NewV7()
+	streams := served{remuxed: true}
+	s := NewSessions(memory{}, positions{}, streams, func(context.Context, domain.Event) {}, thisNode)
+	ctx := t.Context()
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 0, thisNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := 0
+	if _, err := s.Serve(ctx, p.ID, func() { cut++ }); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range s.Playbacks() {
+		s.Close(id)
+	}
+	if cut != 1 || len(streams) != 0 || len(s.Playbacks()) != 0 {
+		t.Errorf("ended: file cut %d times, remuxes left %v, playbacks left %v; want the file cut once and nothing left", cut, streams, s.Playbacks())
+	}
+}
+
 // A playback of a title removed while it played is swept like any other, once: it is not kept to
 // be swept, and fail, again.
 func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {

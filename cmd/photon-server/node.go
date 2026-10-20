@@ -385,7 +385,7 @@ func (n *node) serve(ctx context.Context) error {
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
 		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {
-			endStreams(n.self, n.remuxer)
+			endStreams(n.self, n.sessions)
 			return
 		}
 		drain(context.WithoutCancel(ctx), n.self, n.sessions, n.stops, drainFor, logger)
