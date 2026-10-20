@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,6 +63,19 @@ func TestTheAuthorizationHeaderIsReadAsEachAppWritesIt(t *testing.T) {
 	if got := appOf(r).Token; got != "pst_q" {
 		t.Errorf("an empty header token with ApiKey in the query: %q, want the query's", got)
 	}
+}
+
+// Any header is read without fault, and a value quoted and URL-encoded, as the SDKs write one,
+// reads back as it was.
+func FuzzParseParams(f *testing.F) {
+	f.Add(`DeviceId=iOS_1A2B, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_abc`, "Swiftfin iOS")
+	f.Add(`Client="Infuse, Direct", Device="Apple+TV", Token=""`, `Jellyfin "Web", 10%`)
+	f.Fuzz(func(t *testing.T, params, client string) {
+		parseParams(params)
+		if got := parseParams(`Client="` + url.QueryEscape(client) + `"`).Client; got != client {
+			t.Errorf("Client %q read back as %q", client, got)
+		}
+	})
 }
 
 var (
