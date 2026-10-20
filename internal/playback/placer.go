@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"uuid"
@@ -276,9 +277,12 @@ func (p *Placer) chose(node domain.Node) {
 // streamLimitCode is the problem code a node answers ErrStreamLimit with.
 const streamLimitCode = "stream_limit"
 
-// RemotePath is where a node is asked to open a playback.
+// RemotePattern is where a node is asked to open a playback.
+const RemotePattern = "/api/v1/internal/playbacks/{id}/delivery"
+
+// RemotePath is RemotePattern for playback.
 func RemotePath(playback uuid.UUID) string {
-	return "/api/v1/internal/playbacks/" + playback.String() + "/delivery"
+	return strings.Replace(RemotePattern, "{id}", playback.String(), 1)
 }
 
 // Refuse counts, and answers, the refusal of a playback every one of candidates refused, as
