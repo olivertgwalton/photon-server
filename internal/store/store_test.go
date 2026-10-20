@@ -39,6 +39,21 @@ func TestOpenRefusesUnmigratedDatabase(t *testing.T) {
 	}
 }
 
+// A rollback runs each migration's Down, which nothing else ever does.
+func TestMigrationsRollBackAndReapply(t *testing.T) {
+	s := migrated(t)
+	p, err := s.migrator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(t.Context(), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServerIDSurvivesReopening(t *testing.T) {
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
