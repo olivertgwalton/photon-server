@@ -263,6 +263,40 @@ func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
 	}
 }
 
+func TestAFolderWhoseIgnoreCannotBeReadIsNotRead(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file whatever its mode")
+	}
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"Private/.ignore":              "",
+		"Private/Diary/Home Video.mkv": "v",
+	})
+	if err := os.Chmod(filepath.Join(dir, "Private", ".ignore"), 0); err != nil {
+		t.Fatal(err)
+	}
+	// Walked from the root, the folder's own .ignore is read; walked from below, the one above it.
+	for from, failed := range map[string]string{".": "Private", "Private/Diary": "Private/Diary"} {
+		var mu sync.Mutex
+		got := map[string]bool{}
+		err := Walk(t.Context(), dir, []string{from}, 4, func(_ context.Context, f Folder, err error) error {
+			mu.Lock()
+			defer mu.Unlock()
+			got[f.Path] = err == nil
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got["Private"] || got["Private/Diary"] {
+			t.Errorf("walking %s read a folder its unreadable .ignore may hide: %v", from, got)
+		}
+		if read, told := got[failed]; !told || read {
+			t.Errorf("walking %s did not say the folder could not be read: %v", from, got)
+		}
+	}
+}
+
 func TestRemoveTakesAFileAndTheFoldersItEmpties(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel string) {

@@ -187,11 +187,13 @@ func list(v visit) (Folder, visit, bool, error) {
 		return Folder{Path: v.dir}, v, true, err
 	}
 	if slices.ContainsFunc(entries, func(e fs.DirEntry) bool { return e.Name() == ".ignore" }) {
-		if content, err := os.ReadFile(filepath.Join(full, ".ignore")); err == nil {
-			var ok bool
-			if v.ign, ok = parseIgnore(v.dir, string(content)); !ok {
-				return Folder{}, v, false, nil
-			}
+		content, err := os.ReadFile(filepath.Join(full, ".ignore"))
+		if err != nil {
+			return Folder{Path: v.dir}, v, true, err
+		}
+		var ok bool
+		if v.ign, ok = parseIgnore(v.dir, string(content)); !ok {
+			return Folder{}, v, false, nil
 		}
 	}
 	return read(full, v, entries), v, true, nil
@@ -211,7 +213,14 @@ func (w *walker) climb(dir string) (visit, bool, error) {
 		if name == "." {
 			break
 		}
-		if content, err := os.ReadFile(filepath.Join(w.root, filepath.FromSlash(at), ".ignore")); err == nil {
+		// A .ignore that is there and cannot be read fails the folder: what it hides would
+		// otherwise join the library until it could be read again.
+		content, err := os.ReadFile(filepath.Join(w.root, filepath.FromSlash(at), ".ignore"))
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+		case err != nil:
+			return v, true, err
+		default:
 			var ok bool
 			if v.ign, ok = parseIgnore(at, string(content)); !ok {
 				return v, false, nil
