@@ -12,6 +12,9 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -219,6 +222,57 @@ func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
 	}
 	if _, err := s.Serve(ctx, here.ID, func() {}); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("streaming a stopped playback: %v, want ErrNoPlayback", err)
+	}
+}
+
+// A node counts a file it streams as it is among the playbacks it serves, so a node stopping waits
+// for it to play to its end as it waits for a remux, and stops waiting once it has.
+func TestAFilePlayedAsItIsIsAmongANodesPlaybacks(t *testing.T) {
+	remuxed := uuid.NewV7()
+	s := NewSessions(memory{}, positions{}, served{remuxed: true}, func(context.Context, domain.Event) {}, thisNode)
+	ctx := t.Context()
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 0, thisNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Deliver(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	done, err := s.Serve(ctx, p.ID, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := cmpopts.SortSlices(uuid.UUID.Compare)
+	if diff := cmp.Diff([]uuid.UUID{remuxed, p.ID}, s.Playbacks(), byID); diff != "" {
+		t.Errorf("playbacks while the file streams, each once (-want +got):\n%s", diff)
+	}
+	done()
+	s.Release(p.ID)
+	if diff := cmp.Diff([]uuid.UUID{remuxed}, s.Playbacks(), byID); diff != "" {
+		t.Errorf("playbacks once the file has played (-want +got):\n%s", diff)
+	}
+}
+
+// Ending a node's streams, as a restore does, cuts off the files it streams as they are as well as
+// its remuxes.
+func TestEndingANodesStreamsCutsOffAFilePlayedAsItIs(t *testing.T) {
+	remuxed := uuid.NewV7()
+	streams := served{remuxed: true}
+	s := NewSessions(memory{}, positions{}, streams, func(context.Context, domain.Event) {}, thisNode)
+	ctx := t.Context()
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 0, thisNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := 0
+	if _, err := s.Serve(ctx, p.ID, func() { cut++ }); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range s.Playbacks() {
+		s.Close(id)
+	}
+	if cut != 1 || len(streams) != 0 || len(s.Playbacks()) != 0 {
+		t.Errorf("ended: file cut %d times, remuxes left %v, playbacks left %v; want the file cut once and nothing left", cut, streams, s.Playbacks())
 	}
 }
 

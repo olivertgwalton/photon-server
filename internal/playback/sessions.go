@@ -202,7 +202,7 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	if !ended {
 		return "", ErrNoPlayback
 	}
-	s.close(p.ID)
+	s.Close(p.ID)
 	p.Position = position
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Length, p.Reached, nil)
 	if errors.Is(err, store.ErrNotFound) {
@@ -241,7 +241,7 @@ func (s *Sessions) Abandon(ctx context.Context, id uuid.UUID) error {
 // that have ended on any node. Every node sweeps; each playback is ended once.
 func (s *Sessions) Sweep(ctx context.Context) error {
 	// Read first: a stream opened after the playbacks are read is of a playback already among them.
-	served := append(s.streams.Playbacks(), s.directPlaybacks()...)
+	served := s.Playbacks()
 	all, err := s.live.Playbacks(ctx)
 	if err != nil {
 		return err
@@ -259,7 +259,7 @@ func (s *Sessions) Sweep(ctx context.Context) error {
 	}
 	for _, id := range served {
 		if !going[id] {
-			s.close(id)
+			s.Close(id)
 		}
 	}
 	return errors.Join(errs...)
@@ -329,8 +329,8 @@ func (s *Sessions) SetStreamLimit(limit int) {
 	s.streamLimit = limit
 }
 
-// close ends this node's streams of a playback: its remux, and the files it streams as they are.
-func (s *Sessions) close(id uuid.UUID) {
+// Close ends this node's streams of a playback: its remux, and the files it streams as they are.
+func (s *Sessions) Close(id uuid.UUID) {
 	s.streams.Close(id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -341,10 +341,20 @@ func (s *Sessions) close(id uuid.UUID) {
 	delete(s.delivered, id)
 }
 
-func (s *Sessions) directPlaybacks() []uuid.UUID {
+// Playbacks are those this node serves: its remuxes, the files it streams as they are, and those
+// it was given to deliver.
+func (s *Sessions) Playbacks() []uuid.UUID {
+	ids := map[uuid.UUID]bool{}
+	for _, id := range s.streams.Playbacks() {
+		ids[id] = true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append(slices.Collect(maps.Keys(s.direct)), slices.Collect(maps.Keys(s.delivered))...)
+	for id := range s.direct {
+		ids[id] = true
+	}
+	maps.Copy(ids, s.delivered)
+	return slices.Collect(maps.Keys(ids))
 }
 
 func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playback, error) {
