@@ -190,13 +190,16 @@ type creditLink struct {
 
 // PersonCredits answers the films and shows someone is credited on, the newest first.
 func (s *Store) PersonCredits(ctx context.Context, profile, person uuid.UUID) ([]PersonCredit, error) {
-	// An episode's credit is its show's; a person in many episodes is listed once per part.
+	// An episode's credit is its show's; a person in many episodes is listed once per part. The
+	// viewer is made once: once the statement's plan is cached, Postgres made it again for every
+	// credit, most of a second for someone in thousands of episodes.
 	links, err := queryStructs[creditLink](ctx, s.pool, `
+		WITH seer AS MATERIALIZED (SELECT v FROM viewer($2) v)
 		SELECT DISTINCT ON (t.id, c.kind) t.id AS item_id, c.kind, c.role FROM credits c
 		JOIN items i ON i.id = c.item_id
 		JOIN items t ON t.id = CASE i.kind WHEN 'episode' THEN (SELECT s.parent_id FROM items s WHERE s.id = i.parent_id) ELSE i.id END
 		WHERE c.person_id = $1 AND t.kind IN ('movie', 'show')
-			AND EXISTS (SELECT 1 FROM viewer($2) v WHERE sees(v, t) AND NOT EXISTS (SELECT 1 FROM seen_before(v, t)))
+			AND EXISTS (SELECT 1 FROM seer WHERE sees(seer.v, t) AND NOT EXISTS (SELECT 1 FROM seen_before(seer.v, t)))
 		ORDER BY t.id, c.kind, c.position`, person, profile)
 	if err != nil || len(links) == 0 {
 		return nil, err
