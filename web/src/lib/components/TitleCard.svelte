@@ -19,12 +19,14 @@ import TitleMenuButton from "./TitleMenuButton.svelte";
 // A title on a wall or a rail: a poster, or for an episode or a row about
 // where the reader is, a still. `sizes` is how wide the rail draws it, and
 // `caption` replaces the line under the name (a part played, a date).
+// A title the server does not hold has no title's menu.
 let {
 	card,
 	shape = "poster",
 	sizes,
 	caption: given,
 	current = false,
+	menu = "title",
 }: {
 	card: CardLike;
 	shape?: Shape;
@@ -32,6 +34,7 @@ let {
 	caption?: string;
 	// The page's own title, outlined among the rest of its set.
 	current?: boolean;
+	menu?: "title" | "none";
 } = $props();
 
 // An episode drawn as a poster wears its season's art, as Infuse draws one
@@ -129,9 +132,11 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 			</div>
 		</div>
 	</a>
-	<!-- Beside the link, not in it: a control inside a link is two at once. -->
-	<TitleMenuButton
-		{card}
-		class="absolute top-2 right-2 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
-	/>
+	{#if menu === "title"}
+		<!-- Beside the link, not in it: a control inside a link is two at once. -->
+		<TitleMenuButton
+			{card}
+			class="absolute top-2 right-2 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+		/>
+	{/if}
 </div>
