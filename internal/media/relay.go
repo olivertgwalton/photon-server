@@ -33,6 +33,7 @@ var relayed = []string{"Accept-Ranges", "Content-Length", "Content-Range", "Cont
 type Relay struct {
 	srv    *http.Server
 	host   string
+	logger *slog.Logger
 	mu     sync.Mutex
 	routes map[string]route
 	// clients are the guarded clients by provider host, so a provider's connections are reused.
@@ -50,7 +51,7 @@ func ListenRelay(ctx context.Context, logger *slog.Logger) (*Relay, error) {
 	if err != nil {
 		return nil, fmt.Errorf("media relay: %w", err)
 	}
-	r := &Relay{host: l.Addr().String(), routes: map[string]route{}}
+	r := &Relay{host: l.Addr().String(), logger: logger, routes: map[string]route{}}
 	r.srv = &http.Server{Handler: http.HandlerFunc(r.serve), ReadHeaderTimeout: remoteStall}
 	go func() {
 		if err := r.srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
@@ -95,6 +96,13 @@ func (r *Relay) serve(w http.ResponseWriter, req *http.Request) {
 	}
 	resp, err := fetch(req.Context(), r.client(to.from), req.Method, to.u, header)
 	if err != nil {
+		// The address may carry the provider's key, so the error is told without it.
+		if ue, ok := errors.AsType[*url.Error](err); ok {
+			err = ue.Err
+		}
+		if req.Context().Err() == nil {
+			r.logger.WarnContext(req.Context(), "a provider's media could not be fetched", slog.String("host", to.u.Host), slog.Any("err", err))
+		}
 		http.Error(w, "the media could not be fetched", http.StatusBadGateway)
 		return
 	}

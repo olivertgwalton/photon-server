@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
@@ -46,7 +47,8 @@ func get(t *testing.T, in Input, rng string) (int, string) {
 }
 
 // Media a provider names is read at the relay, by range, never from its own address; from its
-// own host, or a public one, and nowhere else on the server's networks, a redirect's included.
+// own host, or a public one, and nowhere else on the server's networks, a redirect's included. One
+// refused is told an admin by its host, never its address, which carries the provider's key.
 func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 	body := strings.Repeat("0123456789", 100)
 	media := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +64,8 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	from := strings.TrimPrefix(media.URL, "http://")
-	relay := listen(t, io.Discard)
+	var log bytes.Buffer
+	relay := listen(t, &log)
 
 	in := relay.Relayed(at, from, "Heat (1995).mkv")
 	if strings.Contains(in.URL.String(), "s3cret") || in.Name != "Heat (1995).mkv" {
@@ -77,6 +80,9 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 	elsewhere := relay.Relayed(at, "addon.example:443", "Heat (1995).mkv")
 	if code, _ := get(t, elsewhere, ""); code != http.StatusBadGateway {
 		t.Errorf("media on a private address named by another host's addon answered %d, want 502", code)
+	}
+	if told := log.String(); !strings.Contains(told, "level=WARN") || !strings.Contains(told, at.Host) || !strings.Contains(told, ErrNotPublic.Error()) || strings.Contains(told, "s3cret") {
+		t.Errorf("refused, the relay logged %q; want a warning of the host and why, without the key", told)
 	}
 	redirect := httptest.NewServer(http.RedirectHandler(at.String(), http.StatusFound))
 	defer redirect.Close()
