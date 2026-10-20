@@ -44,7 +44,7 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 		t.Errorf("ratings = %v, want %v", page.Ratings, want)
 	}
 	// Its card on the wall says the same, with what a showcase writes beside it.
-	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
@@ -99,7 +99,7 @@ func TestATitleIsSortedAndFilteredByTheRatingItsCardShows(t *testing.T) {
 		}
 	}
 	titles := func(p WallPage) (out []string) {
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib}, p)
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib}, p)
 		if err != nil {
 			t.Fatal(err)
 		}

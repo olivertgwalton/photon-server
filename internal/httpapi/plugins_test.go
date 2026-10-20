@@ -178,7 +178,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	id := cards[0].ID
+	id := cards[0]
 
 	// The plugin that is down is passed over for the next.
 	if err := identify.Handler(st, providers, pictures, func() domain.Locale { return domain.LocaleOf("en-GB") }, func(context.Context, domain.Event) {}, log)(ctx, id); err != nil {

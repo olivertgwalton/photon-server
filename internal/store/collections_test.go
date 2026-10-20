@@ -32,7 +32,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -130,7 +130,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.MarkWatched(ctx, viewer.ID, mine, nil); err != nil {
 		t.Fatal(err)
 	}
-	watched, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}})
+	watched, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: viewer.ID, Sort: domain.SortTitle, Limit: 10, Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +180,7 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	wall := func(f WallFilter) []string {
-		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: f})
+		cards, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, Filter: f})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +237,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	cards, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -404,7 +404,7 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortAdded, Order: domain.Descending, Limit: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -608,7 +608,7 @@ func TestACollectionSaysHowAWallShowsIt(t *testing.T) {
 	alien, mann := set("Alien Anthology", "Alien", "Aliens"), set("Michael Mann", "Heat", "Thief")
 	wall := func(boxes domain.BoxSetMode) []string {
 		t.Helper()
-		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, BoxSets: boxes})
+		cards, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10, BoxSets: boxes})
 		if err != nil || int(total) != len(cards) {
 			t.Fatalf("%d cards of %d, %v", len(cards), total, err)
 		}

@@ -18,7 +18,7 @@ import (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]store.Card, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error)
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
@@ -304,7 +304,12 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		a.internal(w, r, err)
 		return
 	}
-	cards, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
+	titles, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	cards, err := a.svc.Catalogue.Cards(r.Context(), p.Profile, titles)
 	if err != nil {
 		a.internal(w, r, err)
 		return

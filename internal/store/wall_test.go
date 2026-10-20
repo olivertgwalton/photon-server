@@ -4,6 +4,7 @@ package store
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -13,6 +14,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
+
+// wallCards is a page of a wall drawn as the cards a client is shown.
+func (s *Store) wallCards(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
+	ids, total, err := s.Wall(ctx, libs, p)
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.Cards(ctx, p.Profile, ids)
+	return cards, total, err
+}
 
 func TestWallPagesEveryTitleOnce(t *testing.T) {
 	s := migrated(t)
@@ -57,13 +68,13 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 
 	for _, sort := range domain.WallSorts() {
 		for _, order := range []domain.Order{domain.Ascending, domain.Descending} {
-			full, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Limit: 100})
+			full, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Limit: 100})
 			if err != nil || total != 7 || len(full) != 7 {
 				t.Fatalf("%s %s in one page: %d titles of %d, err %v; want the 7 films", sort, order, len(full), total, err)
 			}
 			var paged []Card
 			for offset := 0; offset < int(total); offset += 3 {
-				page, n, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
+				page, n, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
 				if err != nil || n != total {
 					t.Fatalf("from %d: %d of %d, %v", offset, len(page), n, err)
 				}
@@ -95,7 +106,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 		}
 	}
 
-	if past, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Offset: 7, Limit: 3}); err != nil || len(past) != 0 || total != 7 {
+	if past, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Offset: 7, Limit: 3}); err != nil || len(past) != 0 || total != 7 {
 		t.Errorf("past the end: %d of %d, %v; want none of 7", len(past), total, err)
 	}
 	// Alien, Brazil, Heat and heat, Memento, Ran, Zodiac.
@@ -107,7 +118,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 	if _, err := s.Letters(ctx, uuid.NewV7(), uuid.UUID{}, domain.WallTitles, WallFilter{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("letters of an unknown library: %v, want ErrNotFound", err)
 	}
-	if _, _, err := s.Wall(ctx, []uuid.UUID{uuid.NewV7()}, WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.wallCards(ctx, []uuid.UUID{uuid.NewV7()}, WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an unknown library: err = %v, want ErrNotFound", err)
 	}
 }
@@ -126,7 +137,7 @@ func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 			SortTitle: sortTitle(title), Folder: title,
 		})
 	}
-	page, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10})
+	page, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +164,7 @@ func TestOneWallOfSeveralLibraries(t *testing.T) {
 	ids := []uuid.UUID{libs[0].ID, libs[1].ID}
 	titles := func(offset, limit int) ([]string, int64) {
 		t.Helper()
-		cards, total, err := s.Wall(ctx, ids, WallPage{Profile: admin, Sort: domain.SortTitle, Offset: offset, Limit: limit})
+		cards, total, err := s.wallCards(ctx, ids, WallPage{Profile: admin, Sort: domain.SortTitle, Offset: offset, Limit: limit})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -261,7 +272,7 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 	episodes := func(p WallPage) []string {
 		t.Helper()
 		p.Profile, p.Kind, p.Limit = cmp.Or(p.Profile, oliver.ID), domain.WallEpisodes, 100
-		cards, total, err := s.Wall(ctx, []uuid.UUID{lib.ID}, p)
+		cards, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, p)
 		if err != nil || int(total) != p.Offset+len(cards) {
 			t.Fatalf("%+v: %d of %d, %v", p, len(cards), total, err)
 		}
@@ -292,7 +303,7 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 			full := episodes(WallPage{Sort: sort, Order: order})
 			var paged []string
 			for offset := 0; offset < len(full); offset += 2 {
-				page, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Kind: domain.WallEpisodes, Sort: sort, Order: order, Offset: offset, Limit: 2})
+				page, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Kind: domain.WallEpisodes, Sort: sort, Order: order, Offset: offset, Limit: 2})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -323,7 +334,7 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 	if err != nil || !slices.Equal(facets.Genres, []string{"Comedy", "Drama"}) || !slices.Equal(facets.Certificates, []string{"15", "18"}) {
 		t.Errorf("facets = %+v, %v; want their shows' genres and certificates", facets, err)
 	}
-	if cards, total, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Kind: domain.WallEpisodes, Sort: domain.SortTitle, Limit: 10}); err != nil || total != 0 || len(cards) != 0 {
+	if cards, total, err := s.wallCards(ctx, []uuid.UUID{films.ID}, WallPage{Kind: domain.WallEpisodes, Sort: domain.SortTitle, Limit: 10}); err != nil || total != 0 || len(cards) != 0 {
 		t.Errorf("a film library's episodes: %d of %d, %v; want none", len(cards), total, err)
 	}
 }
@@ -350,7 +361,7 @@ func TestAMixedLibrarysWallHoldsFilmsAndShows(t *testing.T) {
 	}
 	titles := func(kind domain.WallKind) []string {
 		t.Helper()
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: admin.ID, Kind: kind, Sort: domain.SortTitle, Limit: 10})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: admin.ID, Kind: kind, Sort: domain.SortTitle, Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -437,11 +448,11 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	wall := func(p WallPage) []string {
 		t.Helper()
 		p.Sort, p.Limit = cmp.Or(p.Sort, domain.SortTitle), cmp.Or(p.Limit, 100)
-		cards, total, err := s.Wall(ctx, []uuid.UUID{films.ID}, p)
+		cards, total, err := s.wallCards(ctx, []uuid.UUID{films.ID}, p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		whole, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: p.Sort, Filter: p.Filter, BoxSets: p.BoxSets, Limit: 100})
+		whole, _, err := s.wallCards(ctx, []uuid.UUID{films.ID}, WallPage{Sort: p.Sort, Filter: p.Filter, BoxSets: p.BoxSets, Limit: 100})
 		if err != nil || int(total) != len(whole) {
 			t.Fatalf("wall: %d cards of %d, %v; want a total of %d", len(cards), total, err, len(whole))
 		}
@@ -470,7 +481,7 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	if got := wall(WallPage{Sort: domain.SortReleased, Order: domain.Descending}); !slices.Equal(got, []string{"Harry Potter Collection", "Heat", "Alien"}) {
 		t.Errorf("the wall newest first = %q, want the box set as of its first film, 2001", got)
 	}
-	cards, _, err := s.Wall(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortTitle, Offset: 1, Limit: 1})
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{films.ID}, WallPage{Sort: domain.SortTitle, Offset: 1, Limit: 1})
 	if err != nil || len(cards) != 1 || cards[0].Year != 2001 || cards[0].ReleaseDate.Year() != 2001 {
 		t.Errorf("the box set's card = %+v, %v; want it dated 2001", cards, err)
 	}

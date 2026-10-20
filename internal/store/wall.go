@@ -80,9 +80,9 @@ type WallPage struct {
 }
 
 // Wall answers a page of the films and shows of libraries, or of their episodes, sorted together,
-// and how many there are in all. Ties in the sort are broken by id, so a page is the same whenever
-// it is asked for while the libraries are.
-func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
+// by id, and how many there are in all; Cards draws them. Ties in the sort are broken by id, so a
+// page is the same whenever it is asked for while the libraries are.
+func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.UUID, int64, error) {
 	where, boxed, args, err := s.wallWhere(ctx, libs, p.Profile, p.Kind, p.Filter, p.BoxSets)
 	if err != nil {
 		return nil, 0, err
@@ -91,7 +91,7 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 	join, order := p.orderBy(args)
 	args["offset"], args["limit"] = p.Offset, p.Limit
 	count := `SELECT count(*) FROM ` + from + ` ` + where
-	page := `SELECT ` + itemColumnsOf("items") + ` FROM ` + from + join + ` ` + where + ` ` + order + ` OFFSET @offset LIMIT @limit`
+	page := `SELECT items.id FROM ` + from + join + ` ` + where + ` ` + order + ` OFFSET @offset LIMIT @limit`
 	if boxed != "" {
 		// The titles and the box sets are each read to the page's end in order, and merged: as one
 		// WHERE, the box sets' rows in no library cost the titles' index its order, and the wall a
@@ -100,7 +100,7 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 		outer := `ORDER BY wall_key ` + p.dir() + nulls + `, items.id ` + p.dir()
 		args["end"] = p.Offset + p.Limit
 		arm := func(where, key, order string) string {
-			return `(SELECT ` + itemColumnsOf("items") + `, ` + key + ` AS wall_key FROM items ` + where + ` ` + order + ` LIMIT @end)`
+			return `(SELECT items.id, ` + key + ` AS wall_key FROM items ` + where + ` ` + order + ` LIMIT @end)`
 		}
 		// A box set is as old as its first title, as Jellyfin dates one.
 		setKey := key
@@ -108,19 +108,15 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card,
 			setKey = firstReleased(p.dir())
 		}
 		count = `SELECT (` + count + `) + (SELECT count(*) FROM items ` + boxed + `)`
-		page = `SELECT ` + itemColumnsOf("items") + ` FROM (` + arm(where, key, order) + ` UNION ALL ` + arm(boxed, setKey, outer) + `) items
+		page = `SELECT items.id FROM (` + arm(where, key, order) + ` UNION ALL ` + arm(boxed, setKey, outer) + `) items
 			` + outer + ` OFFSET @offset LIMIT @limit`
 	}
-	var rows []*model.Item
+	var ids []uuid.UUID
 	total, err := s.counted(ctx, count, args, func(ctx context.Context) (err error) {
-		rows, err = queryRows[model.Item](ctx, s.pool, page, args)
+		ids, err = queryColumn[uuid.UUID](ctx, s.pool, page, args)
 		return err
 	})
-	if err != nil {
-		return nil, 0, err
-	}
-	cards, err := s.cards(ctx, p.Profile, rows)
-	return cards, total, err
+	return ids, total, err
 }
 
 // orderBy is the ORDER BY of a page of a wall, its ties broken by id, and what it joins to the

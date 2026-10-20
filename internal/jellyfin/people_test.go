@@ -60,7 +60,11 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if err := st.SetAccess(ctx, kid.ID, store.ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	titles, _, err := st.Wall(ctx, []uuid.UUID{films.ID, tv.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Limit: 3})
+	ids, _, err := st.Wall(ctx, []uuid.UUID{films.ID, tv.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Limit: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles, err := st.Cards(ctx, ada.ID, ids)
 	if err != nil || len(titles) != 3 {
 		t.Fatal(titles, err)
 	}

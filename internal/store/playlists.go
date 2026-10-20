@@ -267,7 +267,11 @@ func (s *Store) SetPlaylistRule(ctx context.Context, profile, playlist uuid.UUID
 
 // smartEntries answers a page of what a smart playlist's rule finds now, and how many it finds.
 func (s *Store) smartEntries(ctx context.Context, profile, lib uuid.UUID, rule SmartRule, offset, limit int) ([]PlaylistEntry, int64, error) {
-	cards, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
+	ids, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
+	if err != nil {
+		return nil, 0, err
+	}
+	cards, err := s.Cards(ctx, profile, ids)
 	if err != nil {
 		return nil, 0, err
 	}

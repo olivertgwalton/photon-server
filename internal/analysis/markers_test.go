@@ -198,7 +198,7 @@ func seasonOf(t *testing.T, st *store.Store, lib uuid.UUID) uuid.UUID {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	show, err := st.Title(t.Context(), uuid.UUID{}, cards[0].ID)
+	show, err := st.Title(t.Context(), uuid.UUID{}, cards[0])
 	if err != nil || len(show.Seasons) != 1 {
 		t.Fatal(show.Seasons, err)
 	}

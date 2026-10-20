@@ -79,7 +79,11 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids := map[string]uuid.UUID{}
-	cards, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	walled, _, err := st.Wall(ctx, []uuid.UUID{lib.ID}, store.WallPage{Profile: ada.ID, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cards, err := st.Cards(ctx, ada.ID, walled)
 	if err != nil {
 		t.Fatal(err)
 	}

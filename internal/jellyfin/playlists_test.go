@@ -55,7 +55,7 @@ func newHousehold(t *testing.T) household {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h.films[f] = cards[0].ID
+		h.films[f] = cards[0]
 	}
 	if h.ada, err = st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil); err != nil {
 		t.Fatal(err)

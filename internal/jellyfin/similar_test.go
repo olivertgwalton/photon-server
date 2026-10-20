@@ -53,8 +53,8 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ids[f.title] = cards[0].ID
-		if err := st.SaveIdentity(ctx, cards[0].ID, domain.SourceTMDB, domain.Metadata{Title: f.title, Genres: f.genres}, nil); err != nil {
+		ids[f.title] = cards[0]
+		if err := st.SaveIdentity(ctx, cards[0], domain.SourceTMDB, domain.Metadata{Title: f.title, Genres: f.genres}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

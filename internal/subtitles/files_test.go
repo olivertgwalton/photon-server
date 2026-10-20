@@ -49,7 +49,7 @@ func heat(t *testing.T) (*store.Store, domain.Library, uuid.UUID) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	return st, lib, cards[0].ID
+	return st, lib, cards[0]
 }
 
 func TestANodeServesAFetchedSubtitleFromItsCache(t *testing.T) {

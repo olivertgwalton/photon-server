@@ -56,7 +56,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	if err != nil || len(offered) != 1 || offered[0].Source != domain.SourceTMDB {
 		t.Errorf("candidates = %+v, %v; want TMDB's poster", offered, err)
 	}
-	cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10})
 	if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] || cards[0].Backdrop != page.Artwork[domain.ArtworkBackdrop][0] {
 		t.Errorf("card = %+v, %v; want the best poster and backdrop", cards, err)
 	}
@@ -133,7 +133,7 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
 		if err != nil || len(cards) != 1 || cards[0].Poster != posters[0] {
 			t.Errorf("card = %+v, %v; want the page's best poster %v", cards, err, posters[0])
 		}
@@ -224,7 +224,7 @@ func TestARemovedPluginsPicturesNoLongerLead(t *testing.T) {
 	}
 	poster := func() string {
 		t.Helper()
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
 		if err != nil || len(cards) != 1 {
 			t.Fatalf("wall = %+v, %v", cards, err)
 		}
@@ -278,7 +278,7 @@ func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
 	}
 	best := func() string {
 		t.Helper()
-		cards, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
 		if err != nil || len(cards) != 1 {
 			t.Fatalf("wall = %+v, %v", cards, err)
 		}

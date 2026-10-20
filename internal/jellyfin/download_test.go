@@ -93,7 +93,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	shoah := cards[0].ID
+	shoah := cards[0]
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
@@ -168,12 +168,12 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 		Copies: noCopies{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
-	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"/Download?ApiKey=pst_ada", "", "")
+	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0])+"/Download?ApiKey=pst_ada", "", "")
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" ||
 		w.Header().Get("Content-Disposition") != `attachment; filename="Heat (1995).mkv"` {
 		t.Errorf("the download: %d %v %q", w.Code, w.Header(), w.Body)
 	}
-	w = serve(api, http.MethodGet, "/Items/"+guid(cards[0].ID)+"?ApiKey=pst_ada&fields=MediaSources,Path", "", "")
+	w = serve(api, http.MethodGet, "/Items/"+guid(cards[0])+"?ApiKey=pst_ada&fields=MediaSources,Path", "", "")
 	var item struct {
 		Path         string
 		MediaSources []struct{ Path string }

@@ -92,7 +92,7 @@ func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {
 	if err != nil || len(cards) != 1 {
 		t.Fatal(cards, err)
 	}
-	id := cards[0].ID
+	id := cards[0]
 
 	var poster bytes.Buffer
 	if err := png.Encode(&poster, image.NewGray(image.Rect(0, 0, 4, 6))); err != nil {
@@ -200,13 +200,13 @@ func TestATitleIsDescribedInItsLibrarysLocale(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0]); err != nil {
 		t.Fatal(err)
 	}
 	if asked != (domain.Locale{Language: "de-DE", Country: "IN", Artwork: domain.ArtworkLocalized}) {
 		t.Errorf("the provider was asked in %+v, want the library's de-DE and India", asked)
 	}
-	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)
+	page, err := st.Title(ctx, uuid.UUID{}, cards[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,10 +244,10 @@ func TestALibraryGivingOriginalTitlesNamesATitleAsItWasFirstNamed(t *testing.T) 
 		t.Fatal(cards, err)
 	}
 	var asked domain.Locale
-	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0].ID); err != nil {
+	if err := Handler(st, provider.NewRegistry(nil, localFilms{&asked}), pictures(t), gb, func(context.Context, domain.Event) {}, log)(ctx, cards[0]); err != nil {
 		t.Fatal(err)
 	}
-	page, err := st.Title(ctx, uuid.UUID{}, cards[0].ID)
+	page, err := st.Title(ctx, uuid.UUID{}, cards[0])
 	if err != nil {
 		t.Fatal(err)
 	}
