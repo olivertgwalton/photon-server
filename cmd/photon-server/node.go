@@ -299,7 +299,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 func (n *node) workers() []*jobs.Worker {
 	st, logger, hub := n.st, n.logger, n.hub
 	scanner := jobs.NewWorker(st, logger, n.id, scanSlots, map[domain.JobKind]jobs.Handler{
-		domain.JobScanLibrary: scanLibrary(st, scan.New(st, n.tools, n.providers, logger), hub, logger),
+		domain.JobScanLibrary: scan.New(st, n.tools, n.providers, logger).Job(hub),
 	}, hub, nil, n.finished)
 	matching := map[domain.JobKind]jobs.Handler{
 		domain.JobIdentify: n.identify,

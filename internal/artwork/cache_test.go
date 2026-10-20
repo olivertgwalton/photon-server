@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // A provider may name a public picture URL that redirects to the server's own networks; the
@@ -256,6 +258,100 @@ func TestASweepClearsReplacedPictures(t *testing.T) {
 	}
 	if len(left) != 3 {
 		t.Errorf("%q left, want the kept picture's two and the stranger", left)
+	}
+}
+
+// pictureStore keeps pictures in id order, each to be fetched from url or hashed from file under
+// root, and the BlurHashes it is given.
+type pictureStore struct {
+	ids        []uuid.UUID
+	url        string
+	root, file string
+	hashes     map[uuid.UUID]string
+}
+
+func newPictureStore(n int) *pictureStore {
+	s := &pictureStore{hashes: map[uuid.UUID]string{}}
+	for range n {
+		s.ids = append(s.ids, uuid.NewV7())
+	}
+	slices.SortFunc(s.ids, uuid.UUID.Compare)
+	return s
+}
+
+func (s *pictureStore) page(after uuid.UUID, limit int) []uuid.UUID {
+	var out []uuid.UUID
+	for _, id := range s.ids {
+		if id.Compare(after) > 0 && len(out) < limit {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func (s *pictureStore) Unfetched(_ context.Context, after uuid.UUID, limit int) (store.Unfetched, uuid.UUID, error) {
+	page := s.page(after, limit)
+	out := store.Unfetched{}
+	for _, id := range page {
+		out[id] = s.url
+	}
+	var last uuid.UUID
+	if len(page) == limit {
+		last = page[len(page)-1]
+	}
+	return out, last, nil
+}
+
+func (s *pictureStore) Unhashed(_ context.Context, after uuid.UUID, limit int) ([]store.Unhashed, error) {
+	var out []store.Unhashed
+	for _, id := range s.page(after, limit) {
+		out = append(out, store.Unhashed{ID: id, Root: s.root, Path: s.file})
+	}
+	return out, nil
+}
+
+func (s *pictureStore) SetBlurhash(_ context.Context, id uuid.UUID, hash string) error {
+	s.hashes[id] = hash
+	return nil
+}
+
+func TestEveryUnfetchedPictureIsFetched(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		reply(t, w, poster.Bytes())
+	}))
+	t.Cleanup(srv.Close)
+	st := newPictureStore(picturesBatch + 1)
+	st.url = srv.URL + "/poster.png"
+	c := newCache(t, t.TempDir(), func(context.Context, uuid.UUID, string) error { return nil })
+	n, err := c.FetchUnfetched(t.Context(), st)
+	if err != nil || n != len(st.ids) {
+		t.Fatalf("fetched %d, %v; want all %d", n, err, len(st.ids))
+	}
+	for _, id := range st.ids {
+		if ok, err := c.blobs.Exists(t.Context(), id.String()); err != nil || !ok {
+			t.Errorf("%s not in the cache: %v", id, err)
+		}
+	}
+}
+
+func TestEveryUnhashedPictureIsHashed(t *testing.T) {
+	var poster bytes.Buffer
+	if err := png.Encode(&poster, gradient(20, 30)); err != nil {
+		t.Fatal(err)
+	}
+	st := newPictureStore(blurhashBatch + 1)
+	st.root, st.file = t.TempDir(), "poster.png"
+	if err := os.WriteFile(filepath.Join(st.root, st.file), poster.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	n, err := newCache(t, t.TempDir(), nil).HashUnhashed(t.Context(), st)
+	if err != nil || n != len(st.ids) || len(st.hashes) != len(st.ids) {
+		t.Errorf("hashed %d of %d, %v; want every picture", len(st.hashes), len(st.ids), err)
 	}
 }
 

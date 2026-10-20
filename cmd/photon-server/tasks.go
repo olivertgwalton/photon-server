@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"time"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/animelist"
@@ -15,10 +14,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/backup"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/events"
-	"github.com/olivertgwalton/photon-server/internal/jobs"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/provider"
-	"github.com/olivertgwalton/photon-server/internal/scan"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/subtitles"
 	"github.com/olivertgwalton/photon-server/internal/task"
@@ -43,66 +40,6 @@ func scanTask(st *store.Store) task.Task {
 			}
 			return errors.Join(errs...)
 		},
-	}
-}
-
-// scanLibrary is the job that scans the folders of one library asked for; jobs are one per
-// library, so two scans of a library never run at once.
-func scanLibrary(st *store.Store, scanner *scan.Scanner, hub *events.Hub, logger *slog.Logger) jobs.Handler {
-	return func(ctx context.Context, id uuid.UUID) error {
-		lib, err := st.Library(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		asked, read, err := st.ScanRequests(ctx, id)
-		if err != nil {
-			return err
-		}
-		started := time.Now()
-		r, err := scanner.Scan(ctx, lib, asked, hub.Scanning(ctx), func(c store.Changed) { hub.Changed(ctx, lib.ID, c) })
-		hub.Scanned(ctx, lib.ID)
-		if err != nil {
-			return fmt.Errorf("%s: %w", lib.Name, err)
-		}
-		if err := st.ScanAnswered(ctx, id, asked, read); err != nil {
-			return err
-		}
-		if err := st.RefreshSmartCollections(ctx, lib.ID); err != nil {
-			logger.WarnContext(ctx, "smart collections not refreshed", slog.String("library", lib.Name), slog.Any("err", err))
-		}
-		logger.InfoContext(ctx, "library scanned", slog.String("library", lib.Name),
-			slog.Int("folders", r.Folders), slog.Int("unchanged", r.Unchanged),
-			slog.Int("probed", r.Probed), slog.Int("left_out", r.Skipped))
-		hub.Raise(ctx, domain.Event{Kind: domain.EventLibraryScanned, Library: lib.ID, Details: domain.ScannedDetails{
-			Folders: r.Folders, Unchanged: r.Unchanged, Probed: r.Probed, LeftOut: r.Skipped,
-		}})
-		added, err := st.TitlesAddedSince(ctx, lib.ID, started)
-		if err != nil {
-			logger.WarnContext(ctx, "titles added not counted", slog.Any("err", err))
-		}
-		if added > 0 {
-			hub.Raise(ctx, domain.Event{Kind: domain.EventTitlesAdded, Library: lib.ID, Details: domain.TitlesAddedDetails{Titles: added}})
-			told, err := st.Notify(ctx, lib.ID, started)
-			if err != nil {
-				logger.WarnContext(ctx, "profiles not told of titles added", slog.Any("err", err))
-			}
-			for _, t := range told {
-				hub.Raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
-					Change: domain.NotificationsAdded, IDs: t.IDs,
-				}})
-			}
-		}
-		// New titles have their subtitles fetched now, as Jellyfin fetches a new item's, not at the
-		// next daily run.
-		if added > 0 && len(lib.SubtitleLanguages) > 0 {
-			if err := st.RequestTask(ctx, domain.TaskFetchSubtitles); err != nil {
-				logger.WarnContext(ctx, "missing subtitles not asked for", slog.Any("err", err))
-			}
-		}
-		return nil
 	}
 }
 
@@ -195,74 +132,19 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 			if err != nil {
 				return err
 			}
-			n, err = backfillBlurhashes(ctx, st, cache)
+			n, err = cache.HashUnhashed(ctx, st)
 			if n > 0 {
 				logger.InfoContext(ctx, "pictures given a blurhash", slog.Int("pictures", n))
 			}
 			if err != nil {
 				return err
 			}
-			n, err = backfillPictures(ctx, st, cache)
+			n, err = cache.FetchUnfetched(ctx, st)
 			if n > 0 {
 				logger.InfoContext(ctx, "pictures fetched ahead", slog.Int("pictures", n))
 			}
 			return err
 		},
-	}
-}
-
-// picturesBatch is how many titles' pictures are fetched at once.
-const picturesBatch = 100
-
-// backfillPictures fetches the pictures every title shows first that are not yet fetched: those
-// of titles described before the server fetched them as it did, and those it could not then.
-func backfillPictures(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
-	fetched := 0
-	var after uuid.UUID
-	for {
-		pictures, last, err := st.Unfetched(ctx, after, picturesBatch)
-		if err != nil {
-			return fetched, err
-		}
-		n, err := cache.Fetch(ctx, pictures)
-		fetched += n
-		if err != nil || last == (uuid.UUID{}) {
-			return fetched, err
-		}
-		after = last
-	}
-}
-
-// blurhashBatch is how many pictures without a BlurHash are asked for at once.
-const blurhashBatch = 500
-
-// backfillBlurhashes takes the BlurHash of each library file and each cached picture that has
-// none: those kept before the server took them. A provider's picture not fetched yet is left to
-// be hashed as it is, and one not decoded here, such as SVG, is passed over.
-func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
-	hashed := 0
-	var after uuid.UUID
-	for {
-		batch, err := st.Unhashed(ctx, after, blurhashBatch)
-		if err != nil || len(batch) == 0 {
-			return hashed, err
-		}
-		for _, p := range batch {
-			var hash string
-			if p.Path == "" {
-				hash, err = cache.Blurhash(ctx, p.ID)
-			} else {
-				hash, err = artwork.FileBlurhash(p.Root, p.Path)
-			}
-			if err != nil {
-				continue
-			}
-			if err := st.SetBlurhash(ctx, p.ID, hash); err != nil {
-				return hashed, err
-			}
-			hashed++
-		}
-		after = batch[len(batch)-1].ID
 	}
 }
 
