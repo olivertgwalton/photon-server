@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"iter"
 	"maps"
 	"slices"
 	"time"
@@ -64,14 +65,24 @@ func (s *Store) KeepDescription(ctx context.Context, id uuid.UUID, m domain.Meta
 // pageArtwork are the kinds of picture a find's page draws, the first of each its provider gives.
 var pageArtwork = []domain.ArtworkKind{domain.ArtworkBackdrop, domain.ArtworkLogo}
 
+// pageArt yields the address of each picture of pageArtwork a description gives, by its kind.
+func pageArt(m domain.Metadata) iter.Seq2[domain.ArtworkKind, string] {
+	return func(yield func(domain.ArtworkKind, string) bool) {
+		for _, kind := range pageArtwork {
+			i := slices.IndexFunc(m.Artwork, func(a domain.Artwork) bool { return a.Kind == kind && a.URL != "" })
+			if i >= 0 && !yield(kind, m.Artwork[i].URL) {
+				return
+			}
+		}
+	}
+}
+
 // pictured are the addresses of the pictures a find's page draws of a description: its backdrop
 // and lettering, and its people's photos.
 func pictured(m domain.Metadata) []string {
 	var urls []string
-	for _, kind := range pageArtwork {
-		if i := slices.IndexFunc(m.Artwork, func(a domain.Artwork) bool { return a.Kind == kind && a.URL != "" }); i >= 0 {
-			urls = append(urls, m.Artwork[i].URL)
-		}
+	for _, url := range pageArt(m) {
+		urls = append(urls, url)
 	}
 	for _, c := range m.Credits {
 		if c.Photo != "" {
@@ -125,18 +136,13 @@ func (s *Store) RequestablePage(ctx context.Context, profile, id uuid.UUID) (Tit
 	if posterURL != nil {
 		page.Artwork[domain.ArtworkPoster] = []uuid.UUID{poster}
 	}
-	for _, kind := range pageArtwork {
-		if i := slices.IndexFunc(m.Artwork, func(a domain.Artwork) bool { return a.Kind == kind && a.URL != "" }); i >= 0 {
-			page.Artwork[kind] = []uuid.UUID{picturedAt(id, m.Artwork[i].URL)}
-		}
+	for kind, url := range pageArt(m) {
+		page.Artwork[kind] = []uuid.UUID{picturedAt(id, url)}
 	}
 	for _, v := range m.Videos {
-		published := v.Published
-		link := VideoLink{Kind: v.Kind, Site: v.Site, Key: v.Key, Name: v.Name, Language: v.Language}
-		if !published.IsZero() {
-			link.Published = &published
-		}
-		page.Videos = append(page.Videos, link)
+		page.Videos = append(page.Videos, VideoLink{
+			Kind: v.Kind, Site: v.Site, Key: v.Key, Name: v.Name, Language: v.Language, Published: optional(v.Published),
+		})
 	}
 	if page.Credits, err = s.foundCredits(ctx, id, m.Credits); err != nil {
 		return TitlePage{}, err
