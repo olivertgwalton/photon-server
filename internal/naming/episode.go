@@ -63,7 +63,7 @@ func ParseEpisode(stem, series string) (Episode, bool) {
 
 // A season of 200–1927 or past 2500 is a resolution or a year, as in "Special (1920x1080)".
 func validSeason(n int) bool {
-	return n < 200 || (n > 1927 && n <= 2500)
+	return (n >= 0 && n < 200) || (n > 1927 && n <= 2500)
 }
 
 // atoi reads the digits a pattern matched; past an int, which no season, episode or year is, it is
