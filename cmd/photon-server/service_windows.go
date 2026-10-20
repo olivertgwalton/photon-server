@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows/svc"
+
+	"github.com/olivertgwalton/photon-server/internal/auth"
 )
 
 // serviceName is the name the service is created under: sc.exe create photon-server.
@@ -35,7 +37,7 @@ func asService(args []string) (bool, int) {
 		return true, 1
 	}
 	defer log.Close()
-	s := &service{logger: slog.New(slog.NewJSONHandler(log, nil)), args: args}
+	s := &service{logger: slog.New(auth.LogHandler{Handler: slog.NewJSONHandler(log, nil)}), args: args}
 	if err := svc.Run(serviceName, s); err != nil {
 		s.logger.Error("photon-server not run as a service", slog.Any("err", err))
 		return true, 1

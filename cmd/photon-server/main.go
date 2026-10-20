@@ -15,6 +15,7 @@ import (
 	// The image has no zoneinfo, and the maintenance window is kept in a zone named by an admin.
 	_ "time/tzdata"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -70,7 +71,7 @@ func main() {
 	if ok, code := asService(os.Args[1:]); ok {
 		os.Exit(code)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	logger := slog.New(auth.LogHandler{Handler: slog.NewJSONHandler(os.Stderr, nil)})
 	stops := make(chan os.Signal, 2)
 	signal.Notify(stops, os.Interrupt, syscall.SIGTERM)
 	os.Exit(exitCode(logger, run(logger, os.Args[1:], stops)))
