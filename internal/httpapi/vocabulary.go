@@ -43,6 +43,7 @@ type vocabularyJSON struct {
 	CalendarFilters map[domain.CalendarFilter]string `json:"calendar_filters"`
 	Sorts           map[domain.WallSort]sortJSON     `json:"sorts"`
 	JobStates       map[domain.JobState]string       `json:"job_states"`
+	RequestStates   map[domain.RequestState]string   `json:"request_states"`
 	DownloadStates  map[domain.DownloadState]string  `json:"download_states"`
 	// Logged are the kinds of event the activity log keeps, as its filter names them.
 	Logged map[domain.EventKind]string `json:"logged"`
@@ -90,6 +91,7 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 		CalendarFilters: wordsFor(domain.CalendarFilters(), said.CalendarFilter),
 		Sorts:           wordsFor(domain.WallSorts(), func(s domain.WallSort) sortJSON { return sortJSON(said.Sort(s)) }),
 		JobStates:       wordsFor(domain.JobStates(), said.JobState),
+		RequestStates:   wordsFor(domain.RequestStates(), said.RequestState),
 		DownloadStates:  wordsFor(domain.DownloadStates(), said.DownloadState),
 		Logged:          wordsFor(domain.LoggedEventKinds(), said.Kept),
 		Hookable:        wordsFor(domain.HookableEventKinds(), said.Told),

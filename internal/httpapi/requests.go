@@ -41,6 +41,9 @@ type requestJSON struct {
 	DecidedByID uuid.UUID `json:"decided_by_id,omitzero"`
 	AskedAt     time.Time `json:"asked_at"`
 	DecidedAt   time.Time `json:"decided_at,omitzero"`
+	// TitleID is the title a library holds of it once it is available, to open as any other.
+	TitleID     uuid.UUID `json:"title_id,omitzero"`
+	AvailableAt time.Time `json:"available_at,omitzero"`
 }
 
 func requestOf(r store.Request) requestJSON {
@@ -48,6 +51,7 @@ func requestOf(r store.Request) requestJSON {
 		ID: r.ID, ProfileID: r.Profile, Profile: r.ProfileName, LibraryID: r.Library, Kind: r.Kind,
 		Title: r.Title, Year: r.Year, IDs: map[domain.Provider]string{r.Provider: r.Value}, Seasons: r.Seasons,
 		State: r.State, Reason: r.Reason, DecidedByID: r.DecidedBy, AskedAt: r.AskedAt, DecidedAt: r.DecidedAt,
+		TitleID: r.Item, AvailableAt: r.AvailableAt,
 	}
 }
 

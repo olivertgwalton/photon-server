@@ -81,6 +81,45 @@ const notify = `
 	SELECT profile_id, array_agg(id) AS ids, profile_id IN (SELECT profile_id FROM subscribed) AS push
 	FROM kept GROUP BY profile_id`
 
+// fulfilled marks the requests for a title, by the ids it is identified by, available, and tells
+// each profile that asked of it as a scan tells of titles added: of the film, or of a show's
+// episodes, that it may see and was never told, unless its notify is none. Asked for, the title is
+// one it cares for, whatever else its notify says.
+const fulfilled = `
+	WITH done AS (
+		UPDATE requests r SET state = 'available', item_id = @item, available_at = now()
+		FROM items i
+		WHERE i.id = @item AND r.kind = i.kind AND r.state NOT IN ('declined', 'available')
+			AND EXISTS (SELECT 1 FROM external_ids e WHERE e.item_id = i.id AND e.provider = r.provider AND e.value = r.value)
+		RETURNING r.profile_id
+	), fresh AS (
+		SELECT DISTINCT d.profile_id, x.id AS item_id
+		FROM done d CROSS JOIN LATERAL viewer(d.profile_id) v
+		JOIN items x ON x.id = @item AND x.kind = 'movie'
+			OR x.kind = 'episode' AND x.parent_id IN (SELECT id FROM items WHERE parent_id = @item AND kind = 'season')
+		LEFT JOIN profile_preferences pp ON pp.profile_id = d.profile_id
+		WHERE coalesce(pp.notify, 'marked') <> 'none' AND sees(v, x)
+			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = x.id AND n.profile_id = d.profile_id)
+	), kept AS (
+		INSERT INTO notifications (profile_id, title_id)
+		SELECT DISTINCT profile_id, @item FROM fresh
+		ON CONFLICT (profile_id, title_id) WHERE read_at IS NULL DO UPDATE SET added_at = now()
+		RETURNING id, profile_id
+	), subscribed AS (
+		SELECT DISTINCT profile_id FROM push_subscriptions WHERE profile_id IN (SELECT profile_id FROM kept)
+	), told AS (
+		INSERT INTO notification_items (item_id, profile_id, notification_id, pushed)
+		SELECT f.item_id, f.profile_id, k.id, f.profile_id NOT IN (SELECT profile_id FROM subscribed)
+		FROM fresh f JOIN kept k USING (profile_id)
+		ON CONFLICT DO NOTHING
+	)
+	SELECT profile_id, array_agg(id) AS ids, profile_id IN (SELECT profile_id FROM subscribed) AS push
+	FROM kept GROUP BY profile_id`
+
+func fulfil(ctx context.Context, tx db, item uuid.UUID) ([]Told, error) {
+	return tell(ctx, tx, fulfilled, pgx.NamedArgs{"item": item})
+}
+
 // Told is a profile told of titles added, and its notifications added or gathering more.
 type Told struct {
 	ProfileID uuid.UUID
@@ -95,27 +134,36 @@ const pushSettle = time.Minute
 // Notify tells each profile that cares of the films and episodes a scan of a library added since
 // it began, and queues a push to those with browsers subscribed, answering the profiles told.
 func (s *Store) Notify(ctx context.Context, library uuid.UUID, since time.Time) ([]Told, error) {
+	var out []Told
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = tell(ctx, tx, notify, pgx.NamedArgs{"library": library, "since": since})
+		return err
+	})
+	return out, err
+}
+
+// tell runs a statement that tells profiles of titles, answering those told, and queues a push to
+// those with browsers subscribed.
+func tell(ctx context.Context, tx db, statement string, args pgx.NamedArgs) ([]Told, error) {
 	type row struct {
 		Told
 		Push bool
 	}
-	var out []Told
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		rows, err := queryStructs[row](ctx, tx, notify, pgx.NamedArgs{"library": library, "since": since})
-		if err != nil {
-			return err
-		}
-		for _, r := range rows {
-			out = append(out, r.Told)
-			if r.Push {
-				if err := enqueueAfter(ctx, tx, domain.JobPush, r.ProfileID, pushSettle); err != nil {
-					return err
-				}
+	rows, err := queryStructs[row](ctx, tx, statement, args)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Told, len(rows))
+	for i, r := range rows {
+		out[i] = r.Told
+		if r.Push {
+			if err := enqueueAfter(ctx, tx, domain.JobPush, r.ProfileID, pushSettle); err != nil {
+				return nil, err
 			}
 		}
-		return nil
-	})
-	return out, err
+	}
+	return out, nil
 }
 
 // Inbox is a profile's notifications, newest first, and how many are unread.

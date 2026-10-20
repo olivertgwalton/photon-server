@@ -272,3 +272,75 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 		t.Errorf("a remote library sending requests: %v, want ErrRemoteRequests", err)
 	}
 }
+
+// A request is available once a library's title with the id it was found under is identified, and
+// names that title; the profile that asked is told of it as a scan tells of titles added, though
+// it marked nothing, unless it hears of nothing. A declined request stays declined.
+func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
+	s, films, film, _ := askable(t)
+	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
+	asker := addProfile(t, s, "Sam", domain.RoleUser, nil)
+	r, err := s.AskFor(ctx, asker.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
+		t.Fatal(err)
+	}
+	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Copies: []Copy{{
+		ContentKey: []byte("c"), Parts: []Part{{RelPath: "I/inception.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
+	}}}
+	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
+		t.Fatal(err)
+	}
+	item := oneItem(t, s, "title = $1", "Inception")
+	told, err := s.Identified(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(told) != 1 || told[0].ProfileID != asker.ID {
+		t.Errorf("told %+v, want the asker alone", told)
+	}
+	mine, _, err := s.Requests(ctx, asker.ID, 0, 1)
+	if err != nil || mine[0].State != domain.RequestAvailable || mine[0].Item != item.ID || mine[0].AvailableAt.IsZero() {
+		t.Errorf("the request %+v, %v; want it available, naming Inception", mine, err)
+	}
+	inbox, err := s.Inbox(ctx, asker.ID, nil)
+	if err != nil || inbox.Unread != 1 || len(inbox.Notifications) != 1 {
+		t.Errorf("the asker's inbox %+v, %v; want Inception in it", inbox, err)
+	}
+	if again, err := s.Identified(ctx, item.ID); err != nil || len(again) != 0 {
+		t.Errorf("identified again: told %+v, %v; want no one twice", again, err)
+	}
+}
+
+// A title may come while its request still waits, which no one then decides: it is available, and
+// a profile that hears of nothing is not told of it.
+func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
+	s, films, film, _ := askable(t)
+	ctx := t.Context()
+	quiet := addProfile(t, s, "Quiet", domain.RoleUser, nil)
+	prefs := domain.DefaultPreferences()
+	prefs.Notify = domain.NotifyNone
+	if _, err := s.SetPreferences(ctx, quiet.ID, prefs); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.AskFor(ctx, quiet.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Copies: []Copy{{
+		ContentKey: []byte("c"), Parts: []Part{{RelPath: "I/inception.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
+	}}}
+	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
+		t.Fatal(err)
+	}
+	told, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
+	if err != nil || len(told) != 0 {
+		t.Errorf("told %+v, %v; want no one", told, err)
+	}
+	if mine, _, err := s.Requests(ctx, quiet.ID, 0, 1); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
+		t.Errorf("the request %+v, %v; want it available", mine, err)
+	}
+}

@@ -28,6 +28,7 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	hasNames(t, milestones, domain.Milestones())
 	hasNames(t, calendarFilters, domain.CalendarFilters())
 	hasNames(t, jobStates, domain.JobStates())
+	hasNames(t, requestStates, domain.RequestStates())
 	hasNames(t, downloadStates, domain.DownloadStates())
 	hasNames(t, accelerations, domain.Accelerations())
 	hasNames(t, rows, domain.HomeRows())

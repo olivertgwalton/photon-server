@@ -308,7 +308,7 @@ func TestTitlesDueAFreshMatchAreQueued(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'identify'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Identified(ctx, oneItem(t, s, "title = $1", "Heat").ID); err != nil {
+	if _, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Heat").ID); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := s.RefreshStale(ctx); err != nil || n != 1 {

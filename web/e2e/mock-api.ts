@@ -802,6 +802,14 @@ const vocabulary: Schemas["Vocabulary"] = {
 		rerun: "To run again",
 		running: "Running",
 	},
+	request_states: {
+		pending: "Waiting",
+		approved: "Approved",
+		declined: "Declined",
+		sent: "Sent",
+		failed: "Failed",
+		available: "Added",
+	},
 	download_states: {
 		converting: "Converting",
 		failed: "Failed",

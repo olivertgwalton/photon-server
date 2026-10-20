@@ -46,6 +46,10 @@ type Request struct {
 	DecidedBy uuid.UUID
 	AskedAt   time.Time
 	DecidedAt time.Time
+	// Item is the title a library holds of it once it is available; zero before, or once that
+	// title has gone.
+	Item        uuid.UUID
+	AvailableAt time.Time
 }
 
 type requestRow struct {
@@ -64,21 +68,20 @@ type requestRow struct {
 	DecidedBy   *uuid.UUID
 	AskedAt     time.Time
 	DecidedAt   *time.Time
+	ItemID      *uuid.UUID
+	AvailableAt *time.Time
 }
 
 const requestColumns = `r.id, r.profile_id, p.name AS profile_name, r.library_id, r.kind, r.provider, r.value, r.title,
-	r.year, r.seasons, r.state, r.reason, r.decided_by, r.asked_at, r.decided_at`
+	r.year, r.seasons, r.state, r.reason, r.decided_by, r.asked_at, r.decided_at, r.item_id, r.available_at`
 
 func (r requestRow) request() Request {
-	out := Request{
+	return Request{
 		ID: r.ID, Profile: r.ProfileID, ProfileName: r.ProfileName, Library: r.LibraryID, Kind: r.Kind,
 		Provider: r.Provider, Value: r.Value, Title: r.Title, Year: deref(r.Year), Seasons: r.Seasons,
 		State: r.State, Reason: deref(r.Reason), DecidedBy: deref(r.DecidedBy), AskedAt: r.AskedAt,
+		DecidedAt: deref(r.DecidedAt), Item: deref(r.ItemID), AvailableAt: deref(r.AvailableAt),
 	}
-	if r.DecidedAt != nil {
-		out.DecidedAt = *r.DecidedAt
-	}
-	return out
 }
 
 func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error) {

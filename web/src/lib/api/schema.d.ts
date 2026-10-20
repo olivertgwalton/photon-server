@@ -9599,6 +9599,8 @@ export interface components {
             /** Format: date-time */
             asked_at: string;
             /** Format: date-time */
+            available_at?: string;
+            /** Format: date-time */
             decided_at?: string;
             /** Format: uuid */
             decided_by_id?: string;
@@ -9617,6 +9619,8 @@ export interface components {
             seasons?: number[];
             state: components["schemas"]["RequestState"];
             title: string;
+            /** Format: uuid */
+            title_id?: string;
             year?: number;
         };
         RequestPage: {
@@ -9626,7 +9630,7 @@ export interface components {
             total: number;
         };
         /** @enum {string} */
-        RequestState: "pending" | "approved" | "declined" | "sent" | "failed";
+        RequestState: "pending" | "approved" | "declined" | "sent" | "failed" | "available";
         Reset: {
             name: string;
         };
@@ -10259,6 +10263,9 @@ export interface components {
             };
             reasons: {
                 [key: string]: components["schemas"]["Described"];
+            };
+            request_states: {
+                [key: string]: string;
             };
             resolutions: {
                 [key: string]: string;
