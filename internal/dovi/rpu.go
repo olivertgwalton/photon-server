@@ -220,6 +220,9 @@ func (r *reader) curve(coefType uint64, coefLen int) {
 		if order == 0 && r.flag() {
 			r.fail(errors.New("dovi: linear interpolation"))
 		}
+		if r.err != nil {
+			return
+		}
 		for range order + 2 {
 			r.coef(coefType, coefLen)
 		}
