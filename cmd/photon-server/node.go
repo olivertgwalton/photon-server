@@ -61,6 +61,7 @@ type node struct {
 	cache     *kv.KV
 	stores    *storage.Stores
 	tools     media.Tools
+	relay     *media.Relay
 	server    uuid.UUID
 	started   time.Time
 	listen    string
@@ -153,7 +154,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	n.releases = release.New(version, n.identity.ReleaseCheck, n.logger)
 	n.plugins = plugin.New(n.st, n.cache)
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
-	offers := remote.New(n.providers)
+	offers := remote.New(n.providers, n.relay)
 	n.parts = library.Parts{Places: n.st, Streams: offers}
 	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {

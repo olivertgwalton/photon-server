@@ -2,6 +2,7 @@ package media
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -11,6 +12,17 @@ import (
 	"testing"
 	"time"
 )
+
+// listen is a relay of the test's own, telling log what it could not fetch.
+func listen(t *testing.T, log io.Writer) *Relay {
+	t.Helper()
+	r, err := ListenRelay(t.Context(), slog.New(slog.NewTextHandler(log, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close() })
+	return r
+}
 
 func get(t *testing.T, in Input, rng string) (int, string) {
 	t.Helper()
@@ -50,11 +62,9 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	from := strings.TrimPrefix(media.URL, "http://")
+	relay := listen(t, io.Discard)
 
-	in, err := Relayed(at, from, "Heat (1995).mkv")
-	if err != nil {
-		t.Fatal(err)
-	}
+	in := relay.Relayed(at, from, "Heat (1995).mkv")
 	if strings.Contains(in.URL.String(), "s3cret") || in.Name != "Heat (1995).mkv" {
 		t.Errorf("relayed as %s named %q, want an address with no key", in.URL, in.Name)
 	}
@@ -64,10 +74,7 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 
 	// Named by an addon elsewhere, the media on the server's own network is not fetched, nor is it
 	// through a redirect from an address that is allowed.
-	elsewhere, err := Relayed(at, "addon.example:443", "Heat (1995).mkv")
-	if err != nil {
-		t.Fatal(err)
-	}
+	elsewhere := relay.Relayed(at, "addon.example:443", "Heat (1995).mkv")
 	if code, _ := get(t, elsewhere, ""); code != http.StatusBadGateway {
 		t.Errorf("media on a private address named by another host's addon answered %d, want 502", code)
 	}
@@ -77,10 +84,7 @@ func TestAProvidersMediaIsRelayedFromItsOwnHostOrAPublicOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	redirected, err := Relayed(to, strings.TrimPrefix(redirect.URL, "http://"), "Heat (1995).mkv")
-	if err != nil {
-		t.Fatal(err)
-	}
+	redirected := relay.Relayed(to, strings.TrimPrefix(redirect.URL, "http://"), "Heat (1995).mkv")
 	if code, _ := get(t, redirected, ""); code != http.StatusBadGateway {
 		t.Errorf("redirected to a private address answered %d, want 502", code)
 	}
@@ -112,10 +116,7 @@ func playlistAt(t *testing.T, list string) (Input, *atomic.Int32) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, err := Relayed(at, strings.TrimPrefix(provider.URL, "http://"), "Heat (1995).mkv")
-	if err != nil {
-		t.Fatal(err)
-	}
+	in := listen(t, io.Discard).Relayed(at, strings.TrimPrefix(provider.URL, "http://"), "Heat (1995).mkv")
 	t.Cleanup(func() { in.Close() })
 	return in, &hits
 }

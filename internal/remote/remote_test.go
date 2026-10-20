@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +16,19 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 )
+
+// relay is a relay of the test's own.
+func relay(t *testing.T) *media.Relay {
+	t.Helper()
+	r, err := media.ListenRelay(t.Context(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close() })
+	return r
+}
 
 // offerer offers whatever it is set to, once let, counting how often it is asked.
 type offerer struct {
@@ -42,7 +55,7 @@ var (
 func TestAProviderIsAskedOnceAMinute(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		p := &offerer{let: make(chan struct{})}
-		o := New(p)
+		o := New(p, nil)
 		var wg sync.WaitGroup
 		for range 5 {
 			wg.Go(func() {
@@ -84,7 +97,7 @@ func TestAPartIsOpenedWhereItsCopyIsOfferedNow(t *testing.T) {
 	uhd := domain.Offer{Key: "torrent:abc:0", Name: "Heat.2160p.mkv", URL: at("/uhd"), From: from}
 	hd := domain.Offer{Key: "torrent:abc:1", Name: "Heat.1080p.mkv", URL: at("/hd"), From: from}
 	p := &offerer{offers: []domain.Offer{uhd, hd}}
-	o := New(p)
+	o := New(p, relay(t))
 	in, err := o.Open(t.Context(), domain.Place{Media: domain.MediaRemote, Rel: Rel(aio, hd), Source: aio, Title: heat})
 	if err != nil {
 		t.Fatal(err)

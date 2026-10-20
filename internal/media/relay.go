@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -24,15 +25,14 @@ var ErrNotPublic = errors.New("media: a provider's media is fetched only from pu
 // are, as serveRemote passes on.
 var relayed = []string{"Accept-Ranges", "Content-Length", "Content-Range", "Content-Type", "ETag", "Last-Modified"}
 
-// relay serves, on a loopback port of the node's own, media a provider named at an address, to the
+// Relay serves, on a loopback port of the node's own, media a provider named at an address, to the
 // tools that read it and to the server's own fetches of it. Neither sees the address, which may
 // carry a provider's key, nor fetches it themselves: the relay fetches it only from public
 // addresses, or from the provider's own host, which an admin chose, at every connection, a
 // redirect's included, so a provider cannot have the server read its own networks.
-type relay struct {
-	start  sync.Once
-	base   string
-	err    error
+type Relay struct {
+	srv    *http.Server
+	host   string
 	mu     sync.Mutex
 	routes map[string]route
 	// clients are the guarded clients by provider host, so a provider's connections are reused.
@@ -44,55 +44,42 @@ type route struct {
 	from string
 }
 
-var relays = &relay{routes: map[string]route{}}
+// ListenRelay starts a relay on a loopback port, serving until it is closed.
+func ListenRelay(ctx context.Context, logger *slog.Logger) (*Relay, error) {
+	l, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("media relay: %w", err)
+	}
+	r := &Relay{host: l.Addr().String(), routes: map[string]route{}}
+	r.srv = &http.Server{Handler: http.HandlerFunc(r.serve), ReadHeaderTimeout: remoteStall}
+	go func() {
+		if err := r.srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
+			logger.ErrorContext(ctx, "the media relay stopped: no remote media plays", slog.Any("err", err))
+		}
+	}()
+	return r, nil
+}
+
+// Close stops the relay, and ends what it is relaying.
+func (r *Relay) Close() error {
+	return r.srv.Close()
+}
 
 // Relayed is the media a provider at host from offers at u, named name, as tools read it: at the
 // relay, until the input is closed.
-func Relayed(u *url.URL, from, name string) (Input, error) {
-	return relays.add(u, from, name)
-}
-
-func (r *relay) add(u *url.URL, from, name string) (Input, error) {
-	r.start.Do(r.listen)
+func (r *Relay) Relayed(u *url.URL, from, name string) Input {
 	token := rand.Text()
 	r.mu.Lock()
-	err := r.err
-	if err == nil {
-		r.routes[token] = route{u: u, from: from}
-	}
+	r.routes[token] = route{u: u, from: from}
 	r.mu.Unlock()
-	if err != nil {
-		return Input{}, err
-	}
-	at, err := url.Parse(r.base + "/" + token)
-	if err != nil {
-		return Input{}, err
-	}
-	return Input{URL: at, Name: name, release: func() {
+	return Input{URL: &url.URL{Scheme: "http", Host: r.host, Path: "/" + token}, Name: name, release: func() {
 		r.mu.Lock()
 		delete(r.routes, token)
 		r.mu.Unlock()
-	}}, nil
+	}}
 }
 
-func (r *relay) listen() {
-	l, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		r.err = fmt.Errorf("media relay: %w", err)
-		return
-	}
-	r.base = "http://" + l.Addr().String()
-	srv := &http.Server{Handler: http.HandlerFunc(r.serve), ReadHeaderTimeout: remoteStall}
-	go func() {
-		// The relay serves for as long as the server runs; one that stops relays nothing more.
-		err := srv.Serve(l)
-		r.mu.Lock()
-		r.err = fmt.Errorf("media relay: %w", err)
-		r.mu.Unlock()
-	}()
-}
-
-func (r *relay) serve(w http.ResponseWriter, req *http.Request) {
+func (r *Relay) serve(w http.ResponseWriter, req *http.Request) {
 	r.mu.Lock()
 	to, ok := r.routes[req.URL.Path[1:]]
 	r.mu.Unlock()
@@ -148,7 +135,7 @@ func playlist(body *bufio.Reader) bool {
 }
 
 // client is the guarded client for media a provider at host from offers.
-func (r *relay) client(from string) *http.Client {
+func (r *Relay) client(from string) *http.Client {
 	if c, ok := r.clients.Load(from); ok {
 		if client, ok := c.(*http.Client); ok {
 			return client

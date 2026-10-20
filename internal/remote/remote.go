@@ -36,6 +36,7 @@ type streamer interface {
 // address that asked for it, so each node asks for its own.
 type Offers struct {
 	providers streamer
+	relay     *media.Relay
 	group     singleflight.Group
 	mu        sync.Mutex
 	kept      map[string]kept
@@ -46,8 +47,8 @@ type kept struct {
 	at     time.Time
 }
 
-func New(providers streamer) *Offers {
-	return &Offers{providers: providers, kept: map[string]kept{}}
+func New(providers streamer, relay *media.Relay) *Offers {
+	return &Offers{providers: providers, relay: relay, kept: map[string]kept{}}
 }
 
 // Of answers what a provider offers of a title, best first, as it offered it within offersFor.
@@ -101,7 +102,7 @@ func (o *Offers) Open(ctx context.Context, p domain.Place) (media.Input, error) 
 	known, name, _ := strings.Cut(p.Rel, "/")
 	for _, offer := range offers {
 		if hex.EncodeToString(offer.Fingerprint(p.Source)) == known {
-			return media.Relayed(offer.URL, offer.From, name)
+			return o.relay.Relayed(offer.URL, offer.From, name), nil
 		}
 	}
 	return media.Input{}, ErrGone

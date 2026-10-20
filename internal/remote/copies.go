@@ -124,10 +124,7 @@ func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
 
 // read probes what an offer is, once it answers, refusing a clip too short to be the title.
 func (c *Copies) read(ctx context.Context, o domain.Offer) (domain.Facts, error) {
-	in, err := media.Relayed(o.URL, o.From, o.Name)
-	if err != nil {
-		return domain.Facts{}, err
-	}
+	in := c.offers.relay.Relayed(o.URL, o.From, o.Name)
 	defer in.Close()
 	if err := c.answers(ctx, in); err != nil {
 		return domain.Facts{}, err
