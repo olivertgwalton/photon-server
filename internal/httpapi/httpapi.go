@@ -291,7 +291,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 	}
 	// Another node asking this one to open a remux, for its metrics, or whether it can read a
 	// library's root, is no client's to call, and so in no description.
-	a.mux.Handle("POST /api/v1/internal/playbacks/{id}/delivery", a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
+	a.mux.Handle("POST "+playback.RemotePattern, a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
 	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
 	a.mux.Handle("GET "+libraryCheckPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeCheckLibrary)))
 	// A sign-in provider sends a browser back here with a query of its own, which a client never
