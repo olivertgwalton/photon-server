@@ -5,6 +5,8 @@ summary: "How fast photon-server answers, and what memory and CPU it takes, meas
 
 We ran photon-server, Jellyfin, Plex and silo side by side on one Mac mini, with the same library of 358 films and about 85 shows. We timed how long each takes to answer the requests its own app sends for everyday pages (Home, a library, a film, a show, search), how many it can answer a second, and how much memory and processor each uses. Playback was not measured. photon-server answered fastest on almost every page and handled the most requests a second. Its own process uses little memory, but with its database it uses more in total than Jellyfin or Plex, which keep everything in one process.
 
+On 20 October 2026 we measured photon-server again, on its own, as the macOS app. Those numbers are in [Photon on its own](#photon-on-its-own).
+
 ## Setup
 
 Measured on 11 October 2026 on one Mac mini: an M4 with 16 GB of memory, running Docker in OrbStack. The four servers read the same library: 358 films and 84–88 shows, depending on how each one groups them. Playback is left out, because it depends on the network and the debrid source more than on the server.
@@ -124,3 +126,77 @@ From `docker stats`, in MiB. For the PostgreSQL containers this includes the pag
 
 - **Smallest servers.** Plex and photon have the smallest server processes at rest. Photon's grew to 359 MiB while answering 17,000 requests a second and returned to 79 MiB afterwards.
 - **Whole stacks.** Plex and Jellyfin keep their whole stack in one process. Photon's comes to about 730 MiB and silo's to about 1.1 GB, most of it PostgreSQL.
+
+## Photon on its own
+
+Measured on 20 October 2026 on the same Mac mini, with the same library: 357 films and 85 shows. Photon ran as the macOS app, version 0.7.2-7 (af723673), with its own PostgreSQL 18 and Valkey. The other three servers are no longer installed there, so only photon was measured.
+
+These numbers can't be set beside the tables above. Photon ran natively rather than in Docker, and the client ran on the same host rather than on a Docker network. The method is otherwise the same: 100 requests per endpoint after 10 warm-ups, on one kept-alive connection, back to back and at 10 a second; `ab -k -c 8 -n 800`, the median of three runs. Every request was made as an admin.
+
+The last six rows weren't measured on 11 October. They time pages whose queries changed in 0.7.2-7. On the version before it, the films wall filtered to what is in progress took 347 ms back to back and answered 7 requests a second, and the top rated films row took 6.9 ms.
+
+### Latency
+
+p50 / p95 in milliseconds.
+
+| Endpoint | Back to back | Paced, 10 a second |
+|---|---|---|
+| Libraries | 0.29 / 0.47 | 1.6 / 2.4 |
+| Recently added films, 20 | 0.99 / 1.9 | 6.1 / 7.5 |
+| Continue watching, 20 | 0.90 / 1.4 | 8.8 / 11.9 |
+| Films A–Z, 60 | 4.9 / 6.5 | 26.0 / 31.1 |
+| Shows A–Z, 60 | 4.6 / 5.8 | 24.0 / 25.6 |
+| Search "star" | 1.2 / 1.6 | 8.7 / 11.9 |
+| Search "incep" | 0.81 / 0.85 | 6.3 / 7.6 |
+| Film page | 0.84 / 0.95 | 6.4 / 10.3 |
+| Show page | 1.0 / 1.2 | 6.9 / 8.9 |
+| Season 1's episodes | 1.0 / 1.2 | 7.0 / 7.7 |
+| Similar titles | 3.1 / 3.5 | 21.2 / 22.6 |
+| Next up, 20 | 2.5 / 4.0 | 20.1 / 25.5 |
+| Top rated films, 20 | 1.2 / 1.7 | 9.1 / 13.7 |
+| Top rated shows, 20 | 1.9 / 2.3 | 12.5 / 16.1 |
+| A person's page, 589 credits | 2.6 / 2.7 | 16.7 / 31.0 |
+| Films wall, in progress | 1.3 / 1.7 | 9.2 / 11.5 |
+| Episodes' filters | 23.5 / 24.3 | 39.3 / 41.5 |
+
+### Page data
+
+The calls the web app makes to draw each page. Each step's calls are sent together, on up to six connections as a browser does, and the next step starts once the last call answers. Each figure is the time from the first request to the last response, p50 / p95 in milliseconds over 30 loads.
+
+| Page | Calls | Time |
+|---|---|---|
+| Home | The libraries, the profile's preferences and its 10 rows of 20 | 9.0 / 10.3 |
+| Film page | The film, then its similar titles | 6.9 / 7.6 |
+| Show and season 1 | The show, then where the profile is in it, its similar titles and season 1 | 7.5 / 8.3 |
+| Films library | Its filters, then 100 titles and the letters | 11.7 / 12.8 |
+
+### Throughput
+
+`ab -k -c 8 -n 800`, in requests per second, with the p50 in milliseconds in brackets: the median of three runs.
+
+| Endpoint | Requests a second |
+|---|---|
+| Libraries | 38,664 (0) |
+| Recently added films | 4,499 (2) |
+| Continue watching | 3,559 (2) |
+| Films A–Z, 60 | 700 (11) |
+| Shows A–Z, 60 | 817 (9) |
+| Search "star" | 2,255 (3) |
+| Search "incep" | 3,455 (2) |
+| Film page | 2,851 (3) |
+| Show page | 2,861 (3) |
+| Season 1's episodes | 3,032 (2) |
+| Similar titles | 1,485 (5) |
+| Next up | 914 (8) |
+| Top rated films | 3,158 (2) |
+| Top rated shows | 2,087 (4) |
+| A person's page | 931 (8) |
+| Films wall, in progress | 2,370 (3) |
+| Episodes' filters | 137 (57) |
+
+### Memory
+
+Measured with macOS's `footprint`, which counts memory PostgreSQL's processes share only once. It is not `docker stats` as above.
+
+- **Server.** About 115 MB at rest, and 135 MB at its peak across the whole run. Its processor use peaked at about 370%.
+- **PostgreSQL.** About 1.2 GB after the run, most of it pages of the database it had read.
