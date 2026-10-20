@@ -97,3 +97,36 @@ func TestNormaliseIsSafeAtOnce(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestResolve(t *testing.T) {
+	// IMDb knows The Thing (1982); a search finds it only without a year, as one read from a folder
+	// may be the wrong release date.
+	find := func(p domain.Provider, id string) ([]domain.Candidate, error) {
+		if p == domain.ProviderIMDb && id == "tt0084787" {
+			return []domain.Candidate{{ID: "1091"}}, nil
+		}
+		return nil, nil
+	}
+	search := func(title string, year int) ([]domain.Candidate, error) {
+		if title == "The Thing" && year == 0 {
+			return []domain.Candidate{{ID: "1091", Title: "The Thing", Year: 1982}}, nil
+		}
+		return nil, nil
+	}
+	for _, tc := range []struct {
+		name string
+		h    Hints
+		want string
+	}{
+		{"its own id", Hints{Title: "The Thing", IDs: map[domain.Provider]string{domain.ProviderTMDB: "42", domain.ProviderIMDb: "tt0084787"}}, "42"},
+		{"an own id that is no id", Hints{Title: "The Thing", IDs: map[domain.Provider]string{domain.ProviderTMDB: "thing", domain.ProviderIMDb: "tt0084787"}}, "1091"},
+		{"another provider's id", Hints{IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0084787"}}, "1091"},
+		{"another provider's id it does not know", Hints{Title: "The Thing", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0000001"}}, "1091"},
+		{"a search without the wrong year", Hints{Title: "The Thing", Year: 1985}, "1091"},
+		{"nothing found", Hints{Title: "Nothing", Year: 1985}, ""},
+	} {
+		if got, err := Resolve(tc.h, domain.ProviderTMDB, []domain.Provider{domain.ProviderIMDb, domain.ProviderTVDB}, find, search); err != nil || got != tc.want {
+			t.Errorf("%s: %q, %v; want %q", tc.name, got, err, tc.want)
+		}
+	}
+}
