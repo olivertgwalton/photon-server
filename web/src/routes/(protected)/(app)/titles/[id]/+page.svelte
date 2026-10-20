@@ -675,11 +675,7 @@ async function ask() {
 	{/if}
 
 	{#if credits.length}
-		<Rail
-			title="Cast & crew"
-			items={credits}
-			href={data.asking ? undefined : `/titles/${t.id}/cast`}
-		>
+		<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
 			{#snippet card(
 				credit: (typeof credits)[number],
 			)}
