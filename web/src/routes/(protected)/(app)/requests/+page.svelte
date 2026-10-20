@@ -2,6 +2,7 @@
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import Pager from "#lib/components/Pager.svelte";
+import RequestTitle from "#lib/components/RequestTitle.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { askerState } from "#lib/requests.js";
 import { vocabulary } from "#lib/vocabulary.js";
@@ -33,16 +34,7 @@ const { offset, total } = $derived(data.requests);
 			<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
 				<div class="min-w-0 flex-1">
 					<p class="text-ink font-semibold">
-						{#if r.title_id}
-							<a href="/titles/{r.title_id}" class="hover:underline"
-								>{r.title}</a
-							>
-						{:else}
-							{r.title}
-						{/if}
-						{#if r.year}
-							<span class="text-ink-3 font-normal"> ({r.year})</span>
-						{/if}
+						<RequestTitle request={r} />
 					</p>
 					<p class="text-ink-3 text-sm">
 						{words.request_states[askerState(r.state)]}

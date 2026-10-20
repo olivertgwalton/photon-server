@@ -7,6 +7,7 @@ import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import Pager from "#lib/components/Pager.svelte";
+import RequestTitle from "#lib/components/RequestTitle.svelte";
 import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -79,16 +80,7 @@ const { offset, total } = $derived(data.requests);
 			>
 				<div class="grid min-w-0 gap-1">
 					<p class="text-ink font-semibold">
-						{#if r.title_id}
-							<a href="/titles/{r.title_id}" class="hover:underline"
-								>{r.title}</a
-							>
-						{:else}
-							{r.title}
-						{/if}
-						{#if r.year}
-							<span class="text-ink-3 font-normal"> ({r.year})</span>
-						{/if}
+						<RequestTitle request={r} />
 						<span class="label ml-2">{words.request_states[r.state]}</span>
 					</p>
 					<p class="text-ink-3 text-xs">
