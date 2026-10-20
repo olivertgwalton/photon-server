@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"time"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/analysis"
 	"github.com/olivertgwalton/photon-server/internal/animelist"
@@ -133,74 +132,19 @@ func sweepArtworkTask(st *store.Store, cache *artwork.Cache, logger *slog.Logger
 			if err != nil {
 				return err
 			}
-			n, err = backfillBlurhashes(ctx, st, cache)
+			n, err = cache.HashUnhashed(ctx, st)
 			if n > 0 {
 				logger.InfoContext(ctx, "pictures given a blurhash", slog.Int("pictures", n))
 			}
 			if err != nil {
 				return err
 			}
-			n, err = backfillPictures(ctx, st, cache)
+			n, err = cache.FetchUnfetched(ctx, st)
 			if n > 0 {
 				logger.InfoContext(ctx, "pictures fetched ahead", slog.Int("pictures", n))
 			}
 			return err
 		},
-	}
-}
-
-// picturesBatch is how many titles' pictures are fetched at once.
-const picturesBatch = 100
-
-// backfillPictures fetches the pictures every title shows first that are not yet fetched: those
-// of titles described before the server fetched them as it did, and those it could not then.
-func backfillPictures(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
-	fetched := 0
-	var after uuid.UUID
-	for {
-		pictures, last, err := st.Unfetched(ctx, after, picturesBatch)
-		if err != nil {
-			return fetched, err
-		}
-		n, err := cache.Fetch(ctx, pictures)
-		fetched += n
-		if err != nil || last == (uuid.UUID{}) {
-			return fetched, err
-		}
-		after = last
-	}
-}
-
-// blurhashBatch is how many pictures without a BlurHash are asked for at once.
-const blurhashBatch = 500
-
-// backfillBlurhashes takes the BlurHash of each library file and each cached picture that has
-// none: those kept before the server took them. A provider's picture not fetched yet is left to
-// be hashed as it is, and one not decoded here, such as SVG, is passed over.
-func backfillBlurhashes(ctx context.Context, st *store.Store, cache *artwork.Cache) (int, error) {
-	hashed := 0
-	var after uuid.UUID
-	for {
-		batch, err := st.Unhashed(ctx, after, blurhashBatch)
-		if err != nil || len(batch) == 0 {
-			return hashed, err
-		}
-		for _, p := range batch {
-			var hash string
-			if p.Path == "" {
-				hash, err = cache.Blurhash(ctx, p.ID)
-			} else {
-				hash, err = artwork.FileBlurhash(p.Root, p.Path)
-			}
-			if err != nil {
-				continue
-			}
-			if err := st.SetBlurhash(ctx, p.ID, hash); err != nil {
-				return hashed, err
-			}
-			hashed++
-		}
-		after = batch[len(batch)-1].ID
 	}
 }
 

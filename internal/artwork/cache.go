@@ -27,6 +27,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 const (
@@ -276,6 +277,72 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 		}
 	}
 	return removed, nil
+}
+
+// unfetched pages through the pictures titles show first that are not yet fetched.
+type unfetched interface {
+	Unfetched(ctx context.Context, after uuid.UUID, limit int) (store.Unfetched, uuid.UUID, error)
+}
+
+// picturesBatch is how many titles' pictures are fetched at once.
+const picturesBatch = 100
+
+// FetchUnfetched fetches the pictures every title shows first that are not yet fetched: those of
+// titles described before the server fetched them as it did, and those it could not then.
+func (c *Cache) FetchUnfetched(ctx context.Context, st unfetched) (int, error) {
+	fetched := 0
+	var after uuid.UUID
+	for {
+		pictures, last, err := st.Unfetched(ctx, after, picturesBatch)
+		if err != nil {
+			return fetched, err
+		}
+		n, err := c.Fetch(ctx, pictures)
+		fetched += n
+		if err != nil || last == (uuid.UUID{}) {
+			return fetched, err
+		}
+		after = last
+	}
+}
+
+// unhashed pages through the pictures kept without a BlurHash, and keeps one.
+type unhashed interface {
+	Unhashed(ctx context.Context, after uuid.UUID, limit int) ([]store.Unhashed, error)
+	SetBlurhash(ctx context.Context, id uuid.UUID, hash string) error
+}
+
+// blurhashBatch is how many pictures without a BlurHash are asked for at once.
+const blurhashBatch = 500
+
+// HashUnhashed takes the BlurHash of each library file and each cached picture that has none:
+// those kept before the server took them. A provider's picture not fetched yet is left to be
+// hashed as it is, and one not decoded here, such as SVG, is passed over.
+func (c *Cache) HashUnhashed(ctx context.Context, st unhashed) (int, error) {
+	hashed := 0
+	var after uuid.UUID
+	for {
+		batch, err := st.Unhashed(ctx, after, blurhashBatch)
+		if err != nil || len(batch) == 0 {
+			return hashed, err
+		}
+		for _, p := range batch {
+			var hash string
+			if p.Path == "" {
+				hash, err = c.Blurhash(ctx, p.ID)
+			} else {
+				hash, err = FileBlurhash(p.Root, p.Path)
+			}
+			if err != nil {
+				continue
+			}
+			if err := st.SetBlurhash(ctx, p.ID, hash); err != nil {
+				return hashed, err
+			}
+			hashed++
+		}
+		after = batch[len(batch)-1].ID
+	}
 }
 
 // ErrNotPicture is something given to keep that is not a picture decoded here, or too large.
