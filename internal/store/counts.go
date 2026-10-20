@@ -14,8 +14,10 @@ func (s *Store) LibraryCounts(ctx context.Context) (map[uuid.UUID]domain.TitleCo
 		SELECT library_id, kind, count(*) FROM items WHERE kind IN ('movie', 'show', 'season', 'episode')
 		GROUP BY 1, 2
 		UNION ALL
-		SELECT l.id, items.kind, count(*) FROM libraries l, items, viewer(NULL) v
-		WHERE `+listedCollection+` AND `+holdsTitleOf("l.id")+`
+		SELECT held.library_id, items.kind, count(*) FROM items JOIN collections c ON c.item_id = items.id, viewer(NULL) v,
+			LATERAL (SELECT title.library_id FROM collection_members held JOIN items title ON title.id = held.item_id
+				WHERE held.collection_id = items.id GROUP BY 1 HAVING count(*) >= `+listedFrom+`) held
+		WHERE `+listedCollection+`
 		GROUP BY 1, 2`)
 	if err != nil {
 		return nil, err
