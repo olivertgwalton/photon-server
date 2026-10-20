@@ -18,6 +18,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/storage"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
@@ -206,8 +207,13 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 		return err
 	}
 	defer stores.Close()
+	relay, err := media.ListenRelay(ctx, logger)
+	if err != nil {
+		return err
+	}
+	defer relay.Close()
 	n := &node{
-		logger: logger, st: st, cache: cache, stores: stores, tools: tools, server: id,
+		logger: logger, st: st, cache: cache, stores: stores, tools: tools, relay: relay, server: id,
 		started: started, listen: listen, cacheRoot: cacheRoot, stops: stops,
 	}
 	if err := n.join(ctx, databaseURL, valkeyURL); err != nil {

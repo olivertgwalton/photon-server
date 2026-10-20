@@ -112,7 +112,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	uhd := domain.Offer{Key: "torrent:abc:0", Name: "Heat.2160p.mkv", URL: at("/heat.mkv"), From: from}
 	provider := &offering{offers: []domain.Offer{dead, uhd}}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	copies := NewCopies(st, New(provider), tools, unmatched)
+	copies := NewCopies(st, New(provider, relay(t)), tools, unmatched)
 
 	if err := copies.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parts := library.Parts{Places: st, Streams: New(provider)}
+	parts := library.Parts{Places: st, Streams: New(provider, relay(t))}
 	in, err := parts.Open(ctx, c.Parts[0].ID)
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	// Offered no more, the copy is missing and its part gone; another offered is read.
 	hd := domain.Offer{Key: "torrent:abc:1", Name: "Heat.1080p.mkv", URL: at("/heat-hd.mkv"), From: from}
 	provider.offers = []domain.Offer{hd}
-	copies = NewCopies(st, New(provider), tools, unmatched)
+	copies = NewCopies(st, New(provider, relay(t)), tools, unmatched)
 	if err := copies.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
 	}
@@ -161,12 +161,12 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	if missing != 1 {
 		t.Errorf("%d copies missing, want the 2160p one", missing)
 	}
-	if _, err := (library.Parts{Places: st, Streams: New(provider)}).Open(ctx, c.Parts[0].ID); !errors.Is(err, ErrGone) {
+	if _, err := (library.Parts{Places: st, Streams: New(provider, relay(t))}).Open(ctx, c.Parts[0].ID); !errors.Is(err, ErrGone) {
 		t.Errorf("the 2160p copy opened: %v, want ErrGone", err)
 	}
 
 	provider.offers = nil
-	if err := NewCopies(st, New(provider), tools, unmatched).Ensure(ctx, item); !errors.Is(err, ErrNoCopy) {
+	if err := NewCopies(st, New(provider, relay(t)), tools, unmatched).Ensure(ctx, item); !errors.Is(err, ErrNoCopy) {
 		t.Errorf("with nothing offered: %v, want ErrNoCopy", err)
 	}
 }
@@ -196,7 +196,7 @@ func TestAFoundTitleIsHeldMatchedAndGivenACopyAsItIsOpened(t *testing.T) {
 		return nil
 	}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	if err := NewCopies(st, New(offers), tools, match).Ensure(ctx, found[0].ID); err != nil {
+	if err := NewCopies(st, New(offers, relay(t)), tools, match).Ensure(ctx, found[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, found[0].ID)
@@ -243,7 +243,7 @@ func TestAStreamBeingFetchedIsWaitedForAndADeadOnePassedOver(t *testing.T) {
 	ready := domain.Offer{Key: "release:Heat.WEB", Name: "Heat.WEB", URL: at(srv.URL, "/heat.mkv"), From: from}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
 	copies := func(offers ...domain.Offer) *Copies {
-		c := NewCopies(st, New(&offering{offers: offers}), tools, unmatched)
+		c := NewCopies(st, New(&offering{offers: offers}, relay(t)), tools, unmatched)
 		c.readyWithin = 200 * time.Millisecond
 		return c
 	}
