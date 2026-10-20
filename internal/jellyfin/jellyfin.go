@@ -417,13 +417,13 @@ func (a *API) refuse(w http.ResponseWriter, status int) {
 }
 
 func (a *API) internal(w http.ResponseWriter, r *http.Request, err error) {
-	a.logger.ErrorContext(r.Context(), "jellyfin request failed", slog.String("path", r.URL.Path), slog.Any("err", err))
+	a.logger.ErrorContext(r.Context(), "jellyfin request failed", slog.String("route", r.Pattern), slog.Any("err", err))
 	a.refuse(w, http.StatusInternalServerError)
 }
 
 // abort ends a reply begun that cannot be finished by cutting its connection, so the app sees it
 // broken rather than taking what was sent for the whole.
 func (a *API) abort(r *http.Request, err error) {
-	a.logger.ErrorContext(r.Context(), "jellyfin request failed", slog.String("path", r.URL.Path), slog.Any("err", err))
+	a.logger.ErrorContext(r.Context(), "jellyfin request failed", slog.String("route", r.Pattern), slog.Any("err", err))
 	panic(http.ErrAbortHandler)
 }
