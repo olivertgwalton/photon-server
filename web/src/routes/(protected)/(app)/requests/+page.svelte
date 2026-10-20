@@ -24,7 +24,7 @@ const { offset, total } = $derived(data.requests);
 	<div class="grid gap-1">
 		<h1 class="title">Requests</h1>
 		<p class="text-ink-3">
-			What you've asked for. You're told when each one is added, as with
+			What you've asked for. You're notified when each one is added, as with
 			anything new.
 		</p>
 	</div>

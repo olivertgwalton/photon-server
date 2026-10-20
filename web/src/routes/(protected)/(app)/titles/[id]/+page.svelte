@@ -422,8 +422,8 @@ async function ask() {
 					</Button>
 					<p class="text-ink-2 text-sm">
 						{asked
-							? "You'll be told when it's added."
-							: "It isn't in the library yet. You'll be told when it's added."}
+							? "You'll be notified when it's added."
+							: "It isn't in the library yet. You'll be notified when it's added."}
 					</p>
 				</div>
 			{:else}
