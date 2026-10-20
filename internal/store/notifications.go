@@ -65,7 +65,12 @@ const notify = `
 			AND sees(v, a.item)
 			AND NOT EXISTS (SELECT 1 FROM quiet_libraries q WHERE q.profile_id = p.id AND q.library_id = @library)
 			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = a.item_id AND n.profile_id = p.id)
-	), kept AS (
+	), ` + telling
+
+// telling ends a statement that tells profiles of titles, after its fresh, the films and episodes
+// each profile is to be told of by the title they are of: it keeps a notification of each title,
+// or gathers more into one unread, and answers the profiles told and whether to push to them.
+const telling = `kept AS (
 		INSERT INTO notifications (profile_id, title_id)
 		SELECT DISTINCT profile_id, title_id FROM fresh
 		ON CONFLICT (profile_id, title_id) WHERE read_at IS NULL DO UPDATE SET added_at = now()
@@ -93,28 +98,14 @@ const fulfilled = `
 			AND EXISTS (SELECT 1 FROM external_ids e WHERE e.item_id = i.id AND e.provider = r.provider AND e.value = r.value)
 		RETURNING r.profile_id
 	), fresh AS (
-		SELECT DISTINCT d.profile_id, x.id AS item_id
+		SELECT DISTINCT d.profile_id, @item AS title_id, x.id AS item_id
 		FROM done d CROSS JOIN LATERAL viewer(d.profile_id) v
 		JOIN items x ON x.id = @item AND x.kind = 'movie'
 			OR x.kind = 'episode' AND x.parent_id IN (SELECT id FROM items WHERE parent_id = @item AND kind = 'season')
 		LEFT JOIN profile_preferences pp ON pp.profile_id = d.profile_id
 		WHERE coalesce(pp.notify, 'marked') <> 'none' AND sees(v, x)
 			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = x.id AND n.profile_id = d.profile_id)
-	), kept AS (
-		INSERT INTO notifications (profile_id, title_id)
-		SELECT DISTINCT profile_id, @item FROM fresh
-		ON CONFLICT (profile_id, title_id) WHERE read_at IS NULL DO UPDATE SET added_at = now()
-		RETURNING id, profile_id
-	), subscribed AS (
-		SELECT DISTINCT profile_id FROM push_subscriptions WHERE profile_id IN (SELECT profile_id FROM kept)
-	), told AS (
-		INSERT INTO notification_items (item_id, profile_id, notification_id, pushed)
-		SELECT f.item_id, f.profile_id, k.id, f.profile_id NOT IN (SELECT profile_id FROM subscribed)
-		FROM fresh f JOIN kept k USING (profile_id)
-		ON CONFLICT DO NOTHING
-	)
-	SELECT profile_id, array_agg(id) AS ids, profile_id IN (SELECT profile_id FROM subscribed) AS push
-	FROM kept GROUP BY profile_id`
+	), ` + telling
 
 func fulfil(ctx context.Context, tx db, item uuid.UUID) ([]Told, error) {
 	return tell(ctx, tx, fulfilled, pgx.NamedArgs{"item": item})
