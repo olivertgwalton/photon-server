@@ -60,13 +60,19 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 func TestSearchAsksForTheYearByKind(t *testing.T) {
 	c := serve(t, map[string]string{
 		"/search/tv?first_air_date_year=2002&include_adult=false&language=en-GB&query=The+Wire": `{"results":[
-			{"id":1438,"name":"The Wire","original_name":"The Wire","first_air_date":"2002-06-02","overview":"Baltimore."}]}`,
+			{"id":1438,"name":"The Wire","original_name":"The Wire","first_air_date":"2002-06-02","overview":"Baltimore.",
+			 "poster_path":"/wire.jpg"}]}`,
 	})
 	got, err := c.Search(t.Context(), gb, Show, "The Wire", 2002)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]domain.Candidate{{ID: "1438", Title: "The Wire", OriginalTitle: "The Wire", Year: 2002, Overview: "Baltimore."}}, got); diff != "" {
+	// A candidate is told by a small poster, and kept, as a search's find is, at its full size.
+	want := []domain.Candidate{{
+		ID: "1438", Title: "The Wire", OriginalTitle: "The Wire", Year: 2002, Overview: "Baltimore.",
+		Poster: "https://image.tmdb.org/t/p/w342/wire.jpg", FullPoster: "https://image.tmdb.org/t/p/original/wire.jpg",
+	}}
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Search (-want +got):\n%s", diff)
 	}
 }

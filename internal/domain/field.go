@@ -45,7 +45,11 @@ type Candidate struct {
 	Year          int
 	// Overview is what the provider says it is about, to tell like-named titles apart by.
 	Overview string
-	Poster   string
+	// Poster is a picture to tell it by, small enough to draw as the provider serves it.
+	// FullPoster is the same picture at the size it was uploaded, for one the server keeps and
+	// sizes itself, as a search's finds are; "" where the provider serves one size.
+	Poster     string
+	FullPoster string
 }
 
 // SeasonMetadata is what a source says about a season and its episodes, by episode number.

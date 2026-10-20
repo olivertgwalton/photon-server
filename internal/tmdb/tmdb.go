@@ -84,7 +84,7 @@ func (r result) match() domain.Candidate {
 		Year: provider.Year(provider.Date(cmp.Or(r.ReleaseDate, r.FirstAirDate))), Overview: r.Overview,
 	}
 	if r.Poster != "" {
-		c.Poster = candidateURL + r.Poster
+		c.Poster, c.FullPoster = candidateURL+r.Poster, imageURL+r.Poster
 	}
 	return c
 }

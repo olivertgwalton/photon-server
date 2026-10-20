@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -52,6 +53,8 @@ func (s *Store) Discoverable(ctx context.Context, profile uuid.UUID) ([]Discover
 
 // SaveDiscoveries keeps what a provider's search found for a remote library, under fixed ids, and
 // answers those no library holds a title of by the provider's id. What was found a day ago goes.
+// A find's poster is the provider's full one, which the server sizes for each client as it does
+// any picture, under an id of its address, so a poster that changes is fetched anew.
 func (s *Store) SaveDiscoveries(ctx context.Context, lib uuid.UUID, kind domain.ItemKind, provider domain.Provider, found []domain.Candidate) ([]Discovery, error) {
 	var out []Discovery
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -69,20 +72,21 @@ func (s *Store) SaveDiscoveries(ctx context.Context, lib uuid.UUID, kind domain.
 			if held {
 				continue
 			}
+			poster := cmp.Or(c.FullPoster, c.Poster)
 			d := Discovery{
 				ID: derived("title", lib, provider, c.ID), Library: lib, Kind: kind, Title: c.Title, Year: c.Year,
-				Overview: c.Overview, Poster: derived("poster", lib, provider, c.ID),
+				Overview: c.Overview, Poster: derived("poster", lib, provider, c.ID+"\x00"+poster),
 			}
 			_, err = tx.Exec(ctx, `
 				INSERT INTO discoveries (id, library_id, kind, provider, value, title, year, overview, poster_id, poster_url)
 				VALUES ($1, $2, $3, $4, $5, $6, nullif($7, 0), nullif($8, ''), $9, nullif($10, ''))
 				ON CONFLICT (id) DO UPDATE SET title = excluded.title, year = excluded.year, overview = excluded.overview,
-					poster_url = excluded.poster_url, found_at = now()`,
-				d.ID, lib, kind, provider, c.ID, d.Title, d.Year, d.Overview, d.Poster, c.Poster)
+					poster_id = excluded.poster_id, poster_url = excluded.poster_url, found_at = now()`,
+				d.ID, lib, kind, provider, c.ID, d.Title, d.Year, d.Overview, d.Poster, poster)
 			if err != nil {
 				return err
 			}
-			if c.Poster == "" {
+			if poster == "" {
 				d.Poster = uuid.UUID{}
 			}
 			out = append(out, d)
