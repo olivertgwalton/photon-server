@@ -81,3 +81,34 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 		t.Errorf("a profile held to 12 searches %+v, %v; want none", libs, err)
 	}
 }
+
+// A find's poster is the provider's full one where it has both, as the server sizes it for each
+// client, not the thumbnail a match is told by; one that changes is a new picture, so what was
+// cached of the old one is not shown for it.
+func TestAFindKeepsItsFullPoster(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddRemoteLibrary(ctx, "Found", domain.LibraryMovies, Remote{DiscoverSource: domain.SourceTMDB, StreamSource: domain.PluginSource("riven")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arrival := domain.Candidate{
+		ID: "329865", Title: "Arrival", Poster: "https://image.tmdb.org/t/p/w342/a.jpg",
+		FullPoster: "https://image.tmdb.org/t/p/original/a.jpg",
+	}
+	saved, err := s.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, []domain.Candidate{arrival})
+	if err != nil || len(saved) != 1 {
+		t.Fatalf("found %+v, %v", saved, err)
+	}
+	if pic, err := s.Picture(ctx, saved[0].Poster); err != nil || pic.URL != arrival.FullPoster {
+		t.Errorf("its poster is %+v, %v; want the full one", pic, err)
+	}
+	arrival.FullPoster = "https://image.tmdb.org/t/p/original/b.jpg"
+	again, err := s.SaveDiscoveries(ctx, lib.ID, domain.ItemMovie, domain.ProviderTMDB, []domain.Candidate{arrival})
+	if err != nil || len(again) != 1 || again[0].ID != saved[0].ID || again[0].Poster == saved[0].Poster {
+		t.Fatalf("found again as %+v, %v; want the same find under a new poster", again, err)
+	}
+	if pic, err := s.Picture(ctx, again[0].Poster); err != nil || pic.URL != arrival.FullPoster {
+		t.Errorf("its new poster is %+v, %v", pic, err)
+	}
+}
