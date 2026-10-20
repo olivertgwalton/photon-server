@@ -204,3 +204,71 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 		t.Errorf("declined requests %+v of %d, %v; want the first", done, total, err)
 	}
 }
+
+// An approved request is sent where its library's requests go, by every id it was found under;
+// one that fails there says why and may be approved again, and sent again, or declined. A library
+// that sends nowhere keeps its requests approved, and a remote library takes none.
+func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
+	s, films, film, show := askable(t)
+	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
+	user := addProfile(t, s, "Sam", domain.RoleUser, nil)
+	sends := func() int {
+		t.Helper()
+		return countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'send_request'`)
+	}
+
+	unsent, err := s.AskFor(ctx, admin.ID, show.ID, nil)
+	if err != nil || unsent.State != domain.RequestApproved || sends() != 0 {
+		t.Fatalf("a request of a library that sends nowhere: %+v, %v, %d sends; want it approved, and none", unsent, err, sends())
+	}
+	riven := domain.PluginSource("riven")
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Requests: &riven}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.AskFor(ctx, user.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sends() != 0 {
+		t.Errorf("%d sends of a request waiting for an admin", sends())
+	}
+	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
+		t.Fatal(err)
+	}
+	if sends() != 1 {
+		t.Errorf("%d sends once approved, want one", sends())
+	}
+	w, lib, ok, err := s.Sending(ctx, r.ID)
+	if err != nil || !ok || lib.RequestSource != riven || w.ID != r.ID || w.Kind != domain.ItemMovie || w.IDs[domain.ProviderTMDB] != "27205" || w.Title != "Inception" {
+		t.Errorf("sending %+v to %q, %v, %v", w, lib.RequestSource, ok, err)
+	}
+
+	if err := s.SentRequest(ctx, r.ID, domain.RequestFailed, "no release found"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, err := s.Sending(ctx, r.ID); err != nil || ok {
+		t.Errorf("a failed request is still being sent: %v, %v", ok, err)
+	}
+	again, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, "")
+	if err != nil || again.State != domain.RequestApproved || again.Reason != "" {
+		t.Errorf("approved again once failed: %+v, %v", again, err)
+	}
+	if err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil {
+		t.Fatal(err)
+	}
+	if sent, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
+		t.Errorf("a sent request declined: %+v, %v; want ErrDecided", sent, err)
+	}
+	if mine, _, err := s.Requests(ctx, user.ID, 0, 1); err != nil || mine[0].State != domain.RequestSent {
+		t.Errorf("the user's request %+v, %v; want it sent", mine, err)
+	}
+
+	found, err := s.AddRemoteLibrary(ctx, "Found", domain.LibraryMovies, Remote{DiscoverSource: domain.SourceTMDB, StreamSource: riven})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLibrary(ctx, found.ID, LibraryChange{Requests: &riven}); !errors.Is(err, ErrRemoteRequests) {
+		t.Errorf("a remote library sending requests: %v, want ErrRemoteRequests", err)
+	}
+}

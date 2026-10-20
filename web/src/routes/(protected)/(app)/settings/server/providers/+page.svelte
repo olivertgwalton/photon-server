@@ -30,6 +30,7 @@ const capabilities = {
 	subtitles: "Subtitles",
 	events: "Events",
 	segments: "Intros and credits",
+	request: "Requests",
 	pages: "Pages",
 } as const;
 

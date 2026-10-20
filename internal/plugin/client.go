@@ -235,6 +235,13 @@ func (c *client) Segments(ctx context.Context, q domain.SegmentQuery) ([]domain.
 	return markers, err
 }
 
+func (c *client) Request(ctx context.Context, w domain.Wanted) error {
+	_, err := post[pluginv1.RequestResponse](ctx, c, domain.CapabilityRequest, "request", func(s pluginv1.Settings) pluginv1.RequestRequest {
+		return pluginv1.RequestRequest{Settings: s, ID: w.ID.String(), Kind: string(w.Kind), IDs: sentIDs(w.IDs), Title: w.Title, Year: w.Year, Seasons: w.Seasons}
+	})
+	return err
+}
+
 // metadata is what the plugin said in the server's terms. Anything the server has no name for (a
 // kind of picture, a site, a credit) or will not fetch (a picture not on the web) is left out.
 func (c *client) metadata(m pluginv1.Metadata) domain.Metadata {

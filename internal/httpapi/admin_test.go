@@ -92,6 +92,9 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	f.libs[i].SubtitleMatch = cmp.Or(c.SubtitleMatch, f.libs[i].SubtitleMatch)
 	f.libs[i].MissingCopies = cmp.Or(c.MissingCopies, f.libs[i].MissingCopies)
 	f.libs[i].BoxSets = cmp.Or(c.BoxSets, f.libs[i].BoxSets)
+	if c.Requests != nil {
+		f.libs[i].RequestSource = *c.Requests
+	}
 	return nil
 }
 
@@ -353,5 +356,41 @@ func TestALibraryAsksInALanguageAndCountryOfItsOwn(t *testing.T) {
 	rec := do(http.MethodGet, "/api/v1/admin/locales", "")
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"en-GB"`) || !strings.Contains(rec.Body.String(), `"countries":["GB","IN","US"]`) {
 		t.Errorf("locales: %d %s, want TMDB's languages and the countries whose certificates are read", rec.Code, rec.Body)
+	}
+}
+
+// fetcher fetches the titles a library lacks, as riven does.
+type fetcher struct{}
+
+func (fetcher) Info() provider.Info {
+	return provider.Info{ID: domain.PluginSource("riven"), Name: "riven"}
+}
+
+func (fetcher) Request(context.Context, domain.Wanted) error { return nil }
+
+// An admin names where a library's approved requests go: a provider that fetches titles, and no
+// other; none leaves them for an admin to fetch by hand.
+func TestAnAdminNamesWhereALibrarysRequestsGo(t *testing.T) {
+	libs := &fakeLibraries{libs: []domain.Library{{ID: films, Name: "Films", Kind: domain.LibraryMovies}}}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Libraries: libs, Events: &fakeEvents{}, Providers: provider.NewRegistry(nil, addon{}, fetcher{}),
+	})
+	set := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/libraries/"+films.String(), strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	var got adminLibraryJSON
+	rec := set(`{"requests": "plugin:riven"}`)
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK || got.Requests != domain.PluginSource("riven") {
+		t.Errorf("sent to riven: %d %+v %v", rec.Code, got, err)
+	}
+	if rec := set(`{"requests": "plugin:aio"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("sent to a provider that fetches nothing: %d, want 400", rec.Code)
+	}
+	if rec := set(`{"requests": ""}`); rec.Code != http.StatusOK || libs.libs[0].RequestSource != "" {
+		t.Errorf("sent nowhere: %d, %q", rec.Code, libs.libs[0].RequestSource)
 	}
 }

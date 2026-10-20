@@ -59,6 +59,7 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
     {"name": "subtitles", "version": 1},
     {"name": "events", "version": 1, "events": ["playback.started", "playback.stopped"]},
     {"name": "segments", "version": 1},
+    {"name": "request", "version": 1},
     {"name": "pages", "version": 1, "pages": [{"id": "ask", "name": "Ask for a film", "url": "/ui", "access": "everyone"}]}
   ],
   "settings": [
@@ -73,7 +74,7 @@ Every call but the manifest is a `POST` of a JSON body, answered `200 OK` with a
 - `capabilities` are what the plugin answers, each at a version of it. A capability's calls are
   `POST /{name}/v{version}/{call}`: `describe` is `match` and `describe`, `search` is `search`,
   `rate` is `ratings`, `person` is `person`, `list` is `list`, `stream` is `streams`,
-  `subtitles` is `search` and `fetch`, `events` is `event`, `segments` is `markers`; `pages` has no call,
+  `subtitles` is `search` and `fetch`, `events` is `event`, `segments` is `markers`, `request` is `request`; `pages` has no call,
   as its pages are visited. Leave a capability out and it is never called.
 - A capability the server does not speak, by name or at that version, is passed over, and a
   plugin that answers none it speaks is refused. So a plugin can name one at two versions, or one
@@ -348,6 +349,28 @@ library offers markers: on `chapters` or `all`. A player is offered the plugin's
 set and what the file's chapters name, and above what the server finds by comparing sound or
 reading pictures. A stretch outside the copy, of a kind the server has no name for, or a second of a
 kind, is dropped.
+
+### `POST /request/v1/request`
+
+Fetch a film, or a show's `seasons` (every one where none are named), that a library lacks and a
+profile asked for, as Radarr, Sonarr or riven does. It comes with every id the library's search
+knows the title by. `id` is the request's, the same each time it is sent: a plugin that has taken
+it on already answers as it did. Answer `{}` once the plugin has taken it on.
+
+```json
+{"settings": {"api_key": "…"}, "id": "0199d1b2-0000-7000-8000-000000000001", "kind": "show",
+ "ids": {"tmdb": "1396", "tvdb": "81189", "imdb": "tt0903747"}, "title": "Breaking Bad", "year": 2008, "seasons": [1, 2]}
+```
+
+```json
+{}
+```
+
+A library sends its requests to the plugin once an admin names it as where they go (the library's
+`requests`), and a request is sent once an admin, or the manager that keeps the profile that
+asked, approves it. A `4xx` marks the request failed with the plugin's words, for an admin to
+approve again or decline; a `5xx`, a timeout or no answer is tried again later. The library holds
+the title once a scan finds it in its folder: the plugin is never asked how it is getting on.
 
 ### Pages
 

@@ -58,8 +58,9 @@ type Setting struct {
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
 // match and describe, "search" is search, "rate" is ratings, "person" is person, "list" is list,
-// "stream" is streams, "subtitles" is search and fetch, "events" is event, "segments" is markers, "pages" is no call: a page is visited.
-var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1, "segments": 1, "pages": 1}
+// "stream" is streams, "subtitles" is search and fetch, "events" is event, "segments" is markers,
+// "request" is request, "pages" is no call: a page is visited.
+var Speaks = map[string]int{"describe": 1, "search": 1, "rate": 1, "person": 1, "list": 1, "stream": 1, "subtitles": 1, "events": 1, "segments": 1, "request": 1, "pages": 1}
 
 // Settings is in every request: what an admin set for the plugin, by key.
 type Settings map[string]string
@@ -321,6 +322,24 @@ type EventRequest struct {
 	Settings Settings        `json:"settings"`
 	Event    json.RawMessage `json:"event"`
 }
+
+// RequestRequest asks the plugin to fetch a film, or a show's seasons, every one where none are
+// named, that a library lacks and a profile asked for: by every id the library's search knows it
+// by. ID is the request's, the same each time it is sent, so a plugin that has taken it on answers
+// again as it did. The plugin answers once it has taken the title on, and the library holds it
+// once a scan finds it.
+type RequestRequest struct {
+	Settings Settings          `json:"settings"`
+	ID       string            `json:"id"`
+	Kind     string            `json:"kind"`
+	IDs      map[string]string `json:"ids"`
+	Title    string            `json:"title"`
+	Year     int               `json:"year,omitempty"`
+	Seasons  []int             `json:"seasons,omitempty"`
+}
+
+// RequestResponse is a request taken on; there is nothing more to say.
+type RequestResponse struct{}
 
 // MarkersRequest asks for the intro and credits of a film by its ids, or of an episode by its
 // show's ids and its numbers, in a copy of a length: a release's timing is of that release.

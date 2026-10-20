@@ -21,12 +21,15 @@ var (
 	ErrRemoteUntouched = errors.New("a remote library has no folder to watch, to delete files from, or to forget copies of")
 	// ErrHoldsNothing is a remote library left with neither a list nor a search to hold titles of.
 	ErrHoldsNothing = errors.New("a remote library holds a list's titles, what a search finds, or both")
+	// ErrRemoteRequests is a remote library given somewhere to send requests: what its search finds
+	// is opened, not asked for.
+	ErrRemoteRequests = errors.New("a remote library takes no requests: what its search finds is opened")
 )
 
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_copies,
+	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, request_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_copies,
 		metadata_language, certification_country, artwork_language, title_language, box_sets, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
@@ -181,6 +184,8 @@ type LibraryChange struct {
 	// Discover, where set, replaces the provider whose search finds it titles it does not hold;
 	// "" is none.
 	Discover *domain.FieldSource
+	// Requests, where set, replaces the provider its approved requests are sent to; "" is none.
+	Requests *domain.FieldSource
 }
 
 // SetLibrary renames a library, changes whether it is watched, where each kind's metadata and
@@ -250,6 +255,8 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 		return ErrRemoteUntouched
 	case refusedBy(err, "library_holding"):
 		return ErrHoldsNothing
+	case refusedBy(err, "library_requests"):
+		return ErrRemoteRequests
 	}
 	return err
 }
@@ -364,11 +371,12 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 		}
 	}
 	if change.Discover != nil {
-		var source *domain.FieldSource
-		if *change.Discover != "" {
-			source = change.Discover
+		if err := setColumn(ctx, tx, id, "discover_source", orNull(*change.Discover)); err != nil {
+			return err
 		}
-		if err := setColumn(ctx, tx, id, "discover_source", source); err != nil {
+	}
+	if change.Requests != nil {
+		if err := setColumn(ctx, tx, id, "request_source", orNull(*change.Requests)); err != nil {
 			return err
 		}
 	}
@@ -376,6 +384,14 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 		return setColumn(ctx, tx, id, "subtitle_match", change.SubtitleMatch)
 	}
 	return nil
+}
+
+// orNull is a source to set, nil for none.
+func orNull(s domain.FieldSource) *domain.FieldSource {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func setColumn(ctx context.Context, tx db, id uuid.UUID, column string, v any) error {
@@ -469,7 +485,8 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 	return domain.Library{
 		ID: r.ID, Name: r.Name, Kind: r.Kind, Media: r.Media, Root: deref(r.Root), ListSource: deref(r.ListSource),
 		ListID: deref(r.ListID), StreamSource: deref(r.StreamSource), DiscoverSource: deref(r.DiscoverSource),
-		Sources: sources, RemoteExtras: extras,
+		RequestSource: deref(r.RequestSource),
+		Sources:       sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
 		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion, MissingCopies: r.MissingCopies,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},

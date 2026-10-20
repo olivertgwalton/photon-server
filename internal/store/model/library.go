@@ -16,6 +16,7 @@ type Library struct {
 	ListID         *string
 	StreamSource   *domain.FieldSource
 	DiscoverSource *domain.FieldSource
+	RequestSource  *domain.FieldSource
 	Monitor        domain.Monitor
 	RefreshDays    int16
 	Previews       domain.PreviewLevel

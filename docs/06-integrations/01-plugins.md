@@ -69,6 +69,7 @@ The plugin's row says what it can do. Each one is used in a different place:
 | Subtitles | Subtitles offered beside other sources'. See [Subtitles](../03-library/10-subtitles.md). |
 | Events | Being told what happens on the server, as a [webhook](05-webhooks.md) is. |
 | Intros and credits | Where intros and credits are. See [Intros, credits and previews](../03-library/09-markers-and-previews.md). |
+| Requests | Fetching the titles a library lacks that people ask for, where an admin names it as where a library's requests go. |
 | Pages | Pages of its own, under **Plugins** in the web app's sidebar. |
 
 A page a plugin marks for admins appears only to admins. Its pages open on the plugin's own site,

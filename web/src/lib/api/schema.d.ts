@@ -7949,6 +7949,7 @@ export interface components {
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"];
             root?: string;
             sources: components["schemas"]["KindSources"][];
             streams?: components["schemas"]["FieldSource"];
@@ -7978,6 +7979,7 @@ export interface components {
             previews: components["schemas"]["PreviewLevel"];
             refresh_days: number;
             remote_extras: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"];
             root?: string;
             sources: components["schemas"]["KindSources"][];
             streams?: components["schemas"]["FieldSource"];
@@ -8143,7 +8145,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages" | "request";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -8750,7 +8752,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push" | "send_request";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -8851,6 +8853,7 @@ export interface components {
             previews?: components["schemas"]["PreviewLevel"];
             refresh_days?: number | null;
             remote_extras?: components["schemas"]["ExtraKind"][];
+            requests?: components["schemas"]["FieldSource"] | null;
             sources?: components["schemas"]["KindSourcesChange"][];
             subtitle_languages?: string[];
             subtitle_match?: components["schemas"]["SubtitleMatch"];
@@ -9623,7 +9626,7 @@ export interface components {
             total: number;
         };
         /** @enum {string} */
-        RequestState: "pending" | "approved" | "declined";
+        RequestState: "pending" | "approved" | "declined" | "sent" | "failed";
         Reset: {
             name: string;
         };
