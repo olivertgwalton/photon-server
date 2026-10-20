@@ -83,7 +83,7 @@ type WallPage struct {
 // by id, and how many there are in all; Cards draws them. Ties in the sort are broken by id, so a
 // page is the same whenever it is asked for while the libraries are.
 func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.UUID, int64, error) {
-	where, boxed, args, err := s.wallWhere(ctx, libs, p.Profile, p.Kind, p.Filter, p.BoxSets)
+	with, where, boxed, args, err := s.wallWhere(ctx, libs, p.Profile, p.Kind, p.Filter, p.BoxSets)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -112,8 +112,8 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.
 			` + outer + ` OFFSET @offset LIMIT @limit`
 	}
 	var ids []uuid.UUID
-	total, err := s.counted(ctx, count, args, func(ctx context.Context) (err error) {
-		ids, err = queryColumn[uuid.UUID](ctx, s.pool, page, args)
+	total, err := s.counted(ctx, with+count, args, func(ctx context.Context) (err error) {
+		ids, err = queryColumn[uuid.UUID](ctx, s.pool, with+page, args)
 		return err
 	})
 	return ids, total, err
@@ -196,20 +196,21 @@ func episodeAired(dir string) string {
 // episodes, as a filter narrows them, and the values they take, each title on its own; ErrNotFound
 // for no such library.
 func (s *Store) wallQuery(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter) (string, pgx.NamedArgs, error) {
-	where, _, args, err := s.wallWhere(ctx, libs, profile, wall, f, domain.BoxSetsExpanded)
+	_, where, _, args, err := s.wallWhere(ctx, libs, profile, wall, f, domain.BoxSetsExpanded)
 	return where, args, err
 }
 
 // wallWhere is wallQuery with box sets shown as boxes says, every one; where it says nothing, as
 // each collection's own mode says, else its library's. Where some are shown, boxed is the WHERE,
-// over items, of those box sets, and where's titles leave out those a collapsed one holds. Each
+// over items, of those box sets, where's titles leave out those a collapsed one holds, and with is
+// the WITH both read the box sets' titles from, which leads the statement. Each
 // kind of item a library's wall lists is its own arm, which lets the wall's sort indexes read a
 // page in order.
-func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter, boxes domain.BoxSetMode) (where, boxed string, args pgx.NamedArgs, err error) {
+func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind, f WallFilter, boxes domain.BoxSetMode) (with, where, boxed string, args pgx.NamedArgs, err error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, kind, box_sets, EXISTS (SELECT 1 FROM collections WHERE box_set IN ('collapsed', 'beside'))
 		FROM libraries WHERE id = ANY($1) ORDER BY id`, libs)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	args = pgx.NamedArgs{"libs": libs, "profile": profile}
 	// A wall that names no kind pages titles.
@@ -239,16 +240,16 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 		return nil
 	})
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	if int(found.RowsAffected()) != len(libs) {
-		return "", "", nil, ErrNotFound
+		return "", "", "", nil, ErrNotFound
 	}
 	where = `WHERE items.library_id = ANY(@libs)
 		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + cmp.Or(strings.Join(arms, " OR "), "false") + `))` + filter
 	// A filtered wall answers titles alone, as Jellyfin's does: a box set has no genre or year.
 	if boxes == domain.BoxSetsExpanded || filter != "" || wall == domain.WallEpisodes || !showing && boxes == "" {
-		return where, "", args, nil
+		return "", where, "", args, nil
 	}
 	args["boxed_libs"], args["boxed_kinds"] = boxedLibs, boxedKinds
 	args["collapsed_libs"], args["beside_libs"] = shownLibs[domain.BoxSetsCollapsed], shownLibs[domain.BoxSetsBeside]
@@ -258,8 +259,11 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	}
 	// Seeing a box set's titles, the profile sees it. Each set's titles are counted in one pass:
 	// as an IN of boxedSets, the sets were grouped again for every title in one, most of a page's time.
-	return where + ` AND items.id NOT IN (SELECT b.item_id FROM (SELECT b.item_id, b.mode,
-			count(*) OVER (PARTITION BY b.collection_id) AS shown FROM (` + boxedTitles + `) b) b
+	// They are made once for the statement, though the titles and the sets both read them: made for
+	// each, they were half a small library's page.
+	return `WITH boxed_titles AS MATERIALIZED (` + boxedTitles + `) `,
+		where + ` AND items.id NOT IN (SELECT b.item_id FROM (SELECT b.item_id, b.mode,
+			count(*) OVER (PARTITION BY b.collection_id) AS shown FROM boxed_titles b) b
 			WHERE b.mode = 'collapsed' AND b.shown >= ` + strconv.Itoa(minShown) + `)`,
 		`WHERE items.kind = 'collection' AND items.id IN (` + boxedSets + `)`, args, nil
 }
@@ -279,7 +283,7 @@ const boxedTitles = `WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v
 // boxedSets are the collections a wall shows among its titles: those holding minShown of
 // boxedTitles. A box set is in no library, so it is on each wall where it holds enough of the
 // titles.
-var boxedSets = `SELECT b.collection_id FROM (` + boxedTitles + `) b GROUP BY b.collection_id HAVING count(*) >= ` + strconv.Itoa(minShown)
+var boxedSets = `SELECT b.collection_id FROM boxed_titles b GROUP BY b.collection_id HAVING count(*) >= ` + strconv.Itoa(minShown)
 
 // wallRows are the items a wall pages, as from; the row of them whose letter, genres, studios and
 // certificate a title has, an episode's being its show's; and whether the viewer v sees one.
@@ -302,7 +306,7 @@ type Letter struct {
 // episodes by their shows'. Letters are read unaccented, so "Émile" counts under E where the wall
 // sorts it.
 func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, wall domain.WallKind, f WallFilter) ([]Letter, error) {
-	where, boxed, args, err := s.wallWhere(ctx, []uuid.UUID{lib}, profile, wall, f, "")
+	with, where, boxed, args, err := s.wallWhere(ctx, []uuid.UUID{lib}, profile, wall, f, "")
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +316,7 @@ func (s *Store) Letters(ctx context.Context, lib, profile uuid.UUID, wall domain
 	if boxed != "" {
 		titles += ` UNION ALL SELECT items.sort_title, count(*) FROM items ` + boxed + ` GROUP BY items.sort_title`
 	}
-	out, err := queryStructs[Letter](ctx, s.pool, `SELECT `+firstLetter("t")+` AS letter, sum(t.n)::int AS count
+	out, err := queryStructs[Letter](ctx, s.pool, with+`SELECT `+firstLetter("t")+` AS letter, sum(t.n)::int AS count
 		FROM (`+titles+`) t GROUP BY letter ORDER BY letter`, args)
 	// Titles before A sort first in the wall, whatever the collation makes of "#".
 	if n := slices.IndexFunc(out, func(l Letter) bool { return l.Letter == "#" }); n > 0 {
