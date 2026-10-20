@@ -22,12 +22,12 @@ const words = vocabulary();
 const api = client();
 const id = $props.id();
 
-const states = $derived([
+const states = [
 	...(
 		["pending", "failed", "approved", "sent", "declined", "available"] as const
 	).map((s) => ({ value: s, label: words.request_states[s] })),
 	{ value: "all", label: "Every request" },
-]);
+];
 
 function show(state: string) {
 	goto(withQuery(page.url, { state, offset: undefined }), { replace: true });
