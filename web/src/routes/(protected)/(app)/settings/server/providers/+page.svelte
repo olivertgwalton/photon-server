@@ -94,7 +94,7 @@ async function register(event: SubmitEvent) {
 	description="Where titles are matched and described. A library chooses which of these it asks, and in what order, in its own settings."
 />
 
-<div class="grid items-start gap-4 lg:grid-cols-2">
+<div class="grid max-w-2xl gap-4">
 	{#each data.providers as provider (provider.id)}
 		{@const id = String(provider.id)}
 		<Card.Root>
