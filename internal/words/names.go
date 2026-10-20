@@ -24,6 +24,7 @@ func (w Words) CalendarFilter(v domain.CalendarFilter) string { return label(cal
 func (w Words) DownloadState(v domain.DownloadState) string   { return label(downloadStates, v) }
 func (w Words) StreamKind(v domain.StreamKind) string         { return label(streamKinds, v) }
 func (w Words) JobState(v domain.JobState) string             { return label(jobStates, v) }
+func (w Words) RequestState(v domain.RequestState) string     { return label(requestStates, v) }
 func (w Words) Acceleration(v domain.Acceleration) string     { return label(accelerations, v) }
 func (w Words) JobKind(v domain.JobKind) string               { return label(jobKinds, v) }
 func (w Words) WebhookFormat(v domain.WebhookFormat) string   { return label(webhookFormats, v) }
@@ -131,6 +132,13 @@ var streamKinds = map[domain.StreamKind]string{
 var jobStates = map[domain.JobState]string{
 	domain.JobQueued: "Queued", domain.JobRunning: "Running", domain.JobRerun: "To run again",
 	domain.JobDead: "Gave up",
+}
+
+// requestStates are how an admin reads where a request stands; the one who asked reads sent and
+// failed as approved, what happens after being the admin's.
+var requestStates = map[domain.RequestState]string{
+	domain.RequestPending: "Waiting", domain.RequestApproved: "Approved", domain.RequestDeclined: "Declined",
+	domain.RequestSent: "Sent", domain.RequestFailed: "Failed", domain.RequestAvailable: "Added",
 }
 
 var accelerations = map[domain.Acceleration]string{

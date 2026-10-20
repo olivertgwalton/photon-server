@@ -115,7 +115,7 @@ func TestAShowRenumberedIsMatchedAgainWhole(t *testing.T) {
 		}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Identified(ctx, id); err != nil {
+	if _, err := s.Identified(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	sub, _, err := s.IdentifySubject(ctx, id)
@@ -257,7 +257,7 @@ func TestALibraryRefreshTakesWhatIsMissingAfterNewTitles(t *testing.T) {
 		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Identified(ctx, id); err != nil {
+		if _, err := s.Identified(ctx, id); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -4,7 +4,8 @@ import "uuid"
 
 // RequestState is where a profile's request for a title stands: waiting on an admin, or the
 // manager that keeps the profile, or approved or declined by one. An approved request whose library
-// names where its requests go is sent there, which took it on or refused it.
+// names where its requests go is sent there, which took it on or refused it. Whatever it is, other
+// than declined, it is available once a library holds the title.
 type RequestState string
 
 const (
@@ -14,11 +15,12 @@ const (
 	RequestSent     RequestState = "sent"
 	// RequestFailed is a request where it was sent refused, for an admin to approve again or
 	// decline.
-	RequestFailed RequestState = "failed"
+	RequestFailed    RequestState = "failed"
+	RequestAvailable RequestState = "available"
 )
 
 func RequestStates() []RequestState {
-	return []RequestState{RequestPending, RequestApproved, RequestDeclined, RequestSent, RequestFailed}
+	return []RequestState{RequestPending, RequestApproved, RequestDeclined, RequestSent, RequestFailed, RequestAvailable}
 }
 
 // Wanted is a title a library lacks, as a provider that fetches titles is asked for it: by every id

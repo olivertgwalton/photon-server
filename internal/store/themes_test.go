@@ -49,7 +49,7 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 		return page.Themes
 	}
 
-	if err := s.Identified(ctx, show); err != nil {
+	if _, err := s.Identified(ctx, show); err != nil {
 		t.Fatal(err)
 	}
 	if n := asked(); n != 0 {
@@ -75,7 +75,7 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 	if f, err := s.Theme(ctx, fetched); err != nil || f != (ThemeFile{Source: domain.ThemeFromThemerr}) {
 		t.Errorf("fetched theme = %+v, %v; want it kept in the cache", f, err)
 	}
-	if err := s.Identified(ctx, show); err != nil {
+	if _, err := s.Identified(ctx, show); err != nil {
 		t.Fatal(err)
 	}
 	if n := asked(); n != 1 {
@@ -117,7 +117,7 @@ func TestAThemeComesFromItsFolderElseThemerrDB(t *testing.T) {
 		t.Errorf("own theme = %+v, %v; want The Wire/theme.mp3 under the library", f, err)
 	}
 	asked()
-	if err := s.Identified(ctx, show); err != nil {
+	if _, err := s.Identified(ctx, show); err != nil {
 		t.Fatal(err)
 	}
 	_, ok, err := s.ThemeSubject(ctx, show)

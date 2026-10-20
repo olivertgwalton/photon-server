@@ -50,8 +50,15 @@ func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Ca
 				rate(ctx, st, r, id, sub, log)
 			}
 		}
-		if err := st.Identified(ctx, id); err != nil {
+		told, err := st.Identified(ctx, id)
+		if err != nil {
 			return err
+		}
+		// Those who asked for the title are told of it as a scan tells of titles added.
+		for _, t := range told {
+			raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
+				Change: domain.NotificationsAdded, IDs: t.IDs,
+			}})
 		}
 		fetch(ctx, st, pictures, id, log)
 		raise(ctx, domain.Event{Kind: domain.EventTitleUpdated, Item: id})
