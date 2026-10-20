@@ -140,10 +140,12 @@ const { offset, total } = $derived(data.requests);
 <Pager {offset} {total} />
 
 <AlertDialog.Root
-	open={!!declining}
-	onOpenChange={(open) => {
-		if (!open) declining = undefined;
-	}}
+	bind:open={
+		() => !!declining,
+		(open) => {
+			if (!open) declining = undefined;
+		}
+	}
 >
 	<AlertDialog.Content>
 		<AlertDialog.Header>
