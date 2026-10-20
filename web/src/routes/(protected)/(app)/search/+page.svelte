@@ -3,7 +3,7 @@ import { withQuery } from "#lib/address.js";
 import Choice from "#lib/components/Choice.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import Rail from "#lib/components/Rail.svelte";
-import RequestableRail from "#lib/components/RequestableRail.svelte";
+import TitleCard from "#lib/components/TitleCard.svelte";
 import { byKind } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
@@ -82,6 +82,15 @@ function scope(library: string) {
 	{/if}
 
 	{#if data.results?.requestable.items.length}
-		<RequestableRail cards={data.results.requestable.items} />
+		<!-- Titles the server lacks, which its owner lets people ask for: each
+			opens as a title's page does, with a way to ask for it in Play's place. -->
+		<Rail title="Not in library" items={data.results.requestable.items}>
+			{#snippet card(
+				c: (typeof data.results.requestable.items)[number],
+				sizes: string,
+			)}
+				<TitleCard card={c} {sizes} menu="none" />
+			{/snippet}
+		</Rail>
 	{/if}
 </div>

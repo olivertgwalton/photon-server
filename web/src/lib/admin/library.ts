@@ -102,7 +102,7 @@ export function libraryChange(
 	// A library of files says who may ask for what, and where it is sent.
 	for (const field of ["discover", "requests"] as const) {
 		const given = form.get(field);
-		if (given !== null && current.media === "folder") {
+		if (given !== null) {
 			const was = current[field] ?? "";
 			if (String(given) !== was) change[field] = String(given);
 		}

@@ -75,9 +75,12 @@ let kind = $derived<Schemas["LibraryKind"]>(library?.kind ?? "movies");
 // titles of a list, as a remote library plays; fixed once it is made.
 let media = $derived<Schemas["LibraryMedia"]>(library?.media ?? "folder");
 const remote = $derived(media === "remote");
-const able = (c: Schemas["Capability"]) =>
+const able = (
+	c: Schemas["Capability"],
+	also: (p: Schemas["MetadataProvider"]) => boolean = () => true,
+) =>
 	providers
-		.filter((p) => p.capabilities.includes(c))
+		.filter((p) => p.capabilities.includes(c) && also(p))
 		.map((p) => ({ value: String(p.id), label: p.name }));
 // A remote library holds a list's titles, what a search finds, or both: those
 // a provider files under ids of its own, which a title found is kept by.
@@ -98,13 +101,7 @@ const holds = $derived(
 );
 const requesters = $derived([
 	{ value: "", label: "Nobody: you add them yourself" },
-	...providers
-		.filter(
-			(p) =>
-				p.capabilities.includes("request") &&
-				holds.every((k) => p.kinds.includes(k)),
-		)
-		.map((p) => ({ value: String(p.id), label: p.name })),
+	...able("request", (p) => holds.every((k) => p.kinds.includes(k))),
 ]);
 let listSource = $state("");
 const nameOf = (id: unknown) =>
