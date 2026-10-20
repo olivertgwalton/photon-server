@@ -309,12 +309,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		a.internal(w, r, err)
 		return
 	}
-	cards, err := a.svc.Catalogue.Cards(r.Context(), p.Profile, titles)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	a.writeList(w, r, cards, int(total), l.start, l)
+	a.writeTitles(w, r, titles, int(total), l.start, l)
 }
 
 // children answers what is in a collection, a show or a season: a collection's titles; a show's
