@@ -165,10 +165,13 @@ func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID
 }
 
 // open starts a play session's HLS as its TranscodingUrl says, once, on this node; done is whether
-// it answered the request itself, refusing it.
+// it answered the request itself, refusing it, or its app went while another fetch started it.
 func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UUID) (done bool) {
-	a.opening.Lock()
-	defer a.opening.Unlock()
+	started, ok := a.starting(r.Context(), session)
+	if !ok {
+		return true
+	}
+	defer started()
 	if a.svc.HLS.Has(session) {
 		return false
 	}
@@ -243,6 +246,31 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 	}
 	a.internal(w, r, err)
 	return true
+}
+
+// starting waits while another request starts session, then marks it started by this one until
+// started is called; ok is false if ctx ends first.
+func (a *API) starting(ctx context.Context, session uuid.UUID) (started func(), ok bool) {
+	for {
+		a.openingMu.Lock()
+		other, busy := a.opening[session]
+		if !busy {
+			a.opening[session] = make(chan struct{})
+			a.openingMu.Unlock()
+			return func() {
+				a.openingMu.Lock()
+				close(a.opening[session])
+				delete(a.opening, session)
+				a.openingMu.Unlock()
+			}, true
+		}
+		a.openingMu.Unlock()
+		select {
+		case <-other:
+		case <-ctx.Done():
+			return nil, false
+		}
+	}
 }
 
 // fromOwner sends a request for a play session another node runs to the signed address that node's

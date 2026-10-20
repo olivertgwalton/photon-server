@@ -122,17 +122,19 @@ type API struct {
 	// routes are the paths of the routes by segment, a wildcard as "", for Jellyfin's routes are
 	// matched whatever their case and ServeMux's are not.
 	routes [][]string
-	// opening is held while a play session's HLS is started, so two fetches of its playlist start
-	// it once.
-	opening sync.Mutex
+	// opening are the play sessions whose HLS this node is starting, each closed when its start
+	// ends, so two fetches of its playlist start it once and another session's need not wait.
+	openingMu sync.Mutex
+	opening   map[uuid.UUID]chan struct{}
 }
 
 // New serves Jellyfin's API as the server whose id is server and that name says is called.
 func New(logger *slog.Logger, server string, name func() string, svc Services) *API {
 	a := &API{
 		logger: logger, svc: svc, name: name,
-		id:  strings.ReplaceAll(server, "-", ""),
-		mux: http.NewServeMux(),
+		id:      strings.ReplaceAll(server, "-", ""),
+		mux:     http.NewServeMux(),
+		opening: map[uuid.UUID]chan struct{}{},
 	}
 	if svc.Web != nil {
 		a.web = http.StripPrefix("/web", http.FileServerFS(svc.Web))
