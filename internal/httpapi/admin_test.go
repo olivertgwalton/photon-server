@@ -363,25 +363,34 @@ func TestALibraryAsksInALanguageAndCountryOfItsOwn(t *testing.T) {
 type fetcher struct{}
 
 func (fetcher) Info() provider.Info {
-	return provider.Info{ID: domain.PluginSource("riven"), Name: "riven"}
+	return provider.Info{ID: domain.PluginSource("riven"), Name: "riven", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow}}
+}
+
+// filmFetcher fetches films alone, as Radarr does.
+type filmFetcher struct{ fetcher }
+
+func (filmFetcher) Info() provider.Info {
+	return provider.Info{ID: domain.PluginSource("films"), Name: "Films", Kinds: []domain.ItemKind{domain.ItemMovie}}
 }
 
 func (fetcher) Request(context.Context, domain.Wanted) error { return nil }
 
-// An admin names where a library's approved requests go: a provider that fetches titles, and no
-// other; none leaves them for an admin to fetch by hand.
+// An admin names where a library's approved requests go: a provider that fetches titles of every
+// kind the library holds, and no other; none leaves them for an admin to fetch by hand.
 func TestAnAdminNamesWhereALibrarysRequestsGo(t *testing.T) {
-	libs := &fakeLibraries{libs: []domain.Library{{ID: films, Name: "Films", Kind: domain.LibraryMovies}}}
+	shows := uuid.NewV7()
+	libs := &fakeLibraries{libs: []domain.Library{{ID: films, Name: "Films", Kind: domain.LibraryMovies}, {ID: shows, Name: "Shows", Kind: domain.LibraryShows}}}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Libraries: libs, Events: &fakeEvents{}, Providers: provider.NewRegistry(nil, addon{}, fetcher{}),
+		Auth: fakeAuth{}, Libraries: libs, Events: &fakeEvents{}, Providers: provider.NewRegistry(nil, addon{}, fetcher{}, filmFetcher{}),
 	})
-	set := func(body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/libraries/"+films.String(), strings.NewReader(body))
+	setOn := func(lib uuid.UUID, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/libraries/"+lib.String(), strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)
 		return rec
 	}
+	set := func(body string) *httptest.ResponseRecorder { return setOn(films, body) }
 	var got adminLibraryJSON
 	rec := set(`{"requests": "plugin:riven"}`)
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK || got.Requests != domain.PluginSource("riven") {
@@ -392,5 +401,11 @@ func TestAnAdminNamesWhereALibrarysRequestsGo(t *testing.T) {
 	}
 	if rec := set(`{"requests": ""}`); rec.Code != http.StatusOK || libs.libs[0].RequestSource != "" {
 		t.Errorf("sent nowhere: %d, %q", rec.Code, libs.libs[0].RequestSource)
+	}
+	if rec := set(`{"requests": "plugin:films"}`); rec.Code != http.StatusOK {
+		t.Errorf("films sent to a fetcher of films: %d %s", rec.Code, rec.Body)
+	}
+	if rec := setOn(shows, `{"requests": "plugin:films"}`); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "fetches no shows") {
+		t.Errorf("shows sent to a fetcher of films: %d %s, want 400", rec.Code, rec.Body)
 	}
 }

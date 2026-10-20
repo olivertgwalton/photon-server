@@ -327,6 +327,21 @@ func (a *API) discoverRefused(ctx context.Context, source domain.FieldSource) st
 	return ""
 }
 
+// fetcherRefused is why a provider cannot fetch a library's requests, or "" where it can: it
+// fetches titles, of every kind the library holds.
+func (a *API) fetcherRefused(ctx context.Context, source domain.FieldSource, kind domain.LibraryKind) string {
+	p, ok, err := a.svc.Providers.Get(ctx, source)
+	if err != nil || !ok || !answers[provider.Requester](p, domain.CapabilityRequest) {
+		return string(source) + " fetches no titles"
+	}
+	for _, k := range kind.Titles() {
+		if !slices.Contains(p.Info().Kinds, k) {
+			return string(source) + " fetches no " + string(k) + "s"
+		}
+	}
+	return ""
+}
+
 // answers reports whether p has the capability c, implemented by T.
 func answers[T provider.Provider](p provider.Provider, c domain.Capability) bool {
 	_, ok := provider.As[T](p, c)
@@ -447,8 +462,8 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	change.Discover = req.Discover
 	if to := req.Requests; to != nil && *to != "" {
-		if p, ok, err := a.svc.Providers.Get(r.Context(), *to); err != nil || !ok || !answers[provider.Requester](p, domain.CapabilityRequest) {
-			writeProblem(w, a.logger, codeInvalidBody, string(*to)+" fetches no titles")
+		if why := a.fetcherRefused(r.Context(), *to, lib.Kind); why != "" {
+			writeProblem(w, a.logger, codeInvalidBody, why)
 			return
 		}
 	}

@@ -111,10 +111,12 @@ const (
 	// SourceRiven fetches the titles a library lacks that its profiles ask for, and says nothing
 	// of titles.
 	SourceRiven FieldSource = "riven"
+	// SourceRadarr fetches the films a library lacks that its profiles ask for.
+	SourceRadarr FieldSource = "radarr"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files

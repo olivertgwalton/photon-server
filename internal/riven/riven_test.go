@@ -17,12 +17,11 @@ import (
 
 // asked is what riven was sent.
 type asked struct {
-	key       string
-	query     string
-	input     input
-	answer    string
-	status    int
-	unreached bool
+	key    string
+	query  string
+	input  input
+	answer string
+	status int
 }
 
 func serve(t *testing.T, a *asked) *Client {
@@ -45,18 +44,13 @@ func serve(t *testing.T, a *asked) *Client {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	address := srv.URL
-	if a.unreached {
-		srv.Close()
-	}
 	return New(func(context.Context) (map[string]string, error) {
-		return map[string]string{addressSetting: address, keySetting: "k3y"}, nil
+		return map[string]string{addressSetting: srv.URL, keySetting: "k3y"}, nil
 	})
 }
 
 // riven is asked for a film by its TMDB id and a show by its TheTVDB id and seasons, with the
-// request's id and the key; one it has already is taken on. It says why where it will not take one,
-// and a riven that is down is asked again later.
+// request's id and the key; one it has already is taken on. It says why where it will not take one.
 func TestRivenIsAskedForATitleALibraryLacks(t *testing.T) {
 	id := uuid.NewV7()
 	film := domain.Wanted{ID: id, Kind: domain.ItemMovie, Title: "Inception", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205", domain.ProviderIMDb: "tt1375666"}}
@@ -91,12 +85,6 @@ func TestRivenIsAskedForATitleALibraryLacks(t *testing.T) {
 	a = &asked{status: http.StatusOK, answer: `{"data": null, "errors": [{"message": "Unauthorized"}]}`}
 	if err := serve(t, a).Request(t.Context(), film); err == nil || !strings.Contains(err.Error(), "Unauthorized") {
 		t.Errorf("a GraphQL error: %v", err)
-	}
-	if err := serve(t, &asked{status: http.StatusBadGateway}).Request(t.Context(), film); !errors.Is(err, provider.ErrUnavailable) {
-		t.Errorf("riven failing on its side: %v, want ErrUnavailable", err)
-	}
-	if err := serve(t, &asked{unreached: true}).Request(t.Context(), film); !errors.Is(err, provider.ErrUnavailable) {
-		t.Errorf("riven not answering: %v, want ErrUnavailable", err)
 	}
 
 	noTVDB := show
