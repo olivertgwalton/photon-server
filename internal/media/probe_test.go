@@ -32,6 +32,25 @@ func probeFixture(t *testing.T, name string) domain.Facts {
 
 var tagString = cmp.Transformer("tag", func(t language.Tag) string { return t.String() })
 
+func FuzzParseProbe(f *testing.F) {
+	names, err := filepath.Glob(filepath.Join("testdata", "*.json"))
+	if err != nil || len(names) == 0 {
+		f.Fatal(names, err)
+	}
+	for _, name := range names {
+		out, err := os.ReadFile(name)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(out)
+	}
+	f.Fuzz(func(t *testing.T, out []byte) {
+		if _, err := parseProbe(out); err != nil {
+			t.Skip(err)
+		}
+	})
+}
+
 func TestProbeHDR10Matroska(t *testing.T) {
 	got := probeFixture(t, "hdr10.json")
 	want := domain.Facts{

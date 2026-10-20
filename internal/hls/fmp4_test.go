@@ -71,3 +71,26 @@ func TestFragmentsAreReadWithWhenTheyAreShown(t *testing.T) {
 		t.Errorf("a file cut short ended with %v, want io.ErrUnexpectedEOF", err)
 	}
 }
+
+func FuzzReadInit(f *testing.F) {
+	for _, name := range []string{"fragments.mp4", "dovi7.mp4"} {
+		data, err := os.ReadFile("testdata/" + name)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(data)
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		s, _, err := readInit(bytes.NewReader(data))
+		if err != nil {
+			return
+		}
+		s.rewrite = func(b []byte) ([]byte, error) { return b, nil }
+		for err == nil {
+			var frag fragment
+			if frag, err = s.next(); err == nil {
+				err = s.write(io.Discard, frag)
+			}
+		}
+	})
+}

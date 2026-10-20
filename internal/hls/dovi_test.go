@@ -140,3 +140,49 @@ func nalUnits(t *testing.T, sample []byte) [][]byte {
 	}
 	return out
 }
+
+// FuzzReadTrun is seeded with every trun in the fMP4 testdata. A trun gives every sample's size
+// or none's.
+func FuzzReadTrun(f *testing.F) {
+	for _, name := range []string{"fragments.mp4", "dovi7.mp4"} {
+		data, err := os.ReadFile("testdata/" + name)
+		if err != nil {
+			f.Fatal(err)
+		}
+		s, _, err := readInit(bytes.NewReader(data))
+		if err != nil {
+			f.Fatal(err)
+		}
+		for {
+			frag, err := s.next()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err == nil {
+				_, err = io.CopyN(io.Discard, s.r, frag.body)
+			}
+			if err == nil {
+				err = children(frag.head[8:len(frag.head)-8], func(typ string, traf []byte) error {
+					if typ != "traf" {
+						return nil
+					}
+					return children(traf, func(typ string, b []byte) error {
+						if typ == "trun" {
+							f.Add(b, -1)
+						}
+						return nil
+					})
+				})
+			}
+			if err != nil {
+				f.Fatal(err)
+			}
+		}
+	}
+	f.Fuzz(func(t *testing.T, b []byte, size int) {
+		r, err := readTrun(b, size)
+		if err == nil && r.sized != nil && len(r.sized) != len(r.sizes) {
+			t.Fatalf("%d sample sizes, %d of them given", len(r.sizes), len(r.sized))
+		}
+	})
+}
