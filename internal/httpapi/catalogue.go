@@ -281,11 +281,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			wg.Go(func() {
 				var found []store.Discovery
 				found, requestableErr = a.svc.Discover.Find(ctx, query.Profile, domain.MediaFolder, query.Text, query.Kinds)
-				cards := make([]store.Card, len(found))
-				for i, d := range found {
-					cards[i] = d.Card()
-				}
-				out.Requestable.Items = cardsJSON(cards)
+				out.Requestable.Items = nonNil(each(found, func(d store.Discovery) cardJSON { return cardOf(d.Card()) }))
 			})
 		}
 	}
