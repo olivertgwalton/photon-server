@@ -75,12 +75,19 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	if got := titles(all); err != nil || !slices.Equal(got, []string{"Alien Collection", "Weekend"}) {
 		t.Errorf("the Collections view = %q, %v; want TMDB's box set once, and the admin's", got, err)
 	}
+	counts, err := s.LibraryCounts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for lib, want := range map[uuid.UUID][]string{
 		films.ID: {"Alien Collection", "Weekend"}, uhd.ID: {}, shows.ID: {"Weekend"},
 	} {
 		listed, _, err := s.Collections(ctx, lib, uuid.UUID{}, 0, 10)
 		if got := titles(listed); err != nil || !slices.Equal(got, want) {
 			t.Errorf("library %v lists %q, %v; want %q", lib, got, err, want)
+		}
+		if n := counts[lib].Collections; n != len(want) {
+			t.Errorf("library %v counts %d collections, lists %d", lib, n, len(want))
 		}
 	}
 	// A smart collection reads the walls of the libraries it names, together.

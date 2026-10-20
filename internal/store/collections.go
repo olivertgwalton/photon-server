@@ -125,8 +125,7 @@ func hasLibraries(ctx context.Context, q db, libs []uuid.UUID) error {
 	return nil
 }
 
-// shownCollections are the collections worth showing: an admin's, and a provider's once
-// it holds minShown titles.
+// shownCollections are those worth showing: an admin's, and a provider's holding minShown titles.
 var shownCollections = `SELECT c.item_id FROM collections c
 	WHERE c.origin IN ` + madeHere + ` OR (SELECT count(*) FROM collection_members m WHERE m.collection_id = c.item_id) >= ` + strconv.Itoa(minShown)
 
@@ -134,14 +133,15 @@ var shownCollections = `SELECT c.item_id FROM collections c
 // the count of them cannot disagree.
 var listedCollection = `items.kind = 'collection' AND items.id IN (` + shownCollections + `) AND sees(v, items)`
 
-// holdsTitleOf is whether the collection items holds enough titles of the library lib, an SQL
-// value: a collection, in no library, is listed in each library whose titles it holds, as Jellyfin
-// lists a library's box sets; an admin's for one of them, a provider's for minShown, as its wall.
+// listedFrom is how many of a library's titles the collection c holds to be listed there, as its
+// wall: a collection, in no library, is listed in each library holding as many, as Jellyfin's are.
+var listedFrom = `CASE WHEN c.origin IN ` + madeHere + ` THEN 1 ELSE ` + strconv.Itoa(minShown) + ` END`
+
+// holdsTitleOf is whether the collection items holds listedFrom titles of the library lib.
 func holdsTitleOf(lib string) string {
-	return `(SELECT count(*) FROM collection_members held JOIN items title ON title.id = held.item_id
-		WHERE held.collection_id = items.id AND title.library_id = ` + lib + `)
-		>= (SELECT CASE WHEN c.origin IN ` + madeHere + ` THEN 1 ELSE ` + strconv.Itoa(minShown) + ` END
-			FROM collections c WHERE c.item_id = items.id)`
+	return `(SELECT count(*) FROM (SELECT FROM collection_members held JOIN items title ON title.id = held.item_id
+			WHERE held.collection_id = items.id AND title.library_id = ` + lib + ` LIMIT ` + strconv.Itoa(minShown) + `) held)
+		>= (SELECT ` + listedFrom + ` FROM collections c WHERE c.item_id = items.id)`
 }
 
 // Collections answers a page of the collections holding a library's titles, by title, and how many
