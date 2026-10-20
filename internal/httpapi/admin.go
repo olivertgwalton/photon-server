@@ -64,7 +64,7 @@ func keeper(r *http.Request) *uuid.UUID {
 type libraryAdmin interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
 	Library(ctx context.Context, id uuid.UUID) (domain.Library, error)
-	AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error)
+	AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string, discover domain.FieldSource) (domain.Library, error)
 	AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error)
 	SetLibrary(ctx context.Context, id uuid.UUID, change store.LibraryChange) error
 	RemoveLibrary(ctx context.Context, id uuid.UUID) error
@@ -268,11 +268,7 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		lib, err = a.svc.Libraries.AddLibrary(r.Context(), req.Name, req.Kind, root)
-		if err == nil && req.Discover != "" {
-			err = a.svc.Libraries.SetLibrary(r.Context(), lib.ID, store.LibraryChange{Discover: &req.Discover})
-			lib.DiscoverSource = req.Discover
-		}
+		lib, err = a.svc.Libraries.AddLibrary(r.Context(), req.Name, req.Kind, root, req.Discover)
 	}
 	if a.answered(w, r, err) {
 		return

@@ -29,7 +29,7 @@ import (
 // it may play.
 func TestAnAppDownloadsAFilm(t *testing.T) {
 	st, ada, heat, copyID := aFilm(t)
-	tv, err := st.AddLibrary(t.Context(), "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(t.Context(), "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ photon_sent_bytes_total{delivery="segment"} 0
 // unasked is one file. A list says so where an app asks for it, as Jellyfin's does.
 func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
-	long, err := st.AddLibrary(t.Context(), "Long", domain.LibraryMovies, t.TempDir())
+	long, err := st.AddLibrary(t.Context(), "Long", domain.LibraryMovies, t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "Heat (1995).strm"), []byte(media.URL+"/heat\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

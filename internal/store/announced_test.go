@@ -14,11 +14,11 @@ import (
 func TestAnAnnouncedEpisodeIsFoundByTheIDTheCalendarGives(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.AddLibrary(ctx, "Other", domain.LibraryShows, "/srv/other")
+	other, err := s.AddLibrary(ctx, "Other", domain.LibraryShows, "/srv/other", "")
 	if err != nil {
 		t.Fatal(err)
 	}

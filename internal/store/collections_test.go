@@ -17,7 +17,7 @@ import (
 func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,11 +218,11 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +300,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +393,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,11 +469,11 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +585,7 @@ func TestAnAdminPutsSeasonsAndEpisodesInACollection(t *testing.T) {
 func TestACollectionSaysHowAWallShowsIt(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}

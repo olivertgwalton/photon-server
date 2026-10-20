@@ -15,7 +15,7 @@ import (
 func TestAnEpisodeWearsItsShowsCertificate(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}

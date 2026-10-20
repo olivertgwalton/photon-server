@@ -92,7 +92,7 @@ func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
 	root := t.TempDir()
-	lib, err := st.AddLibrary(t.Context(), "Library", kind, root)
+	lib, err := st.AddLibrary(t.Context(), "Library", kind, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,7 +602,7 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(other, "Heat", "Heat.mkv"), body, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	lib, err := f.scanner.store.AddLibrary(t.Context(), "Second", domain.LibraryMovies, other)
+	lib, err := f.scanner.store.AddLibrary(t.Context(), "Second", domain.LibraryMovies, other, "")
 	if err != nil {
 		t.Fatal(err)
 	}

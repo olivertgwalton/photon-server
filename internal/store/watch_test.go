@@ -27,7 +27,7 @@ func saveProgress(ctx context.Context, s *Store, profile, item uuid.UUID, positi
 func TestWhatAProfileHasWatched(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 func TestTheNewestWatchWins(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,11 +269,11 @@ func TestTheNewestWatchWins(t *testing.T) {
 func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	kids, err := s.AddLibrary(ctx, "Kids", domain.LibraryShows, "/srv/kids/shows")
+	kids, err := s.AddLibrary(ctx, "Kids", domain.LibraryShows, "/srv/kids/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 	}
 	add := func(name string, source domain.FieldSource, ids map[domain.Provider]string) (uuid.UUID, uuid.UUID, uuid.UUID) {
 		t.Helper()
-		lib, err := s.AddLibrary(ctx, name, domain.LibraryShows, "/srv/"+name)
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryShows, "/srv/"+name, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -480,7 +480,7 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 	}
 	add := func(name string, ids map[domain.Provider]string) (uuid.UUID, uuid.UUID) {
 		t.Helper()
-		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -525,7 +525,7 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 func TestAShowsEpisodesLeftFollowItsScans(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

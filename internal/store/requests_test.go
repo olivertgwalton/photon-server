@@ -17,7 +17,6 @@ func askable(t *testing.T) (s *Store, films domain.Library, film, show Discovery
 	t.Helper()
 	s = migrated(t)
 	ctx := t.Context()
-	tmdb := domain.SourceTMDB
 	var shows domain.Library
 	var err error
 	for _, lib := range []struct {
@@ -25,10 +24,7 @@ func askable(t *testing.T) (s *Store, films domain.Library, film, show Discovery
 		name string
 		kind domain.LibraryKind
 	}{{&films, "Films", domain.LibraryMovies}, {&shows, "Shows", domain.LibraryShows}} {
-		if *lib.into, err = s.AddLibrary(ctx, lib.name, lib.kind, "/srv/"+lib.name); err != nil {
-			t.Fatal(err)
-		}
-		if err := s.SetLibrary(ctx, lib.into.ID, LibraryChange{Discover: &tmdb}); err != nil {
+		if *lib.into, err = s.AddLibrary(ctx, lib.name, lib.kind, "/srv/"+lib.name, domain.SourceTMDB); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -33,7 +33,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	films := map[string]uuid.UUID{}
 	library := func(name string, titles ...string) domain.Library {
 		t.Helper()
-		lib, err := st.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		lib, err := st.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name, "")
 		if err != nil {
 			t.Fatal(err)
 		}

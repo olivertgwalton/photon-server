@@ -19,18 +19,18 @@ import (
 
 func TestLibraries(t *testing.T) {
 	s := migrated(t)
-	films, err := s.AddLibrary(t.Context(), "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(t.Context(), "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if films.ID == (uuid.UUID{}) {
 		t.Error("the new library has no id")
 	}
-	if _, err := s.AddLibrary(t.Context(), "Television", domain.LibraryShows, "/srv/tv"); err != nil {
+	if _, err := s.AddLibrary(t.Context(), "Television", domain.LibraryShows, "/srv/tv", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, dup := range [][2]string{{"Films", "/srv/other"}, {"Other", "/srv/films"}} {
-		if _, err := s.AddLibrary(t.Context(), dup[0], domain.LibraryMovies, dup[1]); !errors.Is(err, ErrLibraryExists) {
+		if _, err := s.AddLibrary(t.Context(), dup[0], domain.LibraryMovies, dup[1], ""); !errors.Is(err, ErrLibraryExists) {
 			t.Errorf("adding %q at %q: err = %v, want %v", dup[0], dup[1], err, ErrLibraryExists)
 		}
 	}
@@ -87,7 +87,7 @@ func TestARemoteLibraryHasNoFolder(t *testing.T) {
 func TestForgettingALibrarysCopiesOnNoDisk(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +124,11 @@ func TestForgettingALibrarysCopiesOnNoDisk(t *testing.T) {
 func TestALibraryIsRenamedAndRemoved(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddLibrary(ctx, "Television", domain.LibraryShows, "/srv/tv"); err != nil {
+	if _, err := s.AddLibrary(ctx, "Television", domain.LibraryShows, "/srv/tv", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Name: "Television"}); !errors.Is(err, ErrLibraryExists) {
@@ -168,7 +168,7 @@ func metadataFrom(lib domain.LibraryKind, sources ...domain.FieldSource) []domai
 func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestALibrarysLocaleDescribesItsTitlesAgain(t *testing.T) {
 func TestAFilmAsksInALocaleOfItsOwnOverItsLibrarys(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme")
+	lib, err := s.AddLibrary(ctx, "Filme", domain.LibraryMovies, "/srv/filme", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestAProfileSeesItsLibrariesInItsOwnOrder(t *testing.T) {
 	ctx := t.Context()
 	var libs [3]domain.Library
 	for i, name := range []string{"Films", "Television", "Archive"} {
-		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name)
+		lib, err := s.AddLibrary(ctx, name, domain.LibraryMovies, "/srv/"+name, "")
 		if err != nil {
 			t.Fatal(err)
 		}

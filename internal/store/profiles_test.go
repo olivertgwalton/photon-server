@@ -127,11 +127,11 @@ func TestAProfileKeepsItsPicture(t *testing.T) {
 func TestAManagerKeepsTheProfilesItAdds(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other")
+	other, err := s.AddLibrary(ctx, "Other", domain.LibraryMovies, "/srv/other", "")
 	if err != nil {
 		t.Fatal(err)
 	}

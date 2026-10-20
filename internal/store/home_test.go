@@ -17,11 +17,11 @@ import (
 func TestHome(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,11 +153,11 @@ func TestHome(t *testing.T) {
 func TestNextEpisode(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestNextEpisode(t *testing.T) {
 func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,11 +355,11 @@ func everyRow(ctx context.Context, t *testing.T, s *Store, profile uuid.UUID) ma
 func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uuid.UUID) {
 	t.Helper()
 	ctx := t.Context()
-	filmLib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	filmLib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -725,7 +725,7 @@ func TestLibraryRow(t *testing.T) {
 func TestPlayFollowsTheEpisodesPage(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

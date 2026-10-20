@@ -52,7 +52,7 @@ func TestJobLoadsSayHowLongTheQueueHasWaited(t *testing.T) {
 
 func TestItemCountsCountTitlesByKind(t *testing.T) {
 	s := migrated(t)
-	films, err := s.AddLibrary(t.Context(), "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(t.Context(), "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,11 +73,11 @@ func TestItemCountsCountTitlesByKind(t *testing.T) {
 func TestItemBytesCountSharedBytesOnce(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ import (
 func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
 func TestAMatchKeepsItsProvidersPictures(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestAMatchKeepsItsProvidersPictures(t *testing.T) {
 func TestAVideoOnYouTubeIsPicturedByItsStill(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}

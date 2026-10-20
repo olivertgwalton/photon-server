@@ -28,7 +28,7 @@ func (s *Store) wallCards(ctx context.Context, libs []uuid.UUID, p WallPage) ([]
 func TestWallPagesEveryTitleOnce(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 func TestTitlesSortTheirNumbersAsNumbers(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,11 +214,11 @@ func TestCardsAreTheTitlesAskedForByID(t *testing.T) {
 func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	lib, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,11 +405,11 @@ func TestAMixedLibrarysWallHoldsFilmsAndShows(t *testing.T) {
 func TestAWallCollapsesABoxSet(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	uhd, err := s.AddLibrary(ctx, "Films in 4K", domain.LibraryMovies, "/srv/4k")
+	uhd, err := s.AddLibrary(ctx, "Films in 4K", domain.LibraryMovies, "/srv/4k", "")
 	if err != nil {
 		t.Fatal(err)
 	}

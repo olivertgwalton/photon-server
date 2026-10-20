@@ -20,15 +20,15 @@ import (
 func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	uhd, err := s.AddLibrary(ctx, "Films in 4K", domain.LibraryMovies, "/srv/4k")
+	uhd, err := s.AddLibrary(ctx, "Films in 4K", domain.LibraryMovies, "/srv/4k", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows")
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 func TestFilmsMatchedAtOnceMakeOneBoxSet(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}

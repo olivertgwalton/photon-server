@@ -118,7 +118,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -138,7 +138,7 @@ func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 	hour := func(rel string) []Copy {
 		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{heat}, nil); err != nil {
 		t.Fatal(err)
 	}
-	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}

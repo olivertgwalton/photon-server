@@ -81,11 +81,11 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	}
 	t.Cleanup(st.Close)
 
-	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv")
+	tv, err := st.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(st.Close)
-	lib, err := st.AddLibrary(ctx, "Everything", domain.LibraryMixed, "/srv/all")
+	lib, err := st.AddLibrary(ctx, "Everything", domain.LibraryMixed, "/srv/all", "")
 	if err != nil {
 		t.Fatal(err)
 	}

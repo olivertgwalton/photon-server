@@ -51,11 +51,11 @@ func (f *fakeLibraries) Library(_ context.Context, id uuid.UUID) (domain.Library
 	return domain.Library{}, store.ErrNotFound
 }
 
-func (f *fakeLibraries) AddLibrary(_ context.Context, name string, kind domain.LibraryKind, root string) (domain.Library, error) {
+func (f *fakeLibraries) AddLibrary(_ context.Context, name string, kind domain.LibraryKind, root string, discover domain.FieldSource) (domain.Library, error) {
 	if slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.Name == name || l.Root == root }) {
 		return domain.Library{}, store.ErrLibraryExists
 	}
-	l := domain.Library{ID: uuid.NewV7(), Name: name, Kind: kind, Root: root, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorRealtime}
+	l := domain.Library{ID: uuid.NewV7(), Name: name, Kind: kind, Root: root, DiscoverSource: discover, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorRealtime}
 	f.libs = append(f.libs, l)
 	return l, nil
 }

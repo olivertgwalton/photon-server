@@ -35,7 +35,7 @@ func heat(t *testing.T) (*store.Store, domain.Library, uuid.UUID) {
 	if err := os.WriteFile(filepath.Join(root, "H", "heat.mkv"), make([]byte, 128<<10), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root)
+	lib, err := st.AddLibrary(ctx, "Films", domain.LibraryMovies, root, "")
 	if err != nil {
 		t.Fatal(err)
 	}

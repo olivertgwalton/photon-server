@@ -20,7 +20,7 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestAFindKeepsItsFullPoster(t *testing.T) {
 func TestALibraryOfFilesSearchesForTitlesToAskFor(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films")
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
