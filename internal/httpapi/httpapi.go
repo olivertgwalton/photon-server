@@ -137,6 +137,8 @@ type Services struct {
 	Playlists playlists
 	// Requests are the titles profiles ask for that libraries of files lack.
 	Requests requests
+	// RequestablePages are the titles a search found that a profile may ask for, drawn as pages.
+	RequestablePages requestablePages
 	// Notifications are each profile's of the films and episodes added that it follows.
 	Notifications notifications
 	// Push are the browsers each profile's notifications are pushed to, subscribed with PushKey.

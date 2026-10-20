@@ -9,8 +9,9 @@ you're told of anything new.
 
 ## Ask for a title
 
-1. Search for it. Below what the server has, **Not on** *server* **yet** shows what it doesn't.
-2. Choose the title to see its poster and what it is about.
+1. Search for it. Below what the server has, **Not in library** shows what it doesn't.
+2. Choose the title. It opens as any title's page does: its picture, what it is about and who is
+   in it, with **Ask for it** where **Play** would be.
 3. Choose **Ask for it**.
 
 A show is asked for whole. A title can be asked for once, whoever asks: if someone already has,

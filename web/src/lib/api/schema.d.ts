@@ -6879,6 +6879,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requestable/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A title a search answered as requestable, as a title's page draws it */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TitlePage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requests": {
         parameters: {
             query?: never;
@@ -8331,7 +8370,7 @@ export interface components {
             kind: components["schemas"]["CreditKind"];
             name: string;
             /** Format: uuid */
-            person_id: string;
+            person_id?: string;
             /** Format: uuid */
             photo?: string;
             role?: string;

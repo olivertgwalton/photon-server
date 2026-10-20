@@ -332,10 +332,12 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return domain.Picture{}, err
 		}
-		// Or the poster of a title a search found.
-		var poster *string
-		err = s.pool.QueryRow(ctx, `SELECT poster_url FROM discoveries WHERE poster_id = $1`, id).Scan(&poster)
-		return domain.Picture{URL: deref(poster)}, found(err)
+		// Or the poster of a title a search found, or a picture of its page.
+		var url *string
+		err = s.pool.QueryRow(ctx, `
+			SELECT poster_url FROM discoveries WHERE poster_id = $1
+			UNION ALL SELECT url FROM discovery_pictures WHERE id = $1 LIMIT 1`, id).Scan(&url)
+		return domain.Picture{URL: deref(url)}, found(err)
 	}
 	if err != nil {
 		return domain.Picture{}, err

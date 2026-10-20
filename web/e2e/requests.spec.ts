@@ -5,15 +5,27 @@ test("a title the server lacks is asked for from a search, and listed as asked",
 	page,
 }) => {
 	await logIn(page, "/search?q=arrival");
-	const lacking = page.getByRole("region", { name: "Not on Den yet" });
-	await lacking.getByRole("button", { name: /Arrival/ }).click();
-	const dialog = page.getByRole("dialog", { name: "Arrival" });
-	await expect(dialog).toContainText(
-		"A linguist is asked to talk to visitors.",
+	const lacking = page.getByRole("region", { name: "Not in library" });
+	await lacking.getByRole("link", { name: /Arrival/ }).click();
+	// It opens as a title's page does, as its provider describes it, with Ask
+	// for it in Play's place and nothing else a held title has.
+	await expect(page).toHaveURL("/titles/d-arrival");
+	await expect(
+		page.getByRole("heading", { level: 1, name: "Arrival" }),
+	).toBeVisible();
+	await expect(page.getByText("Why are they here?")).toBeVisible();
+	await expect(page.getByText("It isn't in the library yet.")).toBeVisible();
+	const cast = page.getByRole("region", { name: "Cast & crew" });
+	await expect(cast.getByRole("link", { name: /Ada Lane/ })).toBeVisible();
+	await expect(cast.getByText("Jeremy Renner")).toBeVisible();
+	await expect(cast.getByRole("link", { name: /Jeremy Renner/ })).toHaveCount(
+		0,
 	);
+	await expect(page.getByRole("button", { name: "Favourite" })).toHaveCount(0);
 	await expectAccessible(page);
-	await dialog.getByRole("button", { name: "Ask for it" }).click();
+	await page.getByRole("button", { name: "Ask for it" }).click();
 	await expect(page.getByText("Asked for Arrival.")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Asked for" })).toBeDisabled();
 
 	// Asked for, the profile has requests to look back at; an admin's is
 	// approved as it is asked.
@@ -24,8 +36,7 @@ test("a title the server lacks is asked for from a search, and listed as asked",
 	).toContainText("Approved");
 
 	// Asked for again, it says so.
-	await page.goto("/search?q=arrival");
-	await page.getByRole("button", { name: /Arrival/ }).click();
+	await page.goto("/titles/d-arrival");
 	await page.getByRole("button", { name: "Ask for it" }).click();
 	await expect(
 		page.getByText("the title has been asked for already"),

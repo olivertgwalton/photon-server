@@ -10,7 +10,19 @@ type Title = components["schemas"]["TitlePage"];
 export const load: PageLoad = async ({ fetch, params, parent, depends }) => {
 	const api = client(fetch);
 	const path = { params: { path: { id: params.id } } };
-	const { title } = await parent();
+	const { title, asking } = await parent();
+	// A title to ask for is no title of the server's: it has nothing more to ask.
+	if (asking) {
+		return {
+			members: undefined,
+			next: undefined,
+			seasonEpisodes: undefined,
+			show: undefined,
+			seasons: undefined,
+			themeMusic: false,
+			similar: undefined,
+		};
+	}
 	// A season has no page of its own: it opens on the episode it is at, with
 	// its season beside it to pick another.
 	if (title.kind === "season") {
