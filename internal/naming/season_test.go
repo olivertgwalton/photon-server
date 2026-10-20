@@ -33,6 +33,7 @@ func TestParseSeason(t *testing.T) {
 		{folder: "Episode 1 Season 2"},
 		{folder: "Extras"},
 		{folder: "1920"},
+		{folder: "-1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.folder, func(t *testing.T) {
@@ -42,6 +43,19 @@ func TestParseSeason(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzParseSeason(f *testing.F) {
+	for _, s := range []string{"Season 7 (2016)", "The.Wonder.Years.S04.PDTV.x264-JCH", "3.Staffel", "1st season", "시즌 2", "Specials", "s06e05", "1920"} {
+		f.Add(s, "")
+	}
+	f.Add("Seinfeld Season 2", "Seinfeld")
+	f.Fuzz(func(t *testing.T, folder, series string) {
+		n, ok := ParseSeason(folder, series)
+		if n < 0 || !ok && n != 0 {
+			t.Fatalf("ParseSeason(%q, %q) = %d, %v", folder, series, n, ok)
+		}
+	})
 }
 
 func TestSaysSeason(t *testing.T) {
