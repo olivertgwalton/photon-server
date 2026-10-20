@@ -97,3 +97,20 @@ func TestAWrappedTimestampCountsOn(t *testing.T) {
 }
 
 func pid(p []byte) int { return int(p[1]&0x1f)<<8 | int(p[2]) }
+
+func FuzzReadTS(f *testing.F) {
+	data, err := os.ReadFile("testdata/segments.ts")
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(data)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		s := readTS(bytes.NewReader(data), 0)
+		for err := error(nil); err == nil; {
+			var frag fragment
+			if frag, err = s.next(); err == nil {
+				err = s.write(io.Discard, frag)
+			}
+		}
+	})
+}
