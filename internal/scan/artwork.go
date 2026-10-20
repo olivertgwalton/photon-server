@@ -64,11 +64,12 @@ func (p pictures) of(stem string, main domain.ArtworkKind) []domain.Artwork {
 	return out
 }
 
-// seasonPictures answers the pictures a series' folder keeps for one season.
-func seasonPictures(root, series string, season int) []domain.Artwork {
+// seasonPictures answers the pictures a series' folder keeps for one season. One that cannot be
+// read is an error, not a folder without them: the season's are saved over those kept there.
+func seasonPictures(root, series string, season int) ([]domain.Artwork, error) {
 	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(series)))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	var names []string
 	for _, e := range entries {
@@ -76,5 +77,5 @@ func seasonPictures(root, series string, season int) []domain.Artwork {
 			names = append(names, e.Name())
 		}
 	}
-	return picturesIn(root, series, names).seasons[season]
+	return picturesIn(root, series, names).seasons[season], nil
 }
