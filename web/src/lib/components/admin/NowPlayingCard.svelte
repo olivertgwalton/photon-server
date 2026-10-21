@@ -71,20 +71,27 @@ function stop() {
 </script>
 
 <article class="bg-raise grid grid-cols-1 overflow-hidden rounded-xl">
-	<div class="bg-ground relative aspect-video">
+	<!-- The title's link is stretched over the whole picture, so the picture
+		opens the title too. -->
+	<div class="bg-ground relative grid aspect-video">
 		{#if picture}
 			<Artwork
 				id={picture}
 				shape="still"
 				sizes="(min-width: 1024px) 24rem, 100vw"
-				class="size-full object-cover opacity-70"
+				class="col-start-1 row-start-1 size-full object-cover opacity-70"
 			/>
 		{/if}
 		<div
-			class="absolute inset-x-0 bottom-0 grid gap-1 bg-linear-to-t from-black/90 to-transparent p-4 pt-10"
+			class="col-start-1 row-start-1 grid gap-1 self-end bg-linear-to-t from-black/90 to-transparent p-4 pt-10"
 		>
 			<h3 class="font-heading text-ink text-base leading-tight font-bold">
-				<a href="/titles/{p.title.id}" class="hover:underline">{name}</a>
+				<a
+					href="/titles/{p.title.id}"
+					class="after:absolute after:inset-0 hover:underline"
+				>
+					{name}
+				</a>
 			</h3>
 			<p class="text-ink-2 text-sm">
 				{p.profile.name}
