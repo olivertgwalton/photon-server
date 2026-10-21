@@ -286,10 +286,15 @@ const boxedTitles = `WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v
 var boxedSets = `SELECT b.collection_id FROM boxed_titles b GROUP BY b.collection_id HAVING count(*) >= ` + strconv.Itoa(minShown)
 
 // wallRows are the items a wall pages, as from; the row of them whose letter, genres, studios and
-// certificate a title has, an episode's being its show's; and whether the viewer v sees one.
+// certificate a title has, an episode's being its show's; and whether the viewer v sees one. An
+// episode's show is said to be a show of the wall's libraries, as it is of its episode's, which lets
+// Postgres judge how many episodes there are by their shows: judged by the episodes, every one
+// joined to a season and a show it took for one in a hundred, and Postgres sorted every episode to
+// page them, where it now walks the shows in order and stops at the page.
 func wallRows(wall domain.WallKind) (from, row, seen string) {
 	if wall == domain.WallEpisodes {
-		return "items JOIN items season ON season.id = items.parent_id JOIN items show ON show.id = season.parent_id", "show",
+		return `items JOIN items season ON season.id = items.parent_id
+			JOIN items show ON show.id = season.parent_id AND show.kind = 'show' AND show.library_id = ANY(@libs)`, "show",
 			"sees(v, items, season, show)"
 	}
 	return "items", "items", "sees(v, items)"
