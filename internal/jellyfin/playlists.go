@@ -14,7 +14,7 @@ import (
 
 type playlists interface {
 	Playlists(ctx context.Context, profile uuid.UUID) ([]store.PlaylistSummary, error)
-	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]store.PlaylistEntry, int64, error)
+	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, page store.Page) ([]store.PlaylistEntry, store.Extent, error)
 	AddPlaylist(ctx context.Context, profile uuid.UUID, name string, items []uuid.UUID) (uuid.UUID, error)
 	AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error
 	RemoveFromPlaylist(ctx context.Context, profile, playlist, entry uuid.UUID) error
@@ -89,7 +89,7 @@ func (a *API) playlistItems(w http.ResponseWriter, r *http.Request) {
 	}
 	l := listedOf(w, r)
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, l.start, l.limit)
+	entries, extent, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, l.page())
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -98,7 +98,7 @@ func (a *API) playlistItems(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeChunks(w, r, len(entries), int(total), l.start, func(ctx context.Context, from, to int) ([]item, error) {
+	a.writeChunks(w, r, len(entries), int(*extent.Total), l.start, func(ctx context.Context, from, to int) ([]item, error) {
 		return a.entryItems(ctx, profile, entries[from:to], l)
 	})
 }
@@ -258,7 +258,7 @@ func (a *API) playlist(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	entries, _, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, 0, math.MaxInt32)
+	entries, _, err := a.svc.Playlists.PlaylistEntries(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, store.Page{Limit: math.MaxInt32, Count: domain.CountNone})
 	if isNotFound(err) {
 		a.refuse(w, http.StatusNotFound)
 		return

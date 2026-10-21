@@ -20,16 +20,16 @@ func (a *API) collectionsFolder() item {
 func (a *API) collections(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Request, l listed) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	var cards []store.Card
-	var total int64
+	var extent store.Extent
 	var err error
 	if len(libs) == 1 {
-		cards, total, err = a.svc.Catalogue.Collections(r.Context(), libs[0].ID, profile, l.start, l.limit)
+		cards, extent, err = a.svc.Catalogue.Collections(r.Context(), libs[0].ID, profile, l.page())
 	} else {
-		cards, total, err = a.svc.Catalogue.AllCollections(r.Context(), profile, l.start, l.limit)
+		cards, extent, err = a.svc.Catalogue.AllCollections(r.Context(), profile, l.page())
 	}
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeList(w, r, cards, int(total), l.start, l)
+	a.writeList(w, r, cards, int(*extent.Total), l.start, l)
 }

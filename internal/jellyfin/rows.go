@@ -23,12 +23,14 @@ const (
 func (a *API) row(kind domain.HomeRow) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		l := listedOf(w, r)
-		cards, total, err := a.svc.Catalogue.RowPage(r.Context(), auth.SessionOf(r.Context()).Profile.ID, kind, l.start, min(l.limit, rowLimit))
+		page := l.page()
+		page.Limit = min(page.Limit, rowLimit)
+		cards, extent, err := a.svc.Catalogue.RowPage(r.Context(), auth.SessionOf(r.Context()).Profile.ID, kind, page)
 		if err != nil {
 			a.internal(w, r, err)
 			return
 		}
-		a.writeList(w, r, cards, int(total), l.start, l)
+		a.writeList(w, r, cards, int(*extent.Total), l.start, l)
 	}
 }
 

@@ -88,7 +88,7 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 	if err != nil || person.Blurhashes[photo] == "" {
 		t.Errorf("person = %+v, %v; want the photo's blurhash", person, err)
 	}
-	found, _, err := s.SearchPeople(ctx, "pacino", 0, 10)
+	found, _, err := totalled(s.SearchPeople(ctx, "pacino", totalledPage(0, 10)))
 	if err != nil || len(found) != 1 || found[0].Blurhashes[photo] == "" {
 		t.Errorf("people found = %+v, %v; want the photo's blurhash", found, err)
 	}

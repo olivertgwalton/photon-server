@@ -18,15 +18,15 @@ import (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error)
-	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, store.Extent, error)
+	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, store.Extent, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
-	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
-	AllCollections(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	Collections(ctx context.Context, lib, profile uuid.UUID, page store.Page) ([]store.Card, store.Extent, error)
+	AllCollections(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Card, store.Extent, error)
 	HasCollections(ctx context.Context, profile uuid.UUID) (bool, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
-	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
+	SearchPeople(ctx context.Context, text string, page store.Page) ([]store.PersonRef, store.Extent, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
 	Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (store.Facets, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
@@ -36,7 +36,7 @@ type catalogue interface {
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
 	AnnouncedEpisode(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
-	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
+	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
 	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
@@ -64,6 +64,12 @@ type listed struct {
 	fields     map[string]bool
 	// words names its copies and tracks in the reader's language.
 	words words.Words
+}
+
+// page is the page of a store's list an app asks for, counted, as Jellyfin answers every list with
+// TotalRecordCount.
+func (l listed) page() store.Page {
+	return store.Page{Offset: l.start, Limit: l.limit, Count: domain.CountExact}
 }
 
 func listedOf(w http.ResponseWriter, r *http.Request) listed {
@@ -149,7 +155,7 @@ var marks = map[string]domain.Mark{
 // wallPage is a library page as an app asks for one: its sort, order and filters, those photon
 // has no like of left out rather than refused, as Jellyfin narrows by what it knows.
 func wallPage(r *http.Request, profile uuid.UUID, l listed) store.WallPage {
-	p := store.WallPage{Profile: profile, Sort: domain.SortTitle, Order: domain.Ascending, Offset: l.start, Limit: l.limit, RatingSite: domain.SiteTMDB}
+	p := store.WallPage{Profile: profile, Sort: domain.SortTitle, Order: domain.Ascending, Offset: l.start, Limit: l.limit, Count: domain.CountExact, RatingSite: domain.SiteTMDB}
 	for _, s := range values(r, "sortBy") {
 		if sort, ok := sorts[strings.ToLower(s)]; ok {
 			p.Sort = sort
@@ -304,12 +310,12 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		a.internal(w, r, err)
 		return
 	}
-	titles, total, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
+	titles, extent, err := a.svc.Catalogue.Wall(r.Context(), ids, p)
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	a.writeTitles(w, r, titles, int(total), l.start, l)
+	a.writeTitles(w, r, titles, int(*extent.Total), l.start, l)
 }
 
 // children answers what is in a collection, a show or a season: a collection's titles; a show's

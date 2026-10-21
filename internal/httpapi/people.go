@@ -17,7 +17,7 @@ type people interface {
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
 	PersonCredits(ctx context.Context, profile, person uuid.UUID) ([]store.PersonCredit, error)
 	DescribePerson(ctx context.Context, id uuid.UUID, d domain.Person) error
-	SearchPeople(ctx context.Context, text string, offset, limit int) ([]store.PersonRef, int64, error)
+	SearchPeople(ctx context.Context, text string, page store.Page) ([]store.PersonRef, store.Extent, error)
 }
 
 type personDescriber interface {

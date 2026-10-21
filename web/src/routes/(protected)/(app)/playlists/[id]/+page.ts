@@ -10,10 +10,18 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 	depends(keys.userdata, keys.playlists);
 	const api = client(fetch);
 	const path = { id: params.id };
+	// The first page counts the list, so the rest are asked for at once.
 	const entries = (offset: number) =>
 		need(
 			api.GET("/api/v1/playlists/{id}/entries", {
-				params: { path, query: { offset, limit: pageLimit } },
+				params: {
+					path,
+					query: {
+						offset,
+						limit: pageLimit,
+						total: offset ? undefined : "exact",
+					},
+				},
 			}),
 		);
 	const [lists, first] = await Promise.all([
@@ -24,8 +32,9 @@ export const load: PageLoad = async ({ fetch, params, depends }) => {
 	if (!playlist) error(404, "That playlist isn't here any more.");
 	// A list is reordered as a whole, so all of it is drawn.
 	const rest = await Promise.all(
-		Array.from({ length: Math.ceil(first.total / pageLimit) - 1 }, (_, i) =>
-			entries((i + 1) * pageLimit),
+		Array.from(
+			{ length: Math.ceil((first.total ?? 0) / pageLimit) - 1 },
+			(_, i) => entries((i + 1) * pageLimit),
 		),
 	);
 	return {

@@ -13,8 +13,8 @@ export const load: LayoutLoad = async ({ fetch }) => {
 	]);
 	return {
 		libraries: libraries.items,
-		collections: collections.total > 0,
-		requests: requests.total > 0,
+		collections: collections.items.length > 0,
+		requests: requests.items.length > 0,
 		pages: pages.items,
 		// The sidebar's own cookie, so it is drawn as it was left.
 		sidebarOpen: !document.cookie.includes("sidebar_state=false"),

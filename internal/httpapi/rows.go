@@ -17,19 +17,19 @@ const defaultRowLimit = 20
 
 // profileRow answers a page of one of the profile's own rows, in the row's order.
 func (a *API) profileRow(w http.ResponseWriter, r *http.Request) {
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	page, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
 	profile, row := auth.SessionOf(r.Context()).Profile.ID, domain.HomeRow(r.PathValue("row"))
-	cards, total, err := a.svc.Catalogue.RowPage(r.Context(), profile, row, offset, limit)
+	cards, extent, err := a.svc.Catalogue.RowPage(r.Context(), profile, row, page)
 	if a.answered(w, r, err) {
 		return
 	}
 	if a.answered(w, r, a.wearCardArt(r.Context(), profile, row, cards)) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
 }
 
 // libraryRow answers the first of one of a library's rows, as the home page has it: the newest or
@@ -39,8 +39,7 @@ func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// The route takes no offset.
-	_, limit, ok := a.paging(w, r, defaultRowLimit)
+	limit, ok := a.queryNumber(w, r, "limit", defaultRowLimit, 1, maxWallLimit)
 	if !ok {
 		return
 	}

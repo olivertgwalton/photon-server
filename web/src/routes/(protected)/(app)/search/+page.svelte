@@ -70,7 +70,7 @@ function scope(library: string) {
 		<Rail
 			title="People"
 			items={data.results.people.items}
-			total={data.results.people.total}
+			total={data.results.people.total ?? undefined}
 			href="/search/people{page.url.search}"
 		>
 			{#snippet card(

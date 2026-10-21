@@ -45,7 +45,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	shown, total, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10)
+	shown, total, err := totalled(s.Collections(ctx, lib.ID, uuid.UUID{}, totalledPage(0, 10)))
 	if err != nil || total != 1 || len(shown) != 1 || shown[0].Title != "Alien Collection" || shown[0].Poster == (uuid.UUID{}) {
 		t.Fatalf("collections = %+v of %d, %v; want the one set with its poster", shown, total, err)
 	}
@@ -85,7 +85,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.SaveIdentity(ctx, ids["Aliens"], domain.SourceTMDB, domain.Metadata{Title: "Aliens"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	shown, _, err = s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10)
+	shown, _, err = totalled(s.Collections(ctx, lib.ID, uuid.UUID{}, totalledPage(0, 10)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 	if err := s.SetMembers(ctx, mine, []uuid.UUID{uuid.NewV7()}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a title of no library: %v, want ErrNotFound", err)
 	}
-	if shown, _, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || len(shown) != 1 || shown[0].Origin != domain.CollectionUser {
+	if shown, _, err := totalled(s.Collections(ctx, lib.ID, uuid.UUID{}, totalledPage(0, 10))); err != nil || len(shown) != 1 || shown[0].Origin != domain.CollectionUser {
 		t.Errorf("collections = %+v, %v; want the admin's own, saying so", shown, err)
 	}
 	members, err = s.Members(ctx, uuid.UUID{}, mine)
@@ -207,7 +207,7 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 	if got := wall(WallFilter{StartsWith: "A"}); !reflect.DeepEqual(got, []string{"Alien", "Aliens"}) {
 		t.Errorf("filtered to A: the wall shows %q, want the films alone", got)
 	}
-	if listed, _, err := s.Collections(ctx, lib.ID, uuid.UUID{}, 0, 10); err != nil || len(listed) != 1 || listed[0].ID != set {
+	if listed, _, err := totalled(s.Collections(ctx, lib.ID, uuid.UUID{}, totalledPage(0, 10))); err != nil || len(listed) != 1 || listed[0].ID != set {
 		t.Errorf("its collections = %+v, %v; want the anthology, listed beside the wall", listed, err)
 	}
 }
@@ -252,7 +252,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	}
 	agree := func(profile uuid.UUID, all int, want map[uuid.UUID]int) {
 		t.Helper()
-		if _, listed, err := s.AllCollections(ctx, profile, 0, 10); err != nil || listed != int64(all) {
+		if _, listed, err := totalled(s.AllCollections(ctx, profile, totalledPage(0, 10))); err != nil || listed != int64(all) {
 			t.Errorf("the Collections view lists %d, %v; want %d", listed, err, all)
 		}
 		counts, err := s.LibraryCounts(ctx)
@@ -260,7 +260,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 			t.Fatal(err)
 		}
 		for lib, n := range want {
-			_, listed, err := s.Collections(ctx, lib, profile, 0, 10)
+			_, listed, err := totalled(s.Collections(ctx, lib, profile, totalledPage(0, 10)))
 			if err != nil || listed != int64(n) {
 				t.Errorf("library %s lists %d collections, %v; want %d", lib, listed, err, n)
 			}
@@ -275,7 +275,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 	}
 	// Empty, it is in the Collections view alone, holding no library's titles.
 	agree(uuid.UUID{}, 1, map[uuid.UUID]int{films.ID: 0, other.ID: 0})
-	if found, _, err := s.Search(ctx, SearchQuery{Text: "alien collection", Limit: 10}); err != nil ||
+	if found, _, err := totalled(s.Search(ctx, SearchQuery{Text: "alien collection", Limit: 10, Count: domain.CountExact})); err != nil ||
 		slices.ContainsFunc(found, func(c Card) bool { return c.Kind == domain.ItemCollection }) {
 		t.Errorf("searching for the set of one = %+v, %v; want it not found", found, err)
 	}
@@ -374,7 +374,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	add("Heat", year(1995), "Crime")
-	if shown, total, err := s.AllCollections(ctx, uuid.UUID{}, 0, 10); err != nil || total != 1 || shown[0].ID != set {
+	if shown, total, err := totalled(s.AllCollections(ctx, uuid.UUID{}, totalledPage(0, 10))); err != nil || total != 1 || shown[0].ID != set {
 		t.Errorf("collections %+v of %d, %v; want the empty smart one shown", shown, total, err)
 	}
 	if err := s.SetMembers(ctx, set, nil); !errors.Is(err, ErrNotUserCollection) {

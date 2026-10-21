@@ -13,7 +13,10 @@ export async function loadRow(
 	depends(keys.home, keys.userdata);
 	const page = await need(
 		client(fetch).GET("/api/v1/profile/rows/{row}", {
-			params: { path: { row: kind }, query: { limit: wallPageSize } },
+			params: {
+				path: { row: kind },
+				query: { limit: wallPageSize, total: "exact" },
+			},
 		}),
 	);
 	return { kind, page };

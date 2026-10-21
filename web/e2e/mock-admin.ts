@@ -1009,6 +1009,7 @@ export function adminTitles(route: string): Response | undefined {
 					...(smart ? [smart] : []),
 				],
 				offset: 0,
+				more: false,
 				total: smart ? 2 : 1,
 			} satisfies Schemas["CardPage"]);
 		case "GET /api/v1/search":
@@ -1024,9 +1025,10 @@ export function adminTitles(route: string): Response | undefined {
 						},
 					],
 					offset: 0,
+					more: false,
 					total: 1,
 				},
-				people: { items: [], offset: 0, total: 0 },
+				people: { items: [], offset: 0, more: false, total: 0 },
 				requestable: { items: [] },
 			} satisfies Schemas["Search"]);
 	}

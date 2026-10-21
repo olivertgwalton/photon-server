@@ -7,7 +7,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	return {
 		requests: await need(
 			client(fetch).GET("/api/v1/requests", {
-				params: { query: { offset, limit: pageSize } },
+				params: { query: { offset, limit: pageSize, total: "exact" } },
 			}),
 		),
 	};

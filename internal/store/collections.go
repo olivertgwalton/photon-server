@@ -144,39 +144,39 @@ func holdsTitleOf(lib string) string {
 		>= (SELECT ` + listedFrom + ` FROM collections c WHERE c.item_id = items.id)`
 }
 
-// Collections answers a page of the collections holding a library's titles, by title, and how many
-// there are.
-func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
+// Collections answers a page of the collections holding a library's titles, by title, and what the
+// page tells of the rest.
+func (s *Store) Collections(ctx context.Context, lib, profile uuid.UUID, page Page) ([]Card, Extent, error) {
 	if err := hasLibrary(ctx, s.pool, lib); err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
-	return s.collectionsWhere(ctx, profile, holdsTitleOf("@lib"), pgx.NamedArgs{"lib": lib}, offset, limit)
+	return s.collectionsWhere(ctx, profile, holdsTitleOf("@lib"), pgx.NamedArgs{"lib": lib}, page)
 }
 
-// AllCollections answers a page of every collection, by title, and how many there are: what
-// Jellyfin's Collections view lists.
-func (s *Store) AllCollections(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Card, int64, error) {
-	return s.collectionsWhere(ctx, profile, "true", pgx.NamedArgs{}, offset, limit)
+// AllCollections answers a page of every collection, by title, and what the page tells of the rest:
+// what Jellyfin's Collections view lists.
+func (s *Store) AllCollections(ctx context.Context, profile uuid.UUID, page Page) ([]Card, Extent, error) {
+	return s.collectionsWhere(ctx, profile, "true", pgx.NamedArgs{}, page)
 }
 
-// collectionsWhere answers a page of the listed collections cond holds of, by title, and how many
-// there are.
-func (s *Store) collectionsWhere(ctx context.Context, profile uuid.UUID, cond string, args pgx.NamedArgs, offset, limit int) ([]Card, int64, error) {
-	args["profile"], args["offset"], args["limit"] = profile, offset, limit
+// collectionsWhere is Collections and AllCollections of the listed collections cond holds of.
+func (s *Store) collectionsWhere(ctx context.Context, profile uuid.UUID, cond string, args pgx.NamedArgs, page Page) ([]Card, Extent, error) {
+	args["profile"], args["offset"], args["limit"] = profile, page.Offset, page.Limit+1
 	// The viewer is made once: joined to each collection, the certificates a limited profile may
 	// not see were found again for every one, most of the time a library's list took.
 	seer := `WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v) `
 	where := ` FROM items, seer WHERE items.kind = 'collection' AND ` + cond + ` AND ` + listedCollection
 	var rows []*model.Item
-	total, err := s.counted(ctx, seer+`SELECT count(*)`+where, args, func(ctx context.Context) (err error) {
+	total, err := s.counted(ctx, page.Count, seer+`SELECT count(*)`+where, args, func(ctx context.Context) (err error) {
 		rows, err = queryRows[model.Item](ctx, s.pool, seer+`SELECT `+itemColumnsOf("items")+where+` ORDER BY items.sort_title, items.id OFFSET @offset LIMIT @limit`, args)
 		return err
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
+	rows, more := pageOf(rows, page.Limit)
 	cards, err := s.cards(ctx, profile, rows)
-	return cards, total, err
+	return cards, Extent{More: more, Total: total}, err
 }
 
 // HasCollections reports whether a profile finds any collection listed.

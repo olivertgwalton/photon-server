@@ -106,7 +106,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	}
 	// The episode is called Show too, and is rated by its show.
 	for _, text := range []string{"heat", "show"} {
-		found, total, err := s.Search(ctx, SearchQuery{Profile: kid.ID, Text: text, Limit: 10})
+		found, total, err := totalled(s.Search(ctx, SearchQuery{Profile: kid.ID, Text: text, Limit: 10, Count: domain.CountExact}))
 		if err != nil {
 			t.Fatal(err)
 		}

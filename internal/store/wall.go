@@ -77,19 +77,21 @@ type WallPage struct {
 	BoxSets domain.BoxSetMode
 	Offset  int
 	Limit   int
+	Count   domain.Counting
 }
 
 // Wall answers a page of the films and shows of libraries, or of their episodes, sorted together,
-// by id, and how many there are in all; Cards draws them. Ties in the sort are broken by id, so a
-// page is the same whenever it is asked for while the libraries are.
-func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.UUID, int64, error) {
+// by id, and what the page tells of the rest; Cards draws them. Ties in the sort are broken by id,
+// so a page is the same whenever it is asked for while the libraries are.
+func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.UUID, Extent, error) {
 	with, where, boxed, args, err := s.wallWhere(ctx, libs, p.Profile, p.Kind, p.Filter, p.BoxSets)
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
 	from, _, _ := wallRows(p.Kind)
 	join, order := p.orderBy(args)
-	args["offset"], args["limit"] = p.Offset, p.Limit
+	// One more than the page is read, to tell whether more follow it.
+	args["offset"], args["limit"] = p.Offset, p.Limit+1
 	count := `SELECT count(*) FROM ` + from + ` ` + where
 	page := `SELECT items.id FROM ` + from + join + ` ` + where + ` ` + order + ` OFFSET @offset LIMIT @limit`
 	if boxed != "" {
@@ -98,7 +100,7 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.
 		// sort of the whole library.
 		_, key, nulls := p.sortKey(args)
 		outer := `ORDER BY wall_key ` + p.dir() + nulls + `, items.id ` + p.dir()
-		args["end"] = p.Offset + p.Limit
+		args["end"] = p.Offset + p.Limit + 1
 		arm := func(where, key, order string) string {
 			return `(SELECT items.id, ` + key + ` AS wall_key FROM items` + join + ` ` + where + ` ` + order + ` LIMIT @end)`
 		}
@@ -112,11 +114,12 @@ func (s *Store) Wall(ctx context.Context, libs []uuid.UUID, p WallPage) ([]uuid.
 			` + outer + ` OFFSET @offset LIMIT @limit`
 	}
 	var ids []uuid.UUID
-	total, err := s.counted(ctx, with+count, args, func(ctx context.Context) (err error) {
+	total, err := s.counted(ctx, p.Count, with+count, args, func(ctx context.Context) (err error) {
 		ids, err = queryColumn[uuid.UUID](ctx, s.pool, with+page, args)
 		return err
 	})
-	return ids, total, err
+	ids, more := pageOf(ids, p.Limit)
+	return ids, Extent{More: more, Total: total}, err
 }
 
 // orderBy is the ORDER BY of a page of a wall, its ties broken by id, and what it joins to the

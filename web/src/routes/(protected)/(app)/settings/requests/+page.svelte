@@ -129,7 +129,7 @@ const { offset, total } = $derived(data.requests);
 {:else}
 	<p class="text-ink-3 text-sm">No requests here.</p>
 {/if}
-<Pager {offset} {total} />
+<Pager {offset} total={total ?? 0} />
 
 <AlertDialog.Root
 	bind:open={

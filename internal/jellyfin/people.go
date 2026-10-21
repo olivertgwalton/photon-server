@@ -61,9 +61,12 @@ func (a *API) work(ctx context.Context, profile uuid.UUID, libs []*store.SeenLib
 		if len(ids) == 0 {
 			return 0, nil
 		}
-		p := store.WallPage{Profile: profile, Kind: kind, Sort: domain.SortTitle, Filter: store.WallFilter{People: []uuid.UUID{id}}}
-		_, total, err := a.svc.Catalogue.Wall(ctx, ids, p)
-		return int(total), err
+		p := store.WallPage{Profile: profile, Kind: kind, Sort: domain.SortTitle, Count: domain.CountExact, Filter: store.WallFilter{People: []uuid.UUID{id}}}
+		_, extent, err := a.svc.Catalogue.Wall(ctx, ids, p)
+		if err != nil {
+			return 0, err
+		}
+		return int(*extent.Total), nil
 	}
 	if films, err = count(domain.WallFilms); err != nil {
 		return 0, 0, err
@@ -77,12 +80,12 @@ func (a *API) work(ctx context.Context, profile uuid.UUID, libs []*store.SeenLib
 // and a list of everyone credited on anything is of no use to one.
 func (a *API) persons(w http.ResponseWriter, r *http.Request) {
 	l := listedOf(w, r)
-	found, total, err := a.svc.Catalogue.SearchPeople(r.Context(), query(r, "searchTerm"), l.start, l.limit)
+	found, extent, err := a.svc.Catalogue.SearchPeople(r.Context(), query(r, "searchTerm"), l.page())
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
-	out := queryResult{Items: make([]item, len(found)), TotalRecordCount: int(total), StartIndex: l.start}
+	out := queryResult{Items: make([]item, len(found)), TotalRecordCount: int(*extent.Total), StartIndex: l.start}
 	for n, p := range found {
 		out.Items[n] = a.personItem(p.ID, p.Name, p.Photo, p.Blurhashes)
 		out.Items[n].Etag = etag(out.Items[n])

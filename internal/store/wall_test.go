@@ -15,14 +15,28 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// wallCards is a page of a wall drawn as the cards a client is shown.
+// wallCards is a page of a wall drawn as the cards a client is shown, and how many the wall holds.
 func (s *Store) wallCards(ctx context.Context, libs []uuid.UUID, p WallPage) ([]Card, int64, error) {
-	ids, total, err := s.Wall(ctx, libs, p)
+	p.Count = domain.CountExact
+	ids, total, err := totalled(s.Wall(ctx, libs, p))
 	if err != nil {
 		return nil, 0, err
 	}
 	cards, err := s.Cards(ctx, p.Profile, ids)
 	return cards, total, err
+}
+
+// totalled is a counted page's items and how many its list holds.
+func totalled[T any](items []T, e Extent, err error) ([]T, int64, error) {
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, *e.Total, nil
+}
+
+// totalledPage is a page of up to limit from offset that asks how many there are.
+func totalledPage(offset, limit int) Page {
+	return Page{Offset: offset, Limit: limit, Count: domain.CountExact}
 }
 
 func TestWallPagesEveryTitleOnce(t *testing.T) {

@@ -81,11 +81,11 @@ func (fakePlaylists) SetPlaylistRule(_ context.Context, profile, playlist uuid.U
 	return nil
 }
 
-func (fakePlaylists) PlaylistEntries(_ context.Context, profile, playlist uuid.UUID, offset, _ int) ([]store.PlaylistEntry, int64, error) {
+func (fakePlaylists) PlaylistEntries(_ context.Context, profile, playlist uuid.UUID, page store.Page) ([]store.PlaylistEntry, store.Extent, error) {
 	if err := own(profile, playlist); err != nil {
-		return nil, 0, err
+		return nil, store.Extent{}, err
 	}
-	return []store.PlaylistEntry{{ID: entry, Title: wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat"})[0]}}, int64(offset + 1), nil
+	return []store.PlaylistEntry{{ID: entry, Title: wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat"})[0]}}, extentOf(int64(page.Offset+1), page.Offset, 1, page.Count), nil
 }
 
 func (fakePlaylists) AddToPlaylist(_ context.Context, profile, playlist uuid.UUID, _ []uuid.UUID) error {

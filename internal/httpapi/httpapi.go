@@ -22,15 +22,22 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// listJSON is every item there is; pageJSON is total's items from offset.
+// listJSON is every item there is; pageJSON is a page of them from offset, whether more follow it,
+// and how many there are in all where the request asked.
 type listJSON[T any] struct {
 	Items []T `json:"items"`
 }
 
 type pageJSON[T any] struct {
-	Items  []T   `json:"items"`
-	Offset int   `json:"offset"`
-	Total  int64 `json:"total"`
+	Items  []T    `json:"items"`
+	Offset int    `json:"offset"`
+	More   bool   `json:"more"`
+	Total  *int64 `json:"total,omitzero"`
+}
+
+// pageAt is a page of items from offset, as what its store page told of the rest.
+func pageAt[T any](items []T, offset int, e store.Extent) pageJSON[T] {
+	return pageJSON[T]{Items: items, Offset: offset, More: e.More, Total: e.Total}
 }
 
 type createdJSON struct {

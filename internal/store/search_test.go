@@ -43,7 +43,7 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 	add(tv.ID, domain.ItemEpisode, "Heat Seeker", "")
 	search := func(text string, lib uuid.UUID, kinds ...domain.ItemKind) []string {
 		t.Helper()
-		cards, total, err := s.Search(ctx, SearchQuery{Text: text, Library: lib, Kinds: kinds, Limit: 20})
+		cards, total, err := totalled(s.Search(ctx, SearchQuery{Text: text, Library: lib, Kinds: kinds, Limit: 20, Count: domain.CountExact}))
 		if err != nil || int(total) != len(cards) {
 			t.Fatal(cards, total, err)
 		}
@@ -79,7 +79,7 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 		}
 	}
 	// A page past the first goes on where it left off and counts every match.
-	cards, total, err := s.Search(ctx, SearchQuery{Text: "heat", Offset: 1, Limit: 1})
+	cards, total, err := totalled(s.Search(ctx, SearchQuery{Text: "heat", Offset: 1, Limit: 1, Count: domain.CountExact}))
 	if err != nil || total != 4 || len(cards) != 1 || cards[0].Title != "Heat Wave" {
 		t.Errorf("the second of four: %+v of %d, %v; want Heat Wave", cards, total, err)
 	}
@@ -124,7 +124,7 @@ func TestSearchFindsATitleInSeveralLibrariesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	for profile, want := range map[uuid.UUID]uuid.UUID{admin.ID: heats[0], other.ID: heats[1]} {
-		cards, total, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "heat", Limit: 20})
+		cards, total, err := totalled(s.Search(ctx, SearchQuery{Profile: profile, Text: "heat", Limit: 20, Count: domain.CountExact}))
 		if err != nil || total != 1 || len(cards) != 1 || cards[0].ID != want {
 			t.Errorf("found %+v of %d, %v; want the one Heat %v", cards, total, err, want)
 		}

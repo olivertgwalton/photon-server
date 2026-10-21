@@ -86,35 +86,36 @@ func (s *Store) AddPlaylist(ctx context.Context, profile uuid.UUID, name string,
 	return id, err
 }
 
-// PlaylistEntries answers a page of a profile's playlist, in its order, and how many entries it
-// has: a smart playlist's are what its rule finds now. ErrNotFound for no such playlist of the
+// PlaylistEntries answers a page of a profile's playlist, in its order, and what the page tells of
+// the rest: a smart playlist's are what its rule finds now. ErrNotFound for no such playlist of the
 // profile's.
-func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]PlaylistEntry, int64, error) {
+func (s *Store) PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, page Page) ([]PlaylistEntry, Extent, error) {
 	lib, rule, err := ownPlaylist(ctx, s.pool, profile, playlist)
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
 	if rule != nil {
-		return s.smartEntries(ctx, profile, lib, *rule, offset, limit)
+		return s.smartEntries(ctx, profile, lib, *rule, page)
 	}
 	// An entry the profile may no longer see, as a library taken from it, is passed over.
-	const seen = `FROM playlist_entries e WHERE e.playlist_id = $1
-		AND EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = e.item_id AND sees(v, i))`
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+seen, playlist, profile).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	entries, err := queryRows[model.PlaylistEntry](ctx, s.pool, `
-		SELECT e.id, e.item_id, e.position `+seen+` ORDER BY e.position, e.id OFFSET $3 LIMIT $4`,
-		playlist, profile, offset, limit)
+	const seen = `FROM playlist_entries e WHERE e.playlist_id = @playlist
+		AND EXISTS (SELECT 1 FROM items i, viewer(@profile) v WHERE i.id = e.item_id AND sees(v, i))`
+	args := pgx.NamedArgs{"playlist": playlist, "profile": profile, "offset": page.Offset, "limit": page.Limit + 1}
+	var entries []*model.PlaylistEntry
+	total, err := s.counted(ctx, page.Count, `SELECT count(*) `+seen, args, func(ctx context.Context) (err error) {
+		entries, err = queryRows[model.PlaylistEntry](ctx, s.pool, `
+			SELECT e.id, e.item_id, e.position `+seen+` ORDER BY e.position, e.id OFFSET @offset LIMIT @limit`, args)
+		return err
+	})
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
+	entries, more := pageOf(entries, page.Limit)
 	out := make([]PlaylistEntry, len(entries))
 	for n, x := range entries {
 		out[n] = PlaylistEntry{ID: x.ID, Title: x.ItemID}
 	}
-	return out, total, nil
+	return out, Extent{More: more, Total: total}, nil
 }
 
 // AddToPlaylist puts titles at the end of a profile's playlist, in order: a film or episode as it
@@ -249,20 +250,26 @@ func (s *Store) SetPlaylistRule(ctx context.Context, profile, playlist uuid.UUID
 	})
 }
 
-// smartEntries answers a page of what a smart playlist's rule finds now, and how many it finds.
-func (s *Store) smartEntries(ctx context.Context, profile, lib uuid.UUID, rule SmartRule, offset, limit int) ([]PlaylistEntry, int64, error) {
-	ids, total, err := s.Wall(ctx, []uuid.UUID{lib}, rule.playlistPage(profile, offset, limit))
+// smartEntries answers a page of what a smart playlist's rule finds now, and what the page tells
+// of the rest, no further than the rule takes.
+func (s *Store) smartEntries(ctx context.Context, profile, lib uuid.UUID, rule SmartRule, page Page) ([]PlaylistEntry, Extent, error) {
+	p := rule.playlistPage(profile, page.Offset, page.Limit)
+	p.Count = page.Count
+	ids, extent, err := s.Wall(ctx, []uuid.UUID{lib}, p)
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
 	if rule.Limit > 0 {
-		total = min(total, int64(rule.Limit))
+		extent.More = extent.More && page.Offset+len(ids) < rule.Limit
+		if extent.Total != nil {
+			extent.Total = new(min(*extent.Total, int64(rule.Limit)))
+		}
 	}
 	out := make([]PlaylistEntry, len(ids))
 	for n, id := range ids {
 		out[n] = PlaylistEntry{Title: id}
 	}
-	return out, total, nil
+	return out, extent, nil
 }
 
 // smartSize counts what a smart playlist's rule finds now and how long those run altogether.

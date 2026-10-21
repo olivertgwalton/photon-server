@@ -2150,6 +2150,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path?: never;
@@ -4143,6 +4145,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path?: never;
@@ -4602,6 +4606,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path: {
@@ -4795,6 +4801,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                     /** @description A letter, or # for anything before A. */
                     starts_with?: string;
                     mark?: components["schemas"]["Mark"][];
@@ -5535,6 +5543,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path: {
@@ -6456,6 +6466,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path: {
@@ -6894,6 +6906,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path?: never;
@@ -7004,6 +7018,8 @@ export interface paths {
                     offset?: number;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
                 };
                 header?: never;
                 path?: never;
@@ -8191,9 +8207,10 @@ export interface components {
         };
         CardPage: {
             items: components["schemas"]["Card"][];
+            more: boolean;
             offset: number;
             /** Format: int64 */
-            total: number;
+            total?: number | null;
         };
         CertificateFacet: {
             name: string;
@@ -8261,6 +8278,8 @@ export interface components {
         };
         /** @enum {string} */
         CollectionOrigin: "tmdb" | "user" | "smart" | "list";
+        /** @enum {string} */
+        Counting: "none" | "exact";
         Counts: {
             collections: number;
             episodes: number;
@@ -8503,9 +8522,10 @@ export interface components {
         };
         EntryPage: {
             items: components["schemas"]["Entry"][];
+            more: boolean;
             offset: number;
             /** Format: int64 */
-            total: number;
+            total?: number | null;
         };
         EpisodeCard: {
             blurhashes?: {
@@ -9242,9 +9262,10 @@ export interface components {
         };
         PersonRefPage: {
             items: components["schemas"]["PersonRef"][];
+            more: boolean;
             offset: number;
             /** Format: int64 */
-            total: number;
+            total?: number | null;
         };
         Pin: {
             pin: string;
@@ -9621,9 +9642,10 @@ export interface components {
         };
         RequestPage: {
             items: components["schemas"]["Request"][];
+            more: boolean;
             offset: number;
             /** Format: int64 */
-            total: number;
+            total?: number | null;
         };
         /** @enum {string} */
         RequestState: "pending" | "approved" | "declined" | "sent" | "failed" | "available";

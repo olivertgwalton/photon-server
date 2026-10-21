@@ -88,9 +88,14 @@ func (a *API) searchHints(w http.ResponseWriter, r *http.Request) {
 // titles its remote libraries' providers find that they do not hold yet, which become theirs as
 // an app opens one.
 func (a *API) searched(ctx context.Context, q store.SearchQuery) ([]store.Card, int, error) {
-	cards, total, err := a.svc.Catalogue.Search(ctx, q)
-	if err != nil || q.Offset > 0 || q.Library != (uuid.UUID{}) {
-		return cards, int(total), err
+	q.Count = domain.CountExact
+	cards, extent, err := a.svc.Catalogue.Search(ctx, q)
+	if err != nil {
+		return nil, 0, err
+	}
+	total := *extent.Total
+	if q.Offset > 0 || q.Library != (uuid.UUID{}) {
+		return cards, int(total), nil
 	}
 	found, err := a.svc.Discover.Find(ctx, q.Profile, domain.MediaRemote, q.Text, q.Kinds)
 	if err != nil {

@@ -10,7 +10,7 @@ export const load: LayoutLoad = async ({ fetch, params, parent, depends }) => {
 	const [{ libraries }, facets, collections] = await Promise.all([
 		parent(),
 		need(api.GET("/api/v1/libraries/{id}/facets", { params: { path } })),
-		// Only its total is wanted: whether to offer the tab at all.
+		// Only whether there is one: whether to offer the tab at all.
 		need(
 			api.GET("/api/v1/libraries/{id}/collections", {
 				params: { path, query: { limit: 1 } },
@@ -19,5 +19,5 @@ export const load: LayoutLoad = async ({ fetch, params, parent, depends }) => {
 	]);
 	const library = libraries.find((l) => l.id === params.id);
 	if (!library) error(404, "That library isn't here any more.");
-	return { library, facets, collections: collections.total };
+	return { library, facets, collections: collections.items.length > 0 };
 };

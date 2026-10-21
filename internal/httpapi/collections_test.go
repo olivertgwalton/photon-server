@@ -30,11 +30,11 @@ type fakeCollections struct {
 	boxSet domain.CollectionBoxSet
 }
 
-func (fakeCollections) Collections(_ context.Context, lib, _ uuid.UUID, offset, _ int) ([]store.Card, int64, error) {
+func (fakeCollections) Collections(_ context.Context, lib, _ uuid.UUID, page store.Page) ([]store.Card, store.Extent, error) {
 	if lib != films {
-		return nil, 0, store.ErrNotFound
+		return nil, store.Extent{}, store.ErrNotFound
 	}
-	return []store.Card{{ID: alienSet, Kind: domain.ItemCollection, Title: "Alien Collection"}}, int64(offset + 1), nil
+	return []store.Card{{ID: alienSet, Kind: domain.ItemCollection, Title: "Alien Collection"}}, extentOf(int64(page.Offset+1), page.Offset, 1, page.Count), nil
 }
 
 func (fakeCollections) Members(_ context.Context, _, id uuid.UUID) ([]store.Card, error) {
@@ -44,8 +44,8 @@ func (fakeCollections) Members(_ context.Context, _, id uuid.UUID) ([]store.Card
 	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Alien"}}, nil
 }
 
-func (fakeCollections) AllCollections(context.Context, uuid.UUID, int, int) ([]store.Card, int64, error) {
-	return []store.Card{{ID: alienSet, Kind: domain.ItemCollection, Title: "Alien Collection"}}, 1, nil
+func (fakeCollections) AllCollections(_ context.Context, _ uuid.UUID, page store.Page) ([]store.Card, store.Extent, error) {
+	return []store.Card{{ID: alienSet, Kind: domain.ItemCollection, Title: "Alien Collection"}}, extentOf(1, page.Offset, 1, page.Count), nil
 }
 
 func (fakeCollections) AddCollection(context.Context, string) (uuid.UUID, error) {

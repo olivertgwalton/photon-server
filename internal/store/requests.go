@@ -133,36 +133,39 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 	return s.request(ctx, s.pool, id)
 }
 
-// Requests answers a page of a profile's requests, newest first, and how many it has.
-func (s *Store) Requests(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Request, int64, error) {
-	return s.requests(ctx, `r.profile_id = @profile`, pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit})
+// Requests answers a page of a profile's requests, newest first, and what the page tells of the
+// rest.
+func (s *Store) Requests(ctx context.Context, profile uuid.UUID, page Page) ([]Request, Extent, error) {
+	return s.requests(ctx, `r.profile_id = @profile`, pgx.NamedArgs{"profile": profile}, page)
 }
 
 // RequestsKept answers a page of the requests of the profiles one administers, newest first, those
-// in a state where one is given, and how many there are: every profile's for an admin, by nil; the
-// users a manager keeps for a manager.
-func (s *Store) RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, offset, limit int) ([]Request, int64, error) {
+// in a state where one is given, and what the page tells of the rest: every profile's for an admin,
+// by nil; the users a manager keeps for a manager.
+func (s *Store) RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, page Page) ([]Request, Extent, error) {
 	return s.requests(ctx, `(@by::uuid IS NULL OR (p.managed_by = @by AND p.role = 'user'))
 		AND (@state = '' OR r.state = @state)`,
-		pgx.NamedArgs{"by": by, "state": string(state), "offset": offset, "limit": limit})
+		pgx.NamedArgs{"by": by, "state": string(state)}, page)
 }
 
-func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs) ([]Request, int64, error) {
+func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs, page Page) ([]Request, Extent, error) {
 	const from = ` FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE `
+	args["offset"], args["limit"] = page.Offset, page.Limit+1
 	var rows []requestRow
-	total, err := s.counted(ctx, `SELECT count(*)`+from+where, args, func(ctx context.Context) (err error) {
+	total, err := s.counted(ctx, page.Count, `SELECT count(*)`+from+where, args, func(ctx context.Context) (err error) {
 		rows, err = queryStructs[requestRow](ctx, s.pool, `SELECT `+requestColumns+from+where+`
 			ORDER BY r.asked_at DESC, r.id DESC OFFSET @offset LIMIT @limit`, args)
 		return err
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
+	rows, more := pageOf(rows, page.Limit)
 	out := make([]Request, len(rows))
 	for i, r := range rows {
 		out[i] = r.request()
 	}
-	return out, total, nil
+	return out, Extent{More: more, Total: total}, nil
 }
 
 // WithdrawRequest takes back a profile's request while it waits: ErrDecided once it is decided,

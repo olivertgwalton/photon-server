@@ -71,7 +71,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 		}
 		return out
 	}
-	all, _, err := s.AllCollections(ctx, uuid.UUID{}, 0, 10)
+	all, _, err := totalled(s.AllCollections(ctx, uuid.UUID{}, totalledPage(0, 10)))
 	if got := titles(all); err != nil || !slices.Equal(got, []string{"Alien Collection", "Weekend"}) {
 		t.Errorf("the Collections view = %q, %v; want TMDB's box set once, and the admin's", got, err)
 	}
@@ -82,7 +82,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	for lib, want := range map[uuid.UUID][]string{
 		films.ID: {"Alien Collection", "Weekend"}, uhd.ID: {}, shows.ID: {"Weekend"},
 	} {
-		listed, _, err := s.Collections(ctx, lib, uuid.UUID{}, 0, 10)
+		listed, _, err := totalled(s.Collections(ctx, lib, uuid.UUID{}, totalledPage(0, 10)))
 		if got := titles(listed); err != nil || !slices.Equal(got, want) {
 			t.Errorf("library %v lists %q, %v; want %q", lib, got, err, want)
 		}
@@ -99,11 +99,11 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 	if got := titles(members); err != nil || !slices.Equal(got, []string{"Alien", "Alien 3", "Aliens"}) {
 		t.Errorf("a smart collection of two libraries holds %q, %v; want both libraries' A films", got, err)
 	}
-	found, _, err := s.Search(ctx, SearchQuery{Text: "weekend", Library: shows.ID, Limit: 10})
+	found, _, err := totalled(s.Search(ctx, SearchQuery{Text: "weekend", Library: shows.ID, Limit: 10, Count: domain.CountExact}))
 	if got := titles(found); err != nil || !slices.Equal(got, []string{"Weekend"}) {
 		t.Errorf("searching the shows for it = %q, %v; want the collection holding one", got, err)
 	}
-	if found, _, err = s.Search(ctx, SearchQuery{Text: "weekend", Library: uhd.ID, Limit: 10}); err != nil || len(found) != 0 {
+	if found, _, err = totalled(s.Search(ctx, SearchQuery{Text: "weekend", Library: uhd.ID, Limit: 10, Count: domain.CountExact})); err != nil || len(found) != 0 {
 		t.Errorf("searching the 4K films for it = %q, %v; want none", titles(found), err)
 	}
 }

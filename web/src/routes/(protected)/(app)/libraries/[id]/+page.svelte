@@ -204,7 +204,7 @@ function jump(letters: Letter[], letter: string) {
 		<svelte:boundary>
 			{@const answer = await shown}
 			{#if "titles" in answer}
-				{count(answer.titles.total, episodes ? "episode" : "title")}
+				{count(answer.titles.total ?? 0, episodes ? "episode" : "title")}
 			{/if}
 			{#snippet pending()}
 				<!-- No count until the wall comes. -->

@@ -59,5 +59,5 @@ const { offset, total } = $derived(data.requests);
 			<p class="text-ink-3">Nothing asked for yet.</p>
 		{/each}
 	</ul>
-	<Pager {offset} {total} />
+	<Pager {offset} total={total ?? 0} />
 </div>
