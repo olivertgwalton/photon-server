@@ -5,11 +5,13 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, params }) => {
 	const api = client(fetch);
 	const path = { params: { path: { id: params.id } } };
-	const [profiles, access] = await Promise.all([
+	const [profiles, access, authenticator] = await Promise.all([
 		need(api.GET("/api/v1/profiles")),
 		need(api.GET("/api/v1/admin/profiles/{id}/access", path)),
+		// None is a 404.
+		api.GET("/api/v1/admin/profiles/{id}/authenticator", path),
 	]);
 	const profile = profiles.items.find((p) => p.id === params.id);
 	if (!profile) error(404, "That isn't here any more.");
-	return { profile, access };
+	return { profile, access, authenticator: authenticator.data };
 };

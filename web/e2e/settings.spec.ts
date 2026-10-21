@@ -137,6 +137,62 @@ test("a member sets a PIN and takes it off again, and sees no server", async ({
 	await expect(page.getByRole("button", { name: "Set PIN" })).toBeVisible();
 });
 
+test.describe(() => {
+	// Every other test logs in by the password alone, even after this one fails.
+	test.afterEach(({ request }) => request.delete("/mock/authenticators"));
+
+	test("an authenticator app is added by its code, then asked for at login", async ({
+		page,
+	}) => {
+		await logIn(page, "/settings");
+		await page
+			.getByRole("button", { name: "Set up an authenticator app" })
+			.click();
+		await expect(
+			page.getByRole("img", { name: "A QR code of the key" }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: "open it in the app" }),
+		).toHaveAttribute(
+			"href",
+			/^otpauth:\/\/totp\/Den:Ada\?secret=[A-Z2-7]{32}&issuer=Den$/,
+		);
+		await expectAccessible(page);
+		await page.getByLabel("The code it shows").fill("000000");
+		await page.getByRole("button", { name: "Add authenticator app" }).click();
+		await expect(
+			page.getByText("That's not the right PIN or password."),
+		).toBeVisible();
+		await page.getByLabel("The code it shows").fill("123456");
+		await page.getByRole("button", { name: "Add authenticator app" }).click();
+		await expect(page.getByText(/^Authenticator app added/)).toBeVisible();
+
+		await page.getByRole("button", { name: "Ada's profile" }).click();
+		await page.getByRole("menuitem", { name: "Log out" }).click();
+		await expect(page).toHaveURL("/auth/login");
+		await page.getByLabel("Name").fill("Ada");
+		await page.getByLabel("Password").fill("correct horse");
+		await page.getByRole("button", { name: "Log in" }).click();
+		await expect(page.getByRole("alert")).toHaveText(
+			"Type the code your authenticator app shows.",
+		);
+		await expect(page.getByLabel("Code")).toBeFocused();
+		await expectAccessible(page);
+		await page.getByLabel("Code").fill("123456");
+		await page.getByRole("button", { name: "Log in" }).click();
+		await page.getByRole("button", { name: "Ada" }).click();
+
+		await page.goto("/settings");
+		await page
+			.getByRole("button", { name: "Remove authenticator app" })
+			.click();
+		await expect(page.getByText("Authenticator app removed.")).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "Set up an authenticator app" }),
+		).toBeVisible();
+	});
+});
+
 test("playback settings are the profile's, kept by the server", async ({
 	page,
 }) => {

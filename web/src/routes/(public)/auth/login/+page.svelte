@@ -1,5 +1,6 @@
 <script lang="ts">
 import { client } from "#lib/api/client.js";
+import { asksForCode } from "#lib/api/problem.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -19,6 +20,9 @@ import type { PageData as PickerData } from "../../../(protected)/profiles/$type
 
 let { data } = $props();
 let pending = $state(false);
+// A profile with an authenticator app is asked its code once its password is
+// right, and the form is sent again with it.
+let askCode = $state(false);
 // A provider that sent the reader back refused says why.
 let message = $state(refusalMessage(page.url.searchParams.get("refused")));
 
@@ -32,6 +36,7 @@ async function login(event: SubmitEvent) {
 				method: "password",
 				name: String(form.get("name")),
 				password: String(form.get("password")),
+				code: askCode ? String(form.get("code")) : undefined,
 				...browserSession(),
 			},
 		}),
@@ -39,6 +44,7 @@ async function login(event: SubmitEvent) {
 	if (!signedIn.answer) {
 		pending = false;
 		message = signedIn.message;
+		askCode ||= asksForCode(signedIn.refused);
 		return;
 	}
 	// A household of several is asked who is watching, as Plex and Netflix
@@ -128,6 +134,25 @@ async function continueWith(slug: string) {
 						<a href="/auth/reset">Forgot your password?</a>
 					</Field.Description>
 				</Field.Field>
+				{#if askCode}
+					<Field.Field>
+						<Field.Label for="code">Code</Field.Label>
+						<Input
+							id="code"
+							name="code"
+							inputmode="numeric"
+							autocomplete="one-time-code"
+							pattern="[0-9 ]*"
+							maxlength={7}
+							required
+							{@attach (input) => input.focus()}
+						/>
+						<Field.Description>
+							From your authenticator app. Lost it? An admin can remove it, or
+							reset your password.
+						</Field.Description>
+					</Field.Field>
+				{/if}
 				<Field.Error errors={[{ message }]} />
 				<Field.Field>
 					<Button type="submit" disabled={pending}>Log in</Button>
