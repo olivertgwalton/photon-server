@@ -30,17 +30,20 @@ export function browserSession() {
 }
 
 // A call's answer, or what to tell the reader when it failed: the server's
-// problem, or that the server never answered.
+// problem, kept as refused, or that the server never answered.
 export async function attempt<
 	A extends { error?: unknown; response: Response },
 >(
 	call: Promise<A>,
 ): Promise<
-	{ answer: A; message?: undefined } | { answer?: undefined; message: string }
+	| { answer: A; message?: undefined; refused?: undefined }
+	| { answer?: undefined; message: string; refused?: unknown }
 > {
 	const answer = await call.catch(() => undefined);
 	if (!answer) return { message: "The server isn't answering." };
-	if (!answer.response.ok) return { message: problemMessage(answer.error) };
+	if (!answer.response.ok) {
+		return { message: problemMessage(answer.error), refused: answer.error };
+	}
 	return { answer };
 }
 

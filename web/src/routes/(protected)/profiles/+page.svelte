@@ -1,7 +1,7 @@
 <script lang="ts">
 import LockIcon from "@lucide/svelte/icons/lock";
 import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
+import { asksForCode, problemMessage } from "#lib/api/problem.js";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
@@ -11,6 +11,8 @@ import { goto } from "$app/navigation";
 
 let { data } = $props();
 let message = $state<string>();
+// The profile whose password was right, asked its authenticator app's code too.
+let codeFor = $state<string>();
 
 // Watches as the profile, with its PIN or password unless it is the one watched
 // as now, then goes back to where the reader was.
@@ -18,11 +20,15 @@ async function choose(event: SubmitEvent) {
 	const form = fields(event);
 	const profileID = String(form.get("profile_id"));
 	const secret = form.get("secret");
+	const code = form.get("code");
 	const { error } = await client().POST("/api/v1/profiles/{id}/switch", {
 		params: { path: { id: profileID } },
-		body: secret ? { secret: String(secret) } : undefined,
+		body: secret
+			? { secret: String(secret), code: code ? String(code) : undefined }
+			: undefined,
 	});
 	message = error ? problemMessage(error) : undefined;
+	if (asksForCode(error)) codeFor = profileID;
 	if (!error) await goto(data.to, { refreshAll: true });
 }
 
@@ -75,6 +81,21 @@ const target = "group grid justify-items-center gap-3 rounded-xl outline-none";
 						/>
 					{/if}
 				</Field.Field>
+				{#if codeFor === data.chosen.id}
+					<Field.Field>
+						<Field.Label for="code">Code</Field.Label>
+						<Input
+							id="code"
+							name="code"
+							inputmode="numeric"
+							autocomplete="one-time-code"
+							pattern="[0-9 ]*"
+							maxlength={7}
+							required
+							{@attach (input) => input.focus()}
+						/>
+					</Field.Field>
+				{/if}
 				<Field.Error errors={[{ message }]} />
 				<Field.Field orientation="horizontal" class="justify-center">
 					<Button

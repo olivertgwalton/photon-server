@@ -6,6 +6,7 @@ type Problem = components["schemas"]["Problem"];
 const messages: Partial<Record<Problem["code"], string>> = {
 	sign_in_refused: "That name and password don't match.",
 	wrong_secret: "That's not the right PIN or password.",
+	authenticator_code_required: "Type the code your authenticator app shows.",
 	pairing_not_found:
 		"No device is showing that code. Check it, or start again on the device.",
 	rate_limited: "Too many tries. Wait a minute and try again.",
@@ -21,6 +22,12 @@ function isProblem(value: unknown): value is Problem {
 		typeof (value as Problem).code === "string" &&
 		typeof (value as Problem).status === "number"
 	);
+}
+
+// Whether a refusal asks for the profile's authenticator app's code beside its
+// password, which is right.
+export function asksForCode(value: unknown): boolean {
+	return isProblem(value) && value.code === "authenticator_code_required";
 }
 
 // The sentence to show for a failed call: the server's detail, else what its
