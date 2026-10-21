@@ -125,7 +125,9 @@ const options = $derived(kinds.find((k) => k.kind === kind));
 const chosen = (made: Schemas["KindSources"]) =>
 	library?.sources.find((s) => s.kind === made.kind) ?? made;
 
-const extras = $derived(library?.remote_extras ?? defaults.remote_extras);
+const extras = $derived<readonly string[]>(
+	library?.remote_extras ?? defaults.remote_extras,
+);
 
 // The languages offered: the common ones, and any the library already has.
 const fetching = $derived(library?.subtitle_languages ?? []);
@@ -378,7 +380,7 @@ const refreshOptions = $derived(
 								id="{id}-extra-{value}"
 								name="remote_extras"
 								{value}
-								checked={(extras as string[]).includes(value)}
+								checked={extras.includes(value)}
 							/>
 							<Label for="{id}-extra-{value}">{label}</Label>
 						</div>
