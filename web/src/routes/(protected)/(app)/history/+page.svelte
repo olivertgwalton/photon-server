@@ -1,5 +1,5 @@
 <script lang="ts">
-import Pager from "#lib/components/Pager.svelte";
+import CursorPager from "#lib/components/CursorPager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
 import { timecode } from "#lib/format.js";
 import { vocabulary } from "#lib/vocabulary.js";
@@ -16,7 +16,6 @@ const days = $derived(
 		day.format(new Date(play.started_at)),
 	),
 );
-const { offset, total } = $derived(data.history);
 </script>
 
 <svelte:head><title>History · Photon</title></svelte:head>
@@ -43,5 +42,5 @@ const { offset, total } = $derived(data.history);
 	{:else}
 		<p class="text-ink-3">Nothing played yet.</p>
 	{/each}
-	<Pager {offset} {total} />
+	<CursorPager next={data.history.next} />
 </div>

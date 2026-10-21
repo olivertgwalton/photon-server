@@ -385,20 +385,19 @@ type Play struct {
 	PositionMS int64
 }
 
-// History answers a page of plays, the latest first, and how many there are: a profile's, or
-// everyone's for none.
-func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]Play, int64, error) {
-	who := optional(profile)
-	const whose = ` FROM plays WHERE $1::uuid IS NULL OR profile_id = $1`
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)`+whose, who).Scan(&total); err != nil {
-		return nil, 0, err
+// History answers up to limit plays from before, the latest first, and whether there are more: a
+// profile's, or everyone's for none. Each is its own statement, as either's index reads it in order.
+func (s *Store) History(ctx context.Context, profile uuid.UUID, before Before, limit int) ([]Play, bool, error) {
+	const columns = `SELECT id, profile_id, item_id, method, started_at, stopped_at, position_ms FROM plays`
+	const page = ` (stopped_at, id) < (@at, @id) ORDER BY stopped_at DESC, id DESC LIMIT @limit`
+	sql := columns + ` WHERE` + page
+	if profile != (uuid.UUID{}) {
+		sql = columns + ` WHERE profile_id = @profile AND` + page
 	}
-	rows, err := queryRows[model.Play](ctx, s.pool, `
-		SELECT id, profile_id, item_id, method, started_at, stopped_at, position_ms`+whose+`
-		ORDER BY stopped_at DESC, id DESC OFFSET $2 LIMIT $3`, who, offset, limit)
+	read, err := queryRows[model.Play](ctx, s.pool, sql, pgx.NamedArgs{"profile": profile, "at": before.At, "id": before.ID, "limit": limit + 1})
+	rows, more := pageOf(read, limit)
 	if err != nil || len(rows) == 0 {
-		return []Play{}, total, err
+		return []Play{}, false, err
 	}
 	in := make([]uuid.UUID, len(rows))
 	for n, r := range rows {
@@ -406,11 +405,11 @@ func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit in
 	}
 	items, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = ANY($1)`, in)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 	cards, err := s.cards(ctx, profile, items)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 	byID := map[uuid.UUID]Card{}
 	for _, c := range cards {
@@ -423,5 +422,5 @@ func (s *Store) History(ctx context.Context, profile uuid.UUID, offset, limit in
 			StartedAt: r.StartedAt, StoppedAt: r.StoppedAt, PositionMS: r.PositionMS,
 		}
 	}
-	return out, total, nil
+	return out, more, nil
 }

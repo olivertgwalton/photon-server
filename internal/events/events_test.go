@@ -46,9 +46,9 @@ func TestTheLogKeepsWhatAnAdminReadsLater(t *testing.T) {
 	hub.Raise(ctx, domain.Event{Kind: domain.EventSignedIn, Profile: oliver.ID, Details: domain.SignInDetails{Device: "Living room"}})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: domain.TaskSweepJobs}})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventSignInRefused, Details: domain.SignInDetails{Name: "Oliver"}})
-	got, total, err := st.Activity(ctx, "", 0, 10)
-	if err != nil || total != 2 {
-		t.Fatalf("Activity = %+v of %d, %v; want the sign-in and the refusal, not the task starting", got, total, err)
+	got, _, err := st.Activity(ctx, "", store.Newest, 10)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Activity = %+v, %v; want the sign-in and the refusal, not the task starting", got, err)
 	}
 	if got[0].Kind != domain.EventSignInRefused || got[1].Kind != domain.EventSignedIn || got[1].Profile != oliver.ID {
 		t.Errorf("Activity = %+v; want the refusal, then Oliver's sign-in", got)

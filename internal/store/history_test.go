@@ -44,11 +44,21 @@ func TestEachPlayIsKeptInTheHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	mine, total, err := s.History(ctx, oliver.ID, 0, 10)
-	if err != nil || total != 2 || len(mine) != 2 || mine[0].PositionMS != 3*60_000 || mine[0].Card.Title != "Heat" || mine[0].Method != domain.PlayRemux {
-		t.Errorf("Oliver's = %+v of %d, %v; want his two, the latest first", mine, total, err)
+	mine, more, err := s.History(ctx, oliver.ID, Newest, 10)
+	if err != nil || more || len(mine) != 2 || mine[0].PositionMS != 3*60_000 || mine[0].Card.Title != "Heat" || mine[0].Method != domain.PlayRemux {
+		t.Errorf("Oliver's = %+v, more %v, %v; want his two, the latest first, and no more", mine, more, err)
 	}
-	if all, total, err := s.History(ctx, uuid.UUID{}, 1, 1); err != nil || total != 3 || len(all) != 1 || all[0].Profile != kid.ID {
-		t.Errorf("everyone's second = %+v of %d, %v; want the kid's", all, total, err)
+	first, more, err := s.History(ctx, uuid.UUID{}, Newest, 1)
+	if err != nil || !more || len(first) != 1 || first[0].Profile != oliver.ID {
+		t.Fatalf("everyone's first = %+v, more %v, %v; want Oliver's latest, and more", first, more, err)
+	}
+	// A play stopped as the history is read is on no later page: the next goes on from the last read.
+	p := domain.Playback{ID: uuid.NewV7(), Profile: kid.ID, Item: item, Version: c.Version, Method: domain.PlayDirect, Started: start.Add(time.Hour)}
+	if err := s.RecordPlay(ctx, p, p.Started.Add(time.Minute), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	next := Before{At: first[0].StoppedAt, ID: first[0].ID}
+	if second, more, err := s.History(ctx, uuid.UUID{}, next, 1); err != nil || !more || len(second) != 1 || second[0].Profile != kid.ID || second[0].StoppedAt.After(next.At) {
+		t.Errorf("everyone's second = %+v, more %v, %v; want the kid's first play, as before the new one", second, more, err)
 	}
 }

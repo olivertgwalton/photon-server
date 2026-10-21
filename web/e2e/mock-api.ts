@@ -1807,9 +1807,7 @@ const server_ = Bun.serve<Socket>({
 							position_ms: 600_000,
 						},
 					],
-					offset: 0,
-					total: 1,
-				} satisfies Schemas["HistoryEntryPage"]);
+				} satisfies Schemas["HistoryEntryCursorPage"]);
 			case "GET /api/v1/search": {
 				const q = (url.searchParams.get("q") ?? "").toLowerCase();
 				const found = everything().filter((c) =>

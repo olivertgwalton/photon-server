@@ -29,16 +29,19 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 			t.Fatalf("%s: %v", e.Kind, err)
 		}
 	}
-	all, total, err := s.Activity(ctx, "", 0, 10)
-	if err != nil || total != 4 || len(all) != 4 {
-		t.Fatalf("Activity = %d of %d, %v; want 4", len(all), total, err)
+	all, more, err := s.Activity(ctx, "", Newest, 10)
+	if err != nil || more || len(all) != 4 {
+		t.Fatalf("Activity = %d, more %v, %v; want 4 and no more", len(all), more, err)
 	}
 	if all[0].Kind != domain.EventLibraryScanned || all[0].Library != (uuid.UUID{}) || all[1].Kind != domain.EventSignInRefused || all[1].Details != (domain.SignInDetails{Name: "Guest"}) {
 		t.Errorf("newest first: %+v", all[:2])
 	}
-	ins, total, err := s.Activity(ctx, domain.EventSignedIn, 0, 1)
-	if err != nil || total != 2 || len(ins) != 1 || ins[0].Profile != oliver.ID || ins[0].Details != (domain.SignInDetails{Device: "Living room"}) {
-		t.Errorf("sign-ins' first page = %+v of %d, %v; want the latest of 2", ins, total, err)
+	ins, more, err := s.Activity(ctx, domain.EventSignedIn, Newest, 1)
+	if err != nil || !more || len(ins) != 1 || ins[0].Profile != oliver.ID || ins[0].Details != (domain.SignInDetails{Device: "Living room"}) {
+		t.Errorf("sign-ins' first page = %+v, more %v, %v; want the latest, and more", ins, more, err)
+	}
+	if older, more, err := s.Activity(ctx, domain.EventSignedIn, Before{At: ins[0].At, ID: ins[0].ID}, 1); err != nil || more || len(older) != 1 || !older[0].At.Equal(now.Add(-40*24*time.Hour)) {
+		t.Errorf("sign-ins' second page = %+v, more %v, %v; want the one from 40 days ago, and no more", older, more, err)
 	}
 
 	if n, err := s.PruneActivity(ctx, now.Add(-30*24*time.Hour)); err != nil || n != 1 {
@@ -51,8 +54,8 @@ func TestTheActivityLogIsReadNewestFirstAndForgetsTheOld(t *testing.T) {
 	if _, err := s.RemoveProfile(ctx, oliver.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	ins, total, err = s.Activity(ctx, domain.EventSignedIn, 0, 10)
-	if err != nil || total != 1 || ins[0].Profile != (uuid.UUID{}) {
-		t.Errorf("after removing Oliver: %+v of %d, %v; want his sign-in kept, naming no one", ins, total, err)
+	ins, _, err = s.Activity(ctx, domain.EventSignedIn, Newest, 10)
+	if err != nil || len(ins) != 1 || ins[0].Profile != (uuid.UUID{}) {
+		t.Errorf("after removing Oliver: %+v, %v; want his sign-in kept, naming no one", ins, err)
 	}
 }
