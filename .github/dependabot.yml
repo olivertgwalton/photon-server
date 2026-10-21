@@ -22,6 +22,9 @@ updates:
     groups:
       web:
         patterns: ["*"]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: swift
     directory: /macos
