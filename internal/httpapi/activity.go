@@ -12,7 +12,7 @@ import (
 )
 
 type activityLog interface {
-	Activity(ctx context.Context, kind domain.EventKind, offset, limit int) ([]domain.Event, int64, error)
+	Activity(ctx context.Context, kind domain.EventKind, before store.Before, limit int) ([]domain.Event, bool, error)
 }
 
 type eventHub interface {
@@ -57,11 +57,11 @@ func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	before, limit, ok := a.cursorPaging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	entries, total, err := a.svc.Activity.Activity(r.Context(), kind, offset, limit)
+	entries, more, err := a.svc.Activity.Activity(r.Context(), kind, before, limit)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -77,7 +77,12 @@ func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
 		out[i] = eventOf(e)
 		out[i].Text = said.Event(e, names)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[eventJSON]{out, offset, total})
+	page := cursorPageJSON[eventJSON]{Items: out}
+	if more {
+		last := entries[len(entries)-1]
+		page.Next = nextOf(last.At, last.ID)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, page)
 }
 
 type snapshotJSON struct {
@@ -166,8 +171,8 @@ func (a *API) activityRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/admin/activity", access: admin, summary: "Page the activity log, the newest first",
-			query:  append([]param{{"kind", domain.EventKind(""), "Only entries of this kind, one the log keeps."}}, pageParams...),
-			status: http.StatusOK, reply: pageJSON[eventJSON]{}, handle: a.adminActivity,
+			query:  append([]param{{"kind", domain.EventKind(""), "Only entries of this kind, one the log keeps."}}, cursorParams...),
+			status: http.StatusOK, reply: cursorPageJSON[eventJSON]{}, handle: a.adminActivity,
 		},
 	}
 }

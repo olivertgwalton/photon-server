@@ -577,11 +577,7 @@ export async function admin(
 		case "GET /api/v1/admin/activity": {
 			const kind = url.searchParams.get("kind");
 			const items = activity.filter((e) => !kind || e.kind === kind);
-			return json({
-				items,
-				offset: 0,
-				total: items.length,
-			} satisfies Schemas["EventPage"]);
+			return json({ items } satisfies Schemas["EventCursorPage"]);
 		}
 		case "GET /api/v1/admin/history":
 			return json({
@@ -602,9 +598,7 @@ export async function admin(
 						position_ms: 6_000_000,
 					},
 				],
-				offset: 0,
-				total: 1,
-			} satisfies Schemas["HistoryEntryPage"]);
+			} satisfies Schemas["HistoryEntryCursorPage"]);
 		case "GET /api/v1/admin/statistics": {
 			// The Kids watched Quiet Hours once, yesterday; a report of Ada's
 			// alone has nothing in it.

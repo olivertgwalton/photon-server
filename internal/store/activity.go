@@ -6,6 +6,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -30,20 +32,21 @@ func (s *Store) AddActivity(ctx context.Context, e domain.Event) (uuid.UUID, err
 	return id, err
 }
 
-// Activity answers a page of the activity log, the newest first, and how many entries there are:
-// every kind's, or one's.
-func (s *Store) Activity(ctx context.Context, kind domain.EventKind, offset, limit int) ([]domain.Event, int64, error) {
-	const of = `FROM activity WHERE $1 = '' OR kind = $1`
-	var total int64
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) `+of, kind).Scan(&total); err != nil {
-		return nil, 0, err
+// Activity answers up to limit entries of the activity log from before, the newest first, and
+// whether there are more: every kind's, or one's. Each is its own statement, as either's index reads
+// it in order.
+func (s *Store) Activity(ctx context.Context, kind domain.EventKind, before Before, limit int) ([]domain.Event, bool, error) {
+	const columns = `SELECT id, at, kind, profile_id, item_id, library_id, details FROM activity`
+	const page = ` (at, id) < (@at, @id) ORDER BY at DESC, id DESC LIMIT @limit`
+	sql := columns + ` WHERE` + page
+	if kind != "" {
+		sql = columns + ` WHERE kind = @kind AND` + page
 	}
-	rows, err := queryRows[model.Activity](ctx, s.pool, `
-		SELECT id, at, kind, profile_id, item_id, library_id, details `+of+` ORDER BY at DESC, id DESC OFFSET $2 LIMIT $3`,
-		kind, offset, limit)
+	read, err := queryRows[model.Activity](ctx, s.pool, sql, pgx.NamedArgs{"kind": kind, "at": before.At, "id": before.ID, "limit": limit + 1})
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
+	rows, more := pageOf(read, limit)
 	out := make([]domain.Event, len(rows))
 	for i, r := range rows {
 		out[i] = domain.Event{
@@ -52,10 +55,10 @@ func (s *Store) Activity(ctx context.Context, kind domain.EventKind, offset, lim
 		}
 		var err error
 		if out[i].Details, err = domain.DetailsOf(r.Kind, r.Details); err != nil {
-			return nil, 0, err
+			return nil, false, err
 		}
 	}
-	return out, total, nil
+	return out, more, nil
 }
 
 // PruneActivity forgets the entries from before a time, answering how many.

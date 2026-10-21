@@ -4,8 +4,8 @@ import { narrow } from "#lib/admin/narrow.js";
 import { liveStream } from "#lib/admin/stream.svelte.js";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/Choice.svelte";
+import CursorPager from "#lib/components/CursorPager.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import Pager from "#lib/components/Pager.svelte";
 import { Label } from "#lib/components/ui/label/index.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
@@ -22,7 +22,7 @@ const kinds = [
 
 // What arrived since the page loaded leads the first page, where it belongs.
 const events = $derived(
-	data.page.offset === 0
+	data.first
 		? [
 				...live.state.arrived.filter(
 					(e) =>
@@ -58,4 +58,4 @@ const events = $derived(
 
 <ActivityList {events} now={clock.now} />
 
-<Pager offset={data.page.offset} total={data.page.total} />
+<CursorPager next={data.page.next} />

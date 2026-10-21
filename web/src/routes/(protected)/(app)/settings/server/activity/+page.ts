@@ -1,6 +1,6 @@
 import { client, need } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { offsetOf, pageSize } from "#lib/paging.js";
+import { afterOf, pageSize } from "#lib/paging.js";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, url, parent }) => {
@@ -11,11 +11,11 @@ export const load: PageLoad = async ({ fetch, url, parent }) => {
 		asked in words.logged
 			? (asked as components["schemas"]["EventKind"])
 			: undefined;
-	const offset = offsetOf(url);
+	const after = afterOf(url);
 	const page = await need(
 		api.GET("/api/v1/admin/activity", {
-			params: { query: { kind, offset, limit: pageSize } },
+			params: { query: { kind, after, limit: pageSize } },
 		}),
 	);
-	return { page, kind };
+	return { page, kind, first: after === undefined };
 };
