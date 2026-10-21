@@ -87,7 +87,40 @@ You can reset a password from a device on your home network.
    can read it. With Docker, run `docker compose logs server` to see it.
 4. Type the code and a new password within 30 minutes.
 
-Every device on that profile is signed out.
+Every device on that profile is signed out, and its [authenticator app](#an-authenticator-app) is
+removed, in case it was lost with the password.
+
+## An authenticator app
+
+An authenticator app, such as Apple Passwords, 1Password or Google Authenticator, shows a new
+six-digit code every 30 seconds. Once a profile has one, logging in with its password also asks
+for the code, so a password someone else has learnt isn't enough on its own.
+
+1. Open Settings › Profile and choose **Set up an authenticator app**.
+2. Scan the QR code with the app. On a phone, choose **open it in the app** instead, or type the
+   key shown beside it.
+3. Type the code the app shows and choose **Add authenticator app**.
+
+From then on, the login page asks for the code once the password is right. Each code works once.
+
+Switching to the profile on **Who's watching?** asks for the code too, when it asks for the
+password. A user's PIN is still just its PIN.
+
+These don't ask for a code:
+
+- Logging in with a [sign-in service](02-single-sign-on.md), which has its own.
+- [Linking a TV](03-pair-a-tv.md) with a code, which a device already signed in approves.
+- [API keys](06-api-keys.md).
+
+Jellyfin apps have nowhere to type the code, so they can't log in to the profile with its
+password. Use [Quick Connect](05-jellyfin-apps.md#quick-connect) instead.
+
+### A lost phone
+
+**Remove authenticator app** in Settings › Profile takes it away. If you can't log in to do that,
+an admin can remove it from the profile's page under Settings › Profiles (a manager can, for the
+users it looks after). An admin who can't log in either can
+[reset their password](#a-forgotten-password), which removes the app too.
 
 ## PINs and switching profile
 
@@ -98,6 +131,8 @@ menu to open **Who's watching?**, then pick a profile.
   Settings › Profile. A user with no PIN asks for its password.
 - An **admin** or **manager** always asks for its password. That way nobody can take over the
   household's settings by guessing a few digits.
+- A profile asked for its password also asks for its
+  [authenticator app](#an-authenticator-app)'s code, if it has one.
 
 ## Good to know
 

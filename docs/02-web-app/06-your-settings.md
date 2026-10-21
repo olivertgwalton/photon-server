@@ -21,6 +21,7 @@ PNG, GIF or WebP image. **Remove picture** takes it away.
 | --- | --- |
 | Name | What every device calls you. No two profiles can share a name. |
 | Password | Type your **Current password**, then the new one twice. Changing it signs you out on every other device. If you have never had a password, leave **Current password** empty. |
+| Authenticator app | Asks for the code from an app on your phone as well as your password when a device logs in. See [an authenticator app](../04-access/01-profiles.md#an-authenticator-app). |
 | PIN | 4 to 6 digits, asked for instead of your password when someone switches to your profile. **Remove PIN** goes back to the password. An admin's profile cannot have a PIN. |
 
 Which libraries you can see is set by an admin or manager. See

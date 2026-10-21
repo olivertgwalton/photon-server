@@ -56,8 +56,9 @@ Quick Connect is Jellyfin's way of [signing in with a code](03-pair-a-tv.md). It
 
 The app signs in as whoever approved it.
 
-> **Tip:** A profile made by a [sign-in service](02-single-sign-on.md) has no password at first.
-> Quick Connect is how it signs in to a Jellyfin app.
+> **Tip:** A profile made by a [sign-in service](02-single-sign-on.md) has no password at first,
+> and a Jellyfin app can't ask for an [authenticator app](01-profiles.md#an-authenticator-app)'s
+> code. Quick Connect is how either signs in to a Jellyfin app.
 
 ## What playing is like
 
