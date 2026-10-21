@@ -5,6 +5,7 @@ export const settings: Record<string, [string, string, string][]> = {
 	"/settings": [
 		["name", "Name", "rename"],
 		["current", "Password", "change"],
+		["authenticator", "Authenticator app", "two-factor 2fa totp one-time code"],
 		["pin", "PIN", "lock code switch"],
 	],
 	"/settings/playback": [

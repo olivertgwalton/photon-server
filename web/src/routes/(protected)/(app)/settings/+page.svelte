@@ -1,7 +1,9 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
+import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
+import { keyAddress, keyPicture, newKey, spaced } from "#lib/authenticator.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -15,9 +17,15 @@ import { refreshAll } from "$app/navigation";
 let { data } = $props();
 const words = vocabulary();
 // Why a change was refused, beside the card it was made in.
-let refused = $state.raw<{ name?: string; pin?: string; password?: string }>(
-	{},
-);
+let refused = $state.raw<{
+	name?: string;
+	pin?: string;
+	password?: string;
+	authenticator?: string;
+}>({});
+// The key being given to an authenticator app, until its code shows it holds it.
+let key = $state<string>();
+const keyLink = $derived(key && keyAddress(key, data.server, data.me.name));
 
 // A change that worked says so in a toast and redraws the page; one refused
 // says why beside it.
@@ -81,6 +89,29 @@ async function setPassword(event: SubmitEvent) {
 		form.reset();
 	}
 }
+async function addAuthenticator(event: SubmitEvent) {
+	const code = String(fields(event).get("code"));
+	const secret = key ?? "";
+	const asked = client().PUT("/api/v1/profile/authenticator", {
+		body: { secret, code },
+	});
+	if (
+		await change(
+			asked,
+			"authenticator",
+			"Authenticator app added. Logging in now asks for its code.",
+		)
+	) {
+		key = undefined;
+	}
+}
+
+const removeAuthenticator = () =>
+	change(
+		client().DELETE("/api/v1/profile/authenticator"),
+		"authenticator",
+		"Authenticator app removed.",
+	);
 </script>
 
 <svelte:head><title>Profile · Settings · Photon</title></svelte:head>
@@ -193,6 +224,94 @@ async function setPassword(event: SubmitEvent) {
 					</Field.Field>
 				</Field.Group>
 			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>
+				<h2 id="authenticator" class="heading">Authenticator app</h2>
+			</Card.Title>
+			<Card.Description>
+				{#if data.authenticator}
+					Added {when.format(new Date(data.authenticator.added_at))}. Logging in
+					with your password, or switching to this profile with it, also asks
+					for the code it shows.
+				{:else}
+					Ask for a code from an app such as Apple Passwords, 1Password or
+					Google Authenticator as well as your password, when a device logs in.
+				{/if}
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			{#if data.authenticator}
+				<Field.Group>
+					<Field.Error errors={[{ message: refused.authenticator }]} />
+					<Field.Field orientation="horizontal">
+						<Button
+							type="button"
+							variant="outline"
+							onclick={removeAuthenticator}
+						>
+							Remove authenticator app
+						</Button>
+					</Field.Field>
+				</Field.Group>
+			{:else if key && keyLink}
+				<form onsubmit={addAuthenticator}>
+					<Field.Group>
+						<Field.Field>
+							<!-- A QR code is read on white, in either theme. -->
+							<div
+								class="size-44 max-w-44 rounded-md bg-white [&>svg]:size-full"
+								role="img"
+								aria-label="A QR code of the key"
+							>
+								{@html keyPicture(keyLink)}
+							</div>
+							<Field.Description>
+								Scan it with the app, or
+								<a href={keyLink}>open it in the app</a>
+								on this device, or type the key
+								<span class="text-ink font-mono">{spaced(key)}</span>.
+							</Field.Description>
+						</Field.Field>
+						<Field.Field
+							data-invalid={refused.authenticator ? true : undefined}
+						>
+							<Field.Label for="authenticator-code">
+								The code it shows
+							</Field.Label>
+							<Input
+								id="authenticator-code"
+								name="code"
+								inputmode="numeric"
+								autocomplete="one-time-code"
+								pattern="[0-9 ]*"
+								maxlength={7}
+								required
+								class="max-w-36"
+								aria-invalid={refused.authenticator ? true : undefined}
+							/>
+							<Field.Error errors={[{ message: refused.authenticator }]} />
+						</Field.Field>
+						<Field.Field orientation="horizontal">
+							<Button type="submit">Add authenticator app</Button>
+							<Button
+								type="button"
+								variant="outline"
+								onclick={() => (key = undefined)}
+							>
+								Cancel
+							</Button>
+						</Field.Field>
+					</Field.Group>
+				</form>
+			{:else}
+				<Button type="button" onclick={() => (key = newKey())}>
+					Set up an authenticator app
+				</Button>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

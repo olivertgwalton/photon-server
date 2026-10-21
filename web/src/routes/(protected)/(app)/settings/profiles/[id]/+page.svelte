@@ -1,7 +1,7 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
 import { accessOf } from "#lib/admin/access.js";
-import { roleOptions } from "#lib/admin/words.js";
+import { roleOptions, when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
@@ -58,6 +58,13 @@ function saveAccess(event: SubmitEvent) {
 			body: accessOf(fields(event)),
 		}),
 		"What this profile sees was saved.",
+	);
+}
+
+function removeAuthenticator() {
+	return act(
+		api.DELETE("/api/v1/admin/profiles/{id}/authenticator", path),
+		"Its authenticator app was removed.",
 	);
 }
 
@@ -147,6 +154,31 @@ function remove() {
 				</Field.Group>
 			</form>
 		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title><h2 class="heading">Authenticator app</h2></Card.Title>
+			<Card.Description>
+				{#if data.authenticator}
+					Added {when.format(new Date(data.authenticator.added_at))}. Logging in
+					with its password also asks for the code it shows.
+				{:else}
+					None. Its owner adds one in their settings.
+				{/if}
+			</Card.Description>
+		</Card.Header>
+		{#if data.authenticator}
+			<Card.Content>
+				<ConfirmButton
+					onconfirm={removeAuthenticator}
+					label="Remove authenticator app"
+					title="Remove {data.profile.name}'s authenticator app?"
+					confirm="Remove it"
+					body={"Its password alone will log it in, until its owner adds an app again. Do this for someone who has lost the phone the app was on."}
+				/>
+			</Card.Content>
+		{/if}
 	</Card.Root>
 
 	<div class="flex items-center gap-3">

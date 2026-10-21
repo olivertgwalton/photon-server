@@ -1248,6 +1248,9 @@ async function avatar(profile: Schemas["Profile"], request: Request) {
 // token → who it is watching as, and whether the profile has a PIN.
 const sessions = new Map<string, Schemas["Profile"]>();
 let kidsPIN = "";
+// When each profile was given an authenticator app, whose code here is always
+// 123456.
+const authenticators = new Map<string, string>();
 
 // The kinds of library each of a library's rows is made for, as the server
 // says of a home section.
@@ -1368,6 +1371,10 @@ const server_ = Bun.serve<Socket>({
 		// Not the API: how a test knows a page is listening, and makes the server
 		// announce a change.
 		if (route === "GET /mock/listening") return Response.json(sockets.size);
+		if (route === "DELETE /mock/authenticators") {
+			authenticators.clear();
+			return new Response(null, { status: 204 });
+		}
 		if (route === "POST /mock/emit") {
 			const { event, data, add } = (await request.json()) as {
 				event: string;
@@ -1451,6 +1458,12 @@ const server_ = Bun.serve<Socket>({
 				body.name !== "Ada" ||
 				body.password !== "correct horse"
 			) {
+				return problem(401, "sign_in_refused", "Unauthorized");
+			}
+			if (authenticators.has(ada.id) && !body.code) {
+				return problem(403, "authenticator_code_required", "Forbidden");
+			}
+			if (authenticators.has(ada.id) && body.code !== "123456") {
 				return problem(401, "sign_in_refused", "Unauthorized");
 			}
 			const issued = crypto.randomUUID();
@@ -1631,6 +1644,25 @@ const server_ = Bun.serve<Socket>({
 					? new Response(null, { status: 204 })
 					: problem(403, "wrong_secret", "That isn't the current password.");
 			}
+			case "GET /api/v1/profile/authenticator": {
+				const added = authenticators.get(me.id);
+				return added
+					? Response.json({
+							added_at: added,
+						} satisfies Schemas["Authenticator"])
+					: problem(404, "not_found", "Not Found");
+			}
+			case "PUT /api/v1/profile/authenticator": {
+				const body = (await request.json()) as Schemas["AuthenticatorChange"];
+				if (!/^[A-Z2-7]{32}$/.test(body.secret) || body.code !== "123456") {
+					return problem(403, "wrong_secret", "Forbidden");
+				}
+				authenticators.set(me.id, new Date().toISOString());
+				return new Response(null, { status: 204 });
+			}
+			case "DELETE /api/v1/profile/authenticator":
+				authenticators.delete(me.id);
+				return new Response(null, { status: 204 });
 			case "DELETE /api/v1/profile/pin":
 				kidsPIN = "";
 				return new Response(null, { status: 204 });
