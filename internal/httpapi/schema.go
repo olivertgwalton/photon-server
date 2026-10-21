@@ -323,7 +323,7 @@ func (s *schemas) of(t reflect.Type) jsonSchema {
 		}
 		return s.ref(t, func() jsonSchema {
 			if pattern, ok := open[t]; ok {
-				return jsonSchema{Type: schemaType{name: "string"}, AnyOf: []jsonSchema{{Enum: enum}, {Pattern: pattern.String()}}}
+				return jsonSchema{Type: schemaType{name: "string"}, AnyOf: []jsonSchema{{Enum: enum}, {Type: schemaType{name: "string"}, Pattern: pattern.String()}}}
 			}
 			return jsonSchema{Type: schemaType{name: "string"}, Enum: enum}
 		})

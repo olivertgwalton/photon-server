@@ -19,7 +19,7 @@ const sources = $derived([
 	{ value: "tmdb", label: "A TMDB list" },
 	{ value: "mdblist", label: "An MDBList list" },
 	...data.listers.map((p) => ({
-		value: String(p.provider),
+		value: p.provider,
 		label: `A ${p.name} catalog`,
 	})),
 ]);
