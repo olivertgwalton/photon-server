@@ -329,7 +329,7 @@ func everyRow(ctx context.Context, t *testing.T, s *Store, profile uuid.UUID) ma
 	out := map[domain.HomeRow][]Card{}
 	for _, row := range domain.HomeRows() {
 		if row.LibraryKinds() == nil {
-			cards, _, err := s.RowPage(ctx, profile, row, 0, 10)
+			cards, _, err := totalled(s.RowPage(ctx, profile, row, totalledPage(0, 10)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -569,7 +569,7 @@ func TestWatchlistPage(t *testing.T) {
 	}
 	page := func(profile uuid.UUID, offset, limit int) ([]string, int64) {
 		t.Helper()
-		cards, total, err := s.RowPage(ctx, profile, domain.RowWatchlist, offset, limit)
+		cards, total, err := totalled(s.RowPage(ctx, profile, domain.RowWatchlist, totalledPage(offset, limit)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -657,7 +657,7 @@ func TestRowPage(t *testing.T) {
 	} {
 		var got []string
 		for offset := 0; offset < 4; offset += 2 {
-			cards, total, err := s.RowPage(ctx, admin, tc.row, offset, 2)
+			cards, total, err := totalled(s.RowPage(ctx, admin, tc.row, totalledPage(offset, 2)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -673,7 +673,7 @@ func TestRowPage(t *testing.T) {
 		}
 	}
 	for _, row := range []domain.HomeRow{domain.RowRecentFilms, domain.RowRecentShows} {
-		if _, _, err := s.RowPage(ctx, admin, row, 0, 2); !errors.Is(err, ErrNotFound) {
+		if _, _, err := totalled(s.RowPage(ctx, admin, row, totalledPage(0, 2))); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: err = %v, want %v", row, err, ErrNotFound)
 		}
 	}

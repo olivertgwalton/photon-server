@@ -20,7 +20,10 @@ export const load: PageLoad = async ({ fetch, params, url, depends }) => {
 	const wall = Promise.all([
 		need(
 			api.GET("/api/v1/libraries/{id}/titles", {
-				params: { path, query: { ...query, limit: wallPageSize } },
+				params: {
+					path,
+					query: { ...query, limit: wallPageSize, total: "exact" },
+				},
 			}),
 		),
 		(sort ?? "title") === "title"

@@ -10,7 +10,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		library,
 		results: await need(
 			client(fetch).GET("/api/v1/search", {
-				params: { query: { q, library, limit: 100 } },
+				params: { query: { q, library, limit: 100, total: "exact" } },
 			}),
 		),
 	};

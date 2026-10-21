@@ -162,25 +162,27 @@ const leastVotes = 1000
 // year, as a film's files come months after it opens in cinemas.
 const releasedWithinDays = 365
 
-// RowPage answers a page of one of the profile's own home rows, in the row's order, and how many
-// titles it holds: ErrNotFound for a library's or a collection's row, which lead to its own page.
-func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]Card, int64, error) {
+// RowPage answers a page of one of the profile's own home rows, in the row's order, and what the
+// page tells of the rest: ErrNotFound for a library's or a collection's row, which lead to its own
+// page.
+func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page Page) ([]Card, Extent, error) {
 	q, ok := rowQueries[row]
 	if !ok || row.LibraryKinds() != nil {
-		return nil, 0, ErrNotFound
+		return nil, Extent{}, ErrNotFound
 	}
 	// LIMIT NULL is no limit.
 	all := pgx.NamedArgs{"profile": profile, "offset": 0, "limit": nil}
 	var items []*model.Item
-	total, err := s.counted(ctx, `SELECT count(*) FROM (`+q+`) page`, all, func(ctx context.Context) (err error) {
-		items, err = queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "offset": offset, "limit": limit})
+	total, err := s.counted(ctx, page.Count, `SELECT count(*) FROM (`+q+`) page`, all, func(ctx context.Context) (err error) {
+		items, err = queryRows[model.Item](ctx, s.pool, q, pgx.NamedArgs{"profile": profile, "offset": page.Offset, "limit": page.Limit + 1})
 		return err
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
+	items, more := pageOf(items, page.Limit)
 	cards, err := s.cards(ctx, profile, items)
-	return cards, total, err
+	return cards, Extent{More: more, Total: total}, err
 }
 
 // LibraryRow answers the first cards, up to limit, of a row made for each library, of library:

@@ -43,12 +43,15 @@ func (l longLibrary) LibrariesSeen(context.Context, uuid.UUID) ([]*store.SeenLib
 	return []*store.SeenLibrary{{ID: l.lib, Name: "Films", Kind: domain.LibraryMovies}}, nil
 }
 
-func (l longLibrary) Wall(_ context.Context, _ []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error) {
+func (l longLibrary) Wall(_ context.Context, _ []uuid.UUID, p store.WallPage) ([]uuid.UUID, store.Extent, error) {
 	var ids []uuid.UUID
 	for _, c := range l.cards[min(p.Offset, len(l.cards)):min(p.Offset+p.Limit, len(l.cards))] {
 		ids = append(ids, c.ID)
 	}
-	return ids, int64(len(l.cards)), nil
+	if p.Count != domain.CountExact {
+		return nil, store.Extent{}, errors.New("a Jellyfin list is counted")
+	}
+	return ids, store.Extent{More: p.Offset+len(ids) < len(l.cards), Total: new(int64(len(l.cards)))}, nil
 }
 
 func (l longLibrary) Cards(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]store.Card, error) {

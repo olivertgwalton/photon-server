@@ -88,11 +88,11 @@ func TestAPersonIsCreditedOnceAcrossTitles(t *testing.T) {
 		t.Errorf("no one: %v, want ErrNotFound", err)
 	}
 	for _, q := range []string{"weav", "SIGOURNEY w", "Sigourney Weaver"} {
-		if found, _, err := s.SearchPeople(ctx, q, 0, 10); err != nil || len(found) != 1 || found[0].ID != her || found[0].Photo == (uuid.UUID{}) {
+		if found, _, err := totalled(s.SearchPeople(ctx, q, totalledPage(0, 10))); err != nil || len(found) != 1 || found[0].ID != her || found[0].Photo == (uuid.UUID{}) {
 			t.Errorf("search %q: %+v, %v; want her", q, found, err)
 		}
 	}
-	found, total, err := s.SearchPeople(ctx, "gourney", 0, 10)
+	found, total, err := totalled(s.SearchPeople(ctx, "gourney", totalledPage(0, 10)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestAPersonIsKnownByAnyProvidersID(t *testing.T) {
 		if err != nil || !maps.Equal(p.IDs, want[c.Name]) {
 			t.Errorf("%s = %+v, %v; want one person with ids %v", c.Name, p, err, want[c.Name])
 		}
-		found, _, err := s.SearchPeople(ctx, c.Name, 0, 10)
+		found, _, err := totalled(s.SearchPeople(ctx, c.Name, totalledPage(0, 10)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -490,7 +490,7 @@ func TestTwoMatchesCreditingSomeoneNewAtOnceShareThem(t *testing.T) {
 		if len(credited[0]) != len(cast) || !slices.Equal(credited[0], credited[1]) {
 			t.Errorf("round %d: credited %v and %v, want the same %d people on both", round, credited[0], credited[1], len(cast))
 		}
-		found, _, err := s.SearchPeople(ctx, "Actor 7", 0, 10)
+		found, _, err := totalled(s.SearchPeople(ctx, "Actor 7", totalledPage(0, 10)))
 		if err != nil {
 			t.Fatal(err)
 		}

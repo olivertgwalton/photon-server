@@ -38,6 +38,7 @@ var (
 	pageParams = []param{
 		{"offset", 0, "Where the page starts, from 0."},
 		{"limit", 0, "How many to answer, from 1 to " + strconv.Itoa(maxWallLimit) + "."},
+		{"total", domain.Counting(""), "Whether to count how many there are in all, which reads every one: none by default."},
 	}
 	// signatureParams are a signed address's: GET it as the server gave it.
 	signatureParams = []param{

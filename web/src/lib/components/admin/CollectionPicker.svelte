@@ -19,14 +19,14 @@ const id = $props.id();
 async function load() {
 	const api = client();
 	const mine = [];
-	for (let offset = 0, total = 1; offset < total; offset += 200) {
+	for (let offset = 0, more = true; more; offset += 200) {
 		const page = await answer(
 			api.GET("/api/v1/collections", {
 				params: { query: { offset, limit: 200 } },
 			}),
 		);
 		mine.push(...page.items.filter((c) => c.origin === "user"));
-		total = page.total;
+		more = page.more;
 	}
 	return mine;
 }

@@ -24,6 +24,7 @@ type SearchQuery struct {
 	Kinds   []domain.ItemKind
 	Offset  int
 	Limit   int
+	Count   domain.Counting
 }
 
 // nearFrom is how many letters and digits are typed before titles near what was typed are
@@ -39,15 +40,15 @@ const nearEnough = "0.4"
 // of it.
 const searchedText = `search_text(title || ' ' || coalesce(original_title, ''))`
 
-// Search answers a page of the matching titles, and how many match in all: one named exactly what
-// was typed, then those starting with it, then the closest matches; an episode after the films,
-// shows and collections matched as well, as Jellyfin ranks them. Where no title has the words
-// typed, those typed with a letter wrong are found by the trigrams they share, the nearest first,
-// as Plex finds them.
-func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error) {
+// Search answers a page of the matching titles, and what the page tells of the rest: one named
+// exactly what was typed, then those starting with it, then the closest matches; an episode after
+// the films, shows and collections matched as well, as Jellyfin ranks them. Where no title has the
+// words typed, those typed with a letter wrong are found by the trigrams they share, the nearest
+// first, as Plex finds them.
+func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, Extent, error) {
 	words := words(q.Text)
 	if len(words) == 0 {
-		return []Card{}, 0, nil
+		return []Card{}, nothingFound(q.Count), nil
 	}
 	kinds := q.Kinds
 	if len(kinds) == 0 {
@@ -55,40 +56,55 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, int64, error
 	}
 	args := pgx.NamedArgs{
 		"kinds": kinds, "episode": domain.ItemEpisode,
-		"query": prefixes(words), "text": q.Text, "library": optional(q.Library), "offset": q.Offset, "limit": q.Limit, "profile": q.Profile,
+		"query": prefixes(words), "text": q.Text, "library": optional(q.Library), "offset": q.Offset, "limit": q.Limit + 1, "profile": q.Profile,
 	}
-	cards, total, err := s.titlesMatching(ctx, q.Profile, args, `search @@ to_tsquery('simple', search_text(@query))`,
+	const typed = `search @@ to_tsquery('simple', search_text(@query))`
+	page := Page{Offset: q.Offset, Limit: q.Limit, Count: q.Count}
+	cards, extent, err := s.titlesMatching(ctx, q.Profile, args, page, typed,
 		`search_text(title) = search_text(@text) DESC, starts_with(search_text(title), search_text(@text)) DESC,
 			kind = @episode, ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC`)
-	if err != nil || total > 0 || utf8.RuneCountInString(strings.Join(words, "")) < nearFrom {
-		return cards, total, err
+	if err != nil || len(cards) > 0 || utf8.RuneCountInString(strings.Join(words, "")) < nearFrom {
+		return cards, extent, err
 	}
-	return s.titlesMatching(ctx, q.Profile, args, `search_text(@text) <% `+searchedText,
+	// A page past the first that is empty may be past every title with the words typed.
+	if q.Offset > 0 {
+		var typedSome bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 `+titlesWhere(typed)+`)`, args).Scan(&typedSome); err != nil || typedSome {
+			return cards, extent, err
+		}
+	}
+	return s.titlesMatching(ctx, q.Profile, args, page, `search_text(@text) <% `+searchedText,
 		`word_similarity(search_text(@text), `+searchedText+`) DESC, kind = @episode`)
 }
 
-// titlesMatching answers the page of titles args asks for among those matching where, in the
-// order given, and how many match in all.
-func (s *Store) titlesMatching(ctx context.Context, profile uuid.UUID, args pgx.NamedArgs, where, order string) ([]Card, int64, error) {
-	matching := `
+// titlesWhere is the FROM and WHERE of the titles args asks for among those matching where.
+func titlesWhere(where string) string {
+	return `
 		FROM items, viewer(CAST(@profile AS uuid)) v
 		WHERE kind = ANY(@kinds) AND ` + where + `
 			AND (CAST(@library AS uuid) IS NULL OR library_id = CAST(@library AS uuid)
 				OR kind = 'collection' AND ` + holdsTitleOf("CAST(@library AS uuid)") + `)
 			AND (kind <> 'collection' OR id IN (` + shownCollections + `))
 			AND sees(v, items) AND NOT EXISTS (SELECT 1 FROM seen_before(v, items))`
+}
+
+// titlesMatching answers the page of titles args asks for among those matching where, in the
+// order given, and what the page tells of the rest.
+func (s *Store) titlesMatching(ctx context.Context, profile uuid.UUID, args pgx.NamedArgs, page Page, where, order string) ([]Card, Extent, error) {
+	matching := titlesWhere(where)
 	var rows []*model.Item
-	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) (err error) {
+	total, err := s.counted(ctx, page.Count, `SELECT count(*) `+matching, args, func(ctx context.Context) (err error) {
 		rows, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` `+matching+`
 			ORDER BY `+order+`, sort_title, id
 			OFFSET @offset LIMIT @limit`, args)
 		return err
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, Extent{}, err
 	}
+	rows, more := pageOf(rows, page.Limit)
 	cards, err := s.cards(ctx, profile, rows)
-	return cards, total, err
+	return cards, Extent{More: more, Total: total}, err
 }
 
 // PersonRef is someone a search finds, with their picture's id.
@@ -99,18 +115,18 @@ type PersonRef struct {
 	Blurhashes Blurhashes
 }
 
-// SearchPeople answers limit of the people from offset whose names have a word starting with each
-// word asked for, as titles are matched, those whose names start with it first, then the most
-// credited; and how many match in all.
-func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int) ([]PersonRef, int64, error) {
+// SearchPeople answers a page of the people whose names have a word starting with each word asked
+// for, as titles are matched, those whose names start with it first, then the most credited; and
+// what the page tells of the rest.
+func (s *Store) SearchPeople(ctx context.Context, text string, page Page) ([]PersonRef, Extent, error) {
 	words := words(text)
 	if len(words) == 0 {
-		return []PersonRef{}, 0, nil
+		return []PersonRef{}, nothingFound(page.Count), nil
 	}
 	matching := `FROM people p WHERE to_tsvector('simple', search_text(p.name)) @@ to_tsquery('simple', search_text(@query))`
-	args := pgx.NamedArgs{"query": prefixes(words), "text": text, "offset": offset, "limit": limit}
+	args := pgx.NamedArgs{"query": prefixes(words), "text": text, "offset": page.Offset, "limit": page.Limit + 1}
 	var out []PersonRef
-	total, err := s.counted(ctx, `SELECT count(*) `+matching, args, func(ctx context.Context) error {
+	total, err := s.counted(ctx, page.Count, `SELECT count(*) `+matching, args, func(ctx context.Context) error {
 		rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.photo_id, p.photo_blurhash `+matching+`
 			ORDER BY starts_with(search_text(p.name), search_text(@text)) DESC,
 				(SELECT count(*) FROM credits c WHERE c.person_id = p.id) DESC, p.name, p.id
@@ -128,7 +144,17 @@ func (s *Store) SearchPeople(ctx context.Context, text string, offset, limit int
 		})
 		return err
 	})
-	return out, total, err
+	out, more := pageOf(out, page.Limit)
+	return out, Extent{More: more, Total: total}, err
+}
+
+// nothingFound is what an empty search tells of the rest: nothing, and that none were found where
+// asked how many.
+func nothingFound(counting domain.Counting) Extent {
+	if counting != domain.CountExact {
+		return Extent{}
+	}
+	return Extent{Total: new(int64(0))}
 }
 
 // words are the words typed: runs of letters and digits.

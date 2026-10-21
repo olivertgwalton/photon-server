@@ -64,7 +64,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	}
 	read := func() ([]PlaylistEntry, []string) {
 		t.Helper()
-		entries, total, err := s.PlaylistEntries(ctx, oliver.ID, list, 0, 50)
+		entries, total, err := totalled(s.PlaylistEntries(ctx, oliver.ID, list, totalledPage(0, 50)))
 		if err != nil || int(total) != len(entries) {
 			t.Fatal(entries, total, err)
 		}
@@ -99,7 +99,7 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 
 	// Another profile's playlist is not there to it.
 	for name, err := range map[string]error{
-		"read":   func() error { _, _, err := s.PlaylistEntries(ctx, kid.ID, list, 0, 50); return err }(),
+		"read":   func() error { _, _, err := s.PlaylistEntries(ctx, kid.ID, list, Page{Limit: 50}); return err }(),
 		"add":    s.AddToPlaylist(ctx, kid.ID, list, []uuid.UUID{heat}),
 		"rename": s.RenamePlaylist(ctx, kid.ID, list, "Mine now"),
 		"remove": s.RemovePlaylist(ctx, kid.ID, list),
@@ -174,7 +174,7 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 	}
 	names := func(offset, limit int) ([]string, int64) {
 		t.Helper()
-		entries, total, err := s.PlaylistEntries(ctx, oliver.ID, list, offset, limit)
+		entries, total, err := totalled(s.PlaylistEntries(ctx, oliver.ID, list, totalledPage(offset, limit)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -193,6 +193,12 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 	if got, total := names(1, 1); !slices.Equal(got, []string{"Cosmos2"}) || total != 3 {
 		t.Errorf("second page = %q of %d, want Cosmos2 of three", got, total)
 	}
+	// A page not asked to count says only whether more follow it.
+	for offset, more := range map[int]bool{1: true, 2: false} {
+		if _, extent, err := s.PlaylistEntries(ctx, oliver.ID, list, Page{Offset: offset, Limit: 1}); err != nil || extent.More != more || extent.Total != nil {
+			t.Errorf("uncounted page from %d = %+v, %v; want more %v and no total", offset, extent, err, more)
+		}
+	}
 	summaries, err := s.Playlists(ctx, oliver.ID)
 	if err != nil || len(summaries) != 1 || summaries[0].Entries != 3 || summaries[0].DurationMS != (3*time.Hour).Milliseconds() {
 		t.Fatalf("playlists = %+v, %v; want one of three entries, three hours", summaries, err)
@@ -202,7 +208,7 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 	}
 
 	// Watched, an episode is no longer one the rule finds.
-	first, _, err := s.PlaylistEntries(ctx, oliver.ID, list, 0, 1)
+	first, _, err := totalled(s.PlaylistEntries(ctx, oliver.ID, list, totalledPage(0, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,6 +234,10 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 	}
 	if got, total := names(1, 50); len(got) != 0 || total != 1 {
 		t.Errorf("past the cap: %q of %d, want none of one", got, total)
+	}
+	// Uncounted, the page at the cap says none follow it, though the rule finds more.
+	if entries, extent, err := s.PlaylistEntries(ctx, oliver.ID, list, Page{Limit: 1}); err != nil || len(entries) != 1 || extent.More || extent.Total != nil {
+		t.Errorf("capped, uncounted: %d entries, %+v, %v; want one, no more, and no total", len(entries), extent, err)
 	}
 	summaries, err = s.Playlists(ctx, oliver.ID)
 	if err != nil || summaries[0].Entries != 1 || summaries[0].DurationMS != time.Hour.Milliseconds() {

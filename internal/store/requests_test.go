@@ -76,14 +76,14 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 		t.Errorf("a show by seasons: %+v, %v; want seasons 1 and 3", seasons, err)
 	}
 
-	mine, total, err := s.Requests(ctx, user.ID, 0, 10)
+	mine, total, err := totalled(s.Requests(ctx, user.ID, totalledPage(0, 10)))
 	if err != nil || total != 2 || len(mine) != 2 || mine[0].ID != seasons.ID {
 		t.Errorf("the user's requests %+v of %d, %v; want both, newest first", mine, total, err)
 	}
-	if theirs, total, err := s.Requests(ctx, other.ID, 0, 10); err != nil || total != 0 || len(theirs) != 0 {
+	if theirs, total, err := totalled(s.Requests(ctx, other.ID, totalledPage(0, 10))); err != nil || total != 0 || len(theirs) != 0 {
 		t.Errorf("another's requests %+v of %d, %v; want none", theirs, total, err)
 	}
-	waiting, total, err := s.RequestsKept(ctx, nil, domain.RequestPending, 0, 10)
+	waiting, total, err := totalled(s.RequestsKept(ctx, nil, domain.RequestPending, totalledPage(0, 10)))
 	if err != nil || total != 2 || len(waiting) != 2 {
 		t.Errorf("waiting for an admin %+v of %d, %v", waiting, total, err)
 	}
@@ -170,10 +170,10 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kept, total, err := s.RequestsKept(ctx, &manager.ID, "", 0, 10); err != nil || total != 1 || kept[0].ID != r.ID {
+	if kept, total, err := totalled(s.RequestsKept(ctx, &manager.ID, "", totalledPage(0, 10))); err != nil || total != 1 || kept[0].ID != r.ID {
 		t.Errorf("the manager's %+v of %d, %v; want the teen's alone", kept, total, err)
 	}
-	if kept, total, err := s.RequestsKept(ctx, &stranger.ID, "", 0, 10); err != nil || total != 0 || len(kept) != 0 {
+	if kept, total, err := totalled(s.RequestsKept(ctx, &stranger.ID, "", totalledPage(0, 10))); err != nil || total != 0 || len(kept) != 0 {
 		t.Errorf("another manager's %+v of %d, %v; want none", kept, total, err)
 	}
 	if _, err := s.DecideRequest(ctx, r.ID, &stranger.ID, stranger.ID, domain.RequestApproved, ""); !errors.Is(err, ErrNotFound) {
@@ -196,7 +196,7 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	if approved, err := s.DecideRequest(ctx, again.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil || approved.State != domain.RequestApproved {
 		t.Errorf("approved by an admin %+v, %v", approved, err)
 	}
-	if done, total, err := s.RequestsKept(ctx, nil, domain.RequestDeclined, 0, 10); err != nil || total != 1 || done[0].ID != r.ID {
+	if done, total, err := totalled(s.RequestsKept(ctx, nil, domain.RequestDeclined, totalledPage(0, 10))); err != nil || total != 1 || done[0].ID != r.ID {
 		t.Errorf("declined requests %+v of %d, %v; want the first", done, total, err)
 	}
 }
@@ -256,7 +256,7 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 	if sent, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("a sent request declined: %+v, %v; want ErrDecided", sent, err)
 	}
-	if mine, _, err := s.Requests(ctx, user.ID, 0, 1); err != nil || mine[0].State != domain.RequestSent {
+	if mine, _, err := totalled(s.Requests(ctx, user.ID, totalledPage(0, 1))); err != nil || mine[0].State != domain.RequestSent {
 		t.Errorf("the user's request %+v, %v; want it sent", mine, err)
 	}
 
@@ -298,7 +298,7 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if len(told) != 1 || told[0].ProfileID != asker.ID {
 		t.Errorf("told %+v, want the asker alone", told)
 	}
-	mine, _, err := s.Requests(ctx, asker.ID, 0, 1)
+	mine, _, err := totalled(s.Requests(ctx, asker.ID, totalledPage(0, 1)))
 	if err != nil || mine[0].State != domain.RequestAvailable || mine[0].Item != item.ID || mine[0].AvailableAt.IsZero() {
 		t.Errorf("the request %+v, %v; want it available, naming Inception", mine, err)
 	}
@@ -336,7 +336,7 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	if err != nil || len(told) != 0 {
 		t.Errorf("told %+v, %v; want no one", told, err)
 	}
-	if mine, _, err := s.Requests(ctx, quiet.ID, 0, 1); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
+	if mine, _, err := totalled(s.Requests(ctx, quiet.ID, totalledPage(0, 1))); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
 		t.Errorf("the request %+v, %v; want it available", mine, err)
 	}
 }

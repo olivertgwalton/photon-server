@@ -29,14 +29,14 @@ const (
 
 type catalogue interface {
 	LibrariesSeen(ctx context.Context, profile uuid.UUID) ([]*store.SeenLibrary, error)
-	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error)
+	Wall(ctx context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, store.Extent, error)
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 	Letters(ctx context.Context, lib, profile uuid.UUID, wall domain.WallKind, f store.WallFilter) ([]store.Letter, error)
 	Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (store.Facets, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
-	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, int64, error)
-	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error)
+	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, store.Extent, error)
+	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	PlayOrder(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
@@ -138,10 +138,12 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.RatingSite = cmp.Or(page.Filter.RatingSite, domain.SiteIMDb)
-	if page.Offset, page.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
+	paged, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
 		return
 	}
-	ids, total, err := a.svc.Catalogue.Wall(r.Context(), []uuid.UUID{lib}, page)
+	page.Offset, page.Limit, page.Count = paged.Offset, paged.Limit, paged.Count
+	ids, extent, err := a.svc.Catalogue.Wall(r.Context(), []uuid.UUID{lib}, page)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -149,7 +151,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), page.Offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
 }
 
 // letters answers how many of a library's titles sort under each letter, in title order, so a
@@ -240,9 +242,11 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	if query.Offset, query.Limit, ok = a.paging(w, r, defaultWallLimit); !ok {
+	page, ok := a.paging(w, r, defaultWallLimit)
+	if !ok {
 		return
 	}
+	query.Offset, query.Limit, query.Count = page.Offset, page.Limit, page.Count
 	findPeople := len(kinds) == 0
 	for _, k := range kinds {
 		switch k {
@@ -264,7 +268,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		everyLibrary := query.Offset == 0 && query.Library == (uuid.UUID{})
 		wg.Go(func() {
 			var cards []store.Card
-			cards, out.Titles.Total, titlesErr = a.svc.Catalogue.Search(ctx, query)
+			var extent store.Extent
+			cards, extent, titlesErr = a.svc.Catalogue.Search(ctx, query)
 			// A search of every library shows first, in its first page, what its remote libraries'
 			// providers find that they do not hold yet, which becomes theirs as it is opened.
 			if titlesErr == nil && everyLibrary {
@@ -273,9 +278,11 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 				for _, d := range found {
 					cards = append(cards, d.Card())
 				}
-				out.Titles.Total += int64(len(found))
+				if extent.Total != nil {
+					extent.Total = new(*extent.Total + int64(len(found)))
+				}
 			}
-			out.Titles.Items = cardsJSON(cards)
+			out.Titles = pageAt(cardsJSON(cards), query.Offset, extent)
 		})
 		if everyLibrary {
 			wg.Go(func() {
@@ -287,12 +294,12 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	}
 	if findPeople {
 		wg.Go(func() {
-			var found []store.PersonRef
-			found, out.People.Total, peopleErr = a.svc.People.SearchPeople(ctx, query.Text, query.Offset, query.Limit)
-			out.People.Items = make([]personRefJSON, len(found))
+			found, extent, err := a.svc.People.SearchPeople(ctx, query.Text, page)
+			out.People = pageAt(make([]personRefJSON, len(found)), query.Offset, extent)
 			for i, p := range found {
 				out.People.Items[i] = personRefJSON(p)
 			}
+			peopleErr = err
 		})
 	}
 	wg.Wait()
@@ -497,13 +504,16 @@ func (a *API) playable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
 }
 
-// paging reads a page's offset and limit, as walls page.
-func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (offset, limit int, ok bool) {
-	if offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
-		return 0, 0, false
+// paging reads a page's offset and limit, as walls page, and whether it asks how many there are.
+func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (page store.Page, ok bool) {
+	if page.Offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
+		return page, false
 	}
-	limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit)
-	return offset, limit, ok
+	if page.Limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit); !ok {
+		return page, false
+	}
+	page.Count, ok = queryEnum(a, w, r, "total", domain.CountNone, domain.Countings())
+	return page, ok
 }
 
 func (a *API) catalogueRoutes() []route {

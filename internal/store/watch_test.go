@@ -332,7 +332,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	}
 	cards := func(profile uuid.UUID) (search []uuid.UUID, home map[domain.HomeRow][]uuid.UUID) {
 		t.Helper()
-		found, _, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10})
+		found, _, err := totalled(s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10, Count: domain.CountExact}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -452,7 +452,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 	}
 
 	for profile, want := range map[uuid.UUID]uuid.UUID{oliver.ID: inKids, sam.ID: inShows} {
-		found, total, err := s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10})
+		found, total, err := totalled(s.Search(ctx, SearchQuery{Profile: profile, Text: "victorious", Limit: 10, Count: domain.CountExact}))
 		if err != nil || total != 1 || len(found) != 1 || found[0].ID != want {
 			t.Errorf("search for %v = %v of %d (%v), want only %v", profile, found, total, err, want)
 		}
@@ -505,7 +505,7 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 	if same, err := s.SameTitles(ctx, oliver.ID, c); err != nil || len(same) != 3 || !slices.Contains(same, a) {
 		t.Errorf("C is the same as %v (%v), want A, B and itself", same, err)
 	}
-	if found, total, err := s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10}); err != nil || total != 1 || found[0].ID != a {
+	if found, total, err := totalled(s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10, Count: domain.CountExact})); err != nil || total != 1 || found[0].ID != a {
 		t.Errorf("search = %v of %d (%v), want A's film once", found, total, err)
 	}
 
@@ -515,7 +515,7 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 	if same, err := s.SameTitles(ctx, oliver.ID, c); err != nil || len(same) != 1 {
 		t.Errorf("with B gone C is the same as %v (%v), want only itself", same, err)
 	}
-	if _, total, err := s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10}); err != nil || total != 2 {
+	if _, total, err := totalled(s.Search(ctx, SearchQuery{Profile: oliver.ID, Text: "heat", Limit: 10, Count: domain.CountExact})); err != nil || total != 2 {
 		t.Errorf("with B gone search finds %d (%v), want A's and C's", total, err)
 	}
 }

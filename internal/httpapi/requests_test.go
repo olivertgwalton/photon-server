@@ -34,12 +34,12 @@ func (*fakeRequests) AskFor(_ context.Context, profile, discovery uuid.UUID, sea
 	return store.Request{ID: uuid.NewV7(), Profile: profile, Kind: domain.ItemMovie, Title: "Inception", Provider: domain.ProviderTMDB, Value: "27205", State: domain.RequestPending}, nil
 }
 
-func (*fakeRequests) Requests(context.Context, uuid.UUID, int, int) ([]store.Request, int64, error) {
-	return nil, 0, nil
+func (*fakeRequests) Requests(context.Context, uuid.UUID, store.Page) ([]store.Request, store.Extent, error) {
+	return nil, store.Extent{}, nil
 }
 
-func (*fakeRequests) RequestsKept(context.Context, *uuid.UUID, domain.RequestState, int, int) ([]store.Request, int64, error) {
-	return nil, 0, nil
+func (*fakeRequests) RequestsKept(context.Context, *uuid.UUID, domain.RequestState, store.Page) ([]store.Request, store.Extent, error) {
+	return nil, store.Extent{}, nil
 }
 
 func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) error {

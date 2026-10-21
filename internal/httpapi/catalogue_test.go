@@ -64,10 +64,20 @@ func (fakeCatalogue) Cards(_ context.Context, _ uuid.UUID, ids []uuid.UUID) ([]s
 	return out, nil
 }
 
+// extentOf is what a page of shown items from offset tells of a list of n: whether more follow it,
+// and n where counting was asked for.
+func extentOf(n int64, offset, shown int, counting domain.Counting) store.Extent {
+	e := store.Extent{More: int64(offset+shown) < n}
+	if counting == domain.CountExact {
+		e.Total = &n
+	}
+	return e
+}
+
 // Wall answers one card titled after the page it was asked for, of 120 in all.
-func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, int64, error) {
+func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage) ([]uuid.UUID, store.Extent, error) {
 	if len(libs) != 1 || libs[0] != films {
-		return nil, 0, store.ErrNotFound
+		return nil, store.Extent{}, store.ErrNotFound
 	}
 	title := string(p.Sort) + " " + string(p.Order) + " " + strconv.Itoa(p.Offset) + "+" + strconv.Itoa(p.Limit)
 	if p.Kind != domain.WallTitles {
@@ -76,7 +86,7 @@ func (fakeCatalogue) Wall(_ context.Context, libs []uuid.UUID, p store.WallPage)
 	if f := p.Filter; f.MinRating > 0 || len(f.Genres) > 0 || len(f.Marks) > 0 || len(f.Years) > 0 {
 		title += fmt.Sprintf(" %v %v %v %s>=%v", f.Genres, f.Marks, f.Years, f.RatingSite, f.MinRating)
 	}
-	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}), 120, nil
+	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: title, ReleaseDate: time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}), extentOf(120, p.Offset, 1, p.Count), nil
 }
 
 func (fakeCatalogue) Letters(_ context.Context, lib, _ uuid.UUID, _ domain.WallKind, f store.WallFilter) ([]store.Letter, error) {
@@ -127,15 +137,15 @@ func (fakeCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage,
 }
 
 // Search finds one title, on the first page alone, titled after what it was asked.
-func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, int64, error) {
+func (fakeCatalogue) Search(_ context.Context, q store.SearchQuery) ([]store.Card, store.Extent, error) {
 	if q.Offset > 0 {
-		return []store.Card{}, 1, nil
+		return []store.Card{}, extentOf(1, q.Offset, 0, q.Count), nil
 	}
 	title := q.Text + " " + q.Library.String()
 	if len(q.Kinds) > 0 {
 		title += fmt.Sprint(" ", q.Kinds)
 	}
-	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, 1, nil
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: title}}, extentOf(1, 0, 1, q.Count), nil
 }
 
 // episodeStill is the picture an episode of the fake catalogue carries, showBackdrop and showThumb
@@ -144,33 +154,33 @@ var episodeStill, showBackdrop, showThumb, filmThumb = uuid.NewV7(), uuid.NewV7(
 
 // The watchlist holds the one film, from offset 0; next up as many episodes of The Wire as a page
 // is asked for.
-func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, offset, limit int) ([]store.Card, int64, error) {
+func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error) {
 	switch row {
 	case domain.RowWatchlist:
-		if offset > 0 {
-			return []store.Card{}, 1, nil
+		if page.Offset > 0 {
+			return []store.Card{}, extentOf(1, page.Offset, 0, page.Count), nil
 		}
-		return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop}}, 1, nil
+		return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop}}, extentOf(1, 0, 1, page.Count), nil
 	case domain.RowNextUp:
-		cards := make([]store.Card, limit)
+		cards := make([]store.Card, page.Limit)
 		for i := range cards {
 			cards[i] = store.Card{
 				ID: films, Kind: domain.ItemEpisode, Title: "Pilot", Show: &store.TitleRef{ID: films, Title: "The Wire"},
 				Thumb: episodeStill, Backdrop: showBackdrop, ShowThumb: showThumb,
 			}
 		}
-		return cards, int64(offset + limit), nil
+		return cards, extentOf(int64(page.Offset+page.Limit), page.Offset, page.Limit, page.Count), nil
 	case domain.RowContinueWatching:
 		// A film with a landscape picture, and one with a backdrop alone.
 		return []store.Card{
 			{ID: films, Kind: domain.ItemMovie, Title: "Heat", Backdrop: showBackdrop, Thumb: filmThumb},
 			{ID: films, Kind: domain.ItemMovie, Title: "Ronin", Backdrop: showBackdrop},
-		}, 2, nil
+		}, extentOf(2, 0, 2, page.Count), nil
 	case domain.RowFavourites:
-		return []store.Card{}, 0, nil
+		return []store.Card{}, extentOf(0, 0, 0, page.Count), nil
 	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
 	}
-	return nil, 0, store.ErrNotFound
+	return nil, store.Extent{}, store.ErrNotFound
 }
 
 // LibraryRow answers, of a films library's row of films, a card titled after the row and how many
@@ -195,8 +205,11 @@ func TestProfileRow(t *testing.T) {
 		want     int
 		wantBody string
 	}{
-		{"/api/v1/profile/rows/watchlist", http.StatusOK, `"offset":0,"total":1}`},
-		{"/api/v1/profile/rows/watchlist?offset=1", http.StatusOK, `{"items":[],"offset":1,"total":1}`},
+		{"/api/v1/profile/rows/watchlist", http.StatusOK, `"offset":0,"more":false}`},
+		{"/api/v1/profile/rows/watchlist?total=exact", http.StatusOK, `"offset":0,"more":false,"total":1}`},
+		{"/api/v1/profile/rows/watchlist?offset=1&total=exact", http.StatusOK, `{"items":[],"offset":1,"more":false,"total":1}`},
+		{"/api/v1/profile/rows/next_up?limit=3", http.StatusOK, `"offset":0,"more":false}`},
+		{"/api/v1/profile/rows/watchlist?total=all", http.StatusBadRequest, ""},
 		{"/api/v1/profile/rows/recently_added_films", http.StatusNotFound, ""},
 		{"/api/v1/profile/rows/watchlist?limit=0", http.StatusBadRequest, ""},
 	} {
@@ -310,10 +323,10 @@ func TestSearch(t *testing.T) {
 		}
 	}
 	var next searchJSON
-	if err := json.NewDecoder(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1", goodToken, "").Body).Decode(&next); err != nil {
+	if err := json.NewDecoder(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1&total=exact", goodToken, "").Body).Decode(&next); err != nil {
 		t.Fatal(err)
 	}
-	if next.Titles.Offset != 1 || next.Titles.Total != 1 || next.People.Offset != 1 || next.People.Total != 1 || len(next.Titles.Items) != 0 {
+	if next.Titles.Offset != 1 || next.Titles.Total == nil || *next.Titles.Total != 1 || next.People.Offset != 1 || next.People.Total == nil || *next.People.Total != 1 || len(next.Titles.Items) != 0 {
 		t.Errorf("the second page = %+v, want it empty, counting the one title and one person", next)
 	}
 }
@@ -342,7 +355,11 @@ func TestWall(t *testing.T) {
 		{"?kind=episodes&sort=released", http.StatusOK, "episodes released desc 0+50"},
 		{"?kind=seasons", http.StatusBadRequest, ""},
 	} {
-		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query, goodToken, "")
+		counted := "?total=exact"
+		if tc.query != "" {
+			counted = "&total=exact"
+		}
+		rec := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles"+tc.query+counted, goodToken, "")
 		if rec.Code != tc.wantStatus {
 			t.Errorf("%q: status = %d, want %d", tc.query, rec.Code, tc.wantStatus)
 			continue
@@ -363,6 +380,10 @@ func TestWall(t *testing.T) {
 		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle || got.Items[0].ReleaseDate != "1995-12-15" || got.Total != 120 {
 			t.Errorf("%q: body = %+v, want one card %q released 1995-12-15 of 120", tc.query, got, tc.wantTitle)
 		}
+	}
+	// A page not asked to count says only whether more follow it.
+	if body := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles", goodToken, "").Body.String(); !strings.Contains(body, `"more":true`) || strings.Contains(body, `"total"`) {
+		t.Errorf("uncounted page = %s, want more and no total", body)
 	}
 	var listed struct{ Items []struct{ Name string } }
 	if err := json.Unmarshal(serve(t, http.MethodGet, "/api/v1/libraries", goodToken, "").Body.Bytes(), &listed); err != nil ||
@@ -451,9 +472,9 @@ func TestASearchShowsTitlesToAskForApart(t *testing.T) {
 		}
 		return out
 	}
-	got := search("?q=e")
-	if !slices.Equal(titles(got.Titles.Items), []string{"e 00000000-0000-0000-0000-000000000000", "Inception"}) || got.Titles.Total != 2 {
-		t.Errorf("titles %v of %d, want what the server holds and the remote library's find", titles(got.Titles.Items), got.Titles.Total)
+	got := search("?q=e&total=exact")
+	if !slices.Equal(titles(got.Titles.Items), []string{"e 00000000-0000-0000-0000-000000000000", "Inception"}) || got.Titles.Total == nil || *got.Titles.Total != 2 {
+		t.Errorf("titles %v of %v, want what the server holds and the remote library's find", titles(got.Titles.Items), got.Titles.Total)
 	}
 	if !slices.Equal(titles(got.Requestable.Items), []string{"Heat"}) {
 		t.Errorf("titles to ask for %v, want the library of files' find", titles(got.Requestable.Items))
@@ -550,8 +571,8 @@ func (ratedCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage
 	return store.TitlePage{ID: id, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}, nil
 }
 
-func (ratedCatalogue) Wall(context.Context, []uuid.UUID, store.WallPage) ([]uuid.UUID, int64, error) {
-	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}), 1, nil
+func (ratedCatalogue) Wall(_ context.Context, _ []uuid.UUID, p store.WallPage) ([]uuid.UUID, store.Extent, error) {
+	return wallOf(store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat", Certificate: "US:R"}), extentOf(1, p.Offset, 1, p.Count), nil
 }
 
 func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID, domain.WallKind) (store.Facets, error) {

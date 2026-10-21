@@ -15,7 +15,7 @@ type playlists interface {
 	AddPlaylist(ctx context.Context, profile uuid.UUID, name string, items []uuid.UUID) (uuid.UUID, error)
 	AddSmartPlaylist(ctx context.Context, profile, lib uuid.UUID, name string, rule store.SmartRule) (uuid.UUID, error)
 	SetPlaylistRule(ctx context.Context, profile, playlist uuid.UUID, rule store.SmartRule) error
-	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, offset, limit int) ([]store.PlaylistEntry, int64, error)
+	PlaylistEntries(ctx context.Context, profile, playlist uuid.UUID, page store.Page) ([]store.PlaylistEntry, store.Extent, error)
 	AddToPlaylist(ctx context.Context, profile, playlist uuid.UUID, items []uuid.UUID) error
 	RemoveFromPlaylist(ctx context.Context, profile, playlist, entry uuid.UUID) error
 	MovePlaylistEntry(ctx context.Context, profile, playlist, entry uuid.UUID, position int) error
@@ -138,12 +138,12 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r, maxWallLimit)
+	page, ok := a.paging(w, r, maxWallLimit)
 	if !ok {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	entries, total, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, offset, limit)
+	entries, extent, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, page)
 	if a.answered(w, r, err) {
 		return
 	}
@@ -166,7 +166,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 			out = append(out, entryJSON{EntryID: e.ID, cardJSON: cardOf(c)})
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[entryJSON]{out, offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(out, page.Offset, extent))
 }
 
 // addToPlaylist puts titles at the end of a playlist: a show or season as its episodes, a

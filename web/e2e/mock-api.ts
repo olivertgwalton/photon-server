@@ -63,6 +63,7 @@ async function requests(
 		Response.json({
 			items,
 			offset: 0,
+			more: false,
 			total: items.length,
 		} satisfies Schemas["RequestPage"]);
 	if (route === "GET /api/v1/requests")
@@ -1820,9 +1821,15 @@ const server_ = Bun.serve<Socket>({
 					titles: {
 						items: found.slice(0, 20).map(card),
 						offset: 0,
+						more: false,
 						total: found.length,
 					},
-					people: { items: people, offset: 0, total: people.length },
+					people: {
+						items: people,
+						offset: 0,
+						more: false,
+						total: people.length,
+					},
 					requestable: {
 						items: requestable
 							.filter((c) => c.title.toLowerCase().includes(q))
@@ -1966,6 +1973,7 @@ const server_ = Bun.serve<Socket>({
 			return Response.json({
 				items: items.slice(offset, offset + limit).map(card),
 				offset,
+				more: offset + limit < items.length,
 				total: items.length,
 			} satisfies Schemas["CardPage"]);
 		}
@@ -1981,6 +1989,7 @@ const server_ = Bun.serve<Socket>({
 				return Response.json({
 					items: items.slice(offset, offset + limit).map(card),
 					offset,
+					more: offset + limit < items.length,
 					total: items.length,
 				} satisfies Schemas["CardPage"]);
 			}
@@ -2012,6 +2021,7 @@ const server_ = Bun.serve<Socket>({
 				return Response.json({
 					items: id === "l-films" ? [collection] : [],
 					offset: 0,
+					more: false,
 					total: id === "l-films" ? 1 : 0,
 				} satisfies Schemas["CardPage"]);
 			case "GET titles/": {
@@ -2102,6 +2112,7 @@ const server_ = Bun.serve<Socket>({
 							card(byID(item) as Schemas["Card"]),
 						),
 						offset: 0,
+						more: false,
 						total: entriesOf(list).length,
 					} satisfies Schemas["EntryPage"]);
 				}
@@ -2128,6 +2139,7 @@ const server_ = Bun.serve<Socket>({
 						entry_id: `e-${i}`,
 					})),
 					offset: 0,
+					more: false,
 					total: list.items.length,
 				} satisfies Schemas["EntryPage"]);
 			}

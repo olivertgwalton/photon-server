@@ -24,6 +24,7 @@ import (
 // enums are the values of each typed string the API sends or takes.
 var enums = map[reflect.Type][]string{
 	reflect.TypeFor[feed]():                       values(feeds()),
+	reflect.TypeFor[domain.Counting]():            values(domain.Countings()),
 	reflect.TypeFor[domain.AudioTrack]():          values(domain.AudioTracks()),
 	reflect.TypeFor[domain.NextEpisode]():         values(domain.NextEpisodes()),
 	reflect.TypeFor[domain.SegmentAction]():       values(domain.SegmentActions()),

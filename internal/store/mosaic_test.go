@@ -62,7 +62,7 @@ func TestACollectionWithNoPosterWearsAMosaicOfItsTitles(t *testing.T) {
 	}
 	poster := func(profile uuid.UUID) uuid.UUID {
 		t.Helper()
-		cards, _, err := s.Collections(ctx, lib.ID, profile, 0, 10)
+		cards, _, err := totalled(s.Collections(ctx, lib.ID, profile, totalledPage(0, 10)))
 		if err != nil || len(cards) != 1 {
 			t.Fatal(cards, err)
 		}

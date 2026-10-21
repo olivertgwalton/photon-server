@@ -14,8 +14,8 @@ import (
 
 type requests interface {
 	AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error)
-	Requests(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Request, int64, error)
-	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, offset, limit int) ([]store.Request, int64, error)
+	Requests(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Request, store.Extent, error)
+	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, page store.Page) ([]store.Request, store.Extent, error)
 	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error
 	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error)
 }
@@ -92,15 +92,15 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 
 // ownRequests answers a page of the signed-in profile's requests, newest first.
 func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	page, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	rs, total, err := a.svc.Requests.Requests(r.Context(), auth.SessionOf(r.Context()).Profile.ID, offset, limit)
+	rs, extent, err := a.svc.Requests.Requests(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{nonNil(each(rs, requestOf)), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(nonNil(each(rs, requestOf)), page.Offset, extent))
 }
 
 func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
@@ -121,15 +121,15 @@ func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	page, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	rs, total, err := a.svc.Requests.RequestsKept(r.Context(), keeper(r), state, offset, limit)
+	rs, extent, err := a.svc.Requests.RequestsKept(r.Context(), keeper(r), state, page)
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[requestJSON]{nonNil(each(rs, requestOf)), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(nonNil(each(rs, requestOf)), page.Offset, extent))
 }
 
 func (a *API) approveRequest(w http.ResponseWriter, r *http.Request) {

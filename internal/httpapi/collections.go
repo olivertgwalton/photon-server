@@ -13,8 +13,8 @@ import (
 )
 
 type collections interface {
-	Collections(ctx context.Context, lib, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
-	AllCollections(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Card, int64, error)
+	Collections(ctx context.Context, lib, profile uuid.UUID, page store.Page) ([]store.Card, store.Extent, error)
+	AllCollections(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Card, store.Extent, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	AddCollection(ctx context.Context, title string) (uuid.UUID, error)
 	AddSmartCollection(ctx context.Context, libs []uuid.UUID, title string, rule store.SmartRule) (uuid.UUID, error)
@@ -31,15 +31,15 @@ type collections interface {
 // allCollections answers a page of every collection the profile is shown, by title: what the
 // Collections view lists.
 func (a *API) allCollections(w http.ResponseWriter, r *http.Request) {
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	page, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	cards, total, err := a.svc.Collections.AllCollections(r.Context(), auth.SessionOf(r.Context()).Profile.ID, offset, limit)
+	cards, extent, err := a.svc.Collections.AllCollections(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
 }
 
 // libraryCollections answers a page of the collections holding a library's titles, by title, as
@@ -49,15 +49,15 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	page, ok := a.paging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	cards, total, err := a.svc.Collections.Collections(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, offset, limit)
+	cards, extent, err := a.svc.Collections.Collections(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, page)
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[cardJSON]{cardsJSON(cards), offset, total})
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
 }
 
 // members answers a collection's titles.
