@@ -81,7 +81,7 @@ const able = (
 ) =>
 	providers
 		.filter((p) => p.capabilities.includes(c) && also(p))
-		.map((p) => ({ value: String(p.id), label: p.name }));
+		.map((p) => ({ value: p.id, label: p.name }));
 // A remote library holds a list's titles, what a search finds, or both: those
 // a provider files under ids of its own, which a title found is kept by.
 const listers = $derived([{ value: "", label: "No list" }, ...able("list")]);
@@ -104,8 +104,8 @@ const requesters = $derived([
 	...able("request", (p) => holds.every((k) => p.kinds.includes(k))),
 ]);
 let listSource = $state("");
-const nameOf = (id: unknown) =>
-	providers.find((p) => p.id === id)?.name ?? String(id);
+const nameOf = (id?: Schemas["FieldSource"]) =>
+	providers.find((p) => p.id === id)?.name ?? id;
 
 const fetchers = [
 	{

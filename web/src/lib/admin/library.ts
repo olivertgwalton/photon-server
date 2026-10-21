@@ -20,7 +20,7 @@ export function offeredSources(
 			.filter((id) => !providers.some((p) => p.id === id))
 			.map((id) => ({
 				id,
-				name: String(id).charAt(0).toUpperCase() + String(id).slice(1),
+				name: id.charAt(0).toUpperCase() + id.slice(1),
 				ready: true,
 			})),
 		...providers

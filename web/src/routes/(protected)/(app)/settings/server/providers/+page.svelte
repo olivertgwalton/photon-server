@@ -35,14 +35,14 @@ const capabilities = {
 } as const;
 
 // A plugin's slug, from its source id plugin:<slug>.
-function slug(provider: unknown) {
-	return String(provider).replace(/^plugin:/, "");
+function slug(provider: Provider["id"]) {
+	return provider.replace(/^plugin:/, "");
 }
 
 function changeSettings(provider: Provider, settings: Record<string, string>) {
 	return act(
 		api.PATCH("/api/v1/admin/providers/{id}", {
-			params: { path: { id: String(provider.id) } },
+			params: { path: { id: provider.id } },
 			body: { settings },
 		}),
 		`${provider.name} was saved.`,
@@ -96,7 +96,7 @@ async function register(event: SubmitEvent) {
 
 <div class="grid max-w-2xl gap-4">
 	{#each data.providers as provider (provider.id)}
-		{@const id = String(provider.id)}
+		{@const id = provider.id}
 		<Card.Root>
 			<Card.Header>
 				<Card.Title><h2 class="heading">{provider.name}</h2></Card.Title>

@@ -30,7 +30,7 @@ const searchers = $derived(
 				p.kinds.includes(title.kind) &&
 				p.ready,
 		)
-		.map((p) => ({ value: String(p.id), label: p.name })),
+		.map((p) => ({ value: p.id, label: p.name })),
 );
 
 // What is searched for starts as the title says, and is the admin's from then on.
