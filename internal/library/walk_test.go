@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
@@ -264,7 +265,10 @@ func TestWalkingAFolderWalksWhatTheWholeWalkFindsThere(t *testing.T) {
 }
 
 func TestAFolderWhoseIgnoreCannotBeReadIsNotRead(t *testing.T) {
-	if os.Geteuid() == 0 {
+	switch {
+	case runtime.GOOS == "windows":
+		t.Skip("a mode only makes a file read-only there, never unreadable")
+	case os.Geteuid() == 0:
 		t.Skip("root reads a file whatever its mode")
 	}
 	dir := t.TempDir()
