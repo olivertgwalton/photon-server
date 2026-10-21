@@ -115,7 +115,7 @@ var rowQueries = map[domain.HomeRow]string{
 		CROSS JOIN LATERAL (
 			SELECT items.* FROM items
 			WHERE items.id = r.item_id AND items.library_id = @lib AND items.kind IN ('movie', 'show')
-				AND r.source = (SELECT o.source FROM ranked_ratings(items) o WHERE o.site = r.site)
+				AND r.source = (SELECT s.source FROM shown_ratings s WHERE s.item_id = items.id AND s.site = r.site)
 				AND NOT ` + begun + ` AND EXISTS (SELECT 1 FROM seer WHERE sees(seer.v, items))
 			OFFSET 0
 		) items
