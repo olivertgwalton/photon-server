@@ -61,7 +61,7 @@ func TestTheDescriptionHasEveryRoute(t *testing.T) {
 	if err := json.Unmarshal(fetchDescription(t, a), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.OpenAPI != "3.1.1" {
+	if doc.OpenAPI != "3.2.1" {
 		t.Errorf("openapi = %q", doc.OpenAPI)
 	}
 	for _, r := range a.routes() {

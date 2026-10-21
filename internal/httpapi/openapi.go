@@ -144,7 +144,7 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 		return nil, s.err
 	}
 	return json.Marshal(apiDocument{
-		OpenAPI: "3.1.1",
+		OpenAPI: "3.2.1",
 		Info: apiInfo{
 			Title:   "photon-server",
 			Version: info.Version,
