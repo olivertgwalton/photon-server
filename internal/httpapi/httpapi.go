@@ -96,7 +96,7 @@ type authenticator interface {
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	HashPassword(ctx context.Context, password string) (string, error)
 	SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device auth.Device) (string, error)
-	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
+	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret, code string) (domain.Profile, error)
 	WaitingPairing(ctx context.Context, finder uuid.UUID, userCode string) (auth.Pairing, error)
 	FoundPairing(ctx context.Context, profile uuid.UUID, userCode string) (bool, error)
 	StartReset(ctx context.Context, name string) (string, error)

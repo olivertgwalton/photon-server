@@ -137,10 +137,13 @@ func profileOf(p domain.Profile) profileJSON {
 
 // loginRequest signs a device in by one method: a password with the profile's name and the device
 // it names, or a pairing by its device code, the device having been named as the pairing started.
+// Code is the profile's authenticator app's, for one that has one: a password right without it is
+// answered authenticator_code_required, to be sent again with it.
 type loginRequest struct {
 	Method     domain.SignInMethod `json:"method"`
 	Name       string              `json:"name,omitzero"`
 	Password   string              `json:"password,omitzero"`
+	Code       string              `json:"code,omitzero"`
 	Device     string              `json:"device,omitzero"`
 	Client     string              `json:"client,omitzero"`
 	DeviceCode string              `json:"device_code,omitzero"`
@@ -201,7 +204,7 @@ func (a *API) signInByPassword(w http.ResponseWriter, r *http.Request, req login
 	if !a.allowed(w, r, auth.SignInsPerAddress, byAddress) || !a.allowed(w, r, auth.SignInsPerName, byName) {
 		return
 	}
-	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, auth.Device{Name: req.Device, Client: req.Client})
+	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Name, req.Password, req.Code, auth.Device{Name: req.Device, Client: req.Client})
 	// Who tried, from where and on what, as Jellyfin logs a sign-in; never the password.
 	details := domain.SignInDetails{
 		Name: req.Name, Device: req.Device, Client: req.Client,
@@ -211,6 +214,13 @@ func (a *API) signInByPassword(w http.ResponseWriter, r *http.Request, req login
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
 		writeProblem(w, a.logger, codeSignInRefused, "")
+		return
+	case errors.Is(err, auth.ErrWrongCode):
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
+		writeProblem(w, a.logger, codeSignInRefused, "That code isn't your authenticator app's, or was used already.")
+		return
+	case errors.Is(err, auth.ErrCodeRequired):
+		writeProblem(w, a.logger, codeCodeRequired, "")
 		return
 	case err != nil:
 		a.internal(w, r, err)

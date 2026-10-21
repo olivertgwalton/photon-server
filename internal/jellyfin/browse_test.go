@@ -25,7 +25,7 @@ import (
 // profiles signs in by token as the profile it names, in a session with the profile's id.
 type profiles map[string]domain.Profile
 
-func (profiles) SignIn(context.Context, string, string, auth.Device) (string, domain.Profile, error) {
+func (profiles) SignIn(context.Context, string, string, string, auth.Device) (string, domain.Profile, error) {
 	return "", domain.Profile{}, auth.ErrInvalidCredentials
 }
 

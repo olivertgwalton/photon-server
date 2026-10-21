@@ -36,11 +36,19 @@ var (
 
 type fakeAuth struct{}
 
-func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) (string, domain.Profile, error) {
-	if name == "Oliver" && password == "correct horse" {
+// SignIn knows Oliver's password, and Sam's, whose authenticator app's code is 123456.
+func (fakeAuth) SignIn(_ context.Context, name, password, code string, _ auth.Device) (string, domain.Profile, error) {
+	switch {
+	case name == "Oliver" && password == "correct horse":
 		return goodToken, oliver, nil
+	case name != "Sam" || password != "battery staple":
+		return "", domain.Profile{}, auth.ErrInvalidCredentials
+	case code == "":
+		return "", domain.Profile{}, auth.ErrCodeRequired
+	case code != "123456":
+		return "", domain.Profile{}, auth.ErrWrongCode
 	}
-	return "", domain.Profile{}, auth.ErrInvalidCredentials
+	return managerToken, sam, nil
 }
 
 // SetUp makes the first admin Oliver, under any name, refusing a short password.
@@ -108,7 +116,7 @@ func (fakeAuth) WaitingPairing(context.Context, uuid.UUID, string) (auth.Pairing
 
 func (fakeAuth) FoundPairing(context.Context, uuid.UUID, string) (bool, error) { return false, nil }
 
-func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret string) (domain.Profile, error) {
+func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret, _ string) (domain.Profile, error) {
 	if target == oliver.ID && secret != "correct horse" {
 		return domain.Profile{}, auth.ErrWrongSecret
 	}
@@ -192,6 +200,8 @@ func TestLogin(t *testing.T) {
 	}{
 		{"right password", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`, http.StatusOK, ""},
 		{"wrong password", `{"method":"password","name":"Oliver","password":"guess","device":"Living room","client":"Photon"}`, http.StatusUnauthorized, codeSignInRefused},
+		{"right password, no code", `{"method":"password","name":"Sam","password":"battery staple","device":"d","client":"c"}`, http.StatusForbidden, codeCodeRequired},
+		{"right password, wrong code", `{"method":"password","name":"Sam","password":"battery staple","code":"000000","device":"d","client":"c"}`, http.StatusUnauthorized, codeSignInRefused},
 		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
 		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
 		{"not json", `name=Oliver`, http.StatusBadRequest, codeInvalidBody},

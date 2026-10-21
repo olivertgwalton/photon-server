@@ -103,10 +103,12 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 	if !a.allowed(w, r, auth.SignInsPerAddress, byAddress) || !a.allowed(w, r, auth.SignInsPerName, byName) {
 		return
 	}
-	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Username, req.Pw, auth.Device{Name: app.Device, Client: app.Client})
+	// A Jellyfin app has nowhere to type an authenticator's code, so a profile with one signs it in
+	// by Quick Connect.
+	token, profile, err := a.svc.Auth.SignIn(r.Context(), req.Username, req.Pw, "", auth.Device{Name: app.Device, Client: app.Client})
 	details := domain.SignInDetails{Name: req.Username, Device: app.Device, Client: app.Client, Address: addr.String()}
 	switch {
-	case errors.Is(err, auth.ErrInvalidCredentials):
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrCodeRequired):
 		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSignInRefused, Details: details})
 		a.refuse(w, http.StatusUnauthorized)
 		return

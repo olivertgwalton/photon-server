@@ -8899,6 +8899,7 @@ export interface components {
         };
         LoginRequest: {
             client?: string;
+            code?: string;
             device?: string;
             device_code?: string;
             keep?: components["schemas"]["Keep"];
@@ -9464,7 +9465,7 @@ export interface components {
             title: string;
         };
         /** @enum {string} */
-        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "stream_limit" | "no_space" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token";
+        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "stream_limit" | "no_space" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token" | "authenticator_code_required";
         Profile: {
             /** Format: uuid */
             avatar?: string;
@@ -9953,6 +9954,7 @@ export interface components {
             delivery: components["schemas"]["SubtitleDelivery"];
         };
         Switch: {
+            code?: string;
             secret?: string;
         };
         Task: {
