@@ -31,3 +31,6 @@ for size in 16 32 128 256 512; do
   sips -z $((size * 2)) $((size * 2)) "$work/icon.png" --out "$work/AppIcon.iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns -o "$app/Contents/Resources/AppIcon.icns" "$work/AppIcon.iconset"
+# The menu bar's is the mark alone, 18 points square.
+sips -s format png -z 18 18 "$here/MenuBarIcon.svg" --out "$app/Contents/Resources/MenuBarIconTemplate.png" >/dev/null
+sips -s format png -z 36 36 "$here/MenuBarIcon.svg" --out "$app/Contents/Resources/MenuBarIconTemplate@2x.png" >/dev/null

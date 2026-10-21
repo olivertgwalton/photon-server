@@ -7,7 +7,8 @@ struct PhotonApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
-        MenuBarExtra("Photon", systemImage: "play.rectangle.fill") {
+        // The Template suffix makes NSImage draw it in the menu bar's own colour.
+        MenuBarExtra("Photon", image: "MenuBarIconTemplate") {
             PhotonMenu(server: delegate.server, updater: delegate.updater.updater)
         }
     }
