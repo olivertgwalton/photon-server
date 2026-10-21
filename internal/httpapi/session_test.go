@@ -123,6 +123,30 @@ func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.U
 	return oliver, nil
 }
 
+// SetAuthenticator takes the code 123456 for a key of 160 bits.
+func (fakeAuth) SetAuthenticator(_ context.Context, _ uuid.UUID, secret, code string) error {
+	switch {
+	case len(secret) < 32:
+		return auth.ErrBadSecret
+	case code != "123456":
+		return auth.ErrWrongCode
+	}
+	return nil
+}
+
+// Authenticator is Oliver's alone, which a manager does not keep.
+func (fakeAuth) Authenticator(_ context.Context, profile uuid.UUID, by *uuid.UUID) (time.Time, error) {
+	if profile != oliver.ID || by != nil {
+		return time.Time{}, store.ErrNotFound
+	}
+	return time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC), nil
+}
+
+func (f fakeAuth) RemoveAuthenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) error {
+	_, err := f.Authenticator(ctx, profile, by)
+	return err
+}
+
 func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
 	if pin != "" && len(pin) < 4 {
 		return auth.ErrPINNotDigits
@@ -268,6 +292,34 @@ func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodPut, "/api/v1/profile/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a two-digit PIN: status %d, want 400", rec.Code)
+	}
+}
+
+func TestAnAuthenticatorIsAddedByItsCode(t *testing.T) {
+	const key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	for _, c := range []struct {
+		name, body string
+		want       int
+	}{
+		{"no code", `{"secret":"` + key + `"}`, http.StatusBadRequest},
+		{"a short key", `{"secret":"GEZDGNBV","code":"123456"}`, http.StatusBadRequest},
+		{"a wrong code", `{"secret":"` + key + `","code":"000000"}`, http.StatusForbidden},
+		{"its code", `{"secret":"` + key + `","code":"123456"}`, http.StatusNoContent},
+	} {
+		if rec := serve(t, http.MethodPut, "/api/v1/profile/authenticator", goodToken, c.body); rec.Code != c.want {
+			t.Errorf("%s: status %d, want %d: %s", c.name, rec.Code, c.want, rec.Body)
+		}
+	}
+	admins := "/api/v1/admin/profiles/" + oliver.ID.String() + "/authenticator"
+	if rec := serve(t, http.MethodGet, "/api/v1/profile/authenticator", goodToken, ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `"added_at":"2026-10-01T09:00:00Z"`) {
+		t.Errorf("its own: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodDelete, admins, managerToken, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("a manager removing the admin's: status %d, want 404", rec.Code)
+	}
+	if rec := serve(t, http.MethodDelete, admins, goodToken, ""); rec.Code != http.StatusNoContent {
+		t.Errorf("the admin removing it: status %d, want 204", rec.Code)
 	}
 }
 

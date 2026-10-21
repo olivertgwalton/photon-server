@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -103,6 +104,9 @@ type authenticator interface {
 	RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
+	SetAuthenticator(ctx context.Context, profile uuid.UUID, secret, code string) error
+	Authenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) (time.Time, error)
+	RemoveAuthenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 	CreateKey(ctx context.Context, creator domain.Session, name string) (uuid.UUID, string, error)
@@ -325,6 +329,7 @@ func (a *API) routes() []route {
 		a.pushRoutes(),
 		a.catalogueRoutes(),
 		a.avatarsRoutes(),
+		a.authenticatorRoutes(),
 		a.devicesRoutes(),
 		a.collectionsRoutes(),
 		a.peopleRoutes(),
