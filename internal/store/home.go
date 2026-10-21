@@ -25,7 +25,9 @@ var rowQueries = map[domain.HomeRow]string{
 		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and the specials placed in no season aside, unless it is under way already and so in Continue Watching; the shows
-	// in the order that episode was last played.
+	// in the order that episode was last played. The shows are put in that order before each one's
+	// next episode is looked for, so a page stops at its last: looked for first, every show's was,
+	// six times the page's time for a profile of a thousand shows.
 	domain.RowNextUp: `
 		WITH last AS (
 			SELECT DISTINCT ON (show.id) show.id AS show_id, show, ` + episodeOrderOf("e") + ` AS at, w.last_played_at
@@ -37,7 +39,7 @@ var rowQueries = map[domain.HomeRow]string{
 				AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, show))
 			ORDER BY show.id, ` + episodeOrderBy("DESC") + `
 		)
-		SELECT ` + itemColumnsOf("next") + ` FROM last
+		SELECT ` + itemColumnsOf("next") + ` FROM (SELECT * FROM last ORDER BY last_played_at DESC, show_id DESC) last
 		CROSS JOIN LATERAL (
 			SELECT ` + itemColumnsOf("e") + ` FROM items season
 			JOIN items e ON e.parent_id = season.id AND e.kind = 'episode'
