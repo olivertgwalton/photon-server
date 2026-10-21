@@ -434,7 +434,7 @@ func (s *Store) findMembers(ctx context.Context, tx db, collection uuid.UUID, li
 	if err != nil {
 		return err
 	}
-	_, order := rule.page().orderBy(args)
+	join, order := rule.page().orderBy(args)
 	args["collection"] = collection
 	limit := ""
 	if rule.Limit > 0 {
@@ -445,7 +445,7 @@ func (s *Store) findMembers(ctx context.Context, tx db, collection uuid.UUID, li
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO collection_members (collection_id, item_id, position)
-		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 FROM items `+where+` `+order+limit, args)
+		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 FROM items`+join+` `+where+` `+order+limit, args)
 	return err
 }
 
