@@ -20,8 +20,8 @@ export interface paths {
                 query?: {
                     /** @description Only entries of this kind, one the log keeps. */
                     kind?: components["schemas"]["EventKind"];
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
+                    /** @description Where the page starts: the next of the page before it, absent for the first. */
+                    after?: string;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
                 };
@@ -37,7 +37,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["EventPage"];
+                        "application/json": components["schemas"]["EventCursorPage"];
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -504,8 +504,8 @@ export interface paths {
                 query?: {
                     /** @description Only this profile's plays. */
                     profile?: string;
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
+                    /** @description Where the page starts: the next of the page before it, absent for the first. */
+                    after?: string;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
                 };
@@ -521,7 +521,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["HistoryEntryPage"];
+                        "application/json": components["schemas"]["HistoryEntryCursorPage"];
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -4471,8 +4471,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description Where the page starts, from 0. */
-                    offset?: number;
+                    /** @description Where the page starts: the next of the page before it, absent for the first. */
+                    after?: string;
                     /** @description How many to answer, from 1 to 200. */
                     limit?: number;
                 };
@@ -4488,7 +4488,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["HistoryEntryPage"];
+                        "application/json": components["schemas"]["HistoryEntryCursorPage"];
                     };
                 };
                 default: components["responses"]["Problem"];
@@ -8555,14 +8555,12 @@ export interface components {
             /** Format: uuid */
             title_id?: string;
         };
+        EventCursorPage: {
+            items: components["schemas"]["Event"][];
+            next?: string;
+        };
         /** @enum {string} */
         EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed" | "notifications.changed";
-        EventPage: {
-            items: components["schemas"]["Event"][];
-            offset: number;
-            /** Format: int64 */
-            total: number;
-        };
         ExtraCard: {
             /** Format: int64 */
             duration_ms?: number;
@@ -8672,11 +8670,9 @@ export interface components {
             stopped_at: string;
             title: components["schemas"]["Card"];
         };
-        HistoryEntryPage: {
+        HistoryEntryCursorPage: {
             items: components["schemas"]["HistoryEntry"][];
-            offset: number;
-            /** Format: int64 */
-            total: number;
+            next?: string;
         };
         /** @enum {string} */
         HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";

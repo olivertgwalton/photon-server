@@ -2,8 +2,8 @@
 import { narrow } from "#lib/admin/narrow.js";
 import { byName, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/Choice.svelte";
+import CursorPager from "#lib/components/CursorPager.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import Pager from "#lib/components/Pager.svelte";
 import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 import { fullTitle } from "#lib/format.js";
@@ -83,4 +83,4 @@ function reached(position: number, duration?: number) {
 	<p class="text-ink-3 text-sm">Nothing has been played yet.</p>
 {/if}
 
-<Pager offset={data.page.offset} total={data.page.total} />
+<CursorPager next={data.page.next} />

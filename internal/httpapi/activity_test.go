@@ -84,12 +84,12 @@ func (f *fakeEvents) kinds() []domain.EventKind {
 // fakeActivity answers one sign-in, of whichever kind is asked for.
 type fakeActivity struct{ asked []domain.EventKind }
 
-func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _, _ int) ([]domain.Event, int64, error) {
+func (f *fakeActivity) Activity(_ context.Context, kind domain.EventKind, _ store.Before, _ int) ([]domain.Event, bool, error) {
 	f.asked = append(f.asked, kind)
 	return []domain.Event{{
 		ID: uuid.NewV7(), Kind: domain.EventSignedIn, Profile: oliver.ID,
 		Details: domain.SignInDetails{Name: oliver.Name, Device: "Living room", Client: "Photon"},
-	}}, 1, nil
+	}}, false, nil
 }
 
 // listedProfiles lists the profiles an event is worded with.
@@ -120,7 +120,7 @@ func TestAnAdminReadsTheActivityLog(t *testing.T) {
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"kind":"auth.signed_in"`},
 		// An admin reads what happened as a sentence the server words.
 		{goodToken, "/api/v1/admin/activity", http.StatusOK, `"text":"Oliver signed in on Living room (Photon)"`},
-		{goodToken, "/api/v1/admin/activity?kind=auth.signed_in&offset=0&limit=10", http.StatusOK, `"total":1`},
+		{goodToken, "/api/v1/admin/activity?kind=auth.signed_in&limit=10", http.StatusOK, `"kind":"auth.signed_in"`},
 		{goodToken, "/api/v1/admin/activity?kind=job.started", http.StatusBadRequest, "is not one of"},
 		{goodToken, "/api/v1/admin/activity?limit=0", http.StatusBadRequest, ""},
 	} {

@@ -12,7 +12,7 @@ import (
 )
 
 type history interface {
-	History(ctx context.Context, profile uuid.UUID, offset, limit int) ([]store.Play, int64, error)
+	History(ctx context.Context, profile uuid.UUID, before store.Before, limit int) ([]store.Play, bool, error)
 }
 
 type historyEntryJSON struct {
@@ -41,11 +41,11 @@ func (a *API) adminHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
-	offset, limit, ok := a.paging(w, r, defaultWallLimit)
+	before, limit, ok := a.cursorPaging(w, r, defaultWallLimit)
 	if !ok {
 		return
 	}
-	plays, total, err := a.svc.History.History(r.Context(), profile, offset, limit)
+	plays, more, err := a.svc.History.History(r.Context(), profile, before, limit)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -57,19 +57,24 @@ func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID)
 			StartedAt: p.StartedAt.UTC(), StoppedAt: p.StoppedAt.UTC(), PositionMS: p.PositionMS,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageJSON[historyEntryJSON]{out, offset, total})
+	page := cursorPageJSON[historyEntryJSON]{Items: out}
+	if more {
+		last := plays[len(plays)-1]
+		page.Next = nextOf(last.StoppedAt, last.ID)
+	}
+	writeJSON(w, a.logger, "application/json", http.StatusOK, page)
 }
 
 func (a *API) historyRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/history", access: signedIn, summary: "Page the profile's plays, the latest first",
-			query: pageParams, status: http.StatusOK, reply: pageJSON[historyEntryJSON]{}, handle: a.ownHistory,
+			query: cursorParams, status: http.StatusOK, reply: cursorPageJSON[historyEntryJSON]{}, handle: a.ownHistory,
 		},
 		{
 			pattern: "GET /api/v1/admin/history", access: admin, summary: "Page everyone's plays, or one profile's",
-			query:  append([]param{{"profile", uuid.UUID{}, "Only this profile's plays."}}, pageParams...),
-			status: http.StatusOK, reply: pageJSON[historyEntryJSON]{}, handle: a.adminHistory,
+			query:  append([]param{{"profile", uuid.UUID{}, "Only this profile's plays."}}, cursorParams...),
+			status: http.StatusOK, reply: cursorPageJSON[historyEntryJSON]{}, handle: a.adminHistory,
 		},
 	}
 }
