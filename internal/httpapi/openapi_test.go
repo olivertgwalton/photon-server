@@ -228,6 +228,32 @@ func TestAddressesAreDescribedAsURIs(t *testing.T) {
 	}
 }
 
+// A branch of a choice that says only its pattern is of no type, which a client's generated code
+// takes as unknown and so loses the whole choice: a plugin's source has to be a string.
+func TestEveryChoiceIsOfAType(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				AnyOf []struct {
+					Ref  string          `json:"$ref"`
+					Type json.RawMessage `json:"type"`
+					Enum []string        `json:"enum"`
+				} `json:"anyOf"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(fetchDescription(t, newAPI(nil)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for name, schema := range doc.Components.Schemas {
+		for i, branch := range schema.AnyOf {
+			if branch.Ref == "" && branch.Type == nil && branch.Enum == nil {
+				t.Errorf("%s anyOf[%d] is of no type", name, i)
+			}
+		}
+	}
+}
+
 // The description's code enum is problemCodes, so a code declared and not listed would be one no
 // client is told of.
 func TestEveryProblemCodeIsListed(t *testing.T) {
