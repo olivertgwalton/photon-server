@@ -2,7 +2,7 @@
 import * as Select from "#lib/components/ui/select/index.js";
 
 // One of a few answers, sent with its form by `name` where it has one, and
-// named by its trigger's label.
+// named by its label followed by the answer shown, as a native select reads.
 let {
 	options,
 	value = $bindable(),
@@ -10,7 +10,8 @@ let {
 	name,
 	id,
 	class: className,
-	...labelled
+	"aria-label": ariaLabel,
+	"aria-labelledby": labelledby,
 }: {
 	options: readonly { value: T; label: string; disabled?: boolean }[];
 	value?: T;
@@ -22,6 +23,11 @@ let {
 	"aria-labelledby"?: string;
 } = $props();
 
+const uid = $props.id();
+// A <label for={id}> names it natively; an ARIA name must carry the answer too.
+const named = $derived(
+	labelledby ?? (ariaLabel === undefined ? undefined : `${uid}-label`),
+);
 const label = $derived(options.find((o) => o.value === value)?.label);
 </script>
 
@@ -31,8 +37,15 @@ const label = $derived(options.find((o) => o.value === value)?.label);
 	bind:value={value as string}
 	onValueChange={(v) => onchange?.(v as T)}
 >
-	<Select.Trigger {id} class={className} {...labelled}>
-		<span class="truncate">{label ?? "Choose"}</span>
+	<Select.Trigger
+		{id}
+		class={className}
+		aria-labelledby={named && `${named} ${uid}-value`}
+	>
+		{#if ariaLabel !== undefined && !labelledby}
+			<span id="{uid}-label" class="sr-only">{ariaLabel}</span>
+		{/if}
+		<span id="{uid}-value" class="truncate">{label ?? "Choose"}</span>
 	</Select.Trigger>
 	<Select.Content>
 		{#each options as option (option.value)}
