@@ -4846,7 +4846,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Describe the API in OpenAPI 3.1 */
+        /** Describe the API in OpenAPI 3.2.1 */
         get: {
             parameters: {
                 query?: never;

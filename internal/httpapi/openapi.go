@@ -144,7 +144,7 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 		return nil, s.err
 	}
 	return json.Marshal(apiDocument{
-		OpenAPI: "3.1.1",
+		OpenAPI: "3.2.1",
 		Info: apiInfo{
 			Title:   "photon-server",
 			Version: info.Version,
@@ -301,7 +301,7 @@ func (a *API) openAPI(w http.ResponseWriter, _ *http.Request) {
 func (a *API) openAPIRoutes() []route {
 	return []route{
 		{
-			pattern: "GET /api/v1/openapi.json", access: public, summary: "Describe the API in OpenAPI 3.1",
+			pattern: "GET /api/v1/openapi.json", access: public, summary: "Describe the API in OpenAPI 3.2.1",
 			status: http.StatusOK, reply: asFile{openAPIType}, handle: a.openAPI,
 		},
 	}
