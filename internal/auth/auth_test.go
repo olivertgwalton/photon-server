@@ -64,16 +64,16 @@ func TestSignInAndOut(t *testing.T) {
 	for _, c := range []struct{ name, password string }{
 		{"Oliver", "wrong"}, {"Nobody", "correct horse"},
 	} {
-		if _, _, err := svc.SignIn(t.Context(), c.name, c.password, tv); !errors.Is(err, ErrInvalidCredentials) {
+		if _, _, err := svc.SignIn(t.Context(), c.name, c.password, "", tv); !errors.Is(err, ErrInvalidCredentials) {
 			t.Errorf("SignIn(%q, %q): err = %v, want %v", c.name, c.password, err, ErrInvalidCredentials)
 		}
 	}
 
-	if _, profile, err := svc.SignIn(t.Context(), "oliver", "correct horse", tv); err != nil || profile != oliver {
+	if _, profile, err := svc.SignIn(t.Context(), "oliver", "correct horse", "", tv); err != nil || profile != oliver {
 		t.Errorf(`SignIn("oliver") = %+v, %v; want %+v`, profile, err, oliver)
 	}
 
-	token, profile, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	token, profile, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestSignInAndOut(t *testing.T) {
 func TestExpiredSessionsAreRefused(t *testing.T) {
 	svc, st := newService(t)
 	addOliver(t, svc, st)
-	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestWeakHashIsUpgradedAtSignIn(t *testing.T) {
 	if _, err := st.AddProfile(t.Context(), "Oliver", domain.RoleAdmin, old, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv); err != nil {
+	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv); err != nil {
 		t.Fatal(err)
 	}
 	_, hash, err := st.ProfileByName(t.Context(), "Oliver")
@@ -152,7 +152,7 @@ func b64(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
 func TestPairingATelevision(t *testing.T) {
 	svc, st := newService(t)
 	addOliver(t, svc, st)
-	_, phone, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: "iPhone", Client: "Photon iOS"})
+	_, phone, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", Device{Name: "iPhone", Client: "Photon iOS"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestSwitchingProfiles(t *testing.T) {
 		t.Errorf("the switcher would show %s", got)
 	}
 
-	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestSwitchingProfiles(t *testing.T) {
 		{"to the admin with its password", admin, "correct horse", nil, admin},
 	}
 	for _, s := range steps {
-		_, err := svc.SwitchProfile(t.Context(), session(), s.target.ID, s.secret)
+		_, err := svc.SwitchProfile(t.Context(), session(), s.target.ID, s.secret, "")
 		if !errors.Is(err, s.wantErr) {
 			t.Errorf("%s: err = %v, want %v", s.name, err, s.wantErr)
 		}
@@ -430,7 +430,7 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	add("Sam", "sam's password", domain.RoleUser, &mia.ID)
 	signIn := func(name, password, device string) domain.Session {
 		t.Helper()
-		token, _, err := svc.SignIn(t.Context(), name, password, Device{Name: device, Client: "Photon"})
+		token, _, err := svc.SignIn(t.Context(), name, password, "", Device{Name: device, Client: "Photon"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -495,7 +495,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	}
 	signIn := func(device string) (string, domain.Session) {
 		t.Helper()
-		token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", Device{Name: device, Client: "Photon"})
+		token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", Device{Name: device, Client: "Photon"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -508,7 +508,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	phoneToken, phone := signIn("Phone")
 	tvToken, _ := signIn("TV")
 	guestToken, guestTV := signIn("Guest's TV")
-	if _, err := svc.SwitchProfile(t.Context(), guestTV, guest.ID, "guest's password"); err != nil {
+	if _, err := svc.SwitchProfile(t.Context(), guestTV, guest.ID, "guest's password", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -534,10 +534,10 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 	if _, err := svc.Authenticate(t.Context(), guestToken); err != nil {
 		t.Errorf("a device watching as another profile was signed out: %v", err)
 	}
-	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv); !errors.Is(err, ErrInvalidCredentials) {
+	if _, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("the old password still signs in (err %v)", err)
 	}
-	if _, _, err := svc.SignIn(t.Context(), "Oliver", "battery staple", tv); err != nil {
+	if _, _, err := svc.SignIn(t.Context(), "Oliver", "battery staple", "", tv); err != nil {
 		t.Errorf("the new password does not sign in: %v", err)
 	}
 }
@@ -545,7 +545,7 @@ func TestChangingAPasswordSignsOutTheProfilesOtherDevices(t *testing.T) {
 func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 	svc, st := newService(t)
 	oliver := addOliver(t, svc, st)
-	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", tv)
+	token, _, err := svc.SignIn(t.Context(), "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,7 +597,7 @@ func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 	svc, st := newService(t)
 	ctx := t.Context()
 	oliver := addOliver(t, svc, st)
-	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", tv)
+	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +620,7 @@ func TestAForgottenPasswordIsResetByItsCodeOnce(t *testing.T) {
 	if _, err := svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("a device stayed signed in: %v", err)
 	}
-	if _, _, err := svc.SignIn(ctx, "Oliver", "battery staple", tv); err != nil {
+	if _, _, err := svc.SignIn(ctx, "Oliver", "battery staple", "", tv); err != nil {
 		t.Errorf("signing in with the new password: %v", err)
 	}
 }
@@ -699,11 +699,11 @@ func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, password := range []string{"", "anything"} {
-		if _, _, err := svc.SignIn(ctx, "Ada", password, tv); !errors.Is(err, ErrInvalidCredentials) {
+		if _, _, err := svc.SignIn(ctx, "Ada", password, "", tv); !errors.Is(err, ErrInvalidCredentials) {
 			t.Errorf("signing in with %q: %v; want %v", password, err, ErrInvalidCredentials)
 		}
 	}
-	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", tv)
+	token, _, err := svc.SignIn(ctx, "Oliver", "correct horse", "", tv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,7 +711,7 @@ func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SwitchProfile(ctx, oliver, ada.ID, ""); !errors.Is(err, ErrWrongSecret) {
+	if _, err := svc.SwitchProfile(ctx, oliver, ada.ID, "", ""); !errors.Is(err, ErrWrongSecret) {
 		t.Errorf("switching to Ada with no password: %v; want %v", err, ErrWrongSecret)
 	}
 
@@ -729,7 +729,7 @@ func TestAProfileWithNoPasswordSetsItsFirst(t *testing.T) {
 	if err := svc.ChangePassword(ctx, session, "", "battery staple"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.SignIn(ctx, "Ada", "battery staple", tv); err != nil {
+	if _, _, err := svc.SignIn(ctx, "Ada", "battery staple", "", tv); err != nil {
 		t.Errorf("the first password does not sign in: %v", err)
 	}
 	if err := svc.ChangePassword(ctx, session, "", "correct horse"); !errors.Is(err, ErrWrongSecret) {
@@ -785,5 +785,84 @@ func TestATelevisionPairedBySignInGoesWithTheAccount(t *testing.T) {
 		if _, err := svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
 			t.Errorf("the %s is still signed in: %v", name, err)
 		}
+	}
+}
+
+// A profile with an authenticator app signs in by its password and a code, each code once, and
+// switching to it by its password asks a code too; a reset takes the app away with the password.
+func TestAnAuthenticatorsCodeIsAskedBesideThePassword(t *testing.T) {
+	svc, st := newService(t)
+	ctx := t.Context()
+	oliver := addOliver(t, svc, st)
+	hash, err := svc.HashPassword(ctx, "kid's password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddProfile(ctx, "Kid", domain.RoleUser, hash, nil); err != nil {
+		t.Fatal(err)
+	}
+	const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" // "12345678901234567890"
+	key := []byte("12345678901234567890")
+	at := func(step int64) string { return totp(key, step) }
+	// Each step is read as its code is made, as hashing passwords takes long enough to cross one.
+	now := func() int64 { return time.Now().Unix() / 30 }
+
+	if err := svc.SetAuthenticator(ctx, oliver.ID, "GEZDGNBV", at(now())); !errors.Is(err, ErrBadSecret) {
+		t.Errorf("a 40-bit secret: %v, want %v", err, ErrBadSecret)
+	}
+	if err := svc.SetAuthenticator(ctx, oliver.ID, secret, at(now()+5)); !errors.Is(err, ErrWrongCode) {
+		t.Errorf("a code from another time: %v, want %v", err, ErrWrongCode)
+	}
+	added := now() - 1
+	if err := svc.SetAuthenticator(ctx, oliver.ID, strings.ToLower(secret), at(added)); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		name, password, code string
+		want                 error
+	}{
+		{"a wrong password, no code", "guess", "", ErrInvalidCredentials},
+		{"a wrong password, the right code", "guess", at(now()), ErrInvalidCredentials},
+		{"no code", "correct horse", "", ErrCodeRequired},
+		{"the code it was added by", "correct horse", at(added), ErrWrongCode},
+		{"a wrong code", "correct horse", "000000", ErrWrongCode},
+	} {
+		if _, _, err := svc.SignIn(ctx, "Oliver", c.password, c.code, tv); !errors.Is(err, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, err, c.want)
+		}
+	}
+	fresh := at(now())
+	if _, _, err := svc.SignIn(ctx, "Oliver", "correct horse", fresh, tv); err != nil {
+		t.Fatalf("the password and a fresh code: %v", err)
+	}
+	if _, _, err := svc.SignIn(ctx, "Oliver", "correct horse", fresh, tv); !errors.Is(err, ErrWrongCode) {
+		t.Errorf("the same code again: %v, want %v", err, ErrWrongCode)
+	}
+
+	token, _, err := svc.SignIn(ctx, "Kid", "kid's password", "", tv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kidTV, err := svc.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SwitchProfile(ctx, kidTV, oliver.ID, "correct horse", ""); !errors.Is(err, ErrCodeRequired) {
+		t.Errorf("switching to it by its password alone: %v, want %v", err, ErrCodeRequired)
+	}
+	if _, err := svc.SwitchProfile(ctx, kidTV, oliver.ID, "correct horse", at(now()+1)); err != nil {
+		t.Errorf("switching to it with a code: %v", err)
+	}
+
+	code, err := svc.StartReset(ctx, "Oliver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RedeemReset(ctx, code, "battery staple"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.SignIn(ctx, "Oliver", "battery staple", "", tv); err != nil {
+		t.Errorf("after a reset, the password alone: %v", err)
 	}
 }

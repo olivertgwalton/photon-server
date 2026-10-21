@@ -16,6 +16,8 @@ type profileListingJSON struct {
 type switchJSON struct {
 	// Secret is the PIN or password the profile's lock asks for.
 	Secret string `json:"secret,omitzero"`
+	// Code is the profile's authenticator app's, which a password asks for too where it has one.
+	Code string `json:"code,omitzero"`
 }
 
 type pinJSON struct {
@@ -52,7 +54,7 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	if req.Secret != "" && !a.allowed(w, r, auth.SignInsPerName, "switch:profile:"+target.String()) {
 		return
 	}
-	profile, err := a.svc.Auth.SwitchProfile(r.Context(), auth.SessionOf(r.Context()), target, req.Secret)
+	profile, err := a.svc.Auth.SwitchProfile(r.Context(), auth.SessionOf(r.Context()), target, req.Secret, req.Code)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(profile))
 	}
