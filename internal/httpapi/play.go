@@ -45,7 +45,7 @@ type playing interface {
 	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
 	SeesPart(ctx context.Context, profile, part uuid.UUID) error
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
-	Subtitle(ctx context.Context, id uuid.UUID) (store.PlaySubtitle, error)
+	Subtitle(ctx context.Context, id uuid.UUID) (store.SubtitleRef, error)
 	PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error)
 }
 
@@ -188,7 +188,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 		if a.answered(w, r, err) {
 			return
 		}
-		audio, subtitles := copyTracks(c)
+		audio, subtitles := playback.Tracks(c.Streams, c.Subtitles)
 		req.AudioStream = playback.DefaultTracks(audio, subtitles, prefs, last).Audio
 	}
 	n, err := a.svc.Network.Network(r.Context())

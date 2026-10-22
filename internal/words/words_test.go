@@ -33,7 +33,7 @@ func TestATrackIsNamedAsPlexNamesOne(t *testing.T) {
 			t.Errorf("Stream(%+v) = %q, want %q", c.stream, got, c.want)
 		}
 	}
-	file := store.SubtitleRef{Codec: "subrip", Language: "fr", Forced: true}
+	file := store.SubtitleRef{Codec: "subrip", Language: language.French, Forced: true}
 	if got := w.SubtitleFile(file); got != "French Forced (SRT External)" {
 		t.Errorf("a subtitle file beside the copy: %q", got)
 	}

@@ -131,7 +131,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 // file is a subtitle file beside a copy, in its language.
 func (r *Remuxes) file(ctx context.Context, c store.PlayCopy, id uuid.UUID) *hls.SubtitleSource {
 	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.store.SubtitleFile, id) }}
-	if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
+	if i := slices.IndexFunc(c.Subtitles, func(f store.SubtitleRef) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
 		src.Language = c.Subtitles[i].Language.String()
 	}
 	return src

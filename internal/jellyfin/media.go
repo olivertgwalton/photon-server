@@ -141,7 +141,7 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	base := externalBase(v)
 	for n, f := range v.Subtitles {
 		m := mediaStream{
-			Codec: subtitleCodec(f.Codec), Language: iso639(f.Language), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
+			Codec: subtitleCodec(f.Codec), Language: iso639(string(domain.TagOf(f.Language))), Title: f.Title, IsDefault: f.Default, IsForced: f.Forced,
 			IsHearingImpaired: f.HearingImpaired, Type: "Subtitle", Index: base + n, IsExternal: true,
 			IsTextSubtitleStream: textual(f.Codec), SupportsExternalStream: true, DeliveryMethod: "External",
 			DisplayTitle: w.SubtitleFile(f),

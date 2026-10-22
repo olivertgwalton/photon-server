@@ -47,7 +47,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 	copyOf := func(c Copy) store.PlayCopy {
 		return store.PlayCopy{
 			BitrateKbps: c.BitrateKbps, Streams: c.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
-			Subtitles: []store.PlaySubtitle{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
+			Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 		}
 	}
 	h264 := Copy{BitrateKbps: 8_000, Streams: []domain.Stream{
@@ -162,7 +162,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
 	c := store.PlayCopy{
 		BitrateKbps: film.BitrateKbps, Streams: film.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
-		Subtitles: []store.PlaySubtitle{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
+		Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 	}
 	for renditions, want := range map[Renditions]int{RenditionsAll: 2, RenditionsEmbedded: 1} {
 		hlsOf := opened{}
@@ -183,7 +183,7 @@ func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	c := store.PlayCopy{
 		BitrateKbps: film.BitrateKbps, Streams: film.Streams,
 		Parts:     []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}, {ID: uuid.NewV7(), OffsetMS: 60_000, DurationMS: 60_000}},
-		Subtitles: []store.PlaySubtitle{{ID: file, Codec: "ass", Language: language.Russian}},
+		Subtitles: []store.SubtitleRef{{ID: file, Codec: "ass", Language: language.Russian}},
 	}
 	encode := func(stream *int, file *uuid.UUID) domain.VideoPlan {
 		return domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
