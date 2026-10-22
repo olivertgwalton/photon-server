@@ -142,8 +142,12 @@ func testListedByPrefix(t *testing.T, s store) {
 	if ks := keys(t, s, ""); !slices.Equal(ks, []string{"p10/chapters/0.jpg", "top"}) {
 		t.Errorf("listed %q after deleting p1/", ks)
 	}
-	for range s.List(ctx, "") {
-		break // A listing stopped early ends without a fault.
+	// A listing stopped early ends without a fault.
+	for _, err := range s.List(ctx, "") {
+		if err != nil {
+			t.Fatal(err)
+		}
+		break
 	}
 }
 
