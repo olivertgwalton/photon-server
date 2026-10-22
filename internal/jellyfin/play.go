@@ -104,9 +104,10 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	versions, err := a.svc.Catalogue.Versions(r.Context(), []uuid.UUID{id})
+	all, err := a.svc.Catalogue.Versions(r.Context(), []uuid.UUID{id})
+	versions := onDisk(all[id])
 	if err == nil {
-		err = a.chooseTracks(r.Context(), profile, id, versions[id])
+		err = a.chooseTracks(r.Context(), profile, id, versions)
 	}
 	if err != nil {
 		a.internal(w, r, err)
@@ -118,7 +119,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		PlaySessionID string        `json:"PlaySessionId"`
 	}{MediaSources: []mediaSource{}, PlaySessionID: guid(session)}
 	said := words.Negotiate(w, r)
-	for _, v := range versions[id] {
+	for _, v := range versions {
 		src := sourceOf(v, said)
 		// An app that names a copy is answered it alone, as Jellyfin answers it.
 		if v.ID == c.Version {

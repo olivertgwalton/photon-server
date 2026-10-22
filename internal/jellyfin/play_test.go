@@ -880,3 +880,53 @@ func plannedFor(t *testing.T, api http.Handler, transcoding string) transcode {
 	}
 	return p.Transcode
 }
+
+// A version whose file is gone, kept until it is forgotten, is no media source an app could open:
+// not in PlaybackInfo, nor on the item, even when it is the longer.
+func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
+	ctx := t.Context()
+	st, ada, heat, copyID := aFilm(t)
+	libs, err := st.Libraries(ctx)
+	if err != nil || len(libs) != 1 {
+		t.Fatal(libs, err)
+	}
+	longer := store.Part{RelPath: "Heat/Heat - 4K.mkv", Size: 40, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+		Size: 40, Duration: 2 * time.Hour, Container: "matroska,webm",
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeSDR}},
+	}}
+	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{
+		{ContentKey: []byte("heat"), Parts: []store.Part{{RelPath: "Heat/Heat.mkv", Size: 3_600_000_000, ModTime: time.Unix(0, 0)}}, Subtitles: []store.Subtitle{
+			{RelPath: "Heat/Heat.en.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English},
+		}},
+		{ContentKey: []byte("heat 4k"), Label: "4K", Parts: []store.Part{longer}},
+	}}
+	if _, err := st.SaveFolder(ctx, libs[0].ID, "Heat", []byte("w"), []store.Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.FinishScan(ctx, libs[0].ID, []string{"."}, []string{"Heat"}, []string{"Heat/Heat.mkv", "Heat/Heat.en.srt"}); err != nil {
+		t.Fatal(err)
+	}
+	versions, err := st.Versions(ctx, []uuid.UUID{heat})
+	if err != nil || len(versions[heat]) != 2 {
+		t.Fatalf("the versions kept: %v, %v", versions[heat], err)
+	}
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		Copies: noCopies{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Preferences: st,
+	})
+	for _, target := range []string{"/Items/" + guid(heat) + "/PlaybackInfo", "/Items/" + guid(heat) + "?fields=MediaSources"} {
+		method := http.MethodGet
+		if strings.HasSuffix(target, "PlaybackInfo") {
+			method = http.MethodPost
+		}
+		w := serve(api, method, target, `MediaBrowser Token="pst_ada"`, "{}")
+		var got struct {
+			MediaSources []struct {
+				ID string `json:"Id"`
+			}
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(copyID) {
+			t.Errorf("%s %s: %d %s, want only the version on disk", method, target, w.Code, w.Body)
+		}
+	}
+}
