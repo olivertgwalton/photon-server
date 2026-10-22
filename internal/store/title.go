@@ -307,15 +307,6 @@ func (s *Store) dress(ctx context.Context, profile uuid.UUID, item *model.Item, 
 	return nil
 }
 
-// readItem answers a title's row, or ErrNotFound.
-func readItem(ctx context.Context, q db, id uuid.UUID) (*model.Item, error) {
-	row, err := readRow[model.Item](ctx, q, `SELECT `+itemColumns+` FROM items WHERE id = $1`, id)
-	if err != nil {
-		return nil, err
-	}
-	return &row, nil
-}
-
 // visible reports whether a profile may see a title: a library it has, and a certificate within its
 // age; a title it may not is not there to it.
 func (s *Store) visible(ctx context.Context, profile, id uuid.UUID) (bool, error) {
