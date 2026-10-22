@@ -450,3 +450,22 @@ func (a *API) local(r *http.Request) (bool, error) {
 	}
 	return peer.LocalIn(n.LocalNetworks, a.svc.Reach.Client(r)), nil
 }
+
+// each converts every element of in, leaving nil as nil so an omitted list stays omitted.
+func each[S, T any](in []S, convert func(S) T) []T {
+	if in == nil {
+		return nil
+	}
+	out := make([]T, len(in))
+	for i, v := range in {
+		out[i] = convert(v)
+	}
+	return out
+}
+
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}

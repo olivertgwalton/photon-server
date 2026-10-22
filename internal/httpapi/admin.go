@@ -11,55 +11,11 @@ import (
 
 	"golang.org/x/text/language"
 
-	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
-
-// requireAdmin admits a signed-in admin.
-func (a *API) requireAdmin(next http.Handler) http.Handler {
-	return a.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if auth.SessionOf(r.Context()).Profile.Role != domain.RoleAdmin {
-			writeProblem(w, a.logger, codeForbidden, "only an admin may")
-			return
-		}
-		next.ServeHTTP(w, r)
-	}))
-}
-
-// requireManager admits a signed-in admin or manager.
-func (a *API) requireManager(next http.Handler) http.Handler {
-	return a.requireSession(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if keeper, ok := keeperOf(auth.SessionOf(r.Context())); ok {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keeperKey{}, keeper)))
-			return
-		}
-		writeProblem(w, a.logger, codeForbidden, "only an admin or a manager may")
-	}))
-}
-
-type keeperKey struct{}
-
-// keeperOf is whose profiles a session administers: an admin's, every one, nil; a manager's, the
-// ones it keeps. A user administers none.
-func keeperOf(s domain.Session) (*uuid.UUID, bool) {
-	switch s.Profile.Role {
-	case domain.RoleAdmin:
-		return nil, true
-	case domain.RoleManager:
-		return &s.Profile.ID, true
-	case domain.RoleUser:
-	}
-	return nil, false
-}
-
-// keeper is what requireManager found: the profiles the request may administer.
-func keeper(r *http.Request) *uuid.UUID {
-	k, _ := r.Context().Value(keeperKey{}).(*uuid.UUID)
-	return k
-}
 
 type libraryAdmin interface {
 	Libraries(ctx context.Context) ([]domain.Library, error)
@@ -182,13 +138,6 @@ func rankedJSON(list []domain.RankedSource) []rankedSourceJSON {
 		out[i] = rankedSourceJSON(r)
 	}
 	return out
-}
-
-func nonNil[T any](s []T) []T {
-	if s == nil {
-		return []T{}
-	}
-	return s
 }
 
 func (a *API) adminLibraries(w http.ResponseWriter, r *http.Request) {
