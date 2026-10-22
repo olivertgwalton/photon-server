@@ -33,10 +33,13 @@ const (
 	// TaskRefreshAnimeLists reads the published anime lists again, which place anime entries in
 	// shows.
 	TaskRefreshAnimeLists TaskKey = "refresh_anime_lists"
+	// TaskPruneExpired forgets what can no longer be used: devices whose sign-in has expired, and
+	// webhook deliveries that failed long ago.
+	TaskPruneExpired TaskKey = "prune_expired"
 )
 
 func TaskKeys() []TaskKey {
-	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists}
+	return []TaskKey{TaskScanLibraries, TaskSweepJobs, TaskBackupDatabase, TaskRefreshMetadata, TaskSweepArtwork, TaskDetectMarkers, TaskBackfillPreviews, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists, TaskPruneExpired}
 }
 
 // Jobs are the kinds of job the task queues: the work it starts that outlasts its run, and that
@@ -51,7 +54,7 @@ func (k TaskKey) Jobs() []JobKind {
 		return []JobKind{JobMarkers, JobSegments}
 	case TaskBackfillPreviews:
 		return []JobKind{JobPreviews}
-	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists:
+	case TaskSweepJobs, TaskBackupDatabase, TaskSweepArtwork, TaskSweepDownloads, TaskPruneActivity, TaskRefreshCollections, TaskSyncLists, TaskFetchSubtitles, TaskRefreshAnimeLists, TaskPruneExpired:
 	}
 	return nil
 }

@@ -9993,7 +9993,7 @@ export interface components {
             task: components["schemas"]["TaskKey"];
         };
         /** @enum {string} */
-        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles" | "refresh_anime_lists";
+        TaskKey: "scan_libraries" | "sweep_jobs" | "backup_database" | "refresh_metadata" | "sweep_artwork" | "detect_markers" | "backfill_previews" | "sweep_downloads" | "prune_activity" | "refresh_collections" | "sync_lists" | "fetch_subtitles" | "refresh_anime_lists" | "prune_expired";
         TaskList: {
             items: components["schemas"]["Task"][];
         };
