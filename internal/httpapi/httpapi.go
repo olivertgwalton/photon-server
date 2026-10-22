@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 	"github.com/olivertgwalton/photon-server/internal/identity"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/nodecall"
@@ -297,7 +298,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		case asSocket:
 		case asFile:
 			// A file that is JSON, as the description is, is tagged and gzipped as any JSON answer.
-			if !slices.ContainsFunc(reply, func(t string) bool { return !isJSON(t) }) {
+			if !slices.ContainsFunc(reply, func(t string) bool { return !gzipped.IsJSON(t) }) {
 				h = a.revalidate(h)
 			}
 		default:
