@@ -2,8 +2,11 @@ package store
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"uuid"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -81,4 +84,92 @@ func (r SmartRule) playlistPage(profile uuid.UUID, offset, limit int) WallPage {
 		p.Limit = max(0, min(limit, r.Limit-offset))
 	}
 	return p
+}
+
+// AddSmartCollection makes an admin's collection whose titles a rule finds in libs.
+func (s *Store) AddSmartCollection(ctx context.Context, libs []uuid.UUID, title string, rule SmartRule) (uuid.UUID, error) {
+	if err := rule.CheckShared(); err != nil {
+		return uuid.UUID{}, err
+	}
+	var id uuid.UUID
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := hasLibraries(ctx, tx, libs); err != nil {
+			return err
+		}
+		var err error
+		if id, err = newCollection(ctx, tx, title, madeBy{origin: domain.CollectionSmart, rule: &rule, libraries: libs}); err != nil {
+			return err
+		}
+		if err := applyMetadata(ctx, tx, id, domain.SourceUser, domain.Metadata{Title: title}); err != nil {
+			return err
+		}
+		return s.findMembers(ctx, tx, id, libs, rule)
+	})
+	return id, err
+}
+
+// SetRule replaces a smart collection's rule, and its titles with what it finds.
+func (s *Store) SetRule(ctx context.Context, collection uuid.UUID, rule SmartRule) error {
+	if err := rule.CheckShared(); err != nil {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		libs, err := userCollection(ctx, tx, collection, domain.CollectionSmart)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE collections SET rule = $2 WHERE item_id = $1`, collection, rule); err != nil {
+			return err
+		}
+		return s.findMembers(ctx, tx, collection, libs, rule)
+	})
+}
+
+// findMembers replaces a smart collection's titles with what its rule finds now, in its order.
+func (s *Store) findMembers(ctx context.Context, tx db, collection uuid.UUID, libs []uuid.UUID, rule SmartRule) error {
+	where, args, err := s.wallQuery(ctx, libs, uuid.UUID{}, domain.WallTitles, rule.Filter)
+	if err != nil {
+		return err
+	}
+	join, order := rule.page().orderBy(args)
+	args["collection"] = collection
+	limit := ""
+	if rule.Limit > 0 {
+		args["limit"], limit = rule.Limit, ` LIMIT @limit`
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM collection_members WHERE collection_id = @collection`, args); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO collection_members (collection_id, item_id, position)
+		SELECT @collection, items.id, row_number() OVER (`+order+`) - 1 FROM items`+join+` `+where+` `+order+limit, args)
+	return err
+}
+
+// RefreshSmartCollections finds the titles of the smart collections reading any of libs again, or
+// of every one where none is named.
+func (s *Store) RefreshSmartCollections(ctx context.Context, libs ...uuid.UUID) error {
+	type smart struct {
+		ItemID    uuid.UUID
+		Libraries []uuid.UUID
+		Rule      SmartRule
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT item_id, libraries, rule FROM collections
+		WHERE origin = 'smart' AND ($1::uuid[] IS NULL OR libraries && $1)`, libs)
+	if err != nil {
+		return err
+	}
+	all, err := pgx.CollectRows(rows, pgx.RowToStructByPos[smart])
+	if err != nil {
+		return err
+	}
+	for _, c := range all {
+		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			return s.findMembers(ctx, tx, c.ItemID, c.Libraries, c.Rule)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

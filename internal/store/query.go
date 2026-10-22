@@ -121,6 +121,15 @@ func readRow[T any](ctx context.Context, q db, sql string, args ...any) (T, erro
 	return row, found(err)
 }
 
+// readItem answers a title's row, or ErrNotFound.
+func readItem(ctx context.Context, q db, id uuid.UUID) (*model.Item, error) {
+	row, err := readRow[model.Item](ctx, q, `SELECT `+itemColumns+` FROM items WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
 // queryRows answers the rows a statement finds, each column into the field of its name.
 func queryRows[T any](ctx context.Context, q db, sql string, args ...any) ([]*T, error) {
 	rows, err := q.Query(ctx, sql, args...)
