@@ -97,6 +97,19 @@ func CardArts() []CardArt {
 	return []CardArt{CardStill, CardBackdrop, CardLandscape}
 }
 
+// SpoilerMode is whether a profile's apps blur the still of an episode it has not started, as Plex's
+// spoiler setting does: shown unless asked.
+type SpoilerMode string
+
+const (
+	SpoilersShow SpoilerMode = "show"
+	SpoilersHide SpoilerMode = "hide"
+)
+
+func SpoilerModes() []SpoilerMode {
+	return []SpoilerMode{SpoilersShow, SpoilersHide}
+}
+
 // Preferences are how a profile plays, on every device, as Jellyfin's UserConfiguration. The server
 // chooses the sound and subtitles by them; the rest are a player's to follow.
 type Preferences struct {
@@ -115,6 +128,7 @@ type Preferences struct {
 	CreditsAction SegmentAction
 	ThemeMusic    ThemeMusic
 	CardArt       CardArt
+	Spoilers      SpoilerMode
 	Notify        Notify
 	// QuietLibraries are the libraries the profile is told nothing of.
 	QuietLibraries []uuid.UUID
@@ -130,7 +144,7 @@ func DefaultPreferences() Preferences {
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
 		NextEpisode: NextEpisodePlay, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
-		ThemeMusic: ThemeMusicOff, CardArt: CardStill, Notify: NotifyMarked, Home: ArrangeHome(nil),
+		ThemeMusic: ThemeMusicOff, CardArt: CardStill, Spoilers: SpoilersShow, Notify: NotifyMarked, Home: ArrangeHome(nil),
 	}
 }
 
