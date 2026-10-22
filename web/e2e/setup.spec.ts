@@ -85,7 +85,7 @@ test("a new server is set up step by step: its admin, its name, its libraries, a
 	await expectAccessible(page);
 	const before = await (await page.request.get("/api/v1/admin/network")).json();
 	await page.getByLabel("Public address").fill("https://photon.example.com");
-	await page.getByLabel("Remote streaming limit (Mbps)").fill("8");
+	await page.getByLabel("Remote streaming limit (Mb/s)").fill("8");
 	const reached = page.waitForRequest(
 		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/network"),
 	);

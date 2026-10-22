@@ -7,6 +7,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
+import { megabitUnit } from "#lib/format.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 // What a node does, as an admin sets it: taken up by the node at once.
@@ -253,7 +254,7 @@ async function save(event: SubmitEvent) {
 							aria-label="Most megabits a second"
 							class="w-32 font-mono"
 						/>
-						<span class="text-ink-2 text-sm">Mbps</span>
+						<span class="text-ink-2 text-sm">{megabitUnit}</span>
 					</div>
 				{/if}
 				<Field.Description>

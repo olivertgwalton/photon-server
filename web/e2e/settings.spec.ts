@@ -34,7 +34,7 @@ test("a setting is found by its name or another word for it, and opened at", asy
 	await search.fill("remote bitrate");
 	await search.press("Enter");
 	await expect(page).toHaveURL("/settings/server/network#remote-max");
-	await expect(page.getByLabel("Limit (Mbps)")).toBeFocused();
+	await expect(page.getByLabel("Limit (Mb/s)")).toBeFocused();
 });
 
 test("every setting search finds is on its page", async ({ page }) => {

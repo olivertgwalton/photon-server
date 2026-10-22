@@ -6,6 +6,7 @@ import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields, text } from "#lib/form.js";
+import { megabitUnit } from "#lib/format.js";
 
 let { data } = $props();
 
@@ -61,7 +62,7 @@ function save(event: SubmitEvent) {
 			</Field.Field>
 			<Field.Field>
 				<Field.Label for="remote-max"
-					>Remote streaming limit (Mbps)</Field.Label
+					>Remote streaming limit ({megabitUnit})</Field.Label
 				>
 				<Input
 					id="remote-max"
