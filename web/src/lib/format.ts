@@ -210,7 +210,7 @@ export function localeOptions(
 		.toSorted((a, b) => a.label.localeCompare(b.label));
 }
 
-// The copy asked for by id, else the one the server plays when none is: the
+// The version asked for by id, else the one the server plays when none is: the
 // first with its files on disk.
 export function onDisk(
 	versions: Schemas["VersionPage"][] | undefined,
@@ -222,7 +222,7 @@ export function onDisk(
 	);
 }
 
-// Where a title is played. The player reads the copy, the tracks and where to
+// Where a title is played. The player reads the version, the tracks and where to
 // start from the address; with no `t` it resumes where the profile stopped.
 export function playHref(
 	id: string,

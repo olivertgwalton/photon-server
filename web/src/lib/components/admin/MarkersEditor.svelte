@@ -18,9 +18,9 @@ import { vocabulary } from "#lib/vocabulary.js";
 
 type Schemas = components["schemas"];
 
-// Where a copy's intro, credits, recap and preview are, over what its
+// Where a version's intro, credits, recap and preview are, over what its
 // chapters, sound or picture say, and which of its parts have none of a kind.
-// Saving with nothing listed gives the copy back to what was found.
+// Saving with nothing listed gives the version back to what was found.
 let { version }: { version: Schemas["VersionPage"] } = $props();
 
 const id = $props.id();

@@ -248,7 +248,7 @@ const refreshOptions = $derived(
 				/>
 				<Field.Description>
 					A title's streams are asked for as it is opened, and the best one that
-					plays is read and kept as its copy.
+					plays is read and kept as its version.
 				</Field.Description>
 			</Field.Field>
 		{:else}
@@ -391,8 +391,8 @@ const refreshOptions = $derived(
 			<Field.Set>
 				<Field.Legend>Subtitles to download</Field.Legend>
 				<Field.Description>
-					Copies with no subtitle in a language ticked have one fetched from the
-					subtitle providers when they are added, and daily after.
+					Versions with no subtitle in a language ticked have one fetched from
+					the subtitle providers when they are added, and daily after.
 				</Field.Description>
 				<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 					{#each offeredLanguages as { value: tag, label } (tag)}

@@ -7,8 +7,8 @@ type Schemas = components["schemas"];
 
 // The timeline: what has played and arrived, the chapters as ticks, and a
 // thumbnail of wherever the pointer or a drag is, or its chapter's picture
-// when the copy has no trickplay sheets. Seconds throughout, on the
-// copy's whole timeline.
+// when the version has no trickplay sheets. Seconds throughout, on the
+// version's whole timeline.
 let {
 	position,
 	duration,

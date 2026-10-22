@@ -40,7 +40,7 @@ pollWhile(
 	{#if data.downloads.length}
 		<ul class="divide-line divide-y">
 			{#each data.downloads as d (d.id)}
-				<!-- A copy in several files is downloaded a file at a time: each says which. -->
+				<!-- A version in several files is downloaded a file at a time: each says which. -->
 				{@const name = [
 					d.show ? `${d.show}: ${d.title}` : d.title,
 					d.parts > 1 && `part ${d.part_index + 1} of ${d.parts}`,

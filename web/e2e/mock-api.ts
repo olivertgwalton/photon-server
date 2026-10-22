@@ -628,7 +628,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		fetch_subtitles: {
 			name: "Download missing subtitles",
 			description:
-				"Fetches subtitles in the languages libraries name for copies with none in them.",
+				"Fetches subtitles in the languages libraries name for versions with none in them.",
 		},
 		prune_activity: {
 			name: "Prune the activity log",
@@ -1764,7 +1764,7 @@ const server_ = Bun.serve<Socket>({
 				} satisfies Schemas["DownloadList"]);
 			case "POST /api/v1/downloads": {
 				const body: Schemas["DownloadRequest"] = await json(request);
-				// As the server, a copy in several files is asked for a file at a time.
+				// As the server, a version in several files is asked for a file at a time.
 				if (body.version_id === "v-hd" && !body.part_id) {
 					return Response.json(
 						{
