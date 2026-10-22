@@ -265,7 +265,7 @@ type StreamsResponse struct {
 	Streams []Stream `json:"streams"`
 }
 
-// Stream is a copy the server plays from URL, http or https, which may be the plugin's own host.
+// Stream is a version the server plays from URL, http or https, which may be the plugin's own host.
 type Stream struct {
 	// Key is which bytes the stream is, the same each time it is offered though its URL changes:
 	// a file's name and size, or a torrent's hash and file. One with none is left out.
@@ -284,7 +284,7 @@ type SubtitlesRequest struct {
 	IDs      map[string]string `json:"ids"`
 	Season   int               `json:"season,omitempty"`
 	Episode  int               `json:"episode,omitempty"`
-	// Hash is the file's OpenSubtitles hash, where the copy is one file the server can read.
+	// Hash is the file's OpenSubtitles hash, where the version is one file the server can read.
 	Hash string `json:"hash,omitempty"`
 	// Language is an IETF tag, such as en or pt-BR.
 	Language string `json:"language"`
@@ -342,7 +342,7 @@ type RequestRequest struct {
 type RequestResponse struct{}
 
 // MarkersRequest asks for the intro and credits of a film by its ids, or of an episode by its
-// show's ids and its numbers, in a copy of a length: a release's timing is of that release.
+// show's ids and its numbers, in a version of a length: a release's timing is of that release.
 type MarkersRequest struct {
 	Settings   Settings          `json:"settings"`
 	Kind       string            `json:"kind"`
@@ -352,7 +352,7 @@ type MarkersRequest struct {
 	DurationMS int64             `json:"duration_ms"`
 }
 
-// MarkersResponse is the stretches the plugin has timed; none is none known for that copy.
+// MarkersResponse is the stretches the plugin has timed; none is none known for that version.
 type MarkersResponse struct {
 	Markers []Marker `json:"markers"`
 }

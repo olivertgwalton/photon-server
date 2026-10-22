@@ -56,7 +56,7 @@ func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.U
 // profile, or by a manager over the users it keeps, and a user decides none.
 func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	f := &fakeRequests{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f})
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f})
 	do := func(method, target, token, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -116,7 +116,7 @@ func (fakeRequestablePages) Page(_ context.Context, _, id uuid.UUID) (store.Titl
 // an id neither is is not found.
 func TestATitleToAskForOpensAsATitle(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, RequestablePages: fakeRequestablePages{},
+		RemoteVersions: noRemoteVersions{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, RequestablePages: fakeRequestablePages{},
 	})
 	get := func(id uuid.UUID) (int, string) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+id.String(), nil)

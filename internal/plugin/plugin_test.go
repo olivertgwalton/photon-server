@@ -93,7 +93,7 @@ func TestAPluginIsRefusedWhereItAnswersNoCapabilityTheServerSpeaks(t *testing.T)
 	}
 }
 
-// A plugin keeps lists a library's titles come from and streams the copies it plays; a title with
+// A plugin keeps lists a library's titles come from and streams the versions it plays; a title with
 // no ids, or a stream with no key or no web address, is left out.
 func TestAPluginListsTitlesAndStreamsThem(t *testing.T) {
 	mux := http.NewServeMux()
@@ -208,9 +208,9 @@ func TestAPluginHearsTheEventsItNames(t *testing.T) {
 	}
 }
 
-// A plugin is asked to time a copy of a length, and a stretch it answers outside that copy, of a
+// A plugin is asked to time a version of a length, and a stretch it answers outside that version, of a
 // kind the server has no name for, or of a kind already timed, is dropped.
-func TestAPluginTimesACopysIntroAndCredits(t *testing.T) {
+func TestAPluginTimesAVersionsIntroAndCredits(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.MarkersRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || r.URL.Path != "/segments/v1/markers" || req.DurationMS != 2_640_000 || req.Episode != 3 {

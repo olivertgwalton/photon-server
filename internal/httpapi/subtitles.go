@@ -17,7 +17,7 @@ type fetchedSubtitles interface {
 	RemoveFetchedSubtitle(ctx context.Context, id uuid.UUID) error
 }
 
-// foundSubtitleJSON is a subtitle a provider has for a copy. for_release is one made for the very
+// foundSubtitleJSON is a subtitle a provider has for a version. for_release is one made for the very
 // file, found by its hash, which Plex stars.
 type foundSubtitleJSON struct {
 	Source          domain.FieldSource `json:"source"`
@@ -35,7 +35,7 @@ type foundSubtitlesJSON struct {
 	Items     []foundSubtitleJSON `json:"items"`
 }
 
-// subtitleCandidates answers the subtitles providers have in a language for a copy of a film or an
+// subtitleCandidates answers the subtitles providers have in a language for a version of a film or an
 // episode, the one asked for else its longest, as Plex's and Jellyfin's subtitle search: those
 // made for its very file first, found by its hash, then the most fetched.
 func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
@@ -66,13 +66,13 @@ func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
-// fetchSubtitleJSON is a subtitle search found, fetched for the copy it was searched for.
+// fetchSubtitleJSON is a subtitle search found, fetched for the version it was searched for.
 type fetchSubtitleJSON struct {
 	VersionID uuid.UUID `json:"version_id"`
 	foundSubtitleJSON
 }
 
-// fetchSubtitle fetches a subtitle a search found and keeps it beside the copy, for every profile
+// fetchSubtitle fetches a subtitle a search found and keeps it beside the version, for every profile
 // to choose, as Jellyfin's subtitle download does.
 func (a *API) fetchSubtitle(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
@@ -112,16 +112,16 @@ func (a *API) subtitlesRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/titles/{id}/subtitles/candidates", access: signedIn,
-			summary: "Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first",
+			summary: "Find the subtitles providers have in a language for a version of a film or episode, those made for its very file first",
 			query: []param{
 				{"language", domain.LanguageTag(""), "The language, a BCP 47 tag."},
-				{"version_id", uuid.UUID{}, "The copy; the title's longest where none is named."},
+				{"version_id", uuid.UUID{}, "The version; the title's longest where none is named."},
 			},
 			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.subtitleCandidates,
 		},
 		{
 			pattern: "POST /api/v1/titles/{id}/subtitles", access: signedIn,
-			summary: "Fetch a subtitle a search found and keep it beside the copy, for every profile",
+			summary: "Fetch a subtitle a search found and keep it beside the version, for every profile",
 			body:    fetchSubtitleJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.fetchSubtitle,
 		},
 		{

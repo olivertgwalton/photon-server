@@ -19,7 +19,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// streaming gives the titles it streams a copy as they are opened or played, as a remote library's
+// streaming gives the titles it streams a version as they are opened or played, as a remote library's
 // provider does, and has nothing for the rest.
 type streaming struct {
 	st      *store.Store
@@ -49,11 +49,11 @@ func (d discovered) Find(_ context.Context, _ uuid.UUID, media domain.LibraryMed
 	return d, nil
 }
 
-// A remote film with no copy yet, or one a search found, is listed with one media source under its
+// A remote film with no version yet, or one a search found, is listed with one media source under its
 // own id, as Infuse needs one to play an item, to show it among what it searched for, and not to
-// fail the page it is on. Played by that id, it is given its copy and played; one its provider has
+// fail the page it is on. Played by that id, it is given its version and played; one its provider has
 // nothing for is not found.
-func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
+func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -98,7 +98,7 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 		t.Fatalf("found %+v, %v", found, err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: streaming{st, lib.ID, map[uuid.UUID]bool{ids["Heat"]: true}}, Discover: discovered(found),
+		RemoteVersions: streaming{st, lib.ID, map[uuid.UUID]bool{ids["Heat"]: true}}, Discover: discovered(found),
 		Sent: playback.NewSent(), Network: st, Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st,
 		Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st, Placer: alone(nil),
 	})
@@ -128,7 +128,7 @@ func TestARemoteFilmIsListedWithACopyToBeFetchedAsItIsPlayed(t *testing.T) {
 	var info struct{ MediaSources []source }
 	w = serve(api, http.MethodPost, "/Items/"+guid(ids["Heat"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Heat"])+`"}`)
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 || info.MediaSources[0].ID == guid(ids["Heat"]) {
-		t.Errorf("Heat played by its placeholder: %d %s, want its copy, fetched", w.Code, w.Body)
+		t.Errorf("Heat played by its placeholder: %d %s, want its version, fetched", w.Code, w.Body)
 	}
 	if w := serve(api, http.MethodPost, "/Items/"+guid(ids["Avatar"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Avatar"])+`"}`); w.Code != http.StatusNotFound {
 		t.Errorf("Avatar, which its provider has nothing of: %d, want 404", w.Code)

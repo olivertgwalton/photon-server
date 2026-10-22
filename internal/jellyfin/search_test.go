@@ -39,15 +39,15 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Version {
+	versions := func(rel string) []store.Version {
 		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	for _, f := range []string{"The Night Of", "Night Moves"} {
-		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: copies(f + ".mkv")}}, nil); err != nil {
+		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: versions(f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Night Shift", Folder: "Wire", ByNumber: true, Versions: copies("S01E01.mkv")}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Night Shift", Folder: "Wire", ByNumber: true, Versions: versions("S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type hint struct {
 		ItemID, ID, Name, Type, MediaType, Series string
 		IndexNumber                               int
@@ -135,8 +135,8 @@ func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := []store.Version{{ContentKey: []byte("n"), Parts: []store.Part{{RelPath: "n.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
-	if _, err := st.SaveFolder(ctx, films.ID, "N", []byte("v"), []store.Film{{Title: "Night Moves", Folder: "N", Versions: copies}}, nil); err != nil {
+	versions := []store.Version{{ContentKey: []byte("n"), Parts: []store.Part{{RelPath: "n.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	if _, err := st.SaveFolder(ctx, films.ID, "N", []byte("v"), []store.Film{{Title: "Night Moves", Folder: "N", Versions: versions}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
@@ -144,7 +144,7 @@ func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
 		t.Fatal(err)
 	}
 	nightOf := store.Discovery{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "The Night Of", Year: 2016}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: found{nightOf}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: found{nightOf}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	items := func(params string) ([]string, int) {
 		t.Helper()
 		w := serve(api, http.MethodGet, "/Items?recursive=true&"+params, `MediaBrowser Token="pst_ada"`, "")

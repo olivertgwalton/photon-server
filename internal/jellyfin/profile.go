@@ -92,7 +92,7 @@ func matches(profile string, names ...string) bool {
 	return slices.ContainsFunc(names, func(n string) bool { return slices.Contains(l, n) })
 }
 
-// containerNames are the names Jellyfin's apps call a copy's container by, from FFmpeg's.
+// containerNames are the names Jellyfin's apps call a version's container by, from FFmpeg's.
 func containerNames(format string) []string {
 	var out []string
 	for name := range strings.SplitSeq(format, ",") {
@@ -260,9 +260,9 @@ func (d deviceProfile) codecAllows(kind string, s domain.Stream, containers []st
 	return true
 }
 
-// playsDirectly is whether the app plays a copy as it is, its video and audio the tracks chosen:
-// one of its direct-play profiles takes the copy's container and the tracks' codecs, and every
-// condition its container and codec profiles set holds of them; the copy is one file within the
+// playsDirectly is whether the app plays a version as it is, its video and audio the tracks chosen:
+// one of its direct-play profiles takes the version's container and the tracks' codecs, and every
+// condition its container and codec profiles set holds of them; the version is one file within the
 // bitrate the app takes; and the subtitle chosen, if any, is one it draws itself.
 func (d deviceProfile) playsDirectly(c store.PlayVersion, video, audio *domain.Stream, subtitle *subtitleChoice, maxBitrate int64) bool {
 	if len(c.Parts) != 1 || maxBitrate > 0 && int64(c.BitrateKbps)*1000 > maxBitrate {
@@ -287,7 +287,7 @@ func (d deviceProfile) playsDirectly(c store.PlayVersion, video, audio *domain.S
 	return false
 }
 
-// containerAllows is whether a copy's video meets what the app's container profiles set of its
+// containerAllows is whether a version's video meets what the app's container profiles set of its
 // container.
 func (d deviceProfile) containerAllows(video domain.Stream, containers []string) bool {
 	for _, cp := range d.ContainerProfiles {
@@ -299,7 +299,7 @@ func (d deviceProfile) containerAllows(video domain.Stream, containers []string)
 }
 
 // subtitleChoice is the subtitle an app chose: its codec, how the app would draw it, and the file
-// beside the copy it is, if it is one.
+// beside the version it is, if it is one.
 type subtitleChoice struct {
 	codec    string
 	delivery domain.SubtitleDelivery
@@ -307,7 +307,7 @@ type subtitleChoice struct {
 }
 
 // subtitleTaken is whether the app draws a subtitle of a codec itself, delivered so: a stream of the
-// file drawn from it or read out beside it, or a file beside the copy.
+// file drawn from it or read out beside it, or a file beside the version.
 func (d deviceProfile) subtitleTaken(codec string, delivery domain.SubtitleDelivery) bool {
 	switch delivery {
 	case domain.SubtitleEmbedded:
@@ -328,7 +328,7 @@ func (d deviceProfile) sidecarFormat(codec string) string {
 	return d.subtitleFormat("webvtt", "external")
 }
 
-// renditions are the plain text subtitles the app is offered in HLS: the copy's own alone where it
+// renditions are the plain text subtitles the app is offered in HLS: the version's own alone where it
 // fetches every file beside it itself, as WebVTT, which it would otherwise show twice.
 func (d deviceProfile) renditions() playback.Renditions {
 	if d.subtitleFormat("webvtt", "external") != "" {
@@ -349,8 +349,8 @@ func (d deviceProfile) readOut(codec string) string {
 
 // textReadOut is the format the app is sent a plain text stream in, read out of a file played as it
 // is, where it draws it so and not from the file itself: WebVTT, which Jellyfin converts every text
-// stream to, as photon does a file beside the copy; "" where it is not sent so. Turning such a
-// subtitle on so keeps the copy played as it is, as Jellyfin keeps it.
+// stream to, as photon does a file beside the version; "" where it is not sent so. Turning such a
+// subtitle on so keeps the version played as it is, as Jellyfin keeps it.
 func (d deviceProfile) textReadOut(codec string) string {
 	if !hls.TextSubtitle(codec) || d.subtitleFormat(codec, "embed") != "" {
 		return ""
@@ -392,7 +392,7 @@ var hlsCodecs = []string{"h264", "hevc", "av1", "vp9"}
 
 // hls is the HLS transcoding profile the app is given HLS by, and its segments: of its video
 // profiles over HLS in fragmented MP4 or MPEG-TS, in the app's order, the first whose segments
-// carry the copy's audio as it is, as Jellyfin ranks them, else the first. ok is false where it
+// carry the version's audio as it is, as Jellyfin ranks them, else the first. ok is false where it
 // takes no HLS photon makes.
 func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.SegmentFormat, bool) {
 	type candidate struct {
@@ -427,10 +427,10 @@ func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.Seg
 	return candidates[0].profile, candidates[0].format, true
 }
 
-// hlsProfile is photon's profile for the HLS an app takes, for a copy: the codecs its transcoding
+// hlsProfile is photon's profile for the HLS an app takes, for a version: the codecs its transcoding
 // profile names, within the limits its codec profiles set on them (where their ApplyConditions
-// hold of the copy's video), and its bitrate. It opens no container, so photon's decision makes
-// HLS of the copy, copying what the app plays and encoding the rest.
+// hold of the version's video), and its bitrate. It opens no container, so photon's decision makes
+// HLS of the version, copying what the app plays and encoding the rest.
 func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentFormat, c store.PlayVersion, maxBitrate int64) playback.Profile {
 	p := playback.Profile{MaxBitrateKbps: int(maxBitrate / 1000), Parts: domain.PartsJoined, Segments: segments}
 	var video domain.Stream

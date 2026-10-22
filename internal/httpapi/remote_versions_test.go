@@ -8,10 +8,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// noCopies is a server with no remote library: every title's copies are the scanner's.
-type noCopies struct{}
+// noRemoteVersions is a server with no remote library: every title's versions are the scanner's.
+type noRemoteVersions struct{}
 
-func (noCopies) Ensure(context.Context, uuid.UUID) error { return nil }
+func (noRemoteVersions) Ensure(context.Context, uuid.UUID) error { return nil }
 
 // noDiscoveries is a server whose remote libraries search nothing.
 type noDiscoveries struct{}

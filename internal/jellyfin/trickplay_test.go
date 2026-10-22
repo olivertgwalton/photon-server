@@ -21,7 +21,7 @@ import (
 // to a sheet, so two sheets, the second half full; the second is kept.
 func aFilmWithTrickplay(t *testing.T) (*API, uuid.UUID, uuid.UUID) {
 	t.Helper()
-	st, ada, heat, copyID := aFilm(t)
+	st, ada, heat, versionID := aFilm(t)
 	versions, err := st.Versions(t.Context(), []uuid.UUID{heat})
 	if err != nil {
 		t.Fatal(err)
@@ -40,16 +40,16 @@ func aFilmWithTrickplay(t *testing.T) (*API, uuid.UUID, uuid.UUID) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Previews: st, PreviewFiles: analysis.NewPreviews(dir),
 	})
-	return api, heat, copyID
+	return api, heat, versionID
 }
 
 // An app reads a film's trickplay, as Jellyfin's web app and Swiftfin do to show a thumbnail while
-// seeking: on the film itself, and in a list where it asks for it, by its copy and width.
+// seeking: on the film itself, and in a list where it asks for it, by its version and width.
 func TestAnAppReadsAFilmsTrickplay(t *testing.T) {
-	api, heat, copyID := aFilmWithTrickplay(t)
+	api, heat, versionID := aFilmWithTrickplay(t)
 	const header = `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`
 	trickplay := func(target string) map[string]map[string]trickplayInfo {
 		t.Helper()
@@ -72,8 +72,8 @@ func TestAnAppReadsAFilmsTrickplay(t *testing.T) {
 	}
 	want := trickplayInfo{Width: 320, Height: 180, TileWidth: 10, TileHeight: 10, ThumbnailCount: 150, Interval: 10_000}
 	for _, target := range []string{"/Items/" + guid(heat), "/Items?recursive=true&includeItemTypes=Movie&fields=Trickplay"} {
-		if got := trickplay(target); got[guid(copyID)]["320"] != want {
-			t.Errorf("%s: trickplay %v, want %+v under the copy and its width", target, got, want)
+		if got := trickplay(target); got[guid(versionID)]["320"] != want {
+			t.Errorf("%s: trickplay %v, want %+v under the version and its width", target, got, want)
 		}
 	}
 	if got := trickplay("/Items?recursive=true&includeItemTypes=Movie&fields=MediaSources"); got != nil {
@@ -85,23 +85,23 @@ func TestAnAppReadsAFilmsTrickplay(t *testing.T) {
 // its sheets at the width trickplay gave, and fetches each sheet the playlist names, with the
 // token the playlist carries.
 func TestAnAppFetchesAFilmsTrickplaySheets(t *testing.T) {
-	api, heat, copyID := aFilmWithTrickplay(t)
+	api, heat, versionID := aFilmWithTrickplay(t)
 	base := "/Videos/" + guid(heat) + "/Trickplay/320/"
-	w := serve(api, http.MethodGet, base+"tiles.m3u8?MediaSourceId="+guid(copyID)+"&ApiKey=pst_ada", "", "")
+	w := serve(api, http.MethodGet, base+"tiles.m3u8?MediaSourceId="+guid(versionID)+"&ApiKey=pst_ada", "", "")
 	want := "#EXTM3U\n#EXT-X-TARGETDURATION:1000\n#EXT-X-VERSION:7\n#EXT-X-MEDIA-SEQUENCE:1\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-IMAGES-ONLY\n" +
-		"#EXTINF:1000,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n0.jpg?ApiKey=KEY&MediaSourceId=" + guid(copyID) + "\n" +
-		"#EXTINF:500,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n1.jpg?ApiKey=KEY&MediaSourceId=" + guid(copyID) + "\n" +
+		"#EXTINF:1000,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n0.jpg?ApiKey=KEY&MediaSourceId=" + guid(versionID) + "\n" +
+		"#EXTINF:500,\n#EXT-X-TILES:RESOLUTION=320x180,LAYOUT=10x10,DURATION=10\n1.jpg?ApiKey=KEY&MediaSourceId=" + guid(versionID) + "\n" +
 		"#EXT-X-ENDLIST\n"
 	if w.Code != http.StatusOK || keyed(w.Body.String()) != want {
 		t.Errorf("the playlist: %d\n%s\nwant\n%s", w.Code, w.Body, want)
 	}
-	if w := serve(api, http.MethodGet, base+"1.jpg?ApiKey=pst_ada&MediaSourceId="+guid(copyID), "", ""); w.Code != http.StatusOK ||
+	if w := serve(api, http.MethodGet, base+"1.jpg?ApiKey=pst_ada&MediaSourceId="+guid(versionID), "", ""); w.Code != http.StatusOK ||
 		w.Body.String() != "sheet 1" || w.Header().Get("Content-Type") != "image/jpeg" {
 		t.Errorf("the second sheet: %d %s %q", w.Code, w.Header().Get("Content-Type"), w.Body)
 	}
-	// The copy photon would play, where the app names none.
+	// The version photon would play, where the app names none.
 	if w := serve(api, http.MethodGet, "/videos/"+guid(heat)+"/trickplay/320/1.jpg?ApiKey=pst_ada", "", ""); w.Code != http.StatusOK {
-		t.Errorf("a sheet of the copy photon would play: %d", w.Code)
+		t.Errorf("a sheet of the version photon would play: %d", w.Code)
 	}
 	for _, target := range []string{
 		base + "2.jpg", base + "0.jpg", "/Videos/" + guid(heat) + "/Trickplay/640/tiles.m3u8",

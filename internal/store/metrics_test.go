@@ -81,21 +81,21 @@ func TestItemBytesCountSharedBytesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyOf := func(key, rel string, size int64) Version {
+	versionOf := func(key, rel string, size int64) Version {
 		return Version{ContentKey: []byte(key), Parts: []Part{{RelPath: rel, Size: size, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "mkv", Size: size}}}}
 	}
 	const hd, ultraHD, episode = 8_000_000_000, 60_000_000_000, 2_000_000_000
-	heat := Film{Title: "Heat", Folder: "Heat", Versions: []Version{copyOf("heat-hd", "Heat/Heat.1080p.mkv", hd), copyOf("heat-uhd", "Heat/Heat.2160p.mkv", ultraHD)}}
+	heat := Film{Title: "Heat", Folder: "Heat", Versions: []Version{versionOf("heat-hd", "Heat/Heat.1080p.mkv", hd), versionOf("heat-uhd", "Heat/Heat.2160p.mkv", ultraHD)}}
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{heat}, nil); err != nil {
 		t.Fatal(err)
 	}
-	again := Film{Title: "Heat", Folder: "Heat (1995)", Versions: []Version{copyOf("heat-hd", "Heat (1995)/Heat.mkv", hd)}}
+	again := Film{Title: "Heat", Folder: "Heat (1995)", Versions: []Version{versionOf("heat-hd", "Heat (1995)/Heat.mkv", hd)}}
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat (1995)", []byte("v1"), []Film{again}, nil); err != nil {
 		t.Fatal(err)
 	}
 	eps := []Episode{
-		{Season: 1, Episodes: []int{1}, Title: "S1E1", Folder: "Wire", ByNumber: true, Versions: []Version{copyOf("e1", "Wire/S01E01.mkv", episode)}},
-		{Season: 1, Episodes: []int{2}, Title: "S1E2", Folder: "Wire", ByNumber: true, Versions: []Version{copyOf("e1", "Wire/S01E02.mkv", episode)}},
+		{Season: 1, Episodes: []int{1}, Title: "S1E1", Folder: "Wire", ByNumber: true, Versions: []Version{versionOf("e1", "Wire/S01E01.mkv", episode)}},
+		{Season: 1, Episodes: []int{2}, Title: "S1E2", Folder: "Wire", ByNumber: true, Versions: []Version{versionOf("e1", "Wire/S01E02.mkv", episode)}},
 	}
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire", []byte("v1"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)

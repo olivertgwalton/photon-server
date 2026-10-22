@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// MarkerKind is a stretch of a copy a player may offer to skip.
+// MarkerKind is a stretch of a version a player may offer to skip.
 type MarkerKind string
 
 const (
@@ -47,7 +47,7 @@ type Marker struct {
 }
 
 // SegmentQuery is what a provider is asked to time the intro and credits of: a film by its ids, or
-// an episode by its show's ids and its numbers, in a copy of one part of a length.
+// an episode by its show's ids and its numbers, in a version of one part of a length.
 type SegmentQuery struct {
 	Kind            ItemKind
 	IDs             map[Provider]string
@@ -55,7 +55,7 @@ type SegmentQuery struct {
 	Duration        time.Duration
 }
 
-// MarkerAbsent is an admin's word that a copy's part, counted from 0, has no stretch of a kind.
+// MarkerAbsent is an admin's word that a version's part, counted from 0, has no stretch of a kind.
 type MarkerAbsent struct {
 	Kind MarkerKind
 	Part int

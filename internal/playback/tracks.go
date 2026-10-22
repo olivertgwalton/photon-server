@@ -11,7 +11,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Track is a sound or subtitle track to choose from: one inside the copy by its stream index, or
+// Track is a sound or subtitle track to choose from: one inside the version by its stream index, or
 // a subtitle file beside it by its id.
 type Track struct {
 	Stream     int
@@ -22,7 +22,7 @@ type Track struct {
 	Commentary bool
 }
 
-// DefaultTracks are the sound and subtitles a profile's copy plays with unasked, as Jellyfin's
+// DefaultTracks are the sound and subtitles a profile's version plays with unasked, as Jellyfin's
 // SetDefaultAudioAndSubtitleStreamIndices chooses them: what was last chosen for the title where
 // the profile keeps that, else what its preferences ask of the tracks there are. No subtitle is
 // answered as none chosen, never as domain.NoSubtitle.
@@ -44,7 +44,7 @@ func DefaultTracks(audio, subtitles []Track, p domain.Preferences, last domain.C
 	return out
 }
 
-// ChooseTracks says the tracks each copy plays with unasked for a profile, by DefaultTracks.
+// ChooseTracks says the tracks each version plays with unasked for a profile, by DefaultTracks.
 func ChooseTracks(versions []store.VersionPage, p domain.Preferences, last domain.ChosenTracks) {
 	for i, v := range versions {
 		audio, subtitles := Tracks(v.Streams, v.Subtitles)
@@ -112,8 +112,8 @@ func defaultSubtitle(subs []Track, sound language.Tag, p domain.Preferences, las
 			return &subs[i]
 		}
 	}
-	// Unlike Jellyfin, a file beside the copy comes after the copy's own tracks as good: one fetched
-	// or left by another tool is often timed for another release, and a text track inside the copy
+	// Unlike Jellyfin, a file beside the version comes after the version's own tracks as good: one fetched
+	// or left by another tool is often timed for another release, and a text track inside the version
 	// plays as cheaply as one beside it.
 	want := p.SubtitleLanguage
 	sorted := slices.Clone(subs)

@@ -81,7 +81,7 @@ func (f *fakePlaybacks) Abandon(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// aFilm is a household's film, Heat: one copy, an MKV of H.264 and AAC in two chapters, the second
+// aFilm is a household's film, Heat: one version, an MKV of H.264 and AAC in two chapters, the second
 // untitled, with an intro marked and a subtitle file beside it; and Ada, who may play it.
 func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	t.Helper()
@@ -139,25 +139,25 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyID := versions[heat][0].ID
-	if err := st.SetMarkers(ctx, copyID, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 1000, EndMS: 61000}}, nil); err != nil {
+	versionID := versions[heat][0].ID
+	if err := st.SetMarkers(ctx, versionID, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 1000, EndMS: 61000}}, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	return st, ada, heat, copyID
+	return st, ada, heat, versionID
 }
 
-// An app plays a film as Infuse does: asks for its copies, reports it playing, which starts the playback
+// An app plays a film as Infuse does: asks for its versions, reports it playing, which starts the playback
 // the dashboard shows, streams the file with ranges, skips its intro, reads its subtitles beside it, and says
 // where it got to; and marks it watched and a favourite.
 func TestAnAppPlaysAFilm(t *testing.T) {
 	ctx := t.Context()
-	st, ada, heat, copyID := aFilm(t)
+	st, ada, heat, versionID := aFilm(t)
 	log := slog.New(slog.DiscardHandler)
 	plays := newFakePlaybacks()
 	var told []domain.Event
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Raise:   func(_ context.Context, e domain.Event) { told = append(told, e) },
 		Sent:    playback.NewSent(),
 		Network: st,
@@ -185,15 +185,15 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	if len(plays.started) != 0 {
 		t.Errorf("PlaybackInfo started %v: only playing starts a playback", plays.started)
 	}
-	// Infuse names nothing it plays as it is, so Jellyfin's rules leave the copy unplayable as it
+	// Infuse names nothing it plays as it is, so Jellyfin's rules leave the version unplayable as it
 	// is, as real Jellyfin answers it; Infuse plays the file all the same, at full quality.
-	if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(copyID) || info.MediaSources[0]["SupportsDirectPlay"] != false ||
+	if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(versionID) || info.MediaSources[0]["SupportsDirectPlay"] != false ||
 		info.MediaSources[0]["TranscodingUrl"] != nil {
 		t.Errorf("sources: %v", info.MediaSources)
 	}
 	// Jellyfin's web app sends the tracks chosen in its menus as strings, which Jellyfin reads as
 	// numbers, as it does where they are reported.
-	webApp := `{"AudioStreamIndex":"1","SubtitleStreamIndex":"-1","MediaSourceId":"` + guid(copyID) + `","DeviceProfile":{"MaxStaticBitrate":200000000}}`
+	webApp := `{"AudioStreamIndex":"1","SubtitleStreamIndex":"-1","MediaSourceId":"` + guid(versionID) + `","DeviceProfile":{"MaxStaticBitrate":200000000}}`
 	call(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webApp, http.StatusOK)
 	streams, _ := info.MediaSources[0]["MediaStreams"].([]any)
 	external, _ := streams[len(streams)-1].(map[string]any)
@@ -201,7 +201,7 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 		t.Errorf("the subtitle file beside it: %v", external)
 	}
 
-	w := serve(api, http.MethodGet, "/Videos/"+guid(heat)+"/stream?MediaSourceId="+guid(copyID)+"&Static=true", infuse, "")
+	w := serve(api, http.MethodGet, "/Videos/"+guid(heat)+"/stream?MediaSourceId="+guid(versionID)+"&Static=true", infuse, "")
 	if w.Code != http.StatusOK || w.Body.String() != "0123456789" || w.Header().Get("Content-Type") != "video/x-matroska" {
 		t.Errorf("the stream: %d %s %q", w.Code, w.Header().Get("Content-Type"), w.Body)
 	}
@@ -214,10 +214,10 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	if rw.Code != http.StatusPartialContent || rw.Body.String() != "234" {
 		t.Errorf("a range of the stream: %d %q", rw.Code, rw.Body)
 	}
-	if sub := call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(copyID)+"/Subtitles/2/0/Stream.srt", "", http.StatusOK); !strings.Contains(string(sub), "Hello") {
+	if sub := call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(versionID)+"/Subtitles/2/0/Stream.srt", "", http.StatusOK); !strings.Contains(string(sub), "Hello") {
 		t.Errorf("the subtitle file: %q", sub)
 	}
-	call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(copyID)+"/Subtitles/9/0/Stream.srt", "", http.StatusNotFound)
+	call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(versionID)+"/Subtitles/9/0/Stream.srt", "", http.StatusNotFound)
 
 	var segs struct{ Items []map[string]any }
 	if err := json.Unmarshal(call(http.MethodGet, "/MediaSegments/"+guid(heat), "", http.StatusOK), &segs); err != nil {
@@ -235,8 +235,8 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	report("/Sessions/Playing/Progress", 10*60*1e7, info.PlaySessionID)
 	report("/Sessions/Playing/Stopped", 12*60*1e7, info.PlaySessionID)
 	session := uuidOf(t, info.PlaySessionID)
-	if card, ok := plays.started[session]; !ok || card.Profile.ID != ada.ID || card.Version.ID != copyID {
-		t.Errorf("playing started %v, want the session PlaybackInfo named, of the copy", plays.started)
+	if card, ok := plays.started[session]; !ok || card.Profile.ID != ada.ID || card.Version.ID != versionID {
+		t.Errorf("playing started %v, want the session PlaybackInfo named, of the version", plays.started)
 	}
 	if len(plays.told) != 2 || plays.told[1] != 10*time.Minute || plays.stopped[session] != 12*time.Minute {
 		t.Errorf("the playback was told %v and stopped at %v", plays.told, plays.stopped)
@@ -279,7 +279,7 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Watching: st,
 		Raise: func(context.Context, domain.Event) {},
 	})
@@ -391,10 +391,10 @@ func (noOwners) Owner(context.Context, uuid.UUID) (domain.Node, bool, error) {
 // carries the app's token; a play session it was not given is refused, and the app ends it as it
 // moves on.
 func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
-	st, ada, heat, copyID := aFilm(t)
+	st, ada, heat, versionID := aFilm(t)
 	plays, remuxes := newFakePlaybacks(), newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: plays, Watching: st, Preferences: st,
@@ -434,7 +434,7 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	if remuxes.segments[session] != domain.SegmentsFMP4 || src["TranscodingContainer"] != "mp4" {
 		t.Errorf("Swiftfin's HLS is in %s (%v), want fragmented MP4", remuxes.segments[session], src["TranscodingContainer"])
 	}
-	if card, ok := plays.started[session]; !ok || card.Version.ID != copyID {
+	if card, ok := plays.started[session]; !ok || card.Version.ID != versionID {
 		t.Errorf("the playback the dashboard shows: %v", plays.started)
 	}
 	// Past the master, an address carries a key for the app's token and its play session alone: the
@@ -496,7 +496,7 @@ func TestAnAppIsSentToTheNodeRunningItsHLS(t *testing.T) {
 		{"reached at neither", "203.0.113.9:5000", domain.Node{Address: owner.URL}, ""},
 	} {
 		api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-			Copies: noCopies{}, Discover: noDiscoveries{},
+			RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 			Sent:    playback.NewSent(),
 			Network: st,
 			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -543,7 +543,7 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 		return New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-			Copies: noCopies{}, Discover: noDiscoveries{},
+			RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 			Sent:    playback.NewSent(),
 			Network: st, Reach: rc,
 			Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -629,7 +629,7 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 	}{{[]domain.Node{transcoder}, domain.VideoH264}, {nil, ""}} {
 		remuxes := newFakeRemuxes()
 		api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-			Copies: noCopies{}, Discover: noDiscoveries{},
+			RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 			Sent:    playback.NewSent(),
 			Network: st,
 			Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -664,14 +664,14 @@ type someNodes []domain.Node
 
 func (n someNodes) Nodes(context.Context) ([]domain.Node, error) { return n, nil }
 
-// Jellyfin's web app plays a copy as it is, and where that fails asks again with direct play off and
+// Jellyfin's web app plays a version as it is, and where that fails asks again with direct play off and
 // copying the video forbidden, then the audio too, and is given HLS from where it was, encoding what
 // it forbade; the address says what it forbade, so that its last failure stops rather than asks again.
 func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	remuxes := newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -681,7 +681,7 @@ func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
 	const profile = `"DeviceProfile":{"MaxStreamingBitrate":120000000,
 		"DirectPlayProfiles":[{"Container":"mkv","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3"}],
 		"TranscodingProfiles":[{"Container":"ts","Type":"Video","VideoCodec":"h264,hevc","AudioCodec":"aac,ac3,eac3","Protocol":"hls"}]}`
-	// ask answers the copy, and where it is HLS, what fetching it opened.
+	// ask answers the version, and where it is HLS, what fetching it opened.
 	ask := func(flags string) (map[string]any, string, domain.VideoPlan, *domain.AudioPlan) {
 		t.Helper()
 		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webOS, `{"StartTimeTicks":9663630000,`+flags+profile+`}`)
@@ -722,7 +722,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	remuxes := newFakeRemuxes()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: st,
 		Auth:    profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st,
@@ -776,9 +776,9 @@ type noNodes struct{}
 
 func (noNodes) Nodes(context.Context) ([]domain.Node, error) { return nil, nil }
 
-// An app that asks for one of a film's copies is answered that copy alone, as Jellyfin answers
-// it: Jellyfin's web app plays a copy that says it plays as it is over the one it asked for.
-func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
+// An app that asks for one of a film's versions is answered that version alone, as Jellyfin answers
+// it: Jellyfin's web app plays a version that says it plays as it is over the one it asked for.
+func TestAnAppIsAnsweredTheVersionItAskedFor(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
 	log := slog.New(slog.DiscardHandler)
@@ -794,13 +794,13 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyOf := func(name string, width, height int, codec string) store.Version {
+	versionOf := func(name string, width, height int, codec string) store.Version {
 		return store.Version{ContentKey: []byte(name), Parts: []store.Part{{RelPath: "Heat/" + name, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Size: 1, Duration: time.Hour, Container: "matroska,webm",
 			Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: codec, Width: width, Height: height, Range: domain.RangeSDR}},
 		}}}}
 	}
-	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{copyOf("hd.mkv", 1920, 1080, "h264"), copyOf("uhd.mkv", 3840, 2160, "hevc")}}
+	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{versionOf("hd.mkv", 1920, 1080, "h264"), versionOf("uhd.mkv", 3840, 2160, "hevc")}}
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -818,7 +818,7 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 		t.Fatal(versions, err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Preferences: st,
 	})
 	for _, v := range versions[heat] {
@@ -885,7 +885,7 @@ func plannedFor(t *testing.T, api http.Handler, transcoding string) transcode {
 // not in PlaybackInfo, nor on the item, even when it is the longer.
 func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 	ctx := t.Context()
-	st, ada, heat, copyID := aFilm(t)
+	st, ada, heat, versionID := aFilm(t)
 	libs, err := st.Libraries(ctx)
 	if err != nil || len(libs) != 1 {
 		t.Fatal(libs, err)
@@ -911,7 +911,7 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 		t.Fatalf("the versions kept: %v, %v", versions[heat], err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Preferences: st,
 	})
 	for _, target := range []string{"/Items/" + guid(heat) + "/PlaybackInfo", "/Items/" + guid(heat) + "?fields=MediaSources"} {
@@ -925,7 +925,7 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 				ID string `json:"Id"`
 			}
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(copyID) {
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(versionID) {
 			t.Errorf("%s %s: %d %s, want only the version on disk", method, target, w.Code, w.Body)
 		}
 	}

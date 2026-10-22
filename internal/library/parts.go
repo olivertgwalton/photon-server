@@ -14,13 +14,13 @@ type Places interface {
 	PartPlace(ctx context.Context, part uuid.UUID) (domain.Place, error)
 }
 
-// Streams opens a copy a provider streams, as its offers say where it is now.
+// Streams opens a version a provider streams, as its offers say where it is now.
 type Streams interface {
 	Open(ctx context.Context, p domain.Place) (media.Input, error)
 }
 
-// Parts opens the parts of the copies the catalogue holds, for a tool to read or a player to
-// fetch: a file under a folder library's root, or a copy a remote library's provider streams.
+// Parts opens the parts of the versions the catalogue holds, for a tool to read or a player to
+// fetch: a file under a folder library's root, or a version a remote library's provider streams.
 type Parts struct {
 	Places  Places
 	Streams Streams

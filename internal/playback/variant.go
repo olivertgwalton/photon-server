@@ -30,7 +30,7 @@ var audioCodecs = map[string]string{
 	"opus": "Opus", "truehd": "mlpa", "dts": "dtsc",
 }
 
-// variant describes a copy's HLS variant as Jellyfin's master playlist does: its bandwidth, the
+// variant describes a version's HLS variant as Jellyfin's master playlist does: its bandwidth, the
 // formats of the video and audio as they are sent, and the video's range, size and frame rate. Codecs are left out
 // where any one is not known, since a client takes a list as all there is.
 func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {

@@ -7,9 +7,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// placeholder is the one media source a remote film or episode with no copy yet is listed with,
+// placeholder is the one media source a remote film or episode with no version yet is listed with,
 // under the title's own id, as Remux lists one: an app takes an item with no media source to be
-// unplayable (Infuse fails the page it is on), and its copy is fetched only as it is played.
+// unplayable (Infuse fails the page it is on), and its version is fetched only as it is played.
 func placeholder(id uuid.UUID, title string) mediaSource {
 	return mediaSource{
 		Protocol: "File", ID: guid(id), Path: title, Type: "Default", Name: title, ETag: guid(id),
@@ -18,7 +18,7 @@ func placeholder(id uuid.UUID, title string) mediaSource {
 	}
 }
 
-// withPlaceholders gives each of items with no copy that is a remote film or episode its
+// withPlaceholders gives each of items with no version that is a remote film or episode its
 // placeholder, by the titles' ids and names.
 func (a *API) withPlaceholders(ctx context.Context, items []item, ids []uuid.UUID, names []string) error {
 	streamed, err := a.svc.Catalogue.Streamed(ctx, ids)
@@ -34,7 +34,7 @@ func (a *API) withPlaceholders(ctx context.Context, items []item, ids []uuid.UUI
 	return nil
 }
 
-// listPlaceholders gives a list's remote films and episodes with no copy yet their placeholders,
+// listPlaceholders gives a list's remote films and episodes with no version yet their placeholders,
 // where an app asks for media sources.
 func (a *API) listPlaceholders(ctx context.Context, items []item, cards []store.Card, l listed) error {
 	if !l.fields["mediasources"] {
@@ -48,16 +48,16 @@ func (a *API) listPlaceholders(ctx context.Context, items []item, cards []store.
 }
 
 // titlePlaceholder is a title's own page, with its placeholder where it is a remote film or
-// episode with no copy yet.
+// episode with no version yet.
 func (a *API) titlePlaceholder(ctx context.Context, it item, id uuid.UUID, title string) (item, error) {
 	single := []item{it}
 	err := a.withPlaceholders(ctx, single, []uuid.UUID{id}, []string{title})
 	return single[0], err
 }
 
-// copyAsked is the copy an app asks for of a title: a placeholder's id, the title's own, is the one
+// versionAsked is the version an app asks for of a title: a placeholder's id, the title's own, is the one
 // photon would play.
-func copyAsked(title, version uuid.UUID) uuid.UUID {
+func versionAsked(title, version uuid.UUID) uuid.UUID {
 	if version == title {
 		return uuid.UUID{}
 	}

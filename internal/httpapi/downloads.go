@@ -46,9 +46,9 @@ const narrowest = 16
 
 type downloadRequestJSON struct {
 	TitleID uuid.UUID `json:"title_id"`
-	// VersionID is the copy, else the longest on disk.
+	// VersionID is the version, else the longest on disk.
 	VersionID uuid.UUID `json:"version_id,omitzero"`
-	// PartID is which of a copy's several files.
+	// PartID is which of a version's several files.
 	PartID         uuid.UUID `json:"part_id,omitzero"`
 	MaxBitrateKbps int       `json:"max_bitrate_kbps"`
 	// MaxWidth is the widest the picture may be; zero keeps it as shot.
@@ -70,7 +70,7 @@ type downloadJSON struct {
 	Title  string    `json:"title"`
 	Show   string    `json:"show,omitzero"`
 	PartID uuid.UUID `json:"part_id"`
-	// PartIndex is which of its copy's Parts files it is, from 0: a copy in several is
+	// PartIndex is which of its version's Parts files it is, from 0: a version in several is
 	// downloaded a file at a time.
 	PartIndex int `json:"part_index"`
 	Parts     int `json:"parts"`
@@ -110,9 +110,9 @@ func (a *API) downloadJSON(d store.Download) downloadJSON {
 }
 
 // addDownload asks for a film or episode to be downloaded no larger than a video bitrate, and a
-// width if given, as Plex's Downloads do: a copy already within both is its own file, ready now;
+// width if given, as Plex's Downloads do: a version already within both is its own file, ready now;
 // another is converted in the background, once for every profile asking for it at that quality.
-// A copy of several files is downloaded a file at a time, named by part_id.
+// A version of several files is downloaded a file at a time, named by part_id.
 func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 	var req downloadRequestJSON
 	if !a.decode(w, r, &req) {
@@ -131,16 +131,16 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 	if req.PartID != (uuid.UUID{}) {
 		i := slices.IndexFunc(c.Parts, func(p store.PlayPart) bool { return p.ID == req.PartID })
 		if i < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "part_id is not one of the copy's files")
+			writeProblem(w, a.logger, codeInvalidBody, "part_id is not one of the version's files")
 			return
 		}
 		part = c.Parts[i]
 	} else if len(c.Parts) > 1 {
-		writeProblem(w, a.logger, codeInvalidBody, "part_id names which of the copy's "+strconv.Itoa(len(c.Parts))+" files")
+		writeProblem(w, a.logger, codeInvalidBody, "part_id names which of the version's "+strconv.Itoa(len(c.Parts))+" files")
 		return
 	}
 	q := domain.Quality{MaxBitrateKbps: req.MaxBitrateKbps, MaxWidth: req.MaxWidth}
-	pc := playback.Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}
+	pc := playback.Version{Container: c.Container, BitrateKbps: c.BitrateKbps, Streams: c.Streams}
 	var convert *domain.Quality
 	if !playback.Fits(pc, q) {
 		plays := []playback.VideoSupport{{Codec: string(domain.VideoH264)}}
@@ -152,7 +152,7 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 		}
 		d, err := playback.Conversion(pc, q, plays, a.svc.HLS.Hardware().HEVC)
 		if errors.Is(err, playback.ErrNoCompatibleStream) {
-			writeProblem(w, a.logger, codeNoCompatibleStream, "the copy has no video to convert to a codec the device plays")
+			writeProblem(w, a.logger, codeNoCompatibleStream, "the version has no video to convert to a codec the device plays")
 			return
 		}
 		q.Codec, q.Range = d.Video.Encode.Codec, d.Video.Encode.Range

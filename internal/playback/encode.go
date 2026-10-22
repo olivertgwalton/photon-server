@@ -21,7 +21,7 @@ var encoders = map[string]int{"aac": 8, "eac3": 6, "ac3": 6}
 // HLS carries it and it fits its share of the client's limit, else encoded; false where the client
 // takes nothing it can be encoded to.
 func (p Profile) hlsAudio(sound domain.Stream, reasons []domain.TranscodeReason, carried []string, method domain.PlayMethod) (*domain.AudioEncode, bool) {
-	// Encoded video shares the client's limit with the audio, and audio has a share of it; a copy
+	// Encoded video shares the client's limit with the audio, and audio has a share of it; a version
 	// whose video is copied fits it whole already.
 	budget := 0
 	if method == domain.PlayTranscode {
@@ -78,7 +78,7 @@ func (p Profile) audioEncode(s domain.Stream) (domain.AudioEncode, bool) {
 	return domain.AudioEncode{}, false
 }
 
-// sourceKbps stands in for a copy whose bitrate is unknown, as Jellyfin's does.
+// sourceKbps stands in for a version whose bitrate is unknown, as Jellyfin's does.
 const sourceKbps = 40_000
 
 // videoEncode chooses what video the client cannot take as it is is encoded to: HEVC where the
@@ -86,7 +86,7 @@ const sourceKbps = 40_000
 // larger than the client takes it, and spending no more than the client's limit or what the codec
 // needs to match the source. HEVC keeps the source's HDR10 or HLG in 10 bits where the client
 // shows it; any other HDR is tone mapped to SDR.
-func (p Profile) videoEncode(s domain.Stream, copyKbps int, hevc domain.HEVCEncoding) (domain.VideoEncode, bool) {
+func (p Profile) videoEncode(s domain.Stream, versionKbps int, hevc domain.HEVCEncoding) (domain.VideoEncode, bool) {
 	codecs := []domain.VideoCodec{domain.VideoH264}
 	switch hevc {
 	case domain.HEVCAllow:
@@ -99,7 +99,7 @@ func (p Profile) videoEncode(s domain.Stream, copyKbps int, hevc domain.HEVCEnco
 			continue
 		}
 		width, height := fit(s.Width, s.Height, v.MaxWidth, v.MaxHeight)
-		kbps := scaleBitrate(cmp.Or(copyKbps, sourceKbps), s.Codec, codec)
+		kbps := scaleBitrate(cmp.Or(versionKbps, sourceKbps), s.Codec, codec)
 		if p.MaxBitrateKbps > 0 {
 			kbps = min(kbps, p.MaxBitrateKbps)
 		}

@@ -15,7 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Fetcher is the store, with subtitles for its copies found and fetched from the providers.
+// Fetcher is the store, with subtitles for its versions found and fetched from the providers.
 type Fetcher struct {
 	*store.Store
 	parts     library.Parts
@@ -26,7 +26,7 @@ func NewFetcher(st *store.Store, parts library.Parts, providers *provider.Regist
 	return Fetcher{Store: st, parts: parts, providers: providers}
 }
 
-// Search answers the copy of a film or an episode searched, the one asked for else its longest,
+// Search answers the version of a film or an episode searched, the one asked for else its longest,
 // and the subtitles the providers have for it in a language: those made for its very file first.
 func (f Fetcher) Search(ctx context.Context, profile, item, version uuid.UUID, lang language.Tag) (uuid.UUID, []domain.FoundSubtitle, error) {
 	s, err := f.SubtitleSearchOf(ctx, profile, item, version)
@@ -37,7 +37,7 @@ func (f Fetcher) Search(ctx context.Context, profile, item, version uuid.UUID, l
 	return s.Version, found, err
 }
 
-// query is what a copy's subtitles are searched by in a language: its release is hashed where it
+// query is what a version's subtitles are searched by in a language: its release is hashed where it
 // is one file, as one file of several is no release on its own. A file that cannot be read, or
 // media at an address, is searched for without its hash.
 func (f Fetcher) query(ctx context.Context, s store.SubtitleSearch, lang language.Tag) domain.SubtitleQuery {
@@ -60,8 +60,8 @@ func (f Fetcher) query(ctx context.Context, s store.SubtitleSearch, lang languag
 	return q
 }
 
-// Fetch fetches a subtitle a search found for a copy of a film or an episode and keeps it beside
-// the copy, for every profile; it answers the subtitle's id.
+// Fetch fetches a subtitle a search found for a version of a film or an episode and keeps it beside
+// the version, for every profile; it answers the subtitle's id.
 func (f Fetcher) Fetch(ctx context.Context, profile, item, version uuid.UUID, s domain.FoundSubtitle) (uuid.UUID, error) {
 	search, err := f.SubtitleSearchOf(ctx, profile, item, version)
 	if err != nil {
@@ -76,17 +76,17 @@ func (f Fetcher) Fetch(ctx context.Context, profile, item, version uuid.UUID, s 
 	})
 }
 
-// searchAgainAfter is how long a copy with no subtitle to be had in a language waits before it is
+// searchAgainAfter is how long a version with no subtitle to be had in a language waits before it is
 // searched again: most are written in a release's first weeks, and searching daily would spend
 // the provider's requests on titles that have none.
 const searchAgainAfter = 7 * 24 * time.Hour
 
-// wantedBatch is how many copies' wants are read at once.
+// wantedBatch is how many versions' wants are read at once.
 const wantedBatch = 100
 
-// FetchMissing fetches, for each copy of a film or an episode with no subtitle in a language its
+// FetchMissing fetches, for each version of a film or an episode with no subtitle in a language its
 // library names, the one its library takes, as Jellyfin's "Download missing subtitles" does:
-// newest copies first, and only one made for the very file where the library asks for a match. It
+// newest versions first, and only one made for the very file where the library asks for a match. It
 // stops for the day at the provider's quota, and answers how many it fetched.
 func (f Fetcher) FetchMissing(ctx context.Context) (int, error) {
 	fetched := 0
@@ -117,7 +117,7 @@ func (f Fetcher) fetchWanted(ctx context.Context, w store.WantedSubtitle) (bool,
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return false, err
 	}
-	// A forced subtitle covers only what is not in the copy's own language.
+	// A forced subtitle covers only what is not in the version's own language.
 	i := slices.IndexFunc(found, func(s domain.FoundSubtitle) bool {
 		return !s.Forced && (s.ForRelease || w.Match == domain.SubtitleMatchAny)
 	})

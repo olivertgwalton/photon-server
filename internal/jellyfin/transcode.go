@@ -63,7 +63,7 @@ type planned struct {
 	Transcode transcode `json:"transcode"`
 }
 
-// transcode is how a copy is made into HLS for an app, as decided when it asked: kept under its
+// transcode is how a version is made into HLS for an app, as decided when it asked: kept under its
 // play session (see plans), so whichever node its TranscodingUrl is fetched from starts it as
 // decided.
 type transcode struct {
@@ -215,7 +215,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		return true
 	}
 	d := playback.Decision{Method: t.Method, Video: &t.Video, Audio: t.Audio, Reasons: t.Reasons}
-	// A copy encoded is opened on the node with the most transcode slots free that can encode it,
+	// A version encoded is opened on the node with the most transcode slots free that can encode it,
 	// the next where it has none by then; one copied, on the node best placed to deliver it.
 	var candidates, deliverers []domain.Node
 	if t.Video.Encode != nil {
@@ -228,7 +228,7 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		return true
 	}
 	_, _, err = playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
-		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
+		ID: session, Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Version: c, Tracks: domain.ChosenTracks{Subtitle: t.Subtitle},
 		Opening: playback.Opening{Profile: s.Profile.ID, Item: item, Version: c.Version, Segments: t.Segments, StartMS: t.StartMS, Renditions: t.Renditions},
 	}, func(playback.Encoding) (playback.Decision, error) { return d, nil })
 	switch {
@@ -326,7 +326,7 @@ func (a *API) fromOwner(w http.ResponseWriter, r *http.Request, session uuid.UUI
 
 // playlistQuery is what an address a playlist names carries of the app's query: a key in place of
 // its token, as no app sends one with what it fetches of HLS, and its play session. The plan, its
-// signature and the copy only open the session, at the master; carried on every line, they made a
+// signature and the version only open the session, at the master; carried on every line, they made a
 // playlist about ten times its size.
 func (a *API) playlistQuery(r *http.Request) string {
 	q := url.Values{"PlaySessionId": {query(r, "PlaySessionId")}}

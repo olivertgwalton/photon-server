@@ -283,7 +283,7 @@ func sweepDownloadsTask(st *store.Store, logger *slog.Logger) task.Task {
 // fetchSubtitlesEvery is how often Jellyfin downloads missing subtitles.
 const fetchSubtitlesEvery = 24 * time.Hour
 
-// fetchSubtitlesTask fetches the subtitles copies lack in the languages their libraries name.
+// fetchSubtitlesTask fetches the subtitles versions lack in the languages their libraries name.
 func fetchSubtitlesTask(f subtitles.Fetcher, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskFetchSubtitles,

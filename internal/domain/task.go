@@ -28,7 +28,7 @@ const (
 	TaskRefreshCollections TaskKey = "refresh_collections"
 	// TaskSyncLists reads every list collection's list again, as Kometa's daily run.
 	TaskSyncLists TaskKey = "sync_lists"
-	// TaskFetchSubtitles fetches the subtitles copies lack in the languages their libraries name.
+	// TaskFetchSubtitles fetches the subtitles versions lack in the languages their libraries name.
 	TaskFetchSubtitles TaskKey = "fetch_subtitles"
 	// TaskRefreshAnimeLists reads the published anime lists again, which place anime entries in
 	// shows.

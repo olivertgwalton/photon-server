@@ -44,7 +44,7 @@ func newHousehold(t *testing.T) household {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
-	copies := func(rel string) []store.Version {
+	versions := func(rel string) []store.Version {
 		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{
 			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0),
 			Facts: &domain.Facts{Duration: time.Hour},
@@ -55,9 +55,9 @@ func newHousehold(t *testing.T) household {
 		t.Fatal(err)
 	}
 	for _, f := range []store.Film{
-		{Title: "The Matrix", Folder: "Matrix", IDs: map[domain.Provider]string{domain.ProviderTMDB: "603"}, Versions: copies("Matrix/m.mkv")},
-		{Title: "Alien", Folder: "Alien", IDs: map[domain.Provider]string{domain.ProviderTMDB: "348"}, Versions: copies("Alien/a.mkv")},
-		{Title: "Heat", Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Versions: copies("Heat/h.mkv")},
+		{Title: "The Matrix", Folder: "Matrix", IDs: map[domain.Provider]string{domain.ProviderTMDB: "603"}, Versions: versions("Matrix/m.mkv")},
+		{Title: "Alien", Folder: "Alien", IDs: map[domain.Provider]string{domain.ProviderTMDB: "348"}, Versions: versions("Alien/a.mkv")},
+		{Title: "Heat", Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Versions: versions("Heat/h.mkv")},
 	} {
 		if _, err := st.SaveFolder(ctx, films.ID, f.Folder, []byte("v"), []store.Film{f}, nil); err != nil {
 			t.Fatal(err)
@@ -70,7 +70,7 @@ func newHousehold(t *testing.T) household {
 	var eps []store.Episode
 	for _, n := range []int{1, 2} {
 		rel := "Wire/S01E0" + string(rune('0'+n)) + ".mkv"
-		eps = append(eps, store.Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Wire", ByNumber: true, Versions: copies(rel)})
+		eps = append(eps, store.Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Wire", ByNumber: true, Versions: versions(rel)})
 	}
 	show := store.Show{Title: "The Wire", Folder: "Wire", IDs: map[domain.Provider]string{domain.ProviderTVDB: "79126"}}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), show, eps, nil); err != nil {

@@ -64,7 +64,7 @@ func newHousehold(t *testing.T) household {
 		t.Fatal(err)
 	}
 	h.api = New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": h.ada, "pst_bob": h.bob}, Catalogue: st, Preferences: st, Playlists: st,
 		Raise: func(_ context.Context, e domain.Event) { *h.raised = append(*h.raised, e) },
 	})
@@ -185,7 +185,7 @@ func TestAnAppReadsAPlaylist(t *testing.T) {
 	h.read(t, "pst_ada", "/Playlists/"+guid(night)+"/Items?userId="+guid(h.ada.ID)+"&fields=MediaSources", &all)
 	if all.TotalRecordCount != 3 || len(all.Items) != 3 || all.Items[0].Name != "Thief" || all.Items[1].Name != "Heat" ||
 		all.Items[2].ID != all.Items[0].ID || len(all.Items[1].MediaSources) != 1 {
-		t.Fatalf("Night = %+v, want Thief, Heat and Thief again, with their copies", all)
+		t.Fatalf("Night = %+v, want Thief, Heat and Thief again, with their versions", all)
 	}
 	if all.Items[0].PlaylistItemID == "" || all.Items[0].PlaylistItemID == all.Items[2].PlaylistItemID {
 		t.Errorf("entries %q and %q: want each its own id, Thief twice told apart", all.Items[0].PlaylistItemID, all.Items[2].PlaylistItemID)

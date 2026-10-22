@@ -28,7 +28,7 @@ import (
 // so a download broken off goes on, counted as media the node sent. A profile downloads only what
 // it may play.
 func TestAnAppDownloadsAFilm(t *testing.T) {
-	st, ada, heat, copyID := aFilm(t)
+	st, ada, heat, versionID := aFilm(t)
 	tv, err := st.AddLibrary(t.Context(), "TV", domain.LibraryShows, "/srv/tv", "")
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestAnAppDownloadsAFilm(t *testing.T) {
 	}
 	sent := playback.NewSent()
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: sent,
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(heat)+"/Download?ApiKey=pst_ada", "", "")
@@ -50,7 +50,7 @@ func TestAnAppDownloadsAFilm(t *testing.T) {
 		w.Header().Get("Content-Disposition") != "attachment; filename=Heat.mkv" {
 		t.Errorf("the download: %d %v %q", w.Code, w.Header(), w.Body)
 	}
-	r := httptest.NewRequest(http.MethodGet, "/items/"+guid(heat)+"/download?mediaSourceId="+guid(copyID), nil)
+	r := httptest.NewRequest(http.MethodGet, "/items/"+guid(heat)+"/download?mediaSourceId="+guid(versionID), nil)
 	r.Header.Set("Authorization", `MediaBrowser Token="pst_ada"`)
 	r.Header.Set("Range", "bytes=6-")
 	rw := httptest.NewRecorder()
@@ -74,7 +74,7 @@ photon_sent_bytes_total{delivery="segment"} 0
 	}
 }
 
-// An app offers to download only a title whose download would be served: one whose copy played
+// An app offers to download only a title whose download would be served: one whose version played
 // unasked is one file. A list says so where an app asks for it, as Jellyfin's does.
 func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
@@ -95,7 +95,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	}
 	shoah := cards[0]
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	const header = `MediaBrowser Token="pst_ada"`
@@ -165,7 +165,7 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 		t.Fatal(cards, err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playing: st, Parts: library.Parts{Places: st}, Sent: playback.NewSent(),
 	})
 	w := serve(api, http.MethodGet, "/Items/"+guid(cards[0])+"/Download?ApiKey=pst_ada", "", "")

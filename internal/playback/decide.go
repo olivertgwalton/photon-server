@@ -23,7 +23,7 @@ type Profile struct {
 	MaxBitrateKbps int `json:"max_bitrate_kbps"`
 	// Subtitles are the subtitle formats it draws itself, and from where.
 	Subtitles []SubtitleSupport `json:"subtitles,omitzero"`
-	// Parts is how it plays a copy in several files: joined into one HLS stream by the server, the
+	// Parts is how it plays a version in several files: joined into one HLS stream by the server, the
 	// default, or each file in turn as it is.
 	Parts domain.PartPlayback `json:"parts,omitzero"`
 	// Segments is the container of the HLS segments it plays: fragmented MP4, the default, or
@@ -53,7 +53,7 @@ type VideoSupport struct {
 
 // SubtitleSupport is a subtitle format a client draws itself, by FFmpeg's name ("subrip", "ass",
 // "hdmv_pgs_subtitle"): from inside a file it plays as it is, or from a file of its own beside
-// the video, a file beside the copy or a styled stream read out of it.
+// the video, a file beside the version or a styled stream read out of it.
 type SubtitleSupport struct {
 	Codec    string                  `json:"codec"`
 	Delivery domain.SubtitleDelivery `json:"delivery"`
@@ -66,21 +66,21 @@ type AudioSupport struct {
 }
 
 var (
-	// ErrNoCompatibleStream is a copy that cannot be made into anything the client plays.
-	ErrNoCompatibleStream = errors.New("playback: nothing the client plays can be made of this copy")
-	// ErrNoSuchAudio is an audio stream asked for that the copy does not have.
-	ErrNoSuchAudio = errors.New("playback: the copy has no such audio stream")
-	// ErrNoSuchSubtitle is a subtitle stream asked for that the copy does not have.
-	ErrNoSuchSubtitle = errors.New("playback: the copy has no such subtitle stream")
-	// ErrNoSuchSubtitleFile is a subtitle file asked for that is not one beside the copy the client
+	// ErrNoCompatibleStream is a version that cannot be made into anything the client plays.
+	ErrNoCompatibleStream = errors.New("playback: nothing the client plays can be made of this version")
+	// ErrNoSuchAudio is an audio stream asked for that the version does not have.
+	ErrNoSuchAudio = errors.New("playback: the version has no such audio stream")
+	// ErrNoSuchSubtitle is a subtitle stream asked for that the version does not have.
+	ErrNoSuchSubtitle = errors.New("playback: the version has no such subtitle stream")
+	// ErrNoSuchSubtitleFile is a subtitle file asked for that is not one beside the version the client
 	// can be shown: text, or pictures it draws itself.
-	ErrNoSuchSubtitleFile = errors.New("playback: the copy has no such subtitle file the client can be shown")
+	ErrNoSuchSubtitleFile = errors.New("playback: the version has no such subtitle file the client can be shown")
 )
 
-// Copy is what deciding needs of a copy: its container, its bitrate, how many files it is in, its
-// first part's streams, the parts of one copy being cut from one master, and the subtitle files
+// Version is what deciding needs of a version: its container, its bitrate, how many files it is in, its
+// first part's streams, the parts of one version being cut from one master, and the subtitle files
 // beside it.
-type Copy struct {
+type Version struct {
 	Container   string
 	BitrateKbps int
 	Parts       int
@@ -88,16 +88,16 @@ type Copy struct {
 	Files       []SubtitleFile
 }
 
-// CopyOf is what deciding needs of a copy to play.
-func CopyOf(c store.PlayVersion) Copy {
+// VersionOf is what deciding needs of a version to play.
+func VersionOf(c store.PlayVersion) Version {
 	files := make([]SubtitleFile, len(c.Subtitles))
 	for i, f := range c.Subtitles {
 		files[i] = SubtitleFile{ID: f.ID, Codec: f.Codec}
 	}
-	return Copy{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams, Files: files}
+	return Version{Container: c.Container, BitrateKbps: c.BitrateKbps, Parts: len(c.Parts), Streams: c.Streams, Files: files}
 }
 
-// SubtitleFile is a subtitle file beside a copy.
+// SubtitleFile is a subtitle file beside a version.
 type SubtitleFile struct {
 	ID    uuid.UUID
 	Codec string
@@ -110,7 +110,7 @@ type Encoding struct {
 	Libass bool
 }
 
-// Decision is how a copy reaches a client: its file as it is, its video copied into HLS, or its
+// Decision is how a version reaches a client: its file as it is, its video copied into HLS, or its
 // video encoded again, and why it could not go as it is.
 type Decision struct {
 	Method  domain.PlayMethod
@@ -120,8 +120,8 @@ type Decision struct {
 }
 
 // Sidecar reports whether a client draws a subtitle from a file of its own beside the video: a
-// file beside the copy in a format it draws so, or a styled or PGS stream of a copy in one file,
-// read out as it is. A stream of a copy in several files is in each of them, timed on each one's clock, and
+// file beside the version in a format it draws so, or a styled or PGS stream of a version in one file,
+// read out as it is. A stream of a version in several files is in each of them, timed on each one's clock, and
 // is never read out into one file.
 func (p Profile) Sidecar(codec string, file bool, parts int) bool {
 	return p.Draws(codec, domain.SubtitleSidecar) && (file || hls.ReadOut(codec) && parts == 1)
@@ -142,7 +142,7 @@ func Carried(f domain.SegmentFormat) (video, audio []string) {
 	return []string{"h264", "hevc", "av1", "vp9"}, []string{"aac", "ac3", "eac3", "flac", "opus", "alac", "mp3", "dts", "truehd"}
 }
 
-// Decide chooses how a copy plays on a client, with its audio stream as asked, else its default
+// Decide chooses how a version plays on a client, with its audio stream as asked, else its default
 // one, else its first. It plays as it is where the client opens the container and plays every
 // stream; else in HLS with its video copied where the client plays that, encoding the audio where
 // it does not; else in HLS with its video encoded, to HEVC where the client plays it and the
@@ -153,7 +153,7 @@ func Carried(f domain.SegmentFormat) (video, audio []string) {
 // draws it: from the file played as it is, or from a file of its own beside the video. Where it
 // cannot, plain text is carried in HLS as WebVTT, and a picture (PGS, DVD) or styled text (ASS) is
 // drawn into the video, as Jellyfin's subtitle Encode method draws them: WebVTT carries neither.
-func Decide(p Profile, c Copy, tracks domain.ChosenTracks, enc Encoding) (Decision, error) {
+func Decide(p Profile, c Version, tracks domain.ChosenTracks, enc Encoding) (Decision, error) {
 	video, sound := Pick(c.Streams, tracks.Audio)
 	if tracks.Audio != nil && sound == nil {
 		return Decision{}, ErrNoSuchAudio
@@ -261,9 +261,9 @@ type chosenSubtitle struct {
 	file   *uuid.UUID
 }
 
-// subtitle finds the subtitle tracks ask for, nil for none. A picture beside the copy is one only
+// subtitle finds the subtitle tracks ask for, nil for none. A picture beside the version is one only
 // for a client that draws it beside the video: it is never drawn in.
-func (c Copy) subtitle(p Profile, tracks domain.ChosenTracks) (*chosenSubtitle, error) {
+func (c Version) subtitle(p Profile, tracks domain.ChosenTracks) (*chosenSubtitle, error) {
 	switch {
 	case tracks.Subtitle != nil:
 		i := slices.IndexFunc(c.Streams, func(s domain.Stream) bool {

@@ -276,7 +276,7 @@ type PersonDescriber interface {
 	DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error)
 }
 
-// Streamer streams films and episodes: the copies it offers of one, best first.
+// Streamer streams films and episodes: the versions it offers of one, best first.
 type Streamer interface {
 	Provider
 	Streams(ctx context.Context, title domain.Streamed) ([]domain.Offer, error)
@@ -411,7 +411,7 @@ func (r *Registry) Get(ctx context.Context, id domain.FieldSource) (Provider, bo
 // ErrNoStreamer is a provider that streams nothing, or no such provider.
 var ErrNoStreamer = errors.New("the provider streams nothing")
 
-// Streams asks the provider source for the copies it offers of a film or an episode, best first.
+// Streams asks the provider source for the versions it offers of a film or an episode, best first.
 func (r *Registry) Streams(ctx context.Context, source domain.FieldSource, title domain.Streamed) ([]domain.Offer, error) {
 	p, ok, err := r.Get(ctx, source)
 	if err != nil {

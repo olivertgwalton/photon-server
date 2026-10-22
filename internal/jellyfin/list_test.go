@@ -18,24 +18,24 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// longLibrary is a film library longer than a list's chunk: every third film has a copy, every
-// third more is streamed, and every film has an IMDb id. Its copies fail to be read after
+// longLibrary is a film library longer than a list's chunk: every third film has a version, every
+// third more is streamed, and every film has an IMDb id. Its versions fail to be read after
 // failAfter reads, where that is set.
 type longLibrary struct {
 	catalogue
 	lib       uuid.UUID
 	cards     []store.Card
-	copies    map[uuid.UUID]uuid.UUID
+	versions  map[uuid.UUID]uuid.UUID
 	reads     *int
 	failAfter int
 }
 
 func newLongLibrary(n int) longLibrary {
-	l := longLibrary{lib: uuid.NewV7(), copies: map[uuid.UUID]uuid.UUID{}, reads: new(int)}
+	l := longLibrary{lib: uuid.NewV7(), versions: map[uuid.UUID]uuid.UUID{}, reads: new(int)}
 	for i := range n {
 		l.cards = append(l.cards, store.Card{ID: uuid.NewV7(), Kind: domain.ItemMovie, Title: "Film " + strconv.Itoa(i), Year: 1900 + i%120})
 		if i%3 == 0 {
-			l.copies[l.cards[i].ID] = uuid.NewV7()
+			l.versions[l.cards[i].ID] = uuid.NewV7()
 		}
 	}
 	return l
@@ -79,7 +79,7 @@ func (l longLibrary) Versions(_ context.Context, items []uuid.UUID) (map[uuid.UU
 	}
 	out := map[uuid.UUID][]store.VersionPage{}
 	for _, id := range items {
-		if v, ok := l.copies[id]; ok {
+		if v, ok := l.versions[id]; ok {
 			out[id] = []store.VersionPage{{ID: v, Container: "matroska,webm", DurationMS: 7_200_000, SizeBytes: 1 << 30, Parts: 1, Streams: []domain.Stream{
 				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeSDR},
 			}}}
@@ -106,12 +106,12 @@ func (l longLibrary) ExternalIDs(_ context.Context, items []uuid.UUID) (map[uuid
 
 func longAPI(l longLibrary) *API {
 	return New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Catalogue: l, Preferences: newPreferences{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Catalogue: l, Preferences: newPreferences{},
 	})
 }
 
 // A list longer than a chunk is answered as one reply encoded whole: every item in order, with its
-// copies, placeholder and ids where asked, and the list's count and start.
+// versions, placeholder and ids where asked, and the list's count and start.
 func TestAnAppIsAnsweredALongListWhole(t *testing.T) {
 	ctx := t.Context()
 	l := newLongLibrary(2*listChunk + 7)

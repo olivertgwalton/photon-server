@@ -132,7 +132,7 @@ func (r *Remuxer) produce(ctx context.Context, s *session, run *run) error {
 	return cmp.Or(err, readers.Wait())
 }
 
-// keepCues keeps the cues ffmpeg writes to each embedded subtitle's socket, on the copy's clock: the
+// keepCues keeps the cues ffmpeg writes to each embedded subtitle's socket, on the version's clock: the
 // part's, from offset.
 func (s *session) keepCues(sockets []subtitleSocket, offset time.Duration) *errgroup.Group {
 	var readers errgroup.Group

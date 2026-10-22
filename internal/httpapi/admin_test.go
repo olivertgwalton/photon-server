@@ -238,7 +238,7 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	}
 	// Their titles are told as a scan's are, so what is gone leaves every client's catalogue.
 	if n := len(told.changed[added.ID][domain.TitleRemoved]); n != 3 {
-		t.Errorf("told %d titles removed, want the 3 copies' own", n)
+		t.Errorf("told %d titles removed, want the 3 versions' own", n)
 	}
 	for _, tc := range []struct {
 		method, target, body string

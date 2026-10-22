@@ -16,7 +16,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
-// mediaSource is Jellyfin's MediaSourceInfo: one copy of a title. Every field the Kotlin SDK keeps
+// mediaSource is Jellyfin's MediaSourceInfo: one version of a title. Every field the Kotlin SDK keeps
 // is written, true or false, for it refuses a source short of any. Infuse takes an item with none
 // to be unplayable.
 type mediaSource struct {
@@ -56,7 +56,7 @@ type mediaSource struct {
 	HasSegments                bool          `json:"HasSegments"`
 }
 
-// mediaStream is Jellyfin's MediaStream: one track of a copy.
+// mediaStream is Jellyfin's MediaStream: one track of a version.
 type mediaStream struct {
 	Codec                  string  `json:"Codec"`
 	Language               string  `json:"Language,omitempty"`
@@ -114,7 +114,7 @@ func (i *streamIndex) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(bytes.Trim(b, `"`), (*int)(i))
 }
 
-// sourceOf is a copy as a media source. Its Path is its file's name alone, as Infuse reads one,
+// sourceOf is a version as a media source. Its Path is its file's name alone, as Infuse reads one,
 // never where it is on the server.
 func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	file := ""
@@ -136,7 +136,7 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 			s.DefaultAudioStreamIndex = &t.Index
 		}
 	}
-	// Subtitle files beside the copy follow its own tracks, each at the address an app builds for
+	// Subtitle files beside the version follow its own tracks, each at the address an app builds for
 	// it from its index and codec.
 	base := externalBase(v)
 	for n, f := range v.Subtitles {
@@ -205,7 +205,7 @@ func subtitleCodec(codec string) string {
 	return codec
 }
 
-// externalBase is the index of a copy's first subtitle file: after every track of its own.
+// externalBase is the index of a version's first subtitle file: after every track of its own.
 func externalBase(v store.VersionPage) int {
 	base := 0
 	for _, t := range v.Streams {

@@ -49,9 +49,9 @@ type playing interface {
 	PartStreams(ctx context.Context, part uuid.UUID) ([]domain.Stream, error)
 }
 
-// copies give a remote library's films and episodes the copies their provider offers, as one is
+// remoteVersions give a remote library's films and episodes the remoteVersions their provider offers, as one is
 // opened or played.
-type copies interface {
+type remoteVersions interface {
 	Ensure(ctx context.Context, item uuid.UUID) error
 }
 
@@ -60,7 +60,7 @@ type discover interface {
 	Find(ctx context.Context, profile uuid.UUID, media domain.LibraryMedia, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
 }
 
-// parts opens the parts of copies for tools to read and players to fetch.
+// parts opens the parts of versions for tools to read and players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
 }
@@ -72,8 +72,8 @@ type partJSON struct {
 	DurationMS int64        `json:"duration_ms"`
 }
 
-// subtitleJSON is a subtitle the client draws beside the video, timed on the copy's timeline: a
-// file beside the copy, by its id, or a styled stream of it read out as it is, by its index, with
+// subtitleJSON is a subtitle the client draws beside the video, timed on the version's timeline: a
+// file beside the version, by its id, or a styled stream of it read out as it is, by its index, with
 // the address of the fonts the file carries for it.
 type subtitleJSON struct {
 	ID              uuid.UUID          `json:"id,omitzero"`
@@ -97,12 +97,12 @@ type videoJSON struct {
 	Width       int                        `json:"width,omitzero"`
 	Height      int                        `json:"height,omitzero"`
 	BitrateKbps int                        `json:"bitrate_kbps,omitzero"`
-	// Range is the range it is encoded in: SDR, or the copy's HDR kept; tone_mapped says HDR was
+	// Range is the range it is encoded in: SDR, or the version's HDR kept; tone_mapped says HDR was
 	// mapped to SDR to reach it.
 	Range      domain.Range `json:"range,omitzero"`
 	ToneMapped bool         `json:"tone_mapped,omitzero"`
 	// BurnedSubtitle is the subtitle stream drawn into the picture, BurnedSubtitleFile the
-	// subtitle file beside the copy drawn so.
+	// subtitle file beside the version drawn so.
 	BurnedSubtitle     *int       `json:"burned_subtitle,omitzero"`
 	BurnedSubtitleFile *uuid.UUID `json:"burned_subtitle_file,omitzero"`
 }
@@ -130,13 +130,13 @@ func decisions() []decision {
 type playJSON struct {
 	VersionID   uuid.UUID `json:"version_id,omitzero"`
 	AudioStream *int      `json:"audio_stream,omitzero"`
-	// SubtitleStream or SubtitleFile is a subtitle the client will show, a stream of the copy or a
+	// SubtitleStream or SubtitleFile is a subtitle the client will show, a stream of the version or a
 	// text file beside it; one that is a picture or styled is drawn into the video where the
 	// client cannot draw it.
 	SubtitleStream *int              `json:"subtitle_stream,omitzero"`
 	SubtitleFile   *uuid.UUID        `json:"subtitle_file,omitzero"`
 	Profile        *playback.Profile `json:"profile"`
-	// StartMS is where on the copy's timeline the player starts, so an HLS playlist is made from
+	// StartMS is where on the version's timeline the player starts, so an HLS playlist is made from
 	// there before the player asks for it.
 	StartMS int64 `json:"start_ms,omitzero"`
 }
@@ -157,16 +157,16 @@ type playbackJSON struct {
 	ExpiresAt  time.Time                `json:"expires_at"`
 }
 
-// refusalJSON is a copy nothing the client plays can be made of, and why.
+// refusalJSON is a version nothing the client plays can be made of, and why.
 type refusalJSON struct {
 	problem
 	Reasons []domain.TranscodeReason `json:"reasons"`
 }
 
-// play opens a playback of a film or episode as the client's profile decides: its copy's files in
-// order, each with where it starts on the copy's timeline, or an HLS playlist of them, its video
+// play opens a playback of a film or episode as the client's profile decides: its version's files in
+// order, each with where it starts on the version's timeline, or an HLS playlist of them, its video
 // copied or encoded, at signed addresses a player fetches directly. It says what becomes of each
-// stream, and why the copy could not be played as it is.
+// stream, and why the version could not be played as it is.
 func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	req, ok := a.playRequest(w, r)
 	if !ok {
@@ -176,7 +176,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Copies.Ensure(r.Context(), id)) {
+	if a.answered(w, r, a.svc.RemoteVersions.Ensure(r.Context(), id)) {
 		return
 	}
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.VersionID)
@@ -215,10 +215,10 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
 	s := auth.SessionOf(r.Context())
 	d, session, err := playback.Place(r.Context(), a.svc.Placer, a.svc.Playbacks, candidates, deliverers, playback.Start{
-		ID: uuid.NewV7(), Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Copy: c, Tracks: tracks,
+		ID: uuid.NewV7(), Session: s, Address: a.svc.Reach.Client(r).String(), Title: title, Version: c, Tracks: tracks,
 		Opening: playback.Opening{Profile: s.Profile.ID, Item: id, Version: c.Version, Segments: req.Profile.Segments, StartMS: req.StartMS, Renditions: playback.RenditionsAll},
 	}, func(e playback.Encoding) (playback.Decision, error) {
-		return playback.Decide(*req.Profile, playback.CopyOf(c), tracks, e)
+		return playback.Decide(*req.Profile, playback.VersionOf(c), tracks, e)
 	})
 	if errors.Is(err, playback.ErrNoCompatibleStream) {
 		status := codeNoCompatibleStream.status()
@@ -324,8 +324,8 @@ func (a *API) opened(p playback.Profile, c store.PlayVersion, d playback.Decisio
 }
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
-// beside one drawn in: the files beside the copy it draws so, but plain ones HLS carries itself,
-// and a VobSub's in Matroska, and the styled and picture streams of a copy in one file, read out as they are, but those it draws
+// beside one drawn in: the files beside the version it draws so, but plain ones HLS carries itself,
+// and a VobSub's in Matroska, and the styled and picture streams of a version in one file, read out as they are, but those it draws
 // from the file it plays.
 func (a *API) sidecars(p playback.Profile, c store.PlayVersion, method domain.PlayMethod, until time.Time) []subtitleJSON {
 	var out []subtitleJSON
@@ -361,7 +361,7 @@ func (a *API) sidecars(p playback.Profile, c store.PlayVersion, method domain.Pl
 	return out
 }
 
-// openRemote opens a playback another node placed on this one, reading its copy again as the
+// openRemote opens a playback another node placed on this one, reading its version again as the
 // profile may see it: 204 once open, 503 where every transcode slot is held or it delivers as many
 // streams as it may.
 func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {

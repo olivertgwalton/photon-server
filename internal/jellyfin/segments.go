@@ -24,7 +24,7 @@ type segment struct {
 }
 
 // mediaSegments answers a title's intro, credits, recap and preview, as Jellyfin's media segments: the
-// markers of the copy photon would play, which apps offer to skip.
+// markers of the version photon would play, which apps offer to skip.
 func (a *API) mediaSegments(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.itemID(w, r)
 	if !ok {

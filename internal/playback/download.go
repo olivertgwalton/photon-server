@@ -18,20 +18,20 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Fits reports whether a copy is downloaded as it is at a quality: its bitrate no more than the
+// Fits reports whether a version is downloaded as it is at a quality: its bitrate no more than the
 // most, one nobody knows taken as a transcode takes it, and its picture no wider. Its codecs do
 // not matter.
-func Fits(c Copy, q domain.Quality) bool {
+func Fits(c Version, q domain.Quality) bool {
 	video, _ := Pick(c.Streams, nil)
 	return cmp.Or(c.BitrateKbps, sourceKbps) <= q.MaxBitrateKbps &&
 		(q.MaxWidth == 0 || video == nil || video.Width <= q.MaxWidth)
 }
 
-// Conversion decides how a copy is converted to a quality for downloading, as it would be
+// Conversion decides how a version is converted to a quality for downloading, as it would be
 // transcoded for a client playing plays and AAC within it: video encoded to HEVC or H.264 within
 // the bitrate and width, HDR kept or tone mapped to SDR as the client shows it, and audio AAC.
-// ErrNoCompatibleStream for a copy with no video, or none plays can be made of.
-func Conversion(c Copy, q domain.Quality, plays []VideoSupport, hevc domain.HEVCEncoding) (Decision, error) {
+// ErrNoCompatibleStream for a version with no video, or none plays can be made of.
+func Conversion(c Version, q domain.Quality, plays []VideoSupport, hevc domain.HEVCEncoding) (Decision, error) {
 	c.BitrateKbps = cmp.Or(c.BitrateKbps, sourceKbps)
 	video := make([]VideoSupport, len(plays))
 	for i, v := range plays {
@@ -115,7 +115,7 @@ func (c *Conversions) Convert(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	hw := c.slots.Hardware()
-	d, err := Conversion(Copy{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality, Converted(job.Quality), hw.HEVC)
+	d, err := Conversion(Version{Container: job.Container, BitrateKbps: job.BitrateKbps, Streams: job.Streams}, job.Quality, Converted(job.Quality), hw.HEVC)
 	if err != nil {
 		return c.fail(ctx, id, err)
 	}

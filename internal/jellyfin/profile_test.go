@@ -83,41 +83,41 @@ const swiftfin = `{
 	"SubtitleProfiles": [{"Format": "vtt", "Method": "Hls"}]
 }`
 
-// An app plays a copy as it is only where one of its direct-play profiles takes all of it, and
+// An app plays a version as it is only where one of its direct-play profiles takes all of it, and
 // otherwise is given HLS within the limits its profiles set.
-func TestAnAppsProfileDecidesHowACopyPlays(t *testing.T) {
+func TestAnAppsProfileDecidesHowAVersionPlays(t *testing.T) {
 	p := profileOf(t, swiftfin)
 	video := domain.Stream{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Level: 150, Range: domain.RangeSDR}
 	audio := domain.Stream{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2}
-	copyOf := func(container string, parts int) store.PlayVersion {
+	versionOf := func(container string, parts int) store.PlayVersion {
 		return store.PlayVersion{Container: container, BitrateKbps: 8000, Parts: make([]store.PlayPart, parts), Streams: []domain.Stream{video, audio}}
 	}
-	if !p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, p.MaxStreamingBitrate) {
+	if !p.playsDirectly(versionOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, p.MaxStreamingBitrate) {
 		t.Error("an MP4 of HEVC and AAC does not play as it is")
 	}
-	if p.playsDirectly(copyOf("matroska,webm", 1), &video, &audio, nil, p.MaxStreamingBitrate) {
+	if p.playsDirectly(versionOf("matroska,webm", 1), &video, &audio, nil, p.MaxStreamingBitrate) {
 		t.Error("an MKV plays as it is in a player that opens no MKV")
 	}
-	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 2), &video, &audio, nil, p.MaxStreamingBitrate) {
-		t.Error("a copy in two files plays as one file")
+	if p.playsDirectly(versionOf("mov,mp4,m4a,3gp,3g2,mj2", 2), &video, &audio, nil, p.MaxStreamingBitrate) {
+		t.Error("a version in two files plays as one file")
 	}
 	high := video
 	high.Level = 183
-	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &high, &audio, nil, p.MaxStreamingBitrate) {
+	if p.playsDirectly(versionOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &high, &audio, nil, p.MaxStreamingBitrate) {
 		t.Error("HEVC above the level the player decodes plays as it is")
 	}
-	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, &subtitleChoice{codec: "subrip", delivery: domain.SubtitleEmbedded}, p.MaxStreamingBitrate) {
+	if p.playsDirectly(versionOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, &subtitleChoice{codec: "subrip", delivery: domain.SubtitleEmbedded}, p.MaxStreamingBitrate) {
 		t.Error("a subtitle the player draws only from HLS plays in the file")
 	}
-	if p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, 4_000_000) {
-		t.Error("a copy past the bitrate asked for plays as it is")
+	if p.playsDirectly(versionOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, 4_000_000) {
+		t.Error("a version past the bitrate asked for plays as it is")
 	}
 
 	tp, segments, ok := p.hls(&audio)
 	if !ok || segments != domain.SegmentsFMP4 {
 		t.Fatalf("Swiftfin's HLS: %v in %s", ok, segments)
 	}
-	hp := p.hlsProfile(tp, segments, copyOf("matroska,webm", 1), p.MaxStreamingBitrate)
+	hp := p.hlsProfile(tp, segments, versionOf("matroska,webm", 1), p.MaxStreamingBitrate)
 	if hp.MaxBitrateKbps != 120000 || len(hp.Containers) != 0 || len(hp.Video) != 2 || hp.Video[0].Codec != "hevc" || hp.Video[0].MaxLevel != 153 {
 		t.Errorf("HLS profile: %+v", hp)
 	}
@@ -142,11 +142,11 @@ func TestRangesAnAppTakesNarrowWhatHLSCarries(t *testing.T) {
 	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
 	hp := p.hlsProfile(tp, segments, store.PlayVersion{Streams: []domain.Stream{dv}}, 0)
 	if slices.Contains(hp.Video[0].Ranges, domain.RangeDV) || !slices.Contains(hp.Video[0].Ranges, domain.RangeHDR10) {
-		t.Errorf("ranges for a Dolby Vision profile 5 copy: %v", hp.Video[0].Ranges)
+		t.Errorf("ranges for a Dolby Vision profile 5 version: %v", hp.Video[0].Ranges)
 	}
 }
 
-// Of an app's HLS profiles, the first whose segments carry the copy's audio as it is is taken, as
+// Of an app's HLS profiles, the first whose segments carry the version's audio as it is is taken, as
 // Jellyfin ranks them: Android TV lists MPEG-TS first, but DTS is carried only in fragmented MP4.
 func TestAnAppsHLSIsInSegmentsThatCarryItsAudio(t *testing.T) {
 	p := profileOf(t, `{"TranscodingProfiles": [
@@ -184,7 +184,7 @@ func TestAnAppIsSentASubtitleReadOutOnlyWhereItDrawsItSo(t *testing.T) {
 	}
 }
 
-// An app is sent a subtitle file beside a copy in its own format where it draws that, else, plain
+// An app is sent a subtitle file beside a version in its own format where it draws that, else, plain
 // text, as WebVTT where it draws that, as Jellyfin chooses; and not where it draws neither.
 func TestAnAppIsSentASubtitleFileInAFormatItDraws(t *testing.T) {
 	web := profileOf(t, `{"SubtitleProfiles": [{"Format": "vtt", "Method": "External"}, {"Format": "ass", "Method": "External"},

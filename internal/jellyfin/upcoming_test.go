@@ -59,7 +59,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
 	get := func(target string, into any) int {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
@@ -85,10 +85,10 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	}
 	here, coming := upcoming.Items[0], upcoming.Items[1]
 	if here.Name != "Good News About Hell" || here.LocationType != "FileSystem" || len(here.MediaSources) != 1 {
-		t.Errorf("the episode here = %+v, want it with its copy", here)
+		t.Errorf("the episode here = %+v, want it with its version", here)
 	}
 	if coming.Name != "Half Loop" || coming.LocationType != "Virtual" || coming.SeriesName != "Severance" || coming.IndexNumber != 2 || coming.MediaSources != nil {
-		t.Errorf("the episode to come = %+v, want it virtual, of Severance, with no copy", coming)
+		t.Errorf("the episode to come = %+v, want it virtual, of Severance, with no version", coming)
 	}
 	var opened episode
 	if code := get("/Users/"+guid(ada.ID)+"/Items/"+coming.ID, &opened); code != http.StatusOK || opened.Name != "Half Loop" || opened.LocationType != "Virtual" {

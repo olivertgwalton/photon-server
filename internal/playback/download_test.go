@@ -9,27 +9,27 @@ import (
 func TestADownloadIsTheFileUnlessItIsOverTheQuality(t *testing.T) {
 	hd := []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 1920, Height: 1080}}
 	for _, tc := range []struct {
-		name string
-		copy Copy
-		q    domain.Quality
-		fits bool
+		name    string
+		version Version
+		q       domain.Quality
+		fits    bool
 	}{
-		{"under both, whatever its codec", Copy{BitrateKbps: 1500, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1920}, true},
-		{"over the bitrate", Copy{BitrateKbps: 8000, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
-		{"wider than asked", Copy{BitrateKbps: 1500, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280}, false},
-		{"of a bitrate nobody knows", Copy{Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
+		{"under both, whatever its codec", Version{BitrateKbps: 1500, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1920}, true},
+		{"over the bitrate", Version{BitrateKbps: 8000, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
+		{"wider than asked", Version{BitrateKbps: 1500, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280}, false},
+		{"of a bitrate nobody knows", Version{Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
 	} {
-		if got := Fits(tc.copy, tc.q); got != tc.fits {
+		if got := Fits(tc.version, tc.q); got != tc.fits {
 			t.Errorf("%s: fits %t, want %t", tc.name, got, tc.fits)
 		}
 	}
 }
 
-// A 4K Dolby Vision copy with TrueHD 7.1 downloaded at 2 Mbps and 1280 wide is H.264 at that size,
+// A 4K Dolby Vision version with TrueHD 7.1 downloaded at 2 Mbps and 1280 wide is H.264 at that size,
 // tone mapped, with AAC taking its share of the bitrate, for a device of H.264; for one of HEVC
 // and HDR10 it is HEVC with its HDR kept.
 func TestAConversionIsATranscodeWithinTheQuality(t *testing.T) {
-	c := Copy{Container: "matroska,webm", BitrateKbps: 40_000, Streams: []domain.Stream{
+	c := Version{Container: "matroska,webm", BitrateKbps: 40_000, Streams: []domain.Stream{
 		{
 			Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeDV,
 			DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10},

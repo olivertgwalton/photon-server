@@ -36,9 +36,9 @@ type trickplayInfo struct {
 	Bandwidth      int `json:"Bandwidth"`
 }
 
-// trickplay fills the thumbnail sheets of each copy in one file, by the copy's id and their width.
-// A copy in several files has none here: photon times each file's thumbnails from that file's
-// start, and a Jellyfin copy has one run of sheets from its own.
+// trickplay fills the thumbnail sheets of each version in one file, by the version's id and their width.
+// A version in several files has none here: photon times each file's thumbnails from that file's
+// start, and a Jellyfin version has one run of sheets from its own.
 func (it *item) trickplay(versions []store.VersionPage) {
 	for _, v := range versions {
 		if v.Parts != 1 || len(v.Trickplay) != 1 {
@@ -54,8 +54,8 @@ func (it *item) trickplay(versions []store.VersionPage) {
 	}
 }
 
-// trickplayFile serves a copy's thumbnail sheets at the width the copy's Trickplay gives: their
-// playlist, tiles.m3u8, or a sheet by its number, 0.jpg on. The copy is the one the app names, or
+// trickplayFile serves a version's thumbnail sheets at the width the version's Trickplay gives: their
+// playlist, tiles.m3u8, or a sheet by its number, 0.jpg on. The version is the one the app names, or
 // the one photon would play.
 func (a *API) trickplayFile(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.itemID(w, r)
@@ -69,7 +69,7 @@ func (a *API) trickplayFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	c, err := a.svc.Playing.Playable(r.Context(), profile, id, copyAsked(id, version))
+	c, err := a.svc.Playing.Playable(r.Context(), profile, id, versionAsked(id, version))
 	if err == nil && len(c.Parts) != 1 {
 		err = store.ErrNotFound
 	}

@@ -17,12 +17,12 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
-// partStream serves one file of a copy as it is, in byte ranges.
+// partStream serves one file of a version as it is, in byte ranges.
 func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
 	a.serveLibraryFile(w, r, "id", a.svc.Parts.Open, math.MaxInt64)
 }
 
-// playbackPartStream serves a copy's file as it is to its playback, for as long as the playback
+// playbackPartStream serves a version's file as it is to its playback, for as long as the playback
 // lasts: its stop cuts off what is still being sent.
 func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
 	playback, ok := a.pathID(w, r, "id")
@@ -61,7 +61,7 @@ func (a *API) partSample(w http.ResponseWriter, r *http.Request) {
 	a.serveLibraryFile(w, r, "id", visible, sampleBytes)
 }
 
-// subtitleFormat is how a subtitle file beside a copy is served.
+// subtitleFormat is how a subtitle file beside a version is served.
 type subtitleFormat string
 
 const (
@@ -74,7 +74,7 @@ func subtitleFormats() []subtitleFormat {
 	return []subtitleFormat{subtitleOriginal, subtitleWebVTT, subtitleMatroska}
 }
 
-// subtitleFile serves a subtitle file beside a copy as it is, its text in UTF-8, a text one
+// subtitleFile serves a subtitle file beside a version as it is, its text in UTF-8, a text one
 // converted to WebVTT, as Jellyfin's subtitle route converts, for a player that draws nothing else,
 // or a VobSub, its .idx and .sub, in one Matroska file.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
@@ -173,7 +173,7 @@ func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param str
 	}
 }
 
-// openSubtitleFile opens a subtitle file beside a copy.
+// openSubtitleFile opens a subtitle file beside a version.
 func (a *API) openSubtitleFile(ctx context.Context, id uuid.UUID) (media.Input, error) {
 	root, rel, err := a.svc.Playing.SubtitleFile(ctx, id)
 	if err != nil {
@@ -198,13 +198,13 @@ func (a *API) streamsRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/playbacks/{id}/parts/{part}/stream", access: signedAddress,
-			summary: "A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
+			summary: "A version's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts",
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
 			handle: a.playbackPartStream,
 		},
 		{
 			pattern: "GET /api/v1/parts/{id}/stream", access: signedAddress,
-			summary: "A copy's file as it is, in byte ranges, at the address a download answered",
+			summary: "A version's file as it is, in byte ranges, at the address a download answered",
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"video/*"}, delivery: playback.DeliveryFile,
 			handle: a.partStream,
 		},
@@ -215,7 +215,7 @@ func (a *API) streamsRoutes() []route {
 		},
 		{
 			pattern: "GET /api/v1/subtitles/{id}/file", access: signedAddress,
-			summary: "A subtitle file beside a copy, as it is, as WebVTT or in Matroska, at the address play answered",
+			summary: "A subtitle file beside a version, as it is, as WebVTT or in Matroska, at the address play answered",
 			query: append([]param{
 				{"format", subtitleOriginal, "webvtt converts a text subtitle to WebVTT; matroska joins a VobSub's .idx and .sub in one Matroska file; original, the default, is the file as it is, its text in UTF-8."},
 			}, signatureParams...),

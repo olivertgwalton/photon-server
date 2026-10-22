@@ -163,7 +163,7 @@ func (a *API) setConfiguration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// chooseTracks says the tracks each copy of a title plays with for a profile, by the preferences
+// chooseTracks says the tracks each version of a title plays with for a profile, by the preferences
 // and choices photon's own apps play by, as Jellyfin's media sources answer their defaults.
 func (a *API) chooseTracks(ctx context.Context, profile, item uuid.UUID, versions []store.VersionPage) error {
 	if len(versions) == 0 {

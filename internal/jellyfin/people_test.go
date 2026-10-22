@@ -37,15 +37,15 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Version {
+	versions := func(rel string) []store.Version {
 		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	for _, f := range []string{"Alien", "Heat"} {
-		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: copies(f + ".mkv")}}, nil); err != nil {
+		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: versions(f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Show", ByNumber: true, Versions: copies("S01E01.mkv")}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Show", ByNumber: true, Versions: versions("S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Show", []byte("v"), store.Show{Title: "Show", Folder: "Show"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	if err := st.DescribePerson(ctx, her, domain.Person{Name: "Sigourney Weaver", Biography: "An actor.", Born: born, Birthplace: "New York City"}); err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada, "pst_kid": kid}, Catalogue: st, Preferences: st})
 	get := func(token, target string, into any) int {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, "")

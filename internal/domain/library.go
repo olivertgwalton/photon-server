@@ -214,13 +214,13 @@ type Library struct {
 	Titles TitleLanguage
 	// BoxSets is how its wall shows the titles of a box set.
 	BoxSets BoxSetMode
-	// SubtitleLanguages are those it fetches subtitles in for copies that have none in them; none
+	// SubtitleLanguages are those it fetches subtitles in for versions that have none in them; none
 	// is no fetching.
 	SubtitleLanguages []language.Tag
 	SubtitleMatch     SubtitleMatch
 }
 
-// SubtitleMatch is which subtitle a library fetches for a copy itself, as Jellyfin's "Only
+// SubtitleMatch is which subtitle a library fetches for a version itself, as Jellyfin's "Only
 // download subtitles that are a perfect match": one made for its very file, found by its hash, or
 // the best of any, which may be timed for another release.
 type SubtitleMatch string

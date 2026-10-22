@@ -21,7 +21,7 @@ var (
 
 // A film as rips have it: Dolby Vision 8.1 HEVC in Matroska, with TrueHD 7.1 and an AC-3 5.1 dub,
 // and subtitles of every kind.
-var film = Copy{
+var film = Version{
 	Container: "matroska,webm", BitrateKbps: 40_000, Parts: 1,
 	Streams: []domain.Stream{
 		{
@@ -221,8 +221,8 @@ func TestDecide(t *testing.T) {
 			name: "audio no encoder writes for the client", profile: silent,
 			want: Decision{Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.AudioCodecNotSupported}}, err: ErrNoCompatibleStream,
 		},
-		{name: "an audio stream the copy lacks", profile: everything, audio: new(3), err: ErrNoSuchAudio},
-		{name: "a subtitle stream the copy lacks", profile: everything, subtitle: new(1), err: ErrNoSuchSubtitle},
+		{name: "an audio stream the version lacks", profile: everything, audio: new(3), err: ErrNoSuchAudio},
+		{name: "a subtitle stream the version lacks", profile: everything, subtitle: new(1), err: ErrNoSuchSubtitle},
 		{
 			name: "a picture subtitle the client draws plays in the file", profile: drawsPGS, subtitle: new(4),
 			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
@@ -306,15 +306,15 @@ func TestDecide(t *testing.T) {
 				Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
 			},
 		},
-		{name: "a picture beside the copy is no subtitle a player that does not draw it shows", profile: everything, file: &pgsFile, err: ErrNoSuchSubtitleFile},
+		{name: "a picture beside the version is no subtitle a player that does not draw it shows", profile: everything, file: &pgsFile, err: ErrNoSuchSubtitleFile},
 		{
-			name: "a picture beside the copy a client draws goes beside HLS, the video copied", profile: drawsPGSBeside, file: &pgsFile, audio: new(2),
+			name: "a picture beside the version a client draws goes beside HLS, the video copied", profile: drawsPGSBeside, file: &pgsFile, audio: new(2),
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
-		{name: "a subtitle file not beside the copy", profile: everything, file: new(uuid.NewV7()), err: ErrNoSuchSubtitleFile},
+		{name: "a subtitle file not beside the version", profile: everything, file: new(uuid.NewV7()), err: ErrNoSuchSubtitleFile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			enc := Encoding{HEVC: gocmp.Or(tc.hevc, domain.HEVCAllow), Libass: !tc.noLibass}
@@ -330,7 +330,7 @@ func TestDecide(t *testing.T) {
 }
 
 func TestAnInterlacedPictureIsDeinterlacedAsItIsEncoded(t *testing.T) {
-	broadcast := Copy{Container: "mpegts", BitrateKbps: 8_000, Streams: []domain.Stream{
+	broadcast := Version{Container: "mpegts", BitrateKbps: 8_000, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "mpeg2video", Width: 1920, Height: 1080, Interlaced: true},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "ac3", Channels: 6},
 	}}
@@ -490,9 +490,9 @@ func TestAPictureFitsWithinTheClientsLimit(t *testing.T) {
 	}
 }
 
-// A copy in two files plays as it is only on a client that plays each in turn; another has them
+// A version in two files plays as it is only on a client that plays each in turn; another has them
 // joined into one stream, with the video copied.
-func TestACopyInSeveralFilesIsJoinedForAClientThatPlaysOne(t *testing.T) {
+func TestAVersionInSeveralFilesIsJoinedForAClientThatPlaysOne(t *testing.T) {
 	twoFiles := film
 	twoFiles.Parts = 2
 	everything := appleTV
@@ -526,16 +526,16 @@ func TestMPEGTSSegmentsCarryWhatPlayersTakeFromThem(t *testing.T) {
 		},
 		Audio: []AudioSupport{{Codec: "aac"}, {Codec: "opus"}, {Codec: "flac"}},
 	}
-	in := func(video domain.Stream, audio string) Copy {
+	in := func(video domain.Stream, audio string) Version {
 		video.Kind = domain.StreamVideo
-		return Copy{Container: "matroska,webm", BitrateKbps: 10_000, Streams: []domain.Stream{
+		return Version{Container: "matroska,webm", BitrateKbps: 10_000, Streams: []domain.Stream{
 			video, {Index: 1, Kind: domain.StreamAudio, Codec: audio, Channels: 2},
 		}}
 	}
 	dv5 := domain.Stream{Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
 	for _, tc := range []struct {
 		name         string
-		copy         Copy
+		version      Version
 		videoEncoded bool
 		audioEncoded bool
 	}{
@@ -544,7 +544,7 @@ func TestMPEGTSSegmentsCarryWhatPlayersTakeFromThem(t *testing.T) {
 		{"HEVC and FLAC", in(domain.Stream{Codec: "hevc"}, "flac"), false, true},
 		{"Dolby Vision 5, which has no base layer to send", in(dv5, "aac"), true, false},
 	} {
-		fmp4, err := Decide(plays, tc.copy, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+		fmp4, err := Decide(plays, tc.version, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
 		if err != nil {
 			t.Fatalf("%s in fragmented MP4: %v", tc.name, err)
 		}
@@ -553,7 +553,7 @@ func TestMPEGTSSegmentsCarryWhatPlayersTakeFromThem(t *testing.T) {
 		}
 		ts := plays
 		ts.Segments = domain.SegmentsMPEGTS
-		got, err := Decide(ts, tc.copy, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
+		got, err := Decide(ts, tc.version, domain.ChosenTracks{}, Encoding{HEVC: domain.HEVCAllow})
 		if err != nil {
 			t.Fatalf("%s in MPEG-TS: %v", tc.name, err)
 		}

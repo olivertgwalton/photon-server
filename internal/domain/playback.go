@@ -49,7 +49,7 @@ func PlayStates() []PlayState {
 	return []PlayState{StatePlaying, StatePaused}
 }
 
-// Playback is one profile playing one copy of a title, from play to stop.
+// Playback is one profile playing one version of a title, from play to stop.
 type Playback struct {
 	ID       uuid.UUID
 	Profile  uuid.UUID
@@ -94,7 +94,7 @@ func (p Playback) Showing() NowPlaying {
 }
 
 // PlaybackCard is what an admin's dashboard shows of a playback beside where it has got to, as
-// Jellyfin's session card does: who, on what, which title and copy, and how it plays. It is fixed
+// Jellyfin's session card does: who, on what, which title and version, and how it plays. It is fixed
 // as the playback starts, so listing playbacks decides nothing again, and kept and sent as JSON.
 type PlaybackCard struct {
 	Profile  PlaybackProfile   `json:"profile"`
@@ -249,7 +249,7 @@ const (
 
 func HEVCEncodings() []HEVCEncoding { return []HEVCEncoding{HEVCAllow, HEVCDeny} }
 
-// DolbyVisionHandling is what a copy does with a stream's Dolby Vision.
+// DolbyVisionHandling is what a version does with a stream's Dolby Vision.
 type DolbyVisionHandling string
 
 const (
@@ -301,7 +301,7 @@ func Accelerations() []Acceleration {
 	return []Acceleration{AccelSoftware, AccelVideoToolbox, AccelVAAPI, AccelQSV, AccelNVENC, AccelAMF}
 }
 
-// TranscodeReason is why a copy cannot reach a client as it is, in Jellyfin's TranscodeReason terms.
+// TranscodeReason is why a version cannot reach a client as it is, in Jellyfin's TranscodeReason terms.
 type TranscodeReason string
 
 const (
@@ -316,9 +316,9 @@ const (
 	AudioChannelsNotSupported   TranscodeReason = "audio_channels_not_supported"
 	BitrateExceedsLimit         TranscodeReason = "bitrate_exceeds_limit"
 	SubtitleCodecNotSupported   TranscodeReason = "subtitle_codec_not_supported"
-	// PartsNotSupported is a copy in several files for a client that plays one.
+	// PartsNotSupported is a version in several files for a client that plays one.
 	PartsNotSupported TranscodeReason = "parts_not_supported"
-	// DirectPlayError is a client that failed to play a copy as it is, asking again for it encoded.
+	// DirectPlayError is a client that failed to play a version as it is, asking again for it encoded.
 	DirectPlayError TranscodeReason = "direct_play_error"
 )
 
@@ -330,7 +330,7 @@ func TranscodeReasons() []TranscodeReason {
 	}
 }
 
-// PartPlayback is how a client plays a copy in several files: as one stream the server joins
+// PartPlayback is how a client plays a version in several files: as one stream the server joins
 // them into, or each file in turn from its own address.
 type PartPlayback string
 

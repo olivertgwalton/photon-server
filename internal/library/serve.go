@@ -91,7 +91,7 @@ func serveRemote(w http.ResponseWriter, r *http.Request, u *url.URL, limit int64
 	return nil
 }
 
-// ServeSubtitle sends a subtitle file beside a copy as Serve does, its text in UTF-8, as libass
+// ServeSubtitle sends a subtitle file beside a version as Serve does, its text in UTF-8, as libass
 // and a browser read it: as it is if it is, else read in its charset. Pictures are sent as they are.
 func ServeSubtitle(w http.ResponseWriter, r *http.Request, in media.Input, codec, lang string) error {
 	if in.File == nil || !hls.TextSubtitle(codec) && !hls.StyledSubtitle(codec) {
