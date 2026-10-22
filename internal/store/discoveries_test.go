@@ -24,7 +24,7 @@ func TestASearchFindsARemoteLibraryTitlesItBecomesAsOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Copies: []Copy{{
+	film := Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "H/heat.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, films.ID, "H", []byte("v1"), []Film{film}, nil); err != nil {

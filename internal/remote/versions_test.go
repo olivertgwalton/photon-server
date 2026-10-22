@@ -80,10 +80,10 @@ func (o *offering) Streams(context.Context, domain.FieldSource, domain.Streamed)
 	return o.offers, nil
 }
 
-// A remote film has no copy until it is opened: then its provider's best offer that can be read is
+// A remote film has no version until it is opened: then its provider's best offer that can be read is
 // read and kept as a version, opened where its provider offers it now, never at its address. A
-// copy the provider stops offering is missing, and another it offers is read in its place.
-func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
+// version the provider stops offering is missing, and another it offers is read in its place.
+func TestARemoteFilmIsGivenTheVersionItsProviderOffers(t *testing.T) {
 	srv := film(t)
 	st := open(t)
 	ctx := t.Context()
@@ -112,14 +112,14 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	uhd := domain.Offer{Key: "torrent:abc:0", Name: "Heat.2160p.mkv", URL: at("/heat.mkv"), From: from}
 	provider := &offering{offers: []domain.Offer{dead, uhd}}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	copies := NewCopies(st, New(provider, relay(t)), tools, unmatched)
+	versions := NewVersions(st, New(provider, relay(t)), tools, unmatched)
 
-	if err := copies.Ensure(ctx, item); err != nil {
+	if err := versions.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, item)
 	if err != nil || len(page.Versions) != 1 || page.Versions[0].DurationMS < 60_000 {
-		t.Fatalf("the film's copies %+v, %v; want the 2160p copy read, the dead link passed over", page.Versions, err)
+		t.Fatalf("the film's versions %+v, %v; want the 2160p version read, the dead link passed over", page.Versions, err)
 	}
 	c, err := st.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil {
@@ -138,19 +138,19 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 	resp.Body.Close()
 	in.Close()
 	if err != nil || string(head) != "\x1a\x45\xdf\xa3" || strings.Contains(in.URL.String(), srv.URL) || in.Name != "Heat.2160p.mkv" {
-		t.Errorf("opened %q at %s named %q, want the Matroska copy at the relay", head, in.URL, in.Name)
+		t.Errorf("opened %q at %s named %q, want the Matroska version at the relay", head, in.URL, in.Name)
 	}
 
-	// Offered no more, the copy is missing and its part gone; another offered is read.
+	// Offered no more, the version is missing and its part gone; another offered is read.
 	hd := domain.Offer{Key: "torrent:abc:1", Name: "Heat.1080p.mkv", URL: at("/heat-hd.mkv"), From: from}
 	provider.offers = []domain.Offer{hd}
-	copies = NewCopies(st, New(provider, relay(t)), tools, unmatched)
-	if err := copies.Ensure(ctx, item); err != nil {
+	versions = NewVersions(st, New(provider, relay(t)), tools, unmatched)
+	if err := versions.Ensure(ctx, item); err != nil {
 		t.Fatal(err)
 	}
 	page, err = st.Title(ctx, uuid.UUID{}, item)
 	if err != nil || len(page.Versions) != 2 {
-		t.Fatalf("the film's copies %+v, %v; want both", page.Versions, err)
+		t.Fatalf("the film's versions %+v, %v; want both", page.Versions, err)
 	}
 	var missing int
 	for _, v := range page.Versions {
@@ -159,21 +159,21 @@ func TestARemoteFilmIsGivenTheCopyItsProviderOffers(t *testing.T) {
 		}
 	}
 	if missing != 1 {
-		t.Errorf("%d copies missing, want the 2160p one", missing)
+		t.Errorf("%d versions missing, want the 2160p one", missing)
 	}
 	if _, err := (library.Parts{Places: st, Streams: New(provider, relay(t))}).Open(ctx, c.Parts[0].ID); !errors.Is(err, ErrGone) {
-		t.Errorf("the 2160p copy opened: %v, want ErrGone", err)
+		t.Errorf("the 2160p version opened: %v, want ErrGone", err)
 	}
 
 	provider.offers = nil
-	if err := NewCopies(st, New(provider, relay(t)), tools, unmatched).Ensure(ctx, item); !errors.Is(err, ErrNoCopy) {
+	if err := NewVersions(st, New(provider, relay(t)), tools, unmatched).Ensure(ctx, item); !errors.Is(err, ErrNoVersion) {
 		t.Errorf("with nothing offered: %v, want ErrNoCopy", err)
 	}
 }
 
 // A title a search found becomes its library's as it is opened, is matched there and then, and
-// is given the copy its provider offers, as a title its list held is.
-func TestAFoundTitleIsHeldMatchedAndGivenACopyAsItIsOpened(t *testing.T) {
+// is given the version its provider offers, as a title its list held is.
+func TestAFoundTitleIsHeldMatchedAndGivenAVersionAsItIsOpened(t *testing.T) {
 	srv := film(t)
 	st := open(t)
 	ctx := t.Context()
@@ -196,12 +196,12 @@ func TestAFoundTitleIsHeldMatchedAndGivenACopyAsItIsOpened(t *testing.T) {
 		return nil
 	}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	if err := NewCopies(st, New(offers, relay(t)), tools, match).Ensure(ctx, found[0].ID); err != nil {
+	if err := NewVersions(st, New(offers, relay(t)), tools, match).Ensure(ctx, found[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	page, err := st.Title(ctx, uuid.UUID{}, found[0].ID)
 	if err != nil || page.Title != "Heat" || len(page.Versions) != 1 || len(matched) != 1 {
-		t.Errorf("opened, it is %q with %d copies, matched %d times, %v", page.Title, len(page.Versions), len(matched), err)
+		t.Errorf("opened, it is %q with %d versions, matched %d times, %v", page.Title, len(page.Versions), len(matched), err)
 	}
 }
 
@@ -242,22 +242,22 @@ func TestAStreamBeingFetchedIsWaitedForAndADeadOnePassedOver(t *testing.T) {
 	dead := domain.Offer{Key: "release:Heat.Dead", Name: "Heat.Dead", URL: at(srv.URL, "/gone.mkv"), From: from}
 	ready := domain.Offer{Key: "release:Heat.WEB", Name: "Heat.WEB", URL: at(srv.URL, "/heat.mkv"), From: from}
 	tools := media.Tools{FFprobe: media.Tool{Path: tool(t, "ffprobe", "PHOTON_FFPROBE")}}
-	copies := func(offers ...domain.Offer) *Copies {
-		c := NewCopies(st, New(&offering{offers: offers}, relay(t)), tools, unmatched)
+	versions := func(offers ...domain.Offer) *Versions {
+		c := NewVersions(st, New(&offering{offers: offers}, relay(t)), tools, unmatched)
 		c.readyWithin = 200 * time.Millisecond
 		return c
 	}
 
-	if err := copies(fetching, ready).Ensure(ctx, item); !errors.Is(err, ErrFetching) || asked.Load() != 1 {
+	if err := versions(fetching, ready).Ensure(ctx, item); !errors.Is(err, ErrFetching) || asked.Load() != 1 {
 		t.Errorf("first the one being fetched: %v, asked %d times; want ErrFetching, asked once", err, asked.Load())
 	}
 	if page, err := st.Title(ctx, uuid.UUID{}, item); err != nil || len(page.Versions) != 0 {
-		t.Errorf("while it is fetched, %d copies, %v; want none, the ready one after it left alone", len(page.Versions), err)
+		t.Errorf("while it is fetched, %d versions, %v; want none, the ready one after it left alone", len(page.Versions), err)
 	}
-	if err := copies(dead, ready).Ensure(ctx, item); err != nil {
+	if err := versions(dead, ready).Ensure(ctx, item); err != nil {
 		t.Fatal(err)
 	}
 	if page, err := st.Title(ctx, uuid.UUID{}, item); err != nil || len(page.Versions) != 1 {
-		t.Errorf("first a dead one, %d copies, %v; want the ready one after it", len(page.Versions), err)
+		t.Errorf("first a dead one, %d versions, %v; want the ready one after it", len(page.Versions), err)
 	}
 }

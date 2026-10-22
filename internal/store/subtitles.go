@@ -12,8 +12,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// SubtitleSearch is what a copy's subtitles are searched by, and its first part, which its release
-// is hashed by: one file of a copy in several is no release on its own.
+// SubtitleSearch is what a version's subtitles are searched by, and its first part, which its release
+// is hashed by: one file of a version in several is no release on its own.
 type SubtitleSearch struct {
 	Version uuid.UUID
 	Query   domain.SubtitleQuery
@@ -21,9 +21,9 @@ type SubtitleSearch struct {
 	Parts   int
 }
 
-// SubtitleSearchOf answers what a film's or an episode's copy, the one asked for else its
+// SubtitleSearchOf answers what a film's or an episode's version, the one asked for else its
 // longest, is searched for subtitles by: a film's ids, or an episode's show's and its numbers.
-// ErrNotFound for no such title, one the profile may not see, or none of its copies on disk.
+// ErrNotFound for no such title, one the profile may not see, or none of its versions on disk.
 func (s *Store) SubtitleSearchOf(ctx context.Context, profile, item, version uuid.UUID) (SubtitleSearch, error) {
 	c, err := s.Playable(ctx, profile, item, version)
 	if err != nil {
@@ -47,7 +47,7 @@ func (s *Store) SubtitleSearchOf(ctx context.Context, profile, item, version uui
 	return out, err
 }
 
-// FetchedSubtitleFile is a subtitle fetched from a provider for a copy as SubRip: what it is, and
+// FetchedSubtitleFile is a subtitle fetched from a provider for a version as SubRip: what it is, and
 // its text.
 type FetchedSubtitleFile struct {
 	Language        language.Tag
@@ -57,7 +57,7 @@ type FetchedSubtitleFile struct {
 	Body            []byte
 }
 
-// SaveFetchedSubtitle keeps a subtitle fetched for a copy among the files beside it, its text
+// SaveFetchedSubtitle keeps a subtitle fetched for a version among the files beside it, its text
 // kept with it; it answers its id.
 func (s *Store) SaveFetchedSubtitle(ctx context.Context, version uuid.UUID, f FetchedSubtitleFile) (uuid.UUID, error) {
 	var id uuid.UUID
@@ -89,7 +89,7 @@ func (s *Store) RemoveFetchedSubtitle(ctx context.Context, id uuid.UUID) error {
 	return affected(s.pool.Exec(ctx, `DELETE FROM subtitle_files WHERE id = $1 AND body IS NOT NULL`, id))
 }
 
-// WantedSubtitle is a copy that lacks a subtitle in a language its library fetches them in, and
+// WantedSubtitle is a version that lacks a subtitle in a language its library fetches them in, and
 // which its library takes.
 type WantedSubtitle struct {
 	Item, Version uuid.UUID
@@ -97,8 +97,8 @@ type WantedSubtitle struct {
 	Match         domain.SubtitleMatch
 }
 
-// WantedSubtitles answers, newest copy first and after the one given (none for the first), up to
-// limit films' and episodes' copies on disk that have no subtitle in a language their library
+// WantedSubtitles answers, newest version first and after the one given (none for the first), up to
+// limit films' and episodes' versions on disk that have no subtitle in a language their library
 // names, inside or beside them, nor one forced alone, and that were not searched for one in it
 // since. A language is had in any of its regions, as a track is chosen.
 func (s *Store) WantedSubtitles(ctx context.Context, searchedSince time.Time, after *WantedSubtitle, limit int) ([]WantedSubtitle, error) {
@@ -133,7 +133,7 @@ func (s *Store) WantedSubtitles(ctx context.Context, searchedSince time.Time, af
 	})
 }
 
-// SubtitleSearched records that a copy was searched for a subtitle in a language.
+// SubtitleSearched records that a version was searched for a subtitle in a language.
 func (s *Store) SubtitleSearched(ctx context.Context, version uuid.UUID, lang language.Tag) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO subtitle_searches (version_id, language, searched_at) SELECT id, $2, now() FROM versions WHERE id = $1

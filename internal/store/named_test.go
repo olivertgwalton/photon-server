@@ -35,7 +35,7 @@ func TestAnIDIsToldForWhatItNames(t *testing.T) {
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{Libraries: []uuid.UUID{other.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	pilot := Episode{Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Severance", ByNumber: true, Copies: []Copy{{
+	pilot := Episode{Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Severance", ByNumber: true, Versions: []Version{{
 		ContentKey: []byte("1"), Parts: []Part{{RelPath: "1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}},
 	}}}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Severance", []byte("v1"), Show{Title: "Severance", Folder: "Severance"}, []Episode{pilot}, nil); err != nil {

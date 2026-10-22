@@ -37,7 +37,7 @@ func TestAnAnnouncedEpisodeIsFoundByTheIDTheCalendarGives(t *testing.T) {
 		var out []Episode
 		for _, n := range numbers {
 			rel := string(rune('0'+n)) + ".mkv"
-			out = append(out, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Copies: []Copy{{
+			out = append(out, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Versions: []Version{{
 				ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}},
 			}}})
 		}

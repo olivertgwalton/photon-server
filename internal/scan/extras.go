@@ -12,9 +12,9 @@ import (
 // title of the folder above it; an extra named after a title ("Heat (1995)-trailer") to that
 // title in its own folder.
 type extraPlan struct {
-	kind  domain.ExtraKind
-	title string
-	copy  copyPlan
+	kind    domain.ExtraKind
+	title   string
+	version versionPlan
 	// ownerName is the title the extra's name gives, empty for one in an extras folder.
 	ownerName string
 }
@@ -34,9 +34,9 @@ func extrasIn(f library.Folder) (extras []extraPlan, inExtrasFolder bool) {
 			if !suffixed {
 				kind = folderKind
 			}
-			extras = append(extras, extraPlan{kind: kind, title: naming.CleanName(s).Title, copy: copyPlan{parts: []library.File{file}}})
+			extras = append(extras, extraPlan{kind: kind, title: naming.CleanName(s).Title, version: versionPlan{parts: []library.File{file}}})
 		case suffixed:
-			extras = append(extras, extraPlan{kind: kind, title: kindTitle[kind], ownerName: owner, copy: copyPlan{parts: []library.File{file}}})
+			extras = append(extras, extraPlan{kind: kind, title: kindTitle[kind], ownerName: owner, version: versionPlan{parts: []library.File{file}}})
 		}
 	}
 	return extras, inExtrasFolder

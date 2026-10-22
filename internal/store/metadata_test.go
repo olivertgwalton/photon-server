@@ -23,7 +23,7 @@ func TestBetterSourcesSurviveRescans(t *testing.T) {
 	}
 	scanned := func(title string) model.Item {
 		t.Helper()
-		film := Film{Title: title, Year: 1982, Folder: "Thing", Copies: []Copy{{
+		film := Film{Title: title, Year: 1982, Folder: "Thing", Versions: []Version{{
 			ContentKey: []byte("thing"),
 			Parts:      []Part{{RelPath: "Thing/Thing.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}},
 		}}}
@@ -79,7 +79,7 @@ func TestNFOSaysMoreThanFileNamesButNotOverTypedIDs(t *testing.T) {
 		NFO: &domain.Metadata{Title: "Alien", Year: 1979, IDs: map[domain.Provider]string{
 			domain.ProviderTMDB: "999", domain.ProviderIMDb: "tt0078748",
 		}},
-		Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("alien"), Parts: []Part{{
 			RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
@@ -118,7 +118,7 @@ func TestALockedFieldIsLeftForTheReader(t *testing.T) {
 	film := Film{
 		Title: "heat", Folder: "Heat",
 		NFO: &domain.Metadata{Title: "Heat", Locked: []domain.Field{domain.FieldOverview}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
@@ -154,7 +154,7 @@ func TestALibraryChoosesItsSourcesAndTheirOrder(t *testing.T) {
 	}
 	film := Film{
 		Title: "heat", Folder: "Heat", NFO: &domain.Metadata{Title: "Heat (NFO)"},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
@@ -234,7 +234,7 @@ func TestEachKindOfItemTakesItsOwnSources(t *testing.T) {
 	}
 	ep := Episode{
 		Season: 1, Episodes: []int{1}, Title: "Firefly", Folder: "Firefly/Season 1", ByNumber: true,
-		Copies: []Copy{{ContentKey: []byte("f1"), Parts: []Part{{RelPath: "Firefly/Season 1/S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+		Versions: []Version{{ContentKey: []byte("f1"), Parts: []Part{{RelPath: "Firefly/Season 1/S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 	}
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Firefly/Season 1", []byte("v1"), Show{Title: "Firefly", Folder: "Firefly"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)

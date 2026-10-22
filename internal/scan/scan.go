@@ -353,13 +353,13 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 	var films []store.Film
 	plans := planFilms(folder)
 	pics := picturesIn(lib.Root, folder.Path, fileNames(folder))
-	read, err := s.readCopies(ctx, r, plansOf(plans, func(f film) []copyPlan { return f.versions }))
+	read, err := s.readVersions(ctx, r, plansOf(plans, func(f film) []versionPlan { return f.versions }))
 	if err != nil {
 		return store.Saved{}, err
 	}
 	for i, f := range plans {
-		copies := read[i]
-		if len(copies) == 0 {
+		versions := read[i]
+		if len(versions) == 0 {
 			continue
 		}
 		var art []domain.Artwork
@@ -375,7 +375,7 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 		}
 		films = append(films, store.Film{
 			Title: f.name.Title, Year: f.name.Year, Folder: folder.Path, IDs: ids(f.name.IDs),
-			NFO: metadata(s.readNFO(ctx, lib, folder.Path, f.nfos...)), Artwork: art, Themes: themes, Copies: copies,
+			NFO: metadata(s.readNFO(ctx, lib, folder.Path, f.nfos...)), Artwork: art, Themes: themes, Versions: versions,
 		})
 	}
 	extraPlans, inExtrasFolder := extrasIn(folder)
@@ -394,13 +394,13 @@ func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folde
 }
 
 // filmNamed is the title of the film an extra's name gives: the folder's only film, else the one
-// whose copy the name matches, else the title the name reads as.
+// whose version the name matches, else the title the name reads as.
 func filmNamed(name string, films []store.Film) string {
 	if len(films) == 1 {
 		return films[0].Title
 	}
 	for _, f := range films {
-		for _, c := range f.Copies {
+		for _, c := range f.Versions {
 			if strings.EqualFold(stem(path.Base(c.Parts[0].RelPath)), name) {
 				return f.Title
 			}
@@ -409,16 +409,16 @@ func filmNamed(name string, films []store.Film) string {
 	return naming.CleanName(name).Title
 }
 
-// extras reads each planned extra's copy, probing it if new, and names its owner.
+// extras reads each planned extra's version, probing it if new, and names its owner.
 func (s *Scanner) extras(ctx context.Context, r reading, folder library.Folder, plans []extraPlan, owner func(extraPlan) store.Owner) ([]store.Extra, error) {
-	read, err := s.readCopies(ctx, r, plansOf(plans, func(e extraPlan) []copyPlan { return []copyPlan{e.copy} }))
+	read, err := s.readVersions(ctx, r, plansOf(plans, func(e extraPlan) []versionPlan { return []versionPlan{e.version} }))
 	if err != nil {
 		return nil, err
 	}
 	var extras []store.Extra
 	for i, e := range plans {
 		for _, c := range read[i] {
-			extras = append(extras, store.Extra{Kind: e.kind, Title: e.title, Folder: folder.Path, Owner: owner(e), Copy: c})
+			extras = append(extras, store.Extra{Kind: e.kind, Title: e.title, Folder: folder.Path, Owner: owner(e), Version: c})
 		}
 	}
 	return extras, nil
@@ -466,18 +466,18 @@ func (s *Scanner) saveEpisodes(ctx context.Context, r reading, folder library.Fo
 		for _, rel := range unread {
 			s.skip(ctx, r.run, rel, errNoEpisode)
 		}
-		read, err := s.readCopies(ctx, r, plansOf(plans, func(e episodePlan) []copyPlan { return e.versions }))
+		read, err := s.readVersions(ctx, r, plansOf(plans, func(e episodePlan) []versionPlan { return e.versions }))
 		if err != nil {
 			return store.Saved{}, err
 		}
 		for i, e := range plans {
-			copies := read[i]
-			if len(copies) == 0 {
+			versions := read[i]
+			if len(versions) == 0 {
 				continue
 			}
 			ep := store.Episode{
 				Season: e.season, Episodes: e.episodes, AirDate: e.airDate, Title: e.title,
-				Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Copies: copies,
+				Folder: folder.Path, IDs: ids(e.name.IDs), ByNumber: e.byNumber, Versions: versions,
 				Artwork: pics.of(stem(e.versions[0].parts[0].Name), domain.ArtworkThumb),
 			}
 			// An NFO's numbers are stated, not guessed, so they win over the file name's.

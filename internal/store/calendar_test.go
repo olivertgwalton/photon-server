@@ -40,10 +40,10 @@ func TestCalendar(t *testing.T) {
 		t.Fatal(err)
 	}
 	day := func(n int) time.Time { return time.Date(2026, time.October, n, 0, 0, 0, 0, time.UTC) }
-	copies := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	versions := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
 	}
-	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: copies("Heat/Heat.mkv")}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Versions: versions("Heat/Heat.mkv")}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveIdentity(ctx, oneItem(t, s, "title = 'Heat'").ID, domain.SourceTMDB, domain.Metadata{ReleaseDate: day(3)}, nil); err != nil {
@@ -54,7 +54,7 @@ func TestCalendar(t *testing.T) {
 		var eps []Episode
 		for _, n := range episodes {
 			rel := fmt.Sprintf("%s/S01E%02d.mkv", title, n)
-			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: title, ByNumber: true, Copies: copies(rel)})
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: title, ByNumber: true, Versions: versions(rel)})
 		}
 		if _, err := s.SaveShowFolder(ctx, lib, title, fmt.Append(nil, episodes), Show{Title: title, Folder: title}, eps, nil); err != nil {
 			t.Fatal(err)

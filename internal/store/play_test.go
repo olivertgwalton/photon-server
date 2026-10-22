@@ -14,7 +14,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
+func TestTheLongestVersionOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
@@ -31,7 +31,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		Level: 153, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Level: 6, Compatibility: domain.CompatibleHDR10},
 	}
 	theatricalPart.Facts.Streams = []domain.Stream{video, {Index: 1, Kind: domain.StreamAudio, Codec: "truehd", Channels: 8}}
-	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{
+	film := Film{Title: "Lawrence", Folder: "L", Versions: []Version{
 		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{theatricalPart}, Subtitles: []Subtitle{
 			{RelPath: "L/theatrical.en.sdh.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English, HearingImpaired: true},
 		}},
@@ -46,9 +46,9 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	}
 	longest, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil || len(longest.Parts) != 2 || longest.Parts[1].OffsetMS != (2*time.Hour).Milliseconds() {
-		t.Fatalf("Playable = %+v, %v; want the four-hour copy's two parts on one timeline", longest, err)
+		t.Fatalf("Playable = %+v, %v; want the four-hour version's two parts on one timeline", longest, err)
 	}
-	// The title's page names each file of a copy, by its name, so a client can address one before
+	// The title's page names each file of a version, by its name, so a client can address one before
 	// playing it.
 	page, err := s.Title(ctx, uuid.UUID{}, item)
 	if err != nil {
@@ -59,11 +59,11 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		{ID: longest.Parts[1].ID, File: "r2.mkv", Index: 1, SizeBytes: 1, DurationMS: (2 * time.Hour).Milliseconds(), OffsetMS: (2 * time.Hour).Milliseconds()},
 	}
 	if files := page.Versions[0].Files; !reflect.DeepEqual(files, want) || page.Versions[0].Parts != 2 {
-		t.Errorf("the restored copy's files: %+v, want %+v", files, want)
+		t.Errorf("the restored version's files: %+v, want %+v", files, want)
 	}
 	// Its card says there are two to choose between.
 	if cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 10}); err != nil || len(cards) != 1 || cards[0].VersionCount != 2 {
-		t.Errorf("wall = %+v, %v; want the film's card counting its two copies", cards, err)
+		t.Errorf("wall = %+v, %v; want the film's card counting its two versions", cards, err)
 	}
 	var theatrical uuid.UUID
 	if err := s.pool.QueryRow(ctx, `SELECT id FROM versions WHERE label = 'theatrical'`).Scan(&theatrical); err != nil {
@@ -78,7 +78,7 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	} else if root, rel, err := s.SubtitleFile(ctx, got.Subtitles[0].ID); err != nil || root != "/srv/films" || rel != "L/theatrical.en.sdh.srt" {
 		t.Errorf("SubtitleFile = %q %q %v, want the file in the library", root, rel, err)
 	} else if sub, err := s.Subtitle(ctx, got.Subtitles[0].ID); err != nil || !reflect.DeepEqual(sub, got.Subtitles[0]) {
-		t.Errorf("Subtitle = %+v %v, want it as the copy lists it", sub, err)
+		t.Errorf("Subtitle = %+v %v, want it as the version lists it", sub, err)
 	}
 	if len(got.Streams) != 2 || !reflect.DeepEqual(got.Streams[0], video) || got.Streams[1].Channels != 8 {
 		t.Errorf("its streams: %+v, want the Dolby Vision video as probed and TrueHD 7.1", got.Streams)
@@ -87,13 +87,13 @@ func TestTheLongestCopyOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("with every copy's files gone: %v, want ErrNotFound", err)
+		t.Errorf("with every version's files gone: %v, want ErrNotFound", err)
 	}
 }
 
-// Of two copies as long, a title's page lists first the one played unasked, however the database
+// Of two versions as long, a title's page lists first the one played unasked, however the database
 // happens to return them.
-func TestATitlesFirstCopyIsTheOnePlayed(t *testing.T) {
+func TestATitlesFirstVersionIsTheOnePlayed(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
@@ -103,7 +103,7 @@ func TestATitlesFirstCopyIsTheOnePlayed(t *testing.T) {
 	part := func(rel string) Part {
 		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}
 	}
-	film := Film{Title: "Heat", Folder: "H", Copies: []Copy{
+	film := Film{Title: "Heat", Folder: "H", Versions: []Version{
 		{ContentKey: []byte("a"), Label: "a", Parts: []Part{part("H/a.mkv")}},
 		{ContentKey: []byte("b"), Label: "b", Parts: []Part{part("H/b.mkv")}},
 	}}
@@ -136,7 +136,7 @@ func TestPlaybackTitleSaysWhichShow(t *testing.T) {
 	}
 	ep := Episode{
 		Season: 1, Episodes: []int{2}, Title: "Seamless", Folder: "Wire", ByNumber: true,
-		Copies: []Copy{{ContentKey: []byte("e"), Parts: []Part{{RelPath: "Wire/S1E2.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+		Versions: []Version{{ContentKey: []byte("e"), Parts: []Part{{RelPath: "Wire/S1E2.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{ep}, nil); err != nil {
 		t.Fatal(err)

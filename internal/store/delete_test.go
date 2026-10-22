@@ -23,7 +23,7 @@ func TestATitleIsDeletedOnlyWhereItsLibraryAllows(t *testing.T) {
 	}
 	ep := Episode{
 		Season: 1, Episodes: []int{1}, Title: "S1E1", Folder: "Wire/Season 1", ByNumber: true,
-		Copies: []Copy{{
+		Versions: []Version{{
 			ContentKey: []byte("e1"), Parts: []Part{part("Wire/Season 1/e1.cd1.mkv"), part("Wire/Season 1/e1.cd2.mkv")},
 			Subtitles: []Subtitle{{RelPath: "Wire/Season 1/e1.en.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip"}},
 		}},

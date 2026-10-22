@@ -22,7 +22,7 @@ func TestPicturesAnswerTheirBlurhashesWhereverTheyAreShown(t *testing.T) {
 	film := Film{
 		Title: "Heat", Folder: "Heat",
 		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg", Blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}

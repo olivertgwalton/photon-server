@@ -23,14 +23,14 @@ type Film struct {
 	IDs    map[domain.Provider]string
 	NFO    *domain.Metadata
 	// Artwork is the pictures of it in its folder, and Themes its theme tunes there.
-	Artwork []domain.Artwork
-	Themes  []string
-	Copies  []Copy
+	Artwork  []domain.Artwork
+	Themes   []string
+	Versions []Version
 }
 
-// KnownCopies answers which of the content keys are of copies already in the library, by key as
-// a string. The same file in two libraries is a copy in each.
-func (s *Store) KnownCopies(ctx context.Context, lib uuid.UUID, keys [][]byte) (map[string]bool, error) {
+// KnownVersions answers which of the content keys are of versions already in the library, by key as
+// a string. The same file in two libraries is a version in each.
+func (s *Store) KnownVersions(ctx context.Context, lib uuid.UUID, keys [][]byte) (map[string]bool, error) {
 	found, err := queryColumn[[]byte](ctx, s.pool, `SELECT fingerprint FROM versions WHERE library_id = $1 AND fingerprint = ANY($2)`,
 		lib, keys)
 	known := map[string]bool{}
@@ -40,8 +40,8 @@ func (s *Store) KnownCopies(ctx context.Context, lib uuid.UUID, keys [][]byte) (
 	return known, err
 }
 
-// KnownFile is a file the last scan recorded as a part of a copy: its size and modification time
-// then, and the copy's content key, its place in the copy and how many parts the copy has.
+// KnownFile is a file the last scan recorded as a part of a version: its size and modification time
+// then, and the version's content key, its place in the version and how many parts the version has.
 type KnownFile struct {
 	Size       int64
 	ModTime    time.Time
@@ -172,13 +172,13 @@ func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Fi
 	if err := saveFolderThemes(ctx, tx, itemID, f.Folder, f.Themes); err != nil {
 		return err
 	}
-	for _, c := range f.Copies {
-		if err := saveCopy(ctx, tx, lib, settings, itemID, c); err != nil {
+	for _, c := range f.Versions {
+		if err := saveVersion(ctx, tx, lib, settings, itemID, c); err != nil {
 			return err
 		}
 	}
-	// The end of each copy is read for credits; the reading passes over a copy already read.
-	if settings.Markers == domain.MarkersAll && len(f.Copies) > 0 {
+	// The end of each version is read for credits; the reading passes over a version already read.
+	if settings.Markers == domain.MarkersAll && len(f.Versions) > 0 {
 		if err := insertJob(ctx, tx, domain.JobMarkers, itemID, 0, 0, settings.MarkersDue); err != nil {
 			return err
 		}
@@ -186,10 +186,10 @@ func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Fi
 	return keyTitle(ctx, tx, itemID)
 }
 
-// filmItem is the title a film's copies belong to: the title of a copy already known, else a title
+// filmItem is the title a film's versions belong to: the title of a version already known, else a title
 // of the same name in the same folder, else a new one.
 func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed) (uuid.UUID, error) {
-	id, known, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Copies)
+	id, known, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Versions)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -222,12 +222,12 @@ func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed
 	return id, describe(ctx, tx, id, f.Title, f.Year, f.IDs, f.NFO)
 }
 
-// knownItem is the title of kind holding the first of copies the catalogue already has. A copy
-// held by a title of another kind does not count: a film's copy first met as an extra is
+// knownItem is the title of kind holding the first of versions the catalogue already has. A version
+// held by a title of another kind does not count: a film's version first met as an extra is
 // reclaimed by the film, and the emptied extra goes at the end of the scan. Nor does one an admin
 // split off, whose title is its alone.
-func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, copies []Copy) (uuid.UUID, bool, error) {
-	for _, c := range copies {
+func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, versions []Version) (uuid.UUID, bool, error) {
+	for _, c := range versions {
 		var id uuid.UUID
 		err := tx.QueryRow(ctx, `
 			SELECT v.item_id FROM versions v JOIN items i ON i.id = v.item_id
@@ -251,7 +251,7 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 // (kept, so an unmounted disk does not cost its titles), and one whose every part is somewhere is
 // not. A title left with no version is removed, then a season
 // and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
-// answers the titles whose copies went missing or came back, and those removed.
+// answers the titles whose versions went missing or came back, and those removed.
 func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
 	var changed Changed
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -276,7 +276,7 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			}
 		}
 		// Only a version whose part went missing, or came back, is written. This and the sweeps
-		// below read the whole library whatever the scopes: a save in scope can take a path, a copy,
+		// below read the whole library whatever the scopes: a save in scope can take a path, a version,
 		// an episode or an extra from a title outside them, and identifying empties collections.
 		updated, err := queryColumn[uuid.UUID](ctx, tx, `
 			UPDATE versions v SET missing_since = CASE WHEN v.missing_since IS NULL THEN now() END
@@ -313,17 +313,17 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 	return changed, err
 }
 
-// forgetMissing takes a library's copies on no disk out of it, answering the title of each copy
+// forgetMissing takes a library's versions on no disk out of it, answering the title of each version
 // that went and leaving the titles that held nothing else to removeEmptied.
 func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
 	return queryColumn[uuid.UUID](ctx, tx,
 		`DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL RETURNING item_id`, lib)
 }
 
-// ForgetMissingCopies takes a library's copies on no disk out of it, and the titles left with
+// ForgetMissingCopies takes a library's versions on no disk out of it, and the titles left with
 // nothing with them, as an admin asks of a library that keeps them: Plex's Empty Trash. It answers
-// how many copies went and the titles that lost one or went with them, to tell as a scan's are. A
-// remote library, which no scan ends for and whose copies are its provider's offers, is refused.
+// how many versions went and the titles that lost one or went with them, to tell as a scan's are. A
+// remote library, which no scan ends for and whose versions are its provider's offers, is refused.
 func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, Changed, error) {
 	var forgotten int64
 	changed := Changed{}
@@ -355,7 +355,7 @@ func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, 
 	return forgotten, changed, err
 }
 
-// removeEmptied removes a library's films, episodes and extras left with no copy, the seasons and
+// removeEmptied removes a library's films, episodes and extras left with no version, the seasons and
 // shows left with nothing in them, and a provider's box set left empty, whichever library's titles
 // it held, answering every title that went.
 func removeEmptied(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {

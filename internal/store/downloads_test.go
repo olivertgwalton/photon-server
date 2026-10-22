@@ -26,7 +26,7 @@ func downloadable(t *testing.T) (s *Store, film, part uuid.UUID, profiles [2]uui
 		Container: "matroska,webm", Duration: 2 * time.Hour, BitrateKbps: 8000,
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
 	}}
-	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{{Title: "Lawrence", Folder: "L", Copies: []Copy{{ContentKey: []byte("k"), Parts: []Part{p}}}}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{{Title: "Lawrence", Folder: "L", Versions: []Version{{ContentKey: []byte("k"), Parts: []Part{p}}}}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var item uuid.UUID
@@ -236,7 +236,7 @@ func TestADownloadIsItsDevices(t *testing.T) {
 	}
 }
 
-func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
+func TestADownloadSaysWhichOfItsVersionsFilesItIs(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
@@ -246,7 +246,7 @@ func TestADownloadSaysWhichOfItsCopysFilesItIs(t *testing.T) {
 	disc := func(rel string) Part {
 		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}
 	}
-	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{{ContentKey: []byte("k"), Parts: []Part{disc("L/cd1.mkv"), disc("L/cd2.mkv")}}}}
+	film := Film{Title: "Lawrence", Folder: "L", Versions: []Version{{ContentKey: []byte("k"), Parts: []Part{disc("L/cd1.mkv"), disc("L/cd2.mkv")}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "L", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestADownloadNamesItsTitle(t *testing.T) {
 	}
 	episode := Episode{
 		Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true,
-		Copies: []Copy{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "Wire/e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+		Versions: []Version{{ContentKey: []byte("e1"), Parts: []Part{{RelPath: "Wire/e1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 	}
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire", []byte("v1"), Show{Title: "The Wire", Folder: "Wire"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)

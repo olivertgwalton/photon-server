@@ -29,15 +29,15 @@ func TestAnalysingATitleReadsItsFilesAgain(t *testing.T) {
 			Container: "mp4", Duration: time.Hour, Streams: []domain.Stream{video},
 		}}
 	}
-	// The first episode is one copy in two files.
+	// The first episode is one version in two files.
 	eps := []Episode{
 		{
 			Season: 1, Episodes: []int{1}, Title: "S1E1", Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte("e1"), Parts: []Part{part("Wire/e1.cd1.mp4"), part("Wire/e1.cd2.mp4")}}},
+			Versions: []Version{{ContentKey: []byte("e1"), Parts: []Part{part("Wire/e1.cd1.mp4"), part("Wire/e1.cd2.mp4")}}},
 		},
 		{
 			Season: 1, Episodes: []int{2}, Title: "S1E2", Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte("e2"), Parts: []Part{part("Wire/e2.mp4")}}},
+			Versions: []Version{{ContentKey: []byte("e2"), Parts: []Part{part("Wire/e2.mp4")}}},
 		},
 	}
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire", []byte("v1"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
@@ -90,7 +90,7 @@ func TestAnalysingATitleReadsItsFilesAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	if streams != 2 || offset != (2*time.Hour).Milliseconds() || total != (3*time.Hour).Milliseconds() || container != "matroska,webm" {
-		t.Errorf("after reading again: %d streams, second file at %d ms, copy %d ms in %q; want 2, two hours, three hours, matroska",
+		t.Errorf("after reading again: %d streams, second file at %d ms, version %d ms in %q; want 2, two hours, three hours, matroska",
 			streams, offset, total, container)
 	}
 	for _, kind := range []domain.JobKind{domain.JobKeyframes, domain.JobPreviews, domain.JobMarkers} {

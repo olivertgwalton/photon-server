@@ -21,7 +21,7 @@ func TestAFetchedSubtitleOutlivesAScanAndIsServedFromPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Copies: []Copy{{
+	film := Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "H/heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "H", []byte("v1"), []Film{film}, nil); err != nil {
@@ -46,7 +46,7 @@ func TestAFetchedSubtitleOutlivesAScanAndIsServedFromPostgres(t *testing.T) {
 	}
 	c, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
 	if err != nil || len(c.Subtitles) != 1 || c.Subtitles[0].ID != id || c.Subtitles[0].Language != language.French {
-		t.Fatalf("after a scan, the copy's subtitles: %+v, %v; want the fetched French one", c.Subtitles, err)
+		t.Fatalf("after a scan, the version's subtitles: %+v, %v; want the fetched French one", c.Subtitles, err)
 	}
 	// It is in no library: its text is in Postgres.
 	if root, _, err := s.SubtitleFile(ctx, id); err != nil || root != "" {
@@ -63,7 +63,7 @@ func TestAFetchedSubtitleOutlivesAScanAndIsServedFromPostgres(t *testing.T) {
 	}
 }
 
-func TestACopyWantsASubtitleInEachLanguageItsLibraryNamesThatItLacks(t *testing.T) {
+func TestAVersionWantsASubtitleInEachLanguageItsLibraryNamesThatItLacks(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
@@ -76,7 +76,7 @@ func TestACopyWantsASubtitleInEachLanguageItsLibraryNamesThatItLacks(t *testing.
 	}
 	film := func(lib uuid.UUID, title string, streams []domain.Stream, files []Subtitle) uuid.UUID {
 		t.Helper()
-		f := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Subtitles: files, Parts: []Part{{
+		f := Film{Title: title, Folder: title, Versions: []Version{{ContentKey: []byte(title), Subtitles: files, Parts: []Part{{
 			RelPath: title + "/" + title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour, Streams: streams},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib, title, []byte("v1"), []Film{f}, nil); err != nil {

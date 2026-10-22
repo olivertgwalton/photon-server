@@ -43,7 +43,7 @@ func TestWhatAProfileHasWatched(t *testing.T) {
 	for n := 1; n <= 3; n++ {
 		episodes = append(episodes, Episode{
 			Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
+			Versions: []Version{{ContentKey: []byte{byte(n)}, Parts: []Part{{
 				RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
 				Facts: &domain.Facts{Duration: time.Hour},
 			}}}},
@@ -139,10 +139,10 @@ func TestAPlaybackIsOnePlayHoweverOftenItReportsTheEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	heat := []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+	heat := []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 	}}}}
-	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Versions: heat}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var film uuid.UUID
@@ -197,10 +197,10 @@ func TestTheNewestWatchWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	heat := []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+	heat := []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 	}}}}
-	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: heat}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Versions: heat}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var film uuid.UUID
@@ -294,7 +294,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		var eps []Episode
 		for n := 1; n <= 3; n++ {
 			rel := fmt.Sprintf("Victorious/S01E0%d.mkv", n)
-			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("Episode %d", n), Folder: "Victorious", ByNumber: true, Copies: []Copy{{
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("Episode %d", n), Folder: "Victorious", ByNumber: true, Versions: []Version{{
 				ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 			}}})
 		}
@@ -358,7 +358,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 		t.Error("an episode watched in one library is unwatched where another library gained it")
 	}
 
-	// Kids was added first, so it is the copy shown to whoever sees both, but in each library's own
+	// Kids was added first, so it is the version shown to whoever sees both, but in each library's own
 	// recently added row, as Plex's.
 	search, home := cards(oliver.ID)
 	if !slices.Equal(search, []uuid.UUID{inKids}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inKids, inShows}) ||
@@ -372,7 +372,7 @@ func TestATitleInTwoLibrariesIsOneTitle(t *testing.T) {
 	if same, err := s.SameTitles(ctx, sam.ID, inKids); err != nil || !slices.Equal(same, []uuid.UUID{inShows}) {
 		t.Errorf("Kids' show is the same as %v (%v) for a profile seeing only Shows, want Shows'", same, err)
 	}
-	// Sam sees only Shows, so Shows' copy.
+	// Sam sees only Shows, so Shows' version.
 	if search, home := cards(sam.ID); !slices.Equal(search, []uuid.UUID{inShows}) || !slices.Equal(home[domain.RowRecentShows], []uuid.UUID{inShows}) {
 		t.Errorf("a profile seeing only Shows is shown search %v and recently added %v, want Shows' show", search, home[domain.RowRecentShows])
 	}
@@ -423,7 +423,7 @@ func TestATitleMatchedByDifferentProvidersIsOneTitle(t *testing.T) {
 		}
 		rel := "Victorious/S01E01.mkv"
 		saved, err := s.SaveShowFolder(ctx, lib.ID, "Victorious", []byte("v"), Show{Title: "Victorious", Folder: "Victorious"}, []Episode{{
-			Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Victorious", ByNumber: true, Copies: []Copy{{
+			Season: 1, Episodes: []int{1}, Title: "Pilot", Folder: "Victorious", ByNumber: true, Versions: []Version{{
 				ContentKey: []byte(name + rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 			}},
 		}}, nil)
@@ -485,7 +485,7 @@ func TestTitlesSharingAnIDThroughAnotherAreOneTitle(t *testing.T) {
 			t.Fatal(err)
 		}
 		rel := "Heat (1995)/Heat.mkv"
-		if _, err := s.SaveFolder(ctx, lib.ID, "Heat (1995)", []byte("v"), []Film{{Title: "Heat", Year: 1995, Folder: "Heat (1995)", IDs: ids, Copies: []Copy{{
+		if _, err := s.SaveFolder(ctx, lib.ID, "Heat (1995)", []byte("v"), []Film{{Title: "Heat", Year: 1995, Folder: "Heat (1995)", IDs: ids, Versions: []Version{{
 			ContentKey: []byte(name + rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}}}}, nil); err != nil {
 			t.Fatal(err)
@@ -539,7 +539,7 @@ func TestAShowsEpisodesLeftFollowItsScans(t *testing.T) {
 		for _, n := range numbers {
 			episodes = append(episodes, Episode{
 				Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
-				Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
+				Versions: []Version{{ContentKey: []byte{byte(n)}, Parts: []Part{{
 					RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
 					Facts: &domain.Facts{Duration: time.Hour},
 				}}}},
@@ -598,7 +598,7 @@ func TestEachProfileCountsItsOwnEpisodesLeft(t *testing.T) {
 	for n := 1; n <= 2; n++ {
 		episodes = append(episodes, Episode{
 			Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
+			Versions: []Version{{ContentKey: []byte{byte(n)}, Parts: []Part{{
 				RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
 				Facts: &domain.Facts{Duration: time.Hour},
 			}}}},

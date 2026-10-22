@@ -60,7 +60,7 @@ const (
 // Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
 // its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
 // subtitles as WebVTT, as renditions says.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
@@ -129,7 +129,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy
 }
 
 // file is a subtitle file beside a copy, in its language.
-func (r *Remuxes) file(ctx context.Context, c store.PlayCopy, id uuid.UUID) *hls.SubtitleSource {
+func (r *Remuxes) file(ctx context.Context, c store.PlayVersion, id uuid.UUID) *hls.SubtitleSource {
 	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.store.SubtitleFile, id) }}
 	if i := slices.IndexFunc(c.Subtitles, func(f store.SubtitleRef) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
 		src.Language = c.Subtitles[i].Language.String()

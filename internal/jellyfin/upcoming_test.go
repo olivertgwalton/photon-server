@@ -37,7 +37,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "S01E01.mkv", Folder: "Severance", ByNumber: true, Copies: []store.Copy{{
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "S01E01.mkv", Folder: "Severance", ByNumber: true, Versions: []store.Version{{
 		ContentKey: []byte("1"), Parts: []store.Part{{RelPath: "S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Severance", []byte("v"), store.Show{Title: "Severance", Folder: "Severance"}, []store.Episode{ep}, nil); err != nil {

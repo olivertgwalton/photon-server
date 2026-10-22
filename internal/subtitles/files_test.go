@@ -39,7 +39,7 @@ func heat(t *testing.T) (*store.Store, domain.Library, uuid.UUID) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := store.Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Copies: []store.Copy{{
+	film := store.Film{Title: "Heat", Folder: "H", IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt0113277"}, Versions: []store.Version{{
 		ContentKey: []byte("c"), Parts: []store.Part{{RelPath: "H/heat.mkv", Size: 128 << 10, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}
 	if _, err := st.SaveFolder(ctx, lib.ID, "H", []byte("v1"), []store.Film{film}, nil); err != nil {

@@ -39,15 +39,15 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Copy {
-		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	copies := func(rel string) []store.Version {
+		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	for _, f := range []string{"The Night Of", "Night Moves"} {
-		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Copies: copies(f + ".mkv")}}, nil); err != nil {
+		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: copies(f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Night Shift", Folder: "Wire", ByNumber: true, Copies: copies("S01E01.mkv")}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "Night Shift", Folder: "Wire", ByNumber: true, Versions: copies("S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +135,8 @@ func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := []store.Copy{{ContentKey: []byte("n"), Parts: []store.Part{{RelPath: "n.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
-	if _, err := st.SaveFolder(ctx, films.ID, "N", []byte("v"), []store.Film{{Title: "Night Moves", Folder: "N", Copies: copies}}, nil); err != nil {
+	copies := []store.Version{{ContentKey: []byte("n"), Parts: []store.Part{{RelPath: "n.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	if _, err := st.SaveFolder(ctx, films.ID, "N", []byte("v"), []store.Film{{Title: "Night Moves", Folder: "N", Versions: copies}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)

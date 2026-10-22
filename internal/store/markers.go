@@ -16,16 +16,16 @@ import (
 )
 
 var (
-	ErrMarkerOutsidePart = errors.New("a marker must lie within one part of the copy")
+	ErrMarkerOutsidePart = errors.New("a marker must lie within one part of the version")
 	ErrMarkerRepeated    = errors.New("a part has one marker of each kind")
-	ErrMarkerNoPart      = errors.New("the copy has no part of that number")
+	ErrMarkerNoPart      = errors.New("the version has no part of that number")
 )
 
 // markersQuiet is how long a season's sound waits after its last episode arrives before it is
 // compared, so a season scanned folder by folder is compared once.
 const markersQuiet = 10 * time.Minute
 
-// MarkerRef is a stretch a player may offer to skip, on the copy's whole timeline like a chapter.
+// MarkerRef is a stretch a player may offer to skip, on the version's whole timeline like a chapter.
 type MarkerRef struct {
 	Kind    domain.MarkerKind
 	StartMS int64
@@ -76,7 +76,7 @@ func chapterMarkers(chapters []*model.Chapter) []*model.Marker {
 	return slices.Collect(maps.Values(found))
 }
 
-// SetMarkers replaces what an admin says of a copy's markers: stretches given on its whole
+// SetMarkers replaces what an admin says of a version's markers: stretches given on its whole
 // timeline, and parts that have none of a kind. Saying nothing clears them, and the chapters' and
 // fingerprints' stand again.
 func (s *Store) SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error {
@@ -154,7 +154,7 @@ type SeasonPart struct {
 }
 
 // SeasonParts answers the parts of a season's episodes that are on disk, in a library that compares
-// sound, and have sound, by episode, copy and order.
+// sound, and have sound, by episode, version and order.
 func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart, error) {
 	return queryStructs[SeasonPart](ctx, s.pool, `
 		SELECT * FROM (
@@ -173,14 +173,14 @@ func (s *Store) SeasonParts(ctx context.Context, season uuid.UUID) ([]SeasonPart
 		ORDER BY episode, version, idx`, season)
 }
 
-// FilmEnd is the last part of a copy of a film, where its credits are.
+// FilmEnd is the last part of a version of a film, where its credits are.
 type FilmEnd struct {
 	ID       uuid.UUID
 	Duration time.Duration
 	Read     bool
 }
 
-// FilmEnds answers the last part of each copy of a film on disk, in a library that reads its files
+// FilmEnds answers the last part of each version of a film on disk, in a library that reads its files
 // for markers, with a picture: none for anything but a film.
 func (s *Store) FilmEnds(ctx context.Context, film uuid.UUID) ([]FilmEnd, error) {
 	return queryStructs[FilmEnd](ctx, s.pool, `

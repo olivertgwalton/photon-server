@@ -77,9 +77,9 @@ func TestAProviderIsAskedOnceAMinute(t *testing.T) {
 	})
 }
 
-// A part is the copy its provider offers now with its fingerprint, opened through the relay; one
+// A part is the version its provider offers now with its fingerprint, opened through the relay; one
 // no longer offered is gone.
-func TestAPartIsOpenedWhereItsCopyIsOfferedNow(t *testing.T) {
+func TestAPartIsOpenedWhereItsVersionIsOfferedNow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.WriteString(w, "the film "+r.URL.Path); err != nil {
 			t.Error(err)
@@ -109,15 +109,15 @@ func TestAPartIsOpenedWhereItsCopyIsOfferedNow(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if b, err := io.ReadAll(resp.Body); err != nil || string(b) != "the film /hd" || in.Name != "Heat.1080p.mkv" {
-		t.Errorf("opened %q named %q, want the 1080p copy", b, in.Name)
+		t.Errorf("opened %q named %q, want the 1080p version", b, in.Name)
 	}
 	gone := domain.Offer{Key: "file:Heat.mkv:1", Name: "Heat.mkv"}
 	if _, err := o.Open(t.Context(), domain.Place{Media: domain.MediaRemote, Rel: Rel(aio, gone), Source: aio, Title: heat}); !errors.Is(err, ErrGone) {
-		t.Errorf("a copy no longer offered: %v, want ErrGone", err)
+		t.Errorf("a version no longer offered: %v, want ErrGone", err)
 	}
 }
 
-func TestACopyIsFiledByItsFingerprintAndName(t *testing.T) {
+func TestAVersionIsFiledByItsFingerprintAndName(t *testing.T) {
 	rel := Rel(aio, domain.Offer{Key: "k", Name: "../Heat/1995.mkv"})
 	known, name, _ := strings.Cut(rel, "/")
 	if len(known) != 64 || name != "..-Heat-1995.mkv" {

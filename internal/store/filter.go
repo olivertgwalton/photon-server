@@ -50,7 +50,7 @@ func firstLetter(row string) string {
 	THEN upper(left(unaccent(` + row + `.sort_title), 1)) ELSE '#' END`
 }
 
-// versionOf is a copy on disk of a film, or of any episode of a show. Each level is its own arm,
+// versionOf is a version on disk of a film, or of any episode of a show. Each level is its own arm,
 // as an OR across them is a scan of every item for every title.
 const versionOf = `SELECT 1 FROM (
 		SELECT items.id
@@ -186,12 +186,12 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	}
 	at["ids"], at["kinds"] = ids, kinds
 	at["sites"] = domain.RatingSites()
-	// The titles are read once for all four of their facets. The kinds of copy and the rating sites
-	// are those of the titles read, as the wall's filters find them: a copy is a film's, its extras'
+	// The titles are read once for all four of their facets. The kinds of version and the rating sites
+	// are those of the titles read, as the wall's filters find them: a version is a film's, its extras'
 	// or a show's episodes'. Each kind and site is asked whether any of those titles holds one,
-	// rather than every copy and rating of the library being read.
+	// rather than every version and rating of the library being read.
 	from, row, seen := wallRows(wall)
-	// An episode's copies are its own; a title's are its extras' and its episodes' too. A title's
+	// An episode's versions are its own; a title's are its extras' and its episodes' too. A title's
 	// genres, studios and certificate are its own, and an episode's its show's, read once from each
 	// show the episodes are of: copied to each episode, they were most of the facets' time.
 	owner := "coalesce(p.parent_id, e.parent_id, e.id)"
@@ -210,7 +210,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 			viewer(@profile) v
 			WHERE `+seen+`
 		),
-		copies AS MATERIALIZED (
+		pictures AS MATERIALIZED (
 			SELECT k.video_range, k.width FROM (
 				SELECT DISTINCT video_range, width FROM versions WHERE library_id = ANY(@libs) AND missing_since IS NULL
 			) k
@@ -224,8 +224,8 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 			(SELECT array_agg(DISTINCT year ORDER BY year DESC) FROM titles WHERE year IS NOT NULL),
 			(SELECT array_agg(DISTINCT certificate ORDER BY certificate) FROM `+about+` t WHERE certificate IS NOT NULL),
 			(SELECT array_agg(st ORDER BY lower(unaccent(st)), st) FROM (SELECT DISTINCT jsonb_array_elements_text(studios) st FROM `+about+` t) d),
-			(SELECT array_agg(DISTINCT video_range) FROM copies WHERE video_range IS NOT NULL),
-			(SELECT array_agg(DISTINCT width) FROM copies WHERE width IS NOT NULL),
+			(SELECT array_agg(DISTINCT video_range) FROM pictures WHERE video_range IS NOT NULL),
+			(SELECT array_agg(DISTINCT width) FROM pictures WHERE width IS NOT NULL),
 			(SELECT array_agg(s.site) FROM unnest(CAST(@sites AS text[])) s (site)
 				WHERE EXISTS (SELECT 1 FROM ratings r JOIN titles t ON t.id = r.item_id WHERE r.site = s.site))`, at,
 	).Scan(&f.Genres, &f.Years, &f.Certificates, &f.Studios, &f.Ranges, &widths, &f.RatingSites)

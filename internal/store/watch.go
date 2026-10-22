@@ -38,7 +38,7 @@ var ErrSuperseded = errors.New("the title's state has changed since then")
 // or watched.
 const newest = ` WHERE coalesce(watch_state.changed_at, greatest(watch_state.last_played_at, watch_state.watched_at), '-infinity') <= excluded.changed_at`
 
-// Length is how long a film or episode runs, as its progress is measured: its longest copy's.
+// Length is how long a film or episode runs, as its progress is measured: its longest version's.
 func (s *Store) Length(ctx context.Context, item uuid.UUID) (time.Duration, error) {
 	lengths, err := s.durations(ctx, []uuid.UUID{item})
 	return time.Duration(lengths[item].ms) * time.Millisecond, err

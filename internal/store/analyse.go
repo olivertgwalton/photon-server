@@ -44,7 +44,7 @@ func (s *Store) AnalyseTitle(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// SaveProbe replaces what a part's file was read to hold, and its copy's facts with it, then asks
+// SaveProbe replaces what a part's file was read to hold, and its version's facts with it, then asks
 // again for what is made from its streams, as its library makes them: its keyframes, its previews
 // and its markers, an episode's with its season's. An admin asked, so none waits for the window.
 func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) error {
@@ -75,7 +75,7 @@ func (s *Store) SaveProbe(ctx context.Context, part uuid.UUID, f domain.Facts) e
 		if _, err := tx.Exec(ctx, `UPDATE parts SET duration_ms = $2, size_bytes = $3 WHERE id = $1`, part, f.Duration.Milliseconds(), f.Size); err != nil {
 			return err
 		}
-		// A part's length moves every later part's place on the copy's timeline, and the copy's own.
+		// A part's length moves every later part's place on the version's timeline, and the version's own.
 		for _, stmt := range []string{
 			`UPDATE parts p SET offset_ms = coalesce((
 				SELECT sum(q.duration_ms) FROM parts q WHERE q.version_id = p.version_id AND q.idx < p.idx), 0)

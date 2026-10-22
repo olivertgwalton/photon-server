@@ -89,7 +89,7 @@ type Copy struct {
 }
 
 // CopyOf is what deciding needs of a copy to play.
-func CopyOf(c store.PlayCopy) Copy {
+func CopyOf(c store.PlayVersion) Copy {
 	files := make([]SubtitleFile, len(c.Subtitles))
 	for i, f := range c.Subtitles {
 		files[i] = SubtitleFile{ID: f.ID, Codec: f.Codec}

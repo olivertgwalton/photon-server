@@ -12,7 +12,7 @@ import (
 
 // SegmentsAsk is what a film's or an episode's parts not yet asked about are asked of the
 // providers that time intros and credits: the title, and the length of each part that is a whole
-// copy. A copy in several parts is read and not asked about, as a timing is of a whole release.
+// version. A version in several parts is read and not asked about, as a timing is of a whole release.
 type SegmentsAsk struct {
 	Title domain.SegmentQuery
 	Parts map[uuid.UUID]time.Duration

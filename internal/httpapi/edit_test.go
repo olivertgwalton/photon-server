@@ -111,7 +111,7 @@ func (f *fakeEditing) SplitTitle(_ context.Context, id uuid.UUID) error {
 		f.split = id
 		return nil
 	case bare:
-		return store.ErrOneCopy
+		return store.ErrOneVersion
 	}
 	return store.ErrNotFound
 }
@@ -234,7 +234,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPut, base + "/locale", `{"title_language": "native"}`, http.StatusBadRequest, "title_language"},
 		{goodToken, http.MethodPut, base + "/locale", `{"metadata_language": "fr-fr", "certification_country": "fr", "title_language": "original"}`, http.StatusAccepted, ""},
 		{memberToken, http.MethodPost, base + "/split", "", http.StatusForbidden, ""},
-		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + bare.String() + "/split", "", http.StatusConflict, "one copy"},
+		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + bare.String() + "/split", "", http.StatusConflict, "one version"},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/split", "", http.StatusNotFound, "no film"},
 		{goodToken, http.MethodPost, base + "/split", "", http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd"}`, http.StatusAccepted, ""},

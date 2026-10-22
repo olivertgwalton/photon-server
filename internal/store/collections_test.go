@@ -26,7 +26,7 @@ func TestBoxSetsAreMadeFromWhatAProviderSays(t *testing.T) {
 		title    string
 		released time.Time
 	}{{"Aliens", time.Date(1986, 7, 18, 0, 0, 0, 0, time.UTC)}, {"Alien", time.Date(1979, 5, 25, 0, 0, 0, 0, time.UTC)}, {"Heat", time.Date(1995, 12, 15, 0, 0, 0, 0, time.UTC)}} {
-		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{
+		film := Film{Title: f.title, Folder: f.title, Versions: []Version{{ContentKey: []byte(f.title), Parts: []Part{{
 			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
@@ -160,7 +160,7 @@ func TestALibrarysWallShowsACollectionInPlaceOfItsTitles(t *testing.T) {
 	}
 	ids := map[string]uuid.UUID{}
 	for _, title := range []string{"Alien", "Aliens", "Heat"} {
-		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+		film := Film{Title: title, Folder: title, Versions: []Version{{ContentKey: []byte(title), Parts: []Part{{
 			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
@@ -231,7 +231,7 @@ func TestACollectionIsListedInTheLibrariesWhoseTitlesItHolds(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A provider's set of one title is not listed, so it is not counted either.
-	film := Film{Title: "Alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("Alien"), Parts: []Part{{
+	film := Film{Title: "Alien", Folder: "Alien", Versions: []Version{{ContentKey: []byte("Alien"), Parts: []Part{{
 		RelPath: "Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 	}}}}}
 	if _, err := s.SaveFolder(ctx, films.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
@@ -306,7 +306,7 @@ func TestASmartCollectionIsWhatItsRuleFinds(t *testing.T) {
 	}
 	add := func(title string, released time.Time, genre string) {
 		t.Helper()
-		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+		film := Film{Title: title, Folder: title, Versions: []Version{{ContentKey: []byte(title), Parts: []Part{{
 			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {
@@ -402,7 +402,7 @@ func TestAListCollectionHoldsWhatTheLibraryHasOfItsList(t *testing.T) {
 		"Aliens": {domain.ProviderTMDB: "679", domain.ProviderIMDb: "tt0090605"},
 		"Heat":   {domain.ProviderTMDB: "949"},
 	} {
-		film := Film{Title: title, Folder: title, Copies: []Copy{{ContentKey: []byte(title), Parts: []Part{{
+		film := Film{Title: title, Folder: title, Versions: []Version{{ContentKey: []byte(title), Parts: []Part{{
 			RelPath: title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{film}, nil); err != nil {

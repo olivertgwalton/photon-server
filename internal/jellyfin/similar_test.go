@@ -43,7 +43,7 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 		{"Ronin", []string{"Thriller"}},
 		{"Amélie", []string{"Comedy"}},
 	} {
-		film := store.Film{Title: f.title, Folder: f.title, Copies: []store.Copy{{ContentKey: []byte(f.title), Parts: []store.Part{{
+		film := store.Film{Title: f.title, Folder: f.title, Versions: []store.Version{{ContentKey: []byte(f.title), Parts: []store.Part{{
 			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour, Container: "matroska,webm"},
 		}}}}}
 		if _, err := st.SaveFolder(ctx, films.ID, f.title, []byte("v"), []store.Film{film}, nil); err != nil {

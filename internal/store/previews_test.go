@@ -21,7 +21,7 @@ func TestATitlesChapterPicturesAreSigned(t *testing.T) {
 	facts := &domain.Facts{Duration: time.Hour, Chapters: []domain.Chapter{
 		{Start: 0, End: time.Minute, Title: "One"}, {Start: time.Minute, End: time.Hour, Title: "Two"},
 	}}
-	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("h"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: facts}}}}}
+	film := Film{Title: "Heat", Folder: "Heat", Versions: []Version{{ContentKey: []byte("h"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: facts}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}

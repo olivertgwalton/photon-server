@@ -1,6 +1,6 @@
-// Package remote plays a remote library's films and episodes from the copies its provider streams,
+// Package remote plays a remote library's films and episodes from the versions its provider streams,
 // as Remux does: what the provider offers of one is asked as it is played, and kept a minute, so
-// a link that expires is asked for again rather than kept; a copy is known by what its bytes are,
+// a link that expires is asked for again rather than kept; a version is known by what its bytes are,
 // so it is the same version however often it is offered.
 package remote
 
@@ -25,8 +25,8 @@ import (
 // streams: long enough that a play's requests, and a seek's, ask once.
 const offersFor = time.Minute
 
-// ErrGone is a copy its provider no longer offers.
-var ErrGone = errors.New("remote: the provider no longer offers this copy")
+// ErrGone is a version its provider no longer offers.
+var ErrGone = errors.New("remote: the provider no longer offers this version")
 
 type streamer interface {
 	Streams(ctx context.Context, source domain.FieldSource, title domain.Streamed) ([]domain.Offer, error)
@@ -92,7 +92,7 @@ func keyOf(source domain.FieldSource, title domain.Streamed) string {
 	return b.String()
 }
 
-// Open opens the copy a remote part is, where its provider offers it now: through the relay, so
+// Open opens the version a remote part is, where its provider offers it now: through the relay, so
 // whatever reads it never sees its address.
 func (o *Offers) Open(ctx context.Context, p domain.Place) (media.Input, error) {
 	offers, err := o.Of(ctx, p.Source, p.Title)
@@ -108,7 +108,7 @@ func (o *Offers) Open(ctx context.Context, p domain.Place) (media.Input, error) 
 	return media.Input{}, ErrGone
 }
 
-// Rel is where a copy a provider offers is filed among a remote library's parts: by its
+// Rel is where a version a provider offers is filed among a remote library's parts: by its
 // fingerprint, which finds it among what is offered again, and its name, as a player is told it.
 func Rel(source domain.FieldSource, offer domain.Offer) string {
 	name := strings.NewReplacer("/", "-", "\\", "-").Replace(offer.Name)

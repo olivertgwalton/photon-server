@@ -22,7 +22,7 @@ func TestPicturesBesideATitleComeBeforeAProvidersAndItsCardShowsTheBest(t *testi
 	}
 	film := Film{
 		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
@@ -102,7 +102,7 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	}
 	film := Film{
 		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 	}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestARemovedPluginsPicturesNoLongerLead(t *testing.T) {
 	if err := s.SetLibrary(ctx, lib.ID, change); err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+	film := Film{Title: "Heat", Folder: "Heat", Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 	}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
@@ -264,7 +264,7 @@ func TestALibrarysPictureRankingChoosesItsTitlesBest(t *testing.T) {
 	}
 	tmdb, omdb := domain.RankedSource{Source: domain.SourceTMDB, Enabled: true}, domain.RankedSource{Source: domain.SourceOMDb, Enabled: true}
 	rank(tmdb, omdb)
-	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+	film := Film{Title: "Heat", Folder: "Heat", Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 	}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
@@ -312,7 +312,7 @@ func TestTheProviderPicturesATitleShowsFirstAreFetchedUntilHashed(t *testing.T) 
 	}
 	film := Film{
 		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
-		Copies: []Copy{{ContentKey: []byte("heat"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{
 			RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}

@@ -44,8 +44,8 @@ func (o opened) Open(_ context.Context, playback uuid.UUID, c hls.Copy) error {
 }
 
 func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
-	copyOf := func(c Copy) store.PlayCopy {
-		return store.PlayCopy{
+	copyOf := func(c Copy) store.PlayVersion {
+		return store.PlayVersion{
 			BitrateKbps: c.BitrateKbps, Streams: c.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
 			Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 		}
@@ -160,7 +160,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 // A player that fetches each subtitle file beside a copy itself is offered only the copy's own
 // plain text subtitles in its HLS, so none is shown twice.
 func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
-	c := store.PlayCopy{
+	c := store.PlayVersion{
 		BitrateKbps: film.BitrateKbps, Streams: film.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
 		Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 	}
@@ -180,7 +180,7 @@ func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
 // beside the copy.
 func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	file := uuid.NewV7()
-	c := store.PlayCopy{
+	c := store.PlayVersion{
 		BitrateKbps: film.BitrateKbps, Streams: film.Streams,
 		Parts:     []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}, {ID: uuid.NewV7(), OffsetMS: 60_000, DurationMS: 60_000}},
 		Subtitles: []store.SubtitleRef{{ID: file, Codec: "ass", Language: language.Russian}},
@@ -261,7 +261,7 @@ func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			parts := &knownKeyframes{known: c.known}
 			hlsOf, playback := opened{}, uuid.NewV7()
-			copied := store.PlayCopy{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
+			copied := store.PlayVersion{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
 			if err := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 				t.Fatal(err)
 			}

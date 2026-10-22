@@ -30,7 +30,7 @@ type adverts interface {
 }
 
 type opener interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error
 }
 
 // delivering are the playbacks a node delivers, of at most as many as it may at once.
@@ -216,7 +216,7 @@ type Opening struct {
 // Open opens a playback of c, as o says, on node: on this one, or by asking it. A node that
 // delivers as many streams as it may answers ErrStreamLimit, one that has every transcode slot
 // held hls.ErrTranscodeLimit, and one short of space to transcode into hls.ErrNoSpace.
-func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error {
+func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayVersion, o Opening) error {
 	if self := p.self(); node.ID == self.ID {
 		if !streamRoom(self) {
 			return ErrStreamLimit

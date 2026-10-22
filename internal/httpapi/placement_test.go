@@ -145,7 +145,7 @@ func closing(t *testing.T, r *hls.Remuxer) {
 func (n *peerNode) encode(t *testing.T) {
 	t.Helper()
 	video := domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 2000}}
-	err := remuxOpener{n.remuxer}.Open(t.Context(), uuid.NewV7(), store.PlayCopy{Parts: []store.PlayPart{{DurationMS: 60_000}}}, video, nil, domain.SegmentsFMP4, 0, playback.RenditionsAll)
+	err := remuxOpener{n.remuxer}.Open(t.Context(), uuid.NewV7(), store.PlayVersion{Parts: []store.PlayPart{{DurationMS: 60_000}}}, video, nil, domain.SegmentsFMP4, 0, playback.RenditionsAll)
 	if err != nil {
 		t.Fatal(err)
 	}

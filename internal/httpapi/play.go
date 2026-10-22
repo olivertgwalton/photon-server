@@ -35,13 +35,13 @@ type playbacks interface {
 type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
 	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
-	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
+	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayVersion, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node, refused error) error
 }
 
 type playing interface {
-	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
+	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayVersion, error)
 	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
 	SeesPart(ctx context.Context, profile, part uuid.UUID) error
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
@@ -282,7 +282,7 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, boo
 
 // opened is what the client is told of a playback of c, played as d decided, its parts or playlist
 // fetched from origin.
-func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, session domain.Playback, origin string) playbackJSON {
+func (a *API) opened(p playback.Profile, c store.PlayVersion, d playback.Decision, session domain.Playback, origin string) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
 		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
@@ -327,7 +327,7 @@ func (a *API) opened(p playback.Profile, c store.PlayCopy, d playback.Decision, 
 // beside one drawn in: the files beside the copy it draws so, but plain ones HLS carries itself,
 // and a VobSub's in Matroska, and the styled and picture streams of a copy in one file, read out as they are, but those it draws
 // from the file it plays.
-func (a *API) sidecars(p playback.Profile, c store.PlayCopy, method domain.PlayMethod, until time.Time) []subtitleJSON {
+func (a *API) sidecars(p playback.Profile, c store.PlayVersion, method domain.PlayMethod, until time.Time) []subtitleJSON {
 	var out []subtitleJSON
 	for _, s := range c.Streams {
 		if s.Kind != domain.StreamSubtitle || !p.Sidecar(s.Codec, false, len(c.Parts)) ||

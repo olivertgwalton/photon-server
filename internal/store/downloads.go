@@ -21,7 +21,7 @@ type Download struct {
 	Title string
 	Show  string
 	Part  uuid.UUID
-	// PartIndex is which of its copy's Parts files it is, for a copy in several.
+	// PartIndex is which of its version's Parts files it is, for a version in several.
 	PartIndex  int
 	Parts      int
 	Quality    *domain.Quality
@@ -189,7 +189,7 @@ func dropUnwanted(ctx context.Context, tx db) error {
 	return err
 }
 
-// Conversion is what converting a part needs: the part, the quality, and its copy as deciding how
+// Conversion is what converting a part needs: the part, the quality, and its version as deciding how
 // it plays needs it.
 type Conversion struct {
 	Part        uuid.UUID

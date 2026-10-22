@@ -17,8 +17,8 @@ import (
 var (
 	ErrLibraryExists = errors.New("a library with that name or root already exists")
 	// ErrRemoteUntouched is a remote library set to be watched, deleted from, or to forget the
-	// copies its provider no longer offers: it has no folder, and no scan ends for it.
-	ErrRemoteUntouched = errors.New("a remote library has no folder to watch, to delete files from, or to forget copies of")
+	// versions its provider no longer offers: it has no folder, and no scan ends for it.
+	ErrRemoteUntouched = errors.New("a remote library has no folder to watch, to delete files from, or to forget versions of")
 	// ErrHoldsNothing is a remote library left with neither a list nor a search to hold titles of.
 	ErrHoldsNothing = errors.New("a remote library holds a list's titles, what a search finds, or both")
 	// ErrRemoteRequests is a remote library given somewhere to send requests: what its search finds
@@ -168,7 +168,7 @@ type LibraryChange struct {
 	Themes domain.ThemeLookup
 	// Deletion is whether an admin may delete its titles with their files.
 	Deletion domain.MediaDeletion
-	// MissingCopies is what becomes of its copies on no disk at the end of a scan.
+	// MissingCopies is what becomes of its versions on no disk at the end of a scan.
 	MissingCopies domain.MissingCopy
 	// MetadataLanguage and CertificationCountry, where set, replace its locale's: "" is the
 	// server's own. With either changed its titles are described again in it.

@@ -197,7 +197,7 @@ func TestAnEpisodesEventNamesItsShowAndNumbers(t *testing.T) {
 	}
 	ep := store.Episode{
 		Season: 1, Episodes: []int{2}, Title: "S01E02.mkv", Folder: "Severance", ByNumber: true,
-		IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt11650328"}, Copies: []store.Copy{{
+		IDs: map[domain.Provider]string{domain.ProviderIMDb: "tt11650328"}, Versions: []store.Version{{
 			ContentKey: []byte("1"), Parts: []store.Part{{RelPath: "S01E02.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}},
 	}

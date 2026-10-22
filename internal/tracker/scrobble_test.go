@@ -39,8 +39,8 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close(context.Background()) })
 
-	hour := func(rel string) []store.Copy {
-		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{
+	hour := func(rel string) []store.Version {
+		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{
 			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}
 	}
@@ -49,7 +49,7 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 		t.Fatal(err)
 	}
 	heat := store.Film{
-		Title: "Heat", Folder: "Heat", Copies: hour("Heat/h.mkv"),
+		Title: "Heat", Folder: "Heat", Versions: hour("Heat/h.mkv"),
 		IDs: map[domain.Provider]string{domain.ProviderTMDB: "949", domain.ProviderIMDb: "tt0113277"},
 	}
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{heat}, nil); err != nil {
@@ -60,7 +60,7 @@ func TestAProfilesPlaysAreToldToItsTrackers(t *testing.T) {
 		t.Fatal(err)
 	}
 	wire := store.Show{Title: "The Wire", Folder: "Wire", IDs: map[domain.Provider]string{domain.ProviderTVDB: "79126"}}
-	pilot := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Copies: hour("Wire/S01E01.mkv")}
+	pilot := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Versions: hour("Wire/S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), wire, []store.Episode{pilot}, nil); err != nil {
 		t.Fatal(err)
 	}

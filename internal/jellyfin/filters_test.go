@@ -51,7 +51,7 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		{"Brazil", "15", "Embassy", 1985, []string{"Comedy", "Science Fiction"}},
 		{"Heat", "IN:A", "Warner Bros.", 1995, []string{"Crime, Thriller"}},
 	} {
-		film := store.Film{Title: f.title, Folder: f.title, Copies: []store.Copy{{ContentKey: []byte(f.title), Parts: []store.Part{{
+		film := store.Film{Title: f.title, Folder: f.title, Versions: []store.Version{{ContentKey: []byte(f.title), Parts: []store.Part{{
 			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}}
 		if _, err := st.SaveFolder(ctx, films.ID, f.title, []byte("v"), []store.Film{film}, nil); err != nil {

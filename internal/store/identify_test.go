@@ -26,7 +26,7 @@ func TestIdentityDescribesAShowsEpisodes(t *testing.T) {
 		key := []byte{byte(n)}
 		return Episode{
 			Season: 1, Episodes: []int{n}, Title: "the wire", Folder: "The Wire/Season 1", ByNumber: true,
-			Copies: []Copy{{ContentKey: key, Parts: []Part{{
+			Versions: []Version{{ContentKey: key, Parts: []Part{{
 				RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 			}}}},
 		}
@@ -118,7 +118,7 @@ func TestALibraryKeepsTheVideoKindsItAsksFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
+	film := Film{Title: "alien", Folder: "Alien", Versions: []Version{{ContentKey: []byte("alien"), Parts: []Part{{
 		RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 	}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {
@@ -171,7 +171,7 @@ func TestAMatchKeepsItsProvidersPictures(t *testing.T) {
 	}
 	episode := Episode{
 		Season: 1, Episodes: []int{1}, Title: "pilot", Folder: "The Wire/Season 1", ByNumber: true,
-		Copies: []Copy{{ContentKey: []byte("e1"), Parts: []Part{{
+		Versions: []Version{{ContentKey: []byte("e1"), Parts: []Part{{
 			RelPath: "The Wire/Season 1/1.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}},
 	}
@@ -221,7 +221,7 @@ func TestAVideoOnYouTubeIsPicturedByItsStill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "alien", Folder: "Alien", Copies: []Copy{{ContentKey: []byte("alien"), Parts: []Part{{
+	film := Film{Title: "alien", Folder: "Alien", Versions: []Version{{ContentKey: []byte("alien"), Parts: []Part{{
 		RelPath: "Alien/Alien.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 	}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Alien", []byte("v1"), []Film{film}, nil); err != nil {

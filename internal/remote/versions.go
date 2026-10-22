@@ -21,9 +21,9 @@ const (
 	// maxProbes is how many of what a provider offers of a title are read, best first, before it
 	// is found to have nothing to play: a link may be dead, as Remux falls over to the next.
 	maxProbes = 3
-	// minCopy is the shortest copy kept: an addon answers a stream it could not get with a clip
+	// minVersion is the shortest version kept: an addon answers a stream it could not get with a clip
 	// saying so in its place.
-	minCopy = time.Minute
+	minVersion = time.Minute
 	// readyWithin is how long a stream has to begin answering before it is taken to be fetching,
 	// not dead: a debrid link already cached answers in a second or two, where a usenet release
 	// being downloaded, or a torrent being cached, keeps its player waiting on the download.
@@ -31,28 +31,28 @@ const (
 )
 
 var (
-	// ErrNoCopy is a remote film or episode none of whose offers could be read.
-	ErrNoCopy = errors.New("remote: nothing the provider offers of the title could be read")
+	// ErrNoVersion is a remote film or episode none of whose offers could be read.
+	ErrNoVersion = errors.New("remote: nothing the provider offers of the title could be read")
 	// ErrFetching is a remote film or episode whose provider is fetching the best of what it
 	// offers: it plays once the provider has it.
 	ErrFetching = errors.New("remote: the provider is fetching the title; it plays once it has it")
 )
 
-type copyStore interface {
+type versionStore interface {
 	HoldDiscovered(ctx context.Context, id uuid.UUID) (bool, error)
 	RemoteTitleOf(ctx context.Context, item uuid.UUID) (store.RemoteTitle, bool, error)
 	Offered(ctx context.Context, item uuid.UUID, offered [][]byte) ([][]byte, error)
-	SaveCopy(ctx context.Context, lib, item uuid.UUID, c store.Copy) error
+	SaveVersion(ctx context.Context, lib, item uuid.UUID, c store.Version) error
 }
 
 type prober interface {
 	Probe(ctx context.Context, in media.Input) (domain.Facts, error)
 }
 
-// Copies give a remote library's films and episodes the copies their provider offers, as they are
+// Versions give a remote library's films and episodes the versions their provider offers, as they are
 // played: Remux's model, where a title is kept and its streams are not.
-type Copies struct {
-	store  copyStore
+type Versions struct {
+	store  versionStore
 	offers *Offers
 	prober prober
 	// identify matches a title, as its job does: a title a search found is matched as it is
@@ -63,21 +63,21 @@ type Copies struct {
 	readyWithin time.Duration
 }
 
-func NewCopies(st copyStore, offers *Offers, p prober, identify func(ctx context.Context, id uuid.UUID) error) *Copies {
-	return &Copies{store: st, offers: offers, prober: p, identify: identify, readyWithin: readyWithin}
+func NewVersions(st versionStore, offers *Offers, p prober, identify func(ctx context.Context, id uuid.UUID) error) *Versions {
+	return &Versions{store: st, offers: offers, prober: p, identify: identify, readyWithin: readyWithin}
 }
 
-// Ensure has a remote film or episode hold the copies its provider offers now: a copy no longer
+// Ensure has a remote film or episode hold the versions its provider offers now: a version no longer
 // offered is missing, and, where none it holds is offered, the best offer that can be read is
 // read for what it is and kept as a version, or ErrFetching answered where the provider is
 // fetching it. A title a search found is made one of its library's first, and matched. Anything
 // else is left as it is.
-func (c *Copies) Ensure(ctx context.Context, item uuid.UUID) error {
+func (c *Versions) Ensure(ctx context.Context, item uuid.UUID) error {
 	_, err, _ := c.group.Do(item.String(), func() (any, error) { return nil, c.ensure(context.WithoutCancel(ctx), item) })
 	return err
 }
 
-func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
+func (c *Versions) ensure(ctx context.Context, item uuid.UUID) error {
 	held, err := c.store.HoldDiscovered(ctx, item)
 	if err != nil {
 		return err
@@ -114,31 +114,31 @@ func (c *Copies) ensure(ctx context.Context, item uuid.UUID) error {
 			continue
 		}
 		facts.Size = cmp.Or(facts.Size, o.Size)
-		return c.store.SaveCopy(ctx, t.Library, item, store.Copy{
+		return c.store.SaveVersion(ctx, t.Library, item, store.Version{
 			ContentKey: fingerprints[i],
 			Parts:      []store.Part{{RelPath: Rel(t.Source, o), Size: facts.Size, ModTime: time.Unix(0, 0), Facts: &facts}},
 		})
 	}
-	return ErrNoCopy
+	return ErrNoVersion
 }
 
 // read probes what an offer is, once it answers, refusing a clip too short to be the title.
-func (c *Copies) read(ctx context.Context, o domain.Offer) (domain.Facts, error) {
+func (c *Versions) read(ctx context.Context, o domain.Offer) (domain.Facts, error) {
 	in := c.offers.relay.Relayed(o.URL, o.From, o.Name)
 	defer in.Close()
 	if err := c.answers(ctx, in); err != nil {
 		return domain.Facts{}, err
 	}
 	facts, err := c.prober.Probe(ctx, in)
-	if err == nil && facts.Duration < minCopy || err == nil && !slices.ContainsFunc(facts.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamVideo }) {
-		return facts, ErrNoCopy
+	if err == nil && facts.Duration < minVersion || err == nil && !slices.ContainsFunc(facts.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamVideo }) {
+		return facts, ErrNoVersion
 	}
 	return facts, err
 }
 
 // answers is whether an offer's media begins answering within readyWithin: ErrFetching where it
 // does not, and why where it fails.
-func (c *Copies) answers(ctx context.Context, in media.Input) error {
+func (c *Versions) answers(ctx context.Context, in media.Input) error {
 	ctx, cancel := context.WithTimeout(ctx, c.readyWithin)
 	defer cancel()
 	resp, err := media.Fetch(ctx, http.MethodGet, in.URL, http.Header{"Range": {"bytes=0-0"}})

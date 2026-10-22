@@ -26,7 +26,7 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 		{Start: 150 * time.Second, End: 40 * time.Minute, Title: "Chapter 3"},
 		{Start: 40 * time.Minute, End: 42 * time.Minute, Title: "End Credits"},
 	}}
-	film := Film{Title: "Heat", Folder: "Heat", Copies: []Copy{{ContentKey: []byte("h"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: facts}}}}}
+	film := Film{Title: "Heat", Folder: "Heat", Versions: []Version{{ContentKey: []byte("h"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: facts}}}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 		t.Errorf("none said, then rescanned and compared again (-want +got):\n%s", diff)
 	}
 	if err := s.SetMarkers(ctx, version, nil, []domain.MarkerAbsent{{Kind: domain.MarkerIntro, Part: 1}}); !errors.Is(err, ErrMarkerNoPart) {
-		t.Errorf("none in a second part of a one-part copy: %v, want ErrMarkerNoPart", err)
+		t.Errorf("none in a second part of a one-part version: %v, want ErrMarkerNoPart", err)
 	}
 	if err := s.SetMarkers(ctx, version, []domain.Marker{{Kind: domain.MarkerIntro, StartMS: 62_000, EndMS: 148_500}}, none); !errors.Is(err, ErrMarkerRepeated) {
 		t.Errorf("an intro and none: %v, want ErrMarkerRepeated", err)
@@ -109,7 +109,7 @@ func TestATitleSaysWhereItsIntroAndCreditsAre(t *testing.T) {
 		t.Errorf("none cleared: %+v, want the fingerprints' recap and the chapters' intro again", got)
 	}
 	if err := s.SetMarkers(ctx, uuid.NewV7(), nil, nil); !errors.Is(err, ErrNotFound) {
-		t.Errorf("no such copy: %v, want ErrNotFound", err)
+		t.Errorf("no such version: %v, want ErrNotFound", err)
 	}
 }
 

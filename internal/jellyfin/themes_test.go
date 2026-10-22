@@ -44,7 +44,7 @@ func aShowWithATheme(t *testing.T) (st *store.Store, ada domain.Profile, show, e
 	if err != nil {
 		t.Fatal(err)
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "S01E01.mkv", Folder: "Wire", ByNumber: true, Copies: []store.Copy{{
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "S01E01.mkv", Folder: "Wire", ByNumber: true, Versions: []store.Version{{
 		ContentKey: []byte("e1"), Parts: []store.Part{{RelPath: "Wire/S01E01.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire", Themes: []string{"Wire/theme.mp3"}}, []store.Episode{ep}, nil); err != nil {

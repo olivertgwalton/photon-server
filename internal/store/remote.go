@@ -176,9 +176,9 @@ func (s *Store) streamed(ctx context.Context, item uuid.UUID, kind domain.ItemKi
 	return t, err
 }
 
-// Offered marks missing a remote title's copies its provider no longer offers, and not missing
-// those it offers again, the fingerprints of which are offered, as a scan marks a folder's copies
-// by the files it finds. It answers the fingerprints of the title's copies that are offered.
+// Offered marks missing a remote title's versions its provider no longer offers, and not missing
+// those it offers again, the fingerprints of which are offered, as a scan marks a folder's versions
+// by the files it finds. It answers the fingerprints of the title's versions that are offered.
 func (s *Store) Offered(ctx context.Context, item uuid.UUID, offered [][]byte) ([][]byte, error) {
 	return queryColumn[[]byte](ctx, s.pool, `
 		WITH marked AS (
@@ -187,21 +187,21 @@ func (s *Store) Offered(ctx context.Context, item uuid.UUID, offered [][]byte) (
 		SELECT fingerprint FROM marked WHERE live`, item, offered)
 }
 
-// SaveCopy keeps a copy of a title no scan finds: a remote library's, read as it is played.
-func (s *Store) SaveCopy(ctx context.Context, lib, item uuid.UUID, c Copy) error {
+// SaveVersion keeps a version of a title no scan finds: a remote library's, read as it is played.
+func (s *Store) SaveVersion(ctx context.Context, lib, item uuid.UUID, c Version) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		settings, err := analysisOf(ctx, tx, lib)
 		if err != nil {
 			return err
 		}
-		if err := saveCopy(ctx, tx, lib, settings, item, c); err != nil {
+		if err := saveVersion(ctx, tx, lib, settings, item, c); err != nil {
 			return err
 		}
 		return keyTitle(ctx, tx, item)
 	})
 }
 
-// Streamed answers which of items are films or episodes of remote libraries, whose copies their
+// Streamed answers which of items are films or episodes of remote libraries, whose versions their
 // providers stream, or films a remote library's search found, which become such as they are opened.
 func (s *Store) Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error) {
 	ids, err := queryColumn[uuid.UUID](ctx, s.pool, `

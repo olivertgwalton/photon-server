@@ -264,7 +264,7 @@ func (d deviceProfile) codecAllows(kind string, s domain.Stream, containers []st
 // one of its direct-play profiles takes the copy's container and the tracks' codecs, and every
 // condition its container and codec profiles set holds of them; the copy is one file within the
 // bitrate the app takes; and the subtitle chosen, if any, is one it draws itself.
-func (d deviceProfile) playsDirectly(c store.PlayCopy, video, audio *domain.Stream, subtitle *subtitleChoice, maxBitrate int64) bool {
+func (d deviceProfile) playsDirectly(c store.PlayVersion, video, audio *domain.Stream, subtitle *subtitleChoice, maxBitrate int64) bool {
 	if len(c.Parts) != 1 || maxBitrate > 0 && int64(c.BitrateKbps)*1000 > maxBitrate {
 		return false
 	}
@@ -431,7 +431,7 @@ func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.Seg
 // profile names, within the limits its codec profiles set on them (where their ApplyConditions
 // hold of the copy's video), and its bitrate. It opens no container, so photon's decision makes
 // HLS of the copy, copying what the app plays and encoding the rest.
-func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentFormat, c store.PlayCopy, maxBitrate int64) playback.Profile {
+func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentFormat, c store.PlayVersion, maxBitrate int64) playback.Profile {
 	p := playback.Profile{MaxBitrateKbps: int(maxBitrate / 1000), Parts: domain.PartsJoined, Segments: segments}
 	var video domain.Stream
 	for _, s := range c.Streams {

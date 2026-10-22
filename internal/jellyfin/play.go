@@ -27,7 +27,7 @@ import (
 )
 
 type playing interface {
-	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayCopy, error)
+	Playable(ctx context.Context, profile, item, version uuid.UUID) (store.PlayVersion, error)
 	PlaybackTitle(ctx context.Context, id uuid.UUID) (domain.PlaybackTitle, error)
 	SubtitleFile(ctx context.Context, id uuid.UUID) (root, rel string, err error)
 }
@@ -157,7 +157,7 @@ type playbackRequest struct {
 // makes of it, copying what the app plays and encoding the rest, where the app takes HLS photon
 // makes; else neither, and the app plays what it can of the file. The app's bitrate is kept within
 // remote, the server's limit for it, in kbps.
-func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayCopy, req playbackRequest, remote int) {
+func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayVersion, req playbackRequest, remote int) {
 	p := *req.DeviceProfile
 	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
 	video, sound := direct(c, (*int)(req.AudioStreamIndex))
@@ -233,7 +233,7 @@ var transcodingContainers = map[domain.SegmentFormat]string{domain.SegmentsFMP4:
 
 // direct is a copy's tracks played as they are: its first video, and the audio an app chose, else
 // its default, else its first.
-func direct(c store.PlayCopy, audio *int) (video, sound *domain.Stream) {
+func direct(c store.PlayVersion, audio *int) (video, sound *domain.Stream) {
 	video, sound = playback.Pick(c.Streams, audio)
 	if sound == nil {
 		_, sound = playback.Pick(c.Streams, nil)
@@ -243,7 +243,7 @@ func direct(c store.PlayCopy, audio *int) (video, sound *domain.Stream) {
 
 // subtitleOf is the subtitle an app chose by its index: one of the copy's own tracks, whose index
 // photon's decision takes, or a file beside it, numbered after them.
-func subtitleOf(c store.PlayCopy, index *int) (*int, *subtitleChoice) {
+func subtitleOf(c store.PlayVersion, index *int) (*int, *subtitleChoice) {
 	if index == nil || *index < 0 {
 		return nil, nil
 	}
@@ -276,15 +276,15 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 
 // oneFile is the copy an app names, or the one photon would play, of a title the profile may play,
 // where it is in one file. A copy in several files is refused: see errSeveralFiles.
-func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayCopy, bool) {
+func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayVersion, bool) {
 	id, ok := a.itemID(w, r)
 	if !ok {
-		return store.PlayCopy{}, false
+		return store.PlayVersion{}, false
 	}
 	version, ok := optionalID(query(r, "mediaSourceId"))
 	if !ok {
 		a.refuse(w, http.StatusBadRequest)
-		return store.PlayCopy{}, false
+		return store.PlayVersion{}, false
 	}
 	// An app may stream a placeholder without asking for its playback info first.
 	a.ensureCopies(r.Context(), id)
@@ -292,14 +292,14 @@ func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayCopy, b
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		a.refuse(w, http.StatusNotFound)
-		return store.PlayCopy{}, false
+		return store.PlayVersion{}, false
 	case err != nil:
 		a.internal(w, r, err)
-		return store.PlayCopy{}, false
+		return store.PlayVersion{}, false
 	case len(c.Parts) > 1:
 		a.logger.InfoContext(r.Context(), "jellyfin file refused", slog.Any("err", errSeveralFiles))
 		a.refuse(w, http.StatusConflict)
-		return store.PlayCopy{}, false
+		return store.PlayVersion{}, false
 	}
 	return c, true
 }

@@ -138,7 +138,7 @@ func TestOnlyWhatAProfileMaySearchIsAskedFor(t *testing.T) {
 		t.Errorf("a find of a library the profile may not see: %v, want ErrNotFound", err)
 	}
 
-	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Copies: []Copy{{
+	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "I/inception.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
@@ -284,7 +284,7 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
 		t.Fatal(err)
 	}
-	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Copies: []Copy{{
+	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "I/inception.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
@@ -326,7 +326,7 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Copies: []Copy{{
+	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "I/inception.mkv", Size: 1, Facts: &domain.Facts{Duration: 1}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {

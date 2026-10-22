@@ -253,7 +253,7 @@ func (s *Store) locale(ctx context.Context, item *model.Item, p *TitlePage) erro
 }
 
 // ofKind fills in what only a title of item's kind has: a show's seasons, a season's episodes, a
-// film's or episode's copies, a collection's rule and list.
+// film's or episode's versions, a collection's rule and list.
 func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
 	var err error
 	switch item.Kind {
@@ -540,7 +540,7 @@ func (s *Store) episodes(ctx context.Context, profile, season uuid.UUID) ([]Epis
 	return out, nil
 }
 
-// onDisk is what of a title is on disk: how long its longest copy runs, and how many copies.
+// onDisk is what of a title is on disk: how long its longest version runs, and how many versions.
 type onDisk struct {
 	ms       int64
 	versions int
