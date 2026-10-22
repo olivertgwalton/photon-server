@@ -7,11 +7,13 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 )
 
 const (
@@ -30,8 +32,9 @@ type libraries interface {
 	ScanFolders(ctx context.Context, id uuid.UUID, folders []string, delay time.Duration) error
 }
 
-// Watcher watches every folder of each library set to realtime monitoring. inotify watches one
-// folder at a time and sees nothing on a network share, so the scan schedule stays the backstop.
+// Watcher watches every folder of each library set to realtime monitoring. Neither inotify nor
+// FSEvents sees what another machine changes on a network share, so the scan schedule stays the
+// backstop.
 type Watcher struct {
 	libs  libraries
 	log   *slog.Logger
@@ -67,7 +70,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 			clear(changed)
 		case p := <-n.changed:
 			lib, ok := w.owner(p)
-			if !ok {
+			if !ok || ignored(w.roots[lib], p) {
 				continue
 			}
 			if dir, ok := library.Changed(w.roots[lib], p); ok {
@@ -113,6 +116,15 @@ func (w *Watcher) sync(ctx context.Context, n *notifier) {
 	}
 	w.roots = want
 	n.watch(ctx, slices.Compact(slices.Sorted(maps.Values(want))))
+}
+
+// ignored reports whether p, under root, is in a folder or is a file never part of a library.
+func ignored(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == "." {
+		return err != nil
+	}
+	return slices.ContainsFunc(strings.Split(rel, string(filepath.Separator)), naming.Ignored)
 }
 
 // owner is the library a path is in: the one whose root is longest of those it is under.

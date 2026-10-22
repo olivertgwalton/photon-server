@@ -1,3 +1,5 @@
+//go:build !darwin
+
 package watch
 
 import (
@@ -15,7 +17,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/naming"
 )
 
-// notifier tells of changes under its roots, watching each folder of them.
+// notifier tells of changes under its roots by inotify, or ReadDirectoryChangesW on Windows,
+// watching each folder of them.
 type notifier struct {
 	w       *fsnotify.Watcher
 	log     *slog.Logger
