@@ -92,6 +92,13 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	if _, names = read(); !slices.Equal(names, []string{"Heat", "Cosmos1", "Cosmos2", "Cosmos3"}) {
 		t.Errorf("after moving the second Heat first and removing the first: %q", names)
 	}
+	entries, _ = read()
+	if err := s.MovePlaylistEntry(ctx, oliver.ID, list, entries[0].ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, names = read(); !slices.Equal(names, []string{"Cosmos1", "Cosmos2", "Heat", "Cosmos3"}) {
+		t.Errorf("after moving Heat to third: %q", names)
+	}
 	summaries, err := s.Playlists(ctx, oliver.ID)
 	if err != nil || len(summaries) != 1 || summaries[0].Entries != 4 || summaries[0].DurationMS != (4*time.Hour).Milliseconds() {
 		t.Errorf("playlists = %+v, %v; want one of four entries, four hours", summaries, err)
