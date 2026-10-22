@@ -241,7 +241,7 @@ function took(started?: string, finished?: string) {
 									"Stop",
 									() =>
 										act(
-											api.POST("/api/v1/admin/tasks/{key}/stop", {
+											api.DELETE("/api/v1/admin/tasks/{key}/run", {
 												params: { path: { key: task.key } },
 											}),
 											`${words.tasks[task.key].name} was stopped.`,
