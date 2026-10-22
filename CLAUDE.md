@@ -37,7 +37,7 @@ for behaviour; no client's or other server's vocabulary shapes the wire.
 - **Standard library first.** A dependency earns its place in the PR that adds it.
 - **Tests test behaviour** a client or operator would notice. No test that only restates the code.
 - **Comments only where something is surprising.** No doc comment that repeats the name.
-- Format and lint with `golangci-lint fmt` and `golangci-lint run` (v2.14). Both must be silent.
+- Format and lint with `golangci-lint fmt` and `golangci-lint run` (v2.15). Both must be silent.
 - **A migration never holds a large table.** `photon-server migrate` runs beside the old server, and
   goose wraps each migration in one transaction, so every lock it takes lasts to the end. An index
   on a table that exists is `CREATE INDEX CONCURRENTLY IF NOT EXISTS` in a migration marked
