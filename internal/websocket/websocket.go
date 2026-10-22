@@ -45,7 +45,6 @@ const (
 type Status uint16
 
 const (
-	StatusNormal        Status = 1000
 	StatusGoingAway     Status = 1001
 	StatusProtocolError Status = 1002
 	StatusInvalidData   Status = 1007
