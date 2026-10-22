@@ -293,8 +293,13 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		case localNetwork:
 			h = a.requireLocalNetwork(h)
 		}
-		switch r.reply.(type) {
-		case asFile, asSocket:
+		switch reply := r.reply.(type) {
+		case asSocket:
+		case asFile:
+			// A file that is JSON, as the description is, is tagged and gzipped as any JSON answer.
+			if !slices.ContainsFunc(reply, func(t string) bool { return !isJSON(t) }) {
+				h = a.revalidate(h)
+			}
 		default:
 			h = a.revalidate(h)
 		}
