@@ -37,6 +37,15 @@ test("a burst that runs on reloads at most every settleAtMost", () => {
 	expect(reloads).toHaveLength(Math.floor(25_000 / settleAtMost) + 1);
 });
 
+test("progress that makes nothing stale does not hold a reload back", () => {
+	later.add(["library:films"]);
+	for (let at = 0; at < settle; at += 400) {
+		later.add([]);
+		jest.advanceTimersByTime(400);
+	}
+	expect(reloads).toEqual([["library:films"]]);
+});
+
 test("a change alone reloads once it has settled", () => {
 	later.add(["title:1"]);
 	jest.advanceTimersByTime(settle - 1);

@@ -24,8 +24,9 @@ export function settling(reload: (keys: string[]) => void) {
 	}
 	return {
 		add(keys: string[]) {
+			// An event that makes nothing stale, as a scan's progress, is no part of a burst.
+			if (!keys.length) return;
 			for (const key of keys) stale.add(key);
-			if (!stale.size) return;
 			clearTimeout(quiet);
 			quiet = setTimeout(flush, settle);
 			due ??= setTimeout(flush, settleAtMost);
