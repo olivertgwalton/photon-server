@@ -16,21 +16,25 @@ import { Switch } from "#lib/components/ui/switch/index.js";
 import { reorder } from "#lib/reorder.svelte.js";
 import { moved } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
+import { refreshAll } from "$app/navigation";
 
 type Section = components["schemas"]["HomeSection"];
 type CardArt = components["schemas"]["CardArt"];
+type SpoilerMode = components["schemas"]["SpoilerMode"];
 
 let { data } = $props();
 const words = vocabulary();
 // Each change answers the home as kept, until a load gives it afresh.
 let home = $derived(data.prefs.home);
 let art = $derived(data.prefs.card_art);
+let spoilers = $derived(data.prefs.episode_spoilers);
 // Said to a screen reader as a row moves, since the list redraws under focus.
 let said = $state("");
 
 // What the server last kept, to go back to where a save fails.
 let kept = $derived(data.prefs.home);
 let keptArt = $derived(data.prefs.card_art);
+let keptSpoilers = $derived(data.prefs.episode_spoilers);
 // Each save is sent once the one before is answered, so the server keeps the
 // last order drawn; only the answer to that last one is drawn.
 let sending = Promise.resolve();
@@ -102,6 +106,28 @@ function picture(chosen: CardArt) {
 		}
 		art = saved.card_art;
 		toast.success("Saved for every device.");
+	};
+	sending = sending.then(send, send);
+}
+
+// On the same queue too. Every card draws by it, so the pages are loaded
+// afresh once it is kept.
+function hide(chosen: SpoilerMode) {
+	spoilers = chosen;
+	const send = async () => {
+		const { data: saved, error } = await client().PATCH(
+			"/api/v1/profile/preferences",
+			{ body: { episode_spoilers: chosen } },
+		);
+		if (saved) keptSpoilers = saved.episode_spoilers;
+		if (spoilers !== chosen) return;
+		if (error) {
+			spoilers = keptSpoilers;
+			toast.error(problemMessage(error));
+			return;
+		}
+		toast.success("Saved for every device.");
+		await refreshAll();
 	};
 	sending = sending.then(send, send);
 }
@@ -205,6 +231,21 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 				What Continue Watching and Next Up draw a card by. A film uses its own;
 				an episode uses its own still, or its show's backdrop or title art.
 			</Field.Description>
+		</Field.Field>
+		<Field.Separator />
+		<Field.Field orientation="horizontal">
+			<Switch
+				id="spoilers"
+				checked={spoilers === "hide"}
+				onCheckedChange={(v) => hide(v ? "hide" : "show")}
+			/>
+			<Field.Content>
+				<Field.Label for="spoilers">Hide episode spoilers</Field.Label>
+				<Field.Description>
+					Blurs the picture of an episode you have not started, on every device.
+					One you are part way through is not blurred.
+				</Field.Description>
+			</Field.Content>
 		</Field.Field>
 	</Card.Content>
 </Card.Root>

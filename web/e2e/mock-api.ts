@@ -488,6 +488,7 @@ function page(id: string): Schemas["TitlePage"] | undefined {
 				title: e.title,
 				episode_number: e.episode_number,
 				duration_ms: e.duration_ms,
+				thumb: e.thumb,
 				state: states.get(e.id),
 			}));
 	}
@@ -1280,6 +1281,7 @@ const defaults: Schemas["Preferences"] = {
 	credits_action: "ask",
 	theme_music: "off",
 	card_art: "still",
+	episode_spoilers: "show",
 	notify: "marked",
 	quiet_libraries: [],
 	home: [

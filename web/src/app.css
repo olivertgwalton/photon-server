@@ -226,6 +226,12 @@
 		@apply size-full object-cover transition-[opacity,scale,filter] duration-500 ease-out-expo group-hover:scale-105 data-loading:opacity-0 data-loading:blur-md;
 	}
 
+	/* An episode's picture hidden past reading, in proportion to its frame (an
+	   @container), so it reads the same on a rail's card as in a list's. */
+	.spoiler-blur {
+		@apply blur-[7cqi];
+	}
+
 	/* What a card's words sit on over its picture: a shade that gathers toward
 	   the foot, eased rather than straight, so it has no edge to see. */
 	.card-shade {

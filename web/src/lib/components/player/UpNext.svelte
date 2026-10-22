@@ -4,6 +4,7 @@ import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { episodeLabel } from "#lib/format.js";
+import { hidesSpoiler } from "#lib/spoilers.js";
 
 // The next episode, offered as the credits roll, playing by itself once the
 // count runs out unless the reader says otherwise, or has turned autoplay off.
@@ -48,14 +49,14 @@ const where = $derived(episodeLabel(card.season_number, card.episode_number));
 	class="bg-raise/95 ring-line-strong flex w-80 max-w-[calc(100vw-2rem)] gap-3 rounded-xl p-3 shadow-2xl ring-1 backdrop-blur"
 >
 	<div
-		class="bg-ground aspect-video w-28 shrink-0 self-start overflow-hidden rounded-md"
+		class="bg-ground aspect-video w-28 shrink-0 self-start overflow-hidden rounded-md @container"
 	>
 		{#if picture}
 			<Artwork
 				id={picture}
 				shape="still"
 				loading="eager"
-				class="size-full object-cover"
+				class={["size-full object-cover", hidesSpoiler(card) && "spoiler-blur"]}
 				style={blurStyle(card.blurhashes?.[picture])}
 			/>
 		{/if}

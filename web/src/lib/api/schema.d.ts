@@ -9425,6 +9425,7 @@ export interface components {
             audio_track: components["schemas"]["AudioTrack"];
             card_art: components["schemas"]["CardArt"];
             credits_action: components["schemas"]["SegmentAction"];
+            episode_spoilers: components["schemas"]["SpoilerMode"];
             home: components["schemas"]["HomeSection"][];
             intro_action: components["schemas"]["SegmentAction"];
             max_bitrate_kbps: number;
@@ -9444,6 +9445,7 @@ export interface components {
             audio_track?: components["schemas"]["AudioTrack"];
             card_art?: components["schemas"]["CardArt"];
             credits_action?: components["schemas"]["SegmentAction"];
+            episode_spoilers?: components["schemas"]["SpoilerMode"];
             home?: components["schemas"]["HomeSectionChange"][];
             intro_action?: components["schemas"]["SegmentAction"];
             max_bitrate_kbps?: number | null;
@@ -9838,6 +9840,8 @@ export interface components {
             descending: string;
             name: string;
         };
+        /** @enum {string} */
+        SpoilerMode: "show" | "hide";
         StartImport: {
             credentials: components["schemas"]["Credentials"];
             /** Format: uuid */

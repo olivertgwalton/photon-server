@@ -23,6 +23,9 @@ export const settings: Record<string, [string, string, string][]> = {
 		["subtitle-colour", "Subtitle colour", "text color yellow white"],
 		["subtitle-backing", "Subtitle background", "text box shadow outline"],
 	],
+	"/settings/home": [
+		["spoilers", "Hide episode spoilers", "blur unwatched still thumbnail"],
+	],
 	"/settings/notifications": [
 		["notify", "Tell me of", "new episodes films follow"],
 		["push", "Notify this browser", "push alerts desktop phone"],
