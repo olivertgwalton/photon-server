@@ -20,17 +20,14 @@ func names[T ~string](values []T) []string {
 
 var quoted = regexp.MustCompile(`'([^']*)'`)
 
-// Every enum column's CHECK constraint, named after its Go type, allows exactly the Go constants,
-// and a source or id kind a plugin may have exactly the plugin pattern beside them.
+// Every enum column's CHECK constraint, named after its Go type, allows exactly the Go constants.
 func TestEnumConstraintsMatchGo(t *testing.T) {
 	s := migrated(t)
-	plugins := func(values []string) []string { return append(values, domain.PluginPattern) }
 	for constraint, want := range map[string][]string{
 		"library_kind":             names(domain.LibraryKinds()),
 		"plugin_protocol":          names(domain.PluginProtocols()),
 		"library_media":            names(domain.LibraryMedias()),
 		"discovery_kind":           names([]domain.ItemKind{domain.ItemMovie, domain.ItemShow}),
-		"discovery_provider":       plugins(names(domain.Providers())),
 		"monitor":                  names(domain.Monitors()),
 		"preview_level":            names(domain.PreviewLevels()),
 		"marker_detection":         names(domain.MarkerDetections()),
@@ -42,7 +39,6 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"box_set_mode":             names(domain.BoxSetModes()),
 		"request_state":            names(domain.RequestStates()),
 		"request_kind":             names([]domain.ItemKind{domain.ItemMovie, domain.ItemShow}),
-		"request_provider":         plugins(names(domain.Providers())),
 		"collection_box_set":       names(domain.CollectionBoxSets()),
 		"subtitle_match":           names(domain.SubtitleMatches()),
 		"theme_lookup":             names(domain.ThemeLookups()),
@@ -53,11 +49,8 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"notify":                   names(domain.Notifies()),
 		"push_kind":                names(domain.PushKinds()),
 		"apns_environment":         names(domain.APNsEnvironments()),
-		"artwork_source":           plugins(names(domain.ArtworkSources())),
 		"artwork_kind":             names(domain.ArtworkKinds()),
 		"item_kind":                names(domain.ItemKinds()),
-		"id_provider":              plugins(names(domain.Providers())),
-		"person_id_provider":       plugins(names(domain.Providers())),
 		"id_source":                names(domain.IDSources()),
 		"stream_kind":              names(domain.StreamKinds()),
 		"video_range":              names(domain.Ranges()),
@@ -71,20 +64,14 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"session_kind":             names(domain.SessionKinds()),
 		"extra_kind":               names(domain.ExtraKinds()),
 		"field":                    names(domain.Fields()),
-		"field_source":             plugins(names(domain.FieldSources())),
-		"library_source":           plugins(names(domain.MetadataSources())),
 		"library_source_item_kind": names(append(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds()...)),
 		"library_source_fetcher":   names(domain.Fetchers()),
 		"library_extra_kind":       names(domain.ExtraKinds()),
 		"remote_video_kind":        names(domain.ExtraKinds()),
-		"remote_video_source":      plugins([]string{string(domain.SourceTMDB), string(domain.SourceTVDB)}),
-		"announced_source":         plugins([]string{string(domain.SourceTMDB), string(domain.SourceTVDB)}),
 		"task_key":                 names(domain.TaskKeys()),
 		"task_result":              names(domain.TaskResults()),
-		"rating_source":            plugins(names(domain.RatingSources())),
 		"rating_site":              names(domain.RatingSites()),
 		"collection_origin":        names(domain.CollectionOrigins()),
-		"credit_source":            plugins(names(domain.CreditSources())),
 		"credit_kind":              names(domain.CreditKinds()),
 		"profile_unrated":          names(domain.UnratedPolicies()),
 		"provisioning":             names(domain.Provisionings()),
@@ -130,6 +117,48 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		slices.Sort(want)
 		if !slices.Equal(got, want) {
 			t.Errorf("%s: database allows %v, Go has %v", constraint, got, want)
+		}
+	}
+}
+
+// A source or provider a plugin may fill is checked in the database for its shape alone, so that
+// adding one changes no check: every Go constant, and a plugin's name, has that shape.
+func TestProviderConstraintsTakeEveryGoName(t *testing.T) {
+	s := migrated(t)
+	for constraint, want := range map[string][]string{
+		"field_source":        names(domain.FieldSources()),
+		"library_source":      names(domain.MetadataSources()),
+		"artwork_source":      names(domain.ArtworkSources()),
+		"rating_source":       names(domain.RatingSources()),
+		"credit_source":       names(domain.CreditSources()),
+		"id_provider":         names(domain.Providers()),
+		"person_id_provider":  names(domain.Providers()),
+		"discovery_provider":  names(domain.Providers()),
+		"request_provider":    names(domain.Providers()),
+		"remote_video_source": {string(domain.SourceTMDB), string(domain.SourceTVDB)},
+		"announced_source":    {string(domain.SourceTMDB), string(domain.SourceTVDB)},
+	} {
+		var def string
+		err := s.pool.QueryRow(t.Context(),
+			"SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = $1", constraint).Scan(&def)
+		if err != nil {
+			t.Fatalf("%s: %v", constraint, err)
+		}
+		patterns := quoted.FindAllStringSubmatch(def, -1)
+		if len(patterns) != 1 {
+			t.Errorf("%s: %s, want one pattern", constraint, def)
+			continue
+		}
+		shape := regexp.MustCompile(patterns[0][1])
+		for _, name := range append(want, "plugin:my-provider") {
+			if !shape.MatchString(name) {
+				t.Errorf("%s: the database refuses %q", constraint, name)
+			}
+		}
+		for _, junk := range []string{"", "TMDB", "plugin:", "tmdb;"} {
+			if shape.MatchString(junk) {
+				t.Errorf("%s: the database takes %q", constraint, junk)
+			}
 		}
 	}
 }
