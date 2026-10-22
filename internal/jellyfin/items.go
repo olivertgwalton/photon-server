@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/hex"
 	"hash/fnv"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -265,12 +266,13 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		}
 		it.People = append(it.People, who)
 	}
-	it.CanDownload = downloadable(p.Versions)
-	if len(p.Versions) > 0 {
-		it.sources(p.Versions, w)
+	versions := onDisk(p.Versions)
+	it.CanDownload = downloadable(versions)
+	if len(versions) > 0 {
+		it.sources(versions, w)
 		it.MediaStreams = it.MediaSources[0].MediaStreams
-		it.trickplay(p.Versions)
-		it.chapters(p.Versions)
+		it.trickplay(versions)
+		it.chapters(versions)
 	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)
@@ -291,10 +293,16 @@ func (it *item) sources(versions []store.VersionPage, w words.Words) {
 	}
 }
 
-// downloadable is whether /Items/{itemId}/Download serves a title's file: the copy it serves, the
-// one played unasked, is on disk in one file. Jellyfin says so only where it is asked.
+// onDisk is a title's versions Jellyfin offers as media sources: those it can open, leaving out
+// the ones whose files are gone that photon keeps until they are forgotten.
+func onDisk(versions []store.VersionPage) []store.VersionPage {
+	return slices.DeleteFunc(slices.Clone(versions), func(v store.VersionPage) bool { return v.MissingSince != nil })
+}
+
+// downloadable is whether /Items/{itemId}/Download serves a title's file: the version it serves,
+// the one played unasked, is in one file. Jellyfin says so only where it is asked.
 func downloadable(versions []store.VersionPage) *bool {
-	ok := len(versions) > 0 && versions[0].MissingSince == nil && versions[0].Parts == 1
+	ok := len(versions) > 0 && versions[0].Parts == 1
 	return &ok
 }
 

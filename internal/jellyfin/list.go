@@ -32,7 +32,7 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 			return nil, err
 		}
 		for n, id := range ids {
-			v := versions[id]
+			v := onDisk(versions[id])
 			out[n].CanDownload = downloadable(v)
 			if l.fields["trickplay"] {
 				out[n].trickplay(v)
