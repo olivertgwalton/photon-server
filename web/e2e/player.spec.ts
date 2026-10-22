@@ -202,7 +202,7 @@ test("a lower quality stops the playback and plays the server's HLS", async ({
 	await page.waitForRequest("**/api/v1/playbacks/*/progress");
 	const stop = page.waitForRequest("**/api/v1/playbacks/*/stop");
 	const asked = page.waitForRequest("**/api/v1/titles/p-film/play");
-	await settings(page, "Quality", "420 kbps");
+	await settings(page, "Quality", "420 kb/s");
 	await stop;
 	expect((await asked).postDataJSON().profile.max_bitrate_kbps).toBe(420);
 	await page.waitForRequest("**/api/v1/hls/pb/1/sig/*.m4s");
@@ -232,7 +232,7 @@ test("a stream the server let go is opened again where it was", async ({
 	);
 	await logIn(page, "/play/p-film?t=0");
 	await page.waitForRequest("**/api/v1/playbacks/*/progress");
-	await settings(page, "Quality", "420 kbps");
+	await settings(page, "Quality", "420 kb/s");
 	await expect.poll(() => plays, { timeout: 15_000 }).toEqual([0, 420, 420]);
 	await expect.poll(() => time(page)).toBeGreaterThan(0.5);
 	await expect(page.getByRole("alert")).not.toBeAttached();
@@ -247,7 +247,7 @@ test("a stream that breaks again at once is said to have stopped", async ({
 	);
 	await logIn(page, "/play/p-film?t=0");
 	await page.waitForRequest("**/api/v1/playbacks/*/progress");
-	await settings(page, "Quality", "420 kbps");
+	await settings(page, "Quality", "420 kb/s");
 	await expect(page.getByRole("alert")).toContainText("The stream stopped", {
 		timeout: 15_000,
 	});
