@@ -117,6 +117,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		MediaSources  []mediaSource `json:"MediaSources"`
 		PlaySessionID string        `json:"PlaySessionId"`
+		ErrorCode     playbackError `json:"ErrorCode,omitzero"`
 	}{MediaSources: []mediaSource{}, PlaySessionID: guid(session)}
 	said := words.Negotiate(w, r)
 	for _, v := range versions {
@@ -134,7 +135,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			a.internal(w, r, err)
 			return
 		}
-		a.decide(r, &out.MediaSources[0], id, session, c, req, playback.RemoteLimit(n, a.svc.Reach.Network(r)))
+		out.ErrorCode = a.decide(r, &out.MediaSources[0], id, session, c, req, playback.RemoteLimit(n, a.svc.Reach.Network(r)))
 	}
 	a.writeJSON(w, out)
 }
@@ -153,11 +154,19 @@ type playbackRequest struct {
 	AllowAudioStreamCopy *bool `json:"AllowAudioStreamCopy"`
 }
 
+// playbackError is Jellyfin's PlaybackErrorCode: why PlaybackInfo offers nothing an app can play,
+// which the app shows rather than failing as it opens the stream.
+type playbackError string
+
+// noCompatibleStream is a version the app neither plays as it is nor can be given made into HLS.
+const noCompatibleStream playbackError = "NoCompatibleStream"
+
 // decide says how the app plays a version: as it is, where its profile plays that; else as HLS photon
 // makes of it, copying what the app plays and encoding the rest, where the app takes HLS photon
 // makes; else neither, and the app plays what it can of the file. The app's bitrate is kept within
-// remote, the server's limit for it, in kbps.
-func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayVersion, req playbackRequest, remote int) {
+// remote, the server's limit for it, in kbps. It answers noCompatibleStream where HLS was the way
+// and photon cannot make it.
+func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID, c store.PlayVersion, req playbackRequest, remote int) playbackError {
 	p := *req.DeviceProfile
 	limit := int64(playback.Capped(int(cmp.Or(req.MaxStreamingBitrate, p.MaxStreamingBitrate)/1000), remote)) * 1000
 	video, sound := direct(c, (*int)(req.AudioStreamIndex))
@@ -175,11 +184,11 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		// So Jellyfin's web app falls back to HLS where the version fails to play, as Jellyfin answers.
 		src.SupportsTranscoding = takesHLS
 		deliverSubtitles(a.mediaKey(r), src, item, c, p, nil, true)
-		return
+		return ""
 	}
 	src.SupportsDirectPlay, src.SupportsDirectStream = false, false
 	if !takesHLS {
-		return
+		return ""
 	}
 	var audio *int
 	if sound != nil {
@@ -195,7 +204,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if err != nil {
 		log.ErrorContext(r.Context(), "jellyfin transcode not placed", slog.Any("err", err))
-		return
+		return ""
 	}
 	encoder := a.svc.Placer.Self()
 	if len(candidates) > 0 {
@@ -205,15 +214,19 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	hp.EncodeVideo = req.AllowVideoStreamCopy != nil && !*req.AllowVideoStreamCopy
 	hp.EncodeAudio = req.AllowAudioStreamCopy != nil && !*req.AllowAudioStreamCopy
 	d, err := playback.Decide(hp, playback.VersionOf(c), chosen, playback.EncodingOf(encoder))
-	if err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0 {
+	noEncoder := err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0
+	if noEncoder {
 		err = a.svc.Placer.Refuse(candidates, nil)
 	}
 	if err != nil {
 		log.InfoContext(r.Context(), "jellyfin transcode refused", slog.Any("reasons", d.Reasons), slog.Any("err", err))
-		return
+		if noEncoder || errors.Is(err, playback.ErrNoCompatibleStream) {
+			return noCompatibleStream
+		}
+		return ""
 	}
 	if d.Video == nil {
-		return
+		return ""
 	}
 	address, err := a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
@@ -221,11 +234,12 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}, req.AllowVideoStreamCopy, req.AllowAudioStreamCopy)
 	if err != nil {
 		log.ErrorContext(r.Context(), "jellyfin transcode not addressed", slog.Any("err", err))
-		return
+		return ""
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
 	src.TranscodingURL = address
 	deliverSubtitles(a.mediaKey(r), src, item, c, p, d.Video.Encode, false)
+	return ""
 }
 
 // transcodingContainers are Jellyfin's names for the segments of each format.

@@ -605,7 +605,8 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 
 // An app's video is encoded as the node that will encode it can, not as this one could: this node
 // only serves, so its own HEVC encoder is no matter, and the node that transcodes makes H.264. With
-// no node that encodes, the app is offered no HLS that would be refused when fetched.
+// no node that encodes, the app is offered no HLS that would be refused when fetched, and is told
+// why, as Jellyfin's PlaybackInfo tells it.
 func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	n, err := st.Network(t.Context())
@@ -641,16 +642,22 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 		r.RemoteAddr = "203.0.113.9:5000"
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
-		var info struct{ MediaSources []map[string]any }
+		var info struct {
+			MediaSources []map[string]any
+			ErrorCode    string
+		}
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
 		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
 		if tc.codec == "" {
-			if transcoding != "" {
-				t.Errorf("with no node that encodes, HLS is offered: %s", transcoding)
+			if transcoding != "" || info.ErrorCode != "NoCompatibleStream" {
+				t.Errorf("with no node that encodes: HLS %q, error %q; want none, and NoCompatibleStream", transcoding, info.ErrorCode)
 			}
 			continue
+		}
+		if info.ErrorCode != "" {
+			t.Errorf("transcoded, the app is told %q", info.ErrorCode)
 		}
 		plan := plannedFor(t, api, transcoding)
 		if e := plan.Video.Encode; e == nil || e.Codec != tc.codec {
