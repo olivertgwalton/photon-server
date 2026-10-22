@@ -278,11 +278,13 @@ test("a library is added from a folder found by browsing the server", async ({
 	await expect(page.getByText("Saved.")).toBeVisible();
 });
 
-test("a library's copies on no disk are forgotten after a question", async ({
+test("a library's versions on no disk are forgotten after a question", async ({
 	page,
 }) => {
 	await logIn(page, "/settings/server/libraries/l-films");
-	const button = page.getByRole("button", { name: /Forget copies on no disk/ });
+	const button = page.getByRole("button", {
+		name: /Forget versions on no disk/,
+	});
 	await button.click();
 	const ask = page.getByRole("alertdialog");
 	await expect(ask.getByText(/leaves the library/)).toBeVisible();
@@ -298,7 +300,7 @@ test("a library's copies on no disk are forgotten after a question", async ({
 	await button.click();
 	await ask.getByRole("button", { name: "Forget them" }).click();
 	await asked;
-	await expect(page.getByText("2 copies left Films.")).toBeVisible();
+	await expect(page.getByText("2 versions left Films.")).toBeVisible();
 });
 
 test("a library's metadata is refreshed, what is missing or all of it", async ({

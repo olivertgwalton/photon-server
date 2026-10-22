@@ -40,8 +40,8 @@ func TestLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Library{
-		{Name: "Films", Kind: domain.LibraryMovies, Media: domain.MediaFolder, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, MissingCopies: domain.MissingKept, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, BoxSets: domain.BoxSetsExpanded, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
-		{Name: "Television", Kind: domain.LibraryShows, Media: domain.MediaFolder, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, MissingCopies: domain.MissingKept, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, BoxSets: domain.BoxSetsExpanded, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
+		{Name: "Films", Kind: domain.LibraryMovies, Media: domain.MediaFolder, Root: "/srv/films", Sources: domain.DefaultSources(domain.LibraryMovies), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, MissingVersions: domain.MissingKept, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, BoxSets: domain.BoxSetsExpanded, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
+		{Name: "Television", Kind: domain.LibraryShows, Media: domain.MediaFolder, Root: "/srv/tv", Sources: domain.DefaultSources(domain.LibraryShows), RemoteExtras: []domain.ExtraKind{domain.ExtraBehindTheScenes, domain.ExtraFeaturette, domain.ExtraTrailer}, Monitor: domain.MonitorRealtime, RefreshDays: 30, Previews: domain.PreviewsAll, Markers: domain.MarkersAll, Keyframes: domain.KeyframesIndex, Themes: domain.ThemesLocal, Deletion: domain.DeletionOff, MissingVersions: domain.MissingKept, Locale: domain.Locale{Artwork: domain.ArtworkLocalized}, Titles: domain.TitlesLocalized, BoxSets: domain.BoxSetsExpanded, SubtitleLanguages: []language.Tag{}, SubtitleMatch: domain.SubtitleMatchRelease},
 	}
 	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(domain.Library{}, "ID")); diff != "" {
 		t.Errorf("libraries (-want +got):\n%s", diff)
@@ -68,7 +68,7 @@ func TestARemoteLibraryHasNoFolder(t *testing.T) {
 	for name, change := range map[string]LibraryChange{
 		"watched":      {Monitor: domain.MonitorRealtime},
 		"deleted from": {Deletion: domain.DeletionFiles},
-		"made to forget the versions it is no longer offered": {MissingCopies: domain.MissingForgotten},
+		"made to forget the versions it is no longer offered": {MissingVersions: domain.MissingForgotten},
 	} {
 		if err := s.SetLibrary(t.Context(), lib.ID, change); !errors.Is(err, ErrRemoteUntouched) {
 			t.Errorf("set to be %s: %v, want ErrRemoteUntouched", name, err)
@@ -77,7 +77,7 @@ func TestARemoteLibraryHasNoFolder(t *testing.T) {
 	if err := s.SetLibrary(t.Context(), lib.ID, LibraryChange{Previews: domain.PreviewsChapters}); err != nil {
 		t.Errorf("asked for chapter previews: %v", err)
 	}
-	if _, _, err := s.ForgetMissingCopies(t.Context(), lib.ID); !errors.Is(err, ErrRemoteUntouched) {
+	if _, _, err := s.ForgetMissingVersions(t.Context(), lib.ID); !errors.Is(err, ErrRemoteUntouched) {
 		t.Errorf("forgetting its versions on no disk: %v, want ErrRemoteUntouched", err)
 	}
 }
@@ -105,9 +105,9 @@ func TestForgettingALibrarysVersionsOnNoDisk(t *testing.T) {
 	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	versions, changed, err := s.ForgetMissingCopies(ctx, lib.ID)
+	versions, changed, err := s.ForgetMissingVersions(ctx, lib.ID)
 	if err != nil || versions != 1 {
-		t.Fatalf("ForgetMissingCopies = %d, %v; want the one version on no disk", versions, err)
+		t.Fatalf("ForgetMissingVersions = %d, %v; want the one version on no disk", versions, err)
 	}
 	if !slices.Equal(changed[domain.TitleRemoved], []uuid.UUID{item}) {
 		t.Errorf("told %v changed, want %v removed", changed, item)
@@ -116,7 +116,7 @@ func TestForgettingALibrarysVersionsOnNoDisk(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM items`).Scan(&left); err != nil || left != 0 {
 		t.Errorf("%d titles left, %v; want the film gone with its only version", left, err)
 	}
-	if versions, _, err := s.ForgetMissingCopies(ctx, lib.ID); err != nil || versions != 0 {
+	if versions, _, err := s.ForgetMissingVersions(ctx, lib.ID); err != nil || versions != 0 {
 		t.Errorf("asking again = %d, %v; want nothing left to forget", versions, err)
 	}
 }

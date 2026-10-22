@@ -130,19 +130,19 @@ func MediaDeletions() []MediaDeletion {
 	return []MediaDeletion{DeletionOff, DeletionFiles}
 }
 
-// MissingCopy is what becomes of a library's copy on no disk at the end of a scan: kept, marked
+// MissingVersion is what becomes of a library's version on no disk at the end of a scan: kept, marked
 // missing so a mount down for repair does not cost its titles, as Plex keeps a removed item until
 // its trash is emptied; or forgotten there and then, as Plex's "Empty trash automatically after
 // every scan" does.
-type MissingCopy string
+type MissingVersion string
 
 const (
-	MissingKept      MissingCopy = "keep"
-	MissingForgotten MissingCopy = "forget"
+	MissingKept      MissingVersion = "keep"
+	MissingForgotten MissingVersion = "forget"
 )
 
-func MissingCopies() []MissingCopy {
-	return []MissingCopy{MissingKept, MissingForgotten}
+func MissingVersions() []MissingVersion {
+	return []MissingVersion{MissingKept, MissingForgotten}
 }
 
 // BoxSetMode is how a library's wall shows the titles of a box set: collapsed into one tile for
@@ -207,8 +207,8 @@ type Library struct {
 	Keyframes   KeyframeMode
 	Themes      ThemeLookup
 	Deletion    MediaDeletion
-	// MissingCopies is what becomes of its copies on no disk at the end of a scan.
-	MissingCopies MissingCopy
+	// MissingVersions is what becomes of its versions on no disk at the end of a scan.
+	MissingVersions MissingVersion
 	// Locale is what its metadata is asked for in; what it leaves unsaid is the server's.
 	Locale Locale
 	Titles TitleLanguage

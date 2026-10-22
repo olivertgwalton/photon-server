@@ -279,7 +279,7 @@ func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
 	f.scan()
-	if err := f.st.SetLibrary(t.Context(), f.lib.ID, store.LibraryChange{MissingCopies: domain.MissingForgotten}); err != nil {
+	if err := f.st.SetLibrary(t.Context(), f.lib.ID, store.LibraryChange{MissingVersions: domain.MissingForgotten}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(f.root, "Heat (1995)", "Heat (1995).mkv")); err != nil {

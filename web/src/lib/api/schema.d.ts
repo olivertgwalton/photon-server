@@ -1025,7 +1025,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Forget a library's copies on no disk, and the titles left with nothing
+         * Forget a library's versions on no disk, and the titles left with nothing
          * @description Admin only.
          */
         delete: {
@@ -7943,7 +7943,7 @@ export interface components {
             markers: components["schemas"]["MarkerDetection"];
             media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
-            missing_copies: components["schemas"]["MissingCopy"];
+            missing_versions: components["schemas"]["MissingVersion"];
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -7973,7 +7973,7 @@ export interface components {
             markers: components["schemas"]["MarkerDetection"];
             media: components["schemas"]["LibraryMedia"];
             metadata_language?: string;
-            missing_copies: components["schemas"]["MissingCopy"];
+            missing_versions: components["schemas"]["MissingVersion"];
             monitor: components["schemas"]["Monitor"];
             name: string;
             previews: components["schemas"]["PreviewLevel"];
@@ -8634,7 +8634,7 @@ export interface components {
         };
         Forgotten: {
             /** Format: int64 */
-            copies: number;
+            versions: number;
         };
         FoundSubtitle: {
             downloads?: number;
@@ -8847,7 +8847,7 @@ export interface components {
             keyframes?: components["schemas"]["KeyframeMode"];
             markers?: components["schemas"]["MarkerDetection"];
             metadata_language?: string | null;
-            missing_copies?: components["schemas"]["MissingCopy"];
+            missing_versions?: components["schemas"]["MissingVersion"];
             monitor?: components["schemas"]["Monitor"];
             name?: string;
             previews?: components["schemas"]["PreviewLevel"];
@@ -8974,7 +8974,7 @@ export interface components {
             title: string;
         };
         /** @enum {string} */
-        MissingCopy: "keep" | "forget";
+        MissingVersion: "keep" | "forget";
         /** @enum {string} */
         Monitor: "realtime" | "off";
         Move: {

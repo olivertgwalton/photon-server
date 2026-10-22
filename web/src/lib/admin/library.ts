@@ -55,7 +55,7 @@ export function libraryChange(
 	const change: Schemas["LibraryChange"] = {
 		name: textAsTyped(form, "name"),
 		// A remote library has no folder to watch, to delete from, or to forget
-		// copies of, and the form asks none of those of one.
+		// versions of, and the form asks none of those of one.
 		monitor: (form.get("monitor") ?? undefined) as
 			| Schemas["Monitor"]
 			| undefined,
@@ -66,8 +66,8 @@ export function libraryChange(
 		deletion: (form.get("deletion") ?? undefined) as
 			| Schemas["MediaDeletion"]
 			| undefined,
-		missing_copies: (form.get("missing_copies") ?? undefined) as
-			| Schemas["MissingCopy"]
+		missing_versions: (form.get("missing_versions") ?? undefined) as
+			| Schemas["MissingVersion"]
 			| undefined,
 		metadata_language: localeChoice(form.get("metadata_language")),
 		certification_country: localeChoice(form.get("certification_country")),

@@ -287,8 +287,8 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 			return err
 		}
 		updated = append(updated, replaced...)
-		var missing domain.MissingCopy
-		if err := tx.QueryRow(ctx, `SELECT missing_copies FROM libraries WHERE id = $1`, lib).Scan(&missing); err != nil {
+		var missing domain.MissingVersion
+		if err := tx.QueryRow(ctx, `SELECT missing_versions FROM libraries WHERE id = $1`, lib).Scan(&missing); err != nil {
 			return err
 		}
 		if missing == domain.MissingForgotten {
@@ -320,11 +320,11 @@ func forgetMissing(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, erro
 		`DELETE FROM versions WHERE library_id = $1 AND missing_since IS NOT NULL RETURNING item_id`, lib)
 }
 
-// ForgetMissingCopies takes a library's versions on no disk out of it, and the titles left with
+// ForgetMissingVersions takes a library's versions on no disk out of it, and the titles left with
 // nothing with them, as an admin asks of a library that keeps them: Plex's Empty Trash. It answers
 // how many versions went and the titles that lost one or went with them, to tell as a scan's are. A
 // remote library, which no scan ends for and whose versions are its provider's offers, is refused.
-func (s *Store) ForgetMissingCopies(ctx context.Context, lib uuid.UUID) (int64, Changed, error) {
+func (s *Store) ForgetMissingVersions(ctx context.Context, lib uuid.UUID) (int64, Changed, error) {
 	var forgotten int64
 	changed := Changed{}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {

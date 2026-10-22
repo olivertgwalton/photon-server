@@ -70,7 +70,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),
 	reflect.TypeFor[domain.KeyframeMode]():        values(domain.KeyframeModes()),
 	reflect.TypeFor[domain.MediaDeletion]():       values(domain.MediaDeletions()),
-	reflect.TypeFor[domain.MissingCopy]():         values(domain.MissingCopies()),
+	reflect.TypeFor[domain.MissingVersion]():      values(domain.MissingVersions()),
 	reflect.TypeFor[domain.ArtworkLanguage]():     values(domain.ArtworkLanguages()),
 	reflect.TypeFor[domain.TitleLanguage]():       values(domain.TitleLanguages()),
 	reflect.TypeFor[domain.BoxSetMode]():          values(domain.BoxSetModes()),

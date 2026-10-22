@@ -109,7 +109,7 @@ const films: Schemas["AdminLibrary"] = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
-	missing_copies: "keep",
+	missing_versions: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
 	box_sets: "collapsed",
@@ -669,7 +669,7 @@ export async function admin(
 		case "POST /api/v1/admin/libraries/l-films/refresh":
 			return done(202);
 		case "DELETE /api/v1/admin/libraries/l-films/missing":
-			return json({ copies: 2 });
+			return json({ versions: 2 });
 		case "GET /api/v1/admin/folders": {
 			const path = url.searchParams.get("path");
 			if (!path) return json({ items: [{ name: "media", path: "/media" }] });
