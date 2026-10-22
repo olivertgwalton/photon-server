@@ -67,6 +67,25 @@ func (s *Store) PruneActivity(ctx context.Context, before time.Time) (int64, err
 	return res.RowsAffected(), err
 }
 
+// PruneExpiredDevices forgets the devices whose sign-in has expired, with what they downloaded,
+// answering how many.
+func (s *Store) PruneExpiredDevices(ctx context.Context) (int64, error) {
+	res, err := s.pool.Exec(ctx, `DELETE FROM device_sessions WHERE kind = 'device' AND expires_at < now()`)
+	return res.RowsAffected(), err
+}
+
+// PruneFailedDeliveries forgets the webhook deliveries that failed for good before a time, answering
+// how many, and the failed jobs of webhooks since removed.
+func (s *Store) PruneFailedDeliveries(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.pool.Exec(ctx, `
+		WITH dead AS (
+			DELETE FROM jobs j WHERE j.kind = 'deliver_webhook' AND j.state = 'dead'
+				AND (j.run_after < $1 OR NOT EXISTS (SELECT FROM webhook_deliveries d WHERE d.id = j.subject))
+			RETURNING j.subject)
+		DELETE FROM webhook_deliveries d USING dead WHERE d.id = dead.subject`, before)
+	return res.RowsAffected(), err
+}
+
 // TitlesAddedSince counts the films and episodes a library has had added since a time.
 func (s *Store) TitlesAddedSince(ctx context.Context, lib uuid.UUID, since time.Time) (int64, error) {
 	var n int64
