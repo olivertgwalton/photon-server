@@ -55,6 +55,12 @@ jobs:
         run: |
           deploy/fetch-tools.sh linux amd64 "$RUNNER_TEMP/tools"
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      # A backup is dumped and restored with the client tools of the server's own major version.
+      - name: Install PostgreSQL 18's client tools
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
       - run: go build ./...
       - run: go test -tags integration -race -shuffle=on -count=1 ./...
   windows:
