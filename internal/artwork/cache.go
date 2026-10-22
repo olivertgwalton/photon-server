@@ -15,9 +15,11 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"uuid"
@@ -49,8 +51,10 @@ type objects interface {
 // here never goes stale; one replaced is swept away (see Sweep).
 type Cache struct {
 	blobs objects
-	http  *http.Client
-	group singleflight.Group
+	// clients are the guarded clients by the host and port a picture is named at, so each host's
+	// connections are reused.
+	clients sync.Map
+	group   singleflight.Group
 	// resizing holds a place for each picture being resized or hashed, one per processor.
 	resizing chan struct{}
 	// hashed is told each fetched picture's BlurHash.
@@ -59,30 +63,33 @@ type Cache struct {
 
 func New(blobs objects, hashed func(ctx context.Context, id uuid.UUID, blurhash string) error) *Cache {
 	return &Cache{
-		blobs: blobs, http: &http.Client{Timeout: fetchFor, CheckRedirect: guardRedirect}, resizing: make(chan struct{}, runtime.NumCPU()),
+		blobs: blobs, resizing: make(chan struct{}, runtime.NumCPU()),
 		hashed: hashed,
 	}
 }
 
-// guardRedirect refuses a redirect to an address on the server's own networks: a provider may name
-// a public URL that redirects to a private one, which a plain client would follow and fetch from
-// the server's networks. The direct URL a provider names is its own to point where it likes, as
-// the relay fetches a provider's media from its own host; a redirect away from it is not.
-func guardRedirect(req *http.Request, via []*http.Request) error {
-	// net/http's own default stops after ten; setting CheckRedirect drops it, so it is kept.
-	if len(via) >= 10 {
-		return errors.New("stopped after 10 redirects")
+// client is the guarded client for pictures named at u's host and port: the host a provider names
+// is its own to point where it likes, as the relay fetches a provider's media from its own host, but
+// a redirect away from it is fetched only from a public address, checked as it is dialled, so a
+// public URL that redirects to the server's own networks fetches nothing from them.
+func (c *Cache) client(u *url.URL) *http.Client {
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
 	}
-	ips, err := net.DefaultResolver.LookupNetIP(req.Context(), "ip", req.URL.Hostname())
-	if err != nil {
-		return err
-	}
-	for _, ip := range ips {
-		if !media.Public(ip) {
-			return fmt.Errorf("%w: %s", media.ErrNotPublic, req.URL.Hostname())
+	from := net.JoinHostPort(u.Hostname(), port)
+	if cl, ok := c.clients.Load(from); ok {
+		if client, ok := cl.(*http.Client); ok {
+			return client
 		}
 	}
-	return nil
+	// No proxy: one would dial for it, past the guard.
+	client := &http.Client{Timeout: fetchFor, Transport: &http.Transport{
+		DialContext:       media.GuardedDial(&net.Dialer{Timeout: fetchFor}, from),
+		ForceAttemptHTTP2: true,
+	}}
+	c.clients.Store(from, client)
+	return client
 }
 
 // File answers the picture with id, fetching it from url the first time it is asked for.
@@ -161,7 +168,7 @@ func (c *Cache) fetch(ctx context.Context, id uuid.UUID, url string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := c.http.Do(req)
+	resp, err := c.client(req.URL).Do(req)
 	if err != nil {
 		return err
 	}

@@ -149,32 +149,39 @@ func (r *Relay) client(from string) *http.Client {
 			return client
 		}
 	}
-	dialer := &net.Dialer{Timeout: remoteStall}
 	c := &http.Client{Transport: &http.Transport{
 		TLSHandshakeTimeout:   remoteStall,
 		ResponseHeaderTimeout: remoteStall,
-		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			if address == from {
-				return dialer.DialContext(ctx, network, address)
-			}
-			host, port, err := net.SplitHostPort(address)
-			if err != nil {
-				return nil, err
-			}
-			ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				if !Public(ip) {
-					return nil, fmt.Errorf("%w: %s", ErrNotPublic, host)
-				}
-			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
-		},
+		DialContext:           GuardedDial(&net.Dialer{Timeout: remoteStall}, from),
 	}}
 	r.clients.Store(from, c)
 	return c
+}
+
+// GuardedDial dials as dialer does an address that is from, the host and port a provider named
+// itself, which is its own to point where it likes. Any other it resolves once, refuses with
+// ErrNotPublic where an answer is not Public, and dials the answer it checked, so a name that
+// answers otherwise when asked again is never asked again.
+func GuardedDial(dialer *net.Dialer, from string) func(ctx context.Context, network, address string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address == from {
+			return dialer.DialContext(ctx, network, address)
+		}
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		if err != nil {
+			return nil, err
+		}
+		for _, ip := range ips {
+			if !Public(ip) {
+				return nil, fmt.Errorf("%w: %s", ErrNotPublic, host)
+			}
+		}
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+	}
 }
 
 // cgnat is the shared address space carriers put behind one public address, as private to them as
