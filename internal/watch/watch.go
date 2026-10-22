@@ -3,18 +3,13 @@ package watch
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"log/slog"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
-	"syscall"
+	"strings"
 	"time"
 	"uuid"
-
-	"github.com/fsnotify/fsnotify"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
@@ -37,8 +32,9 @@ type libraries interface {
 	ScanFolders(ctx context.Context, id uuid.UUID, folders []string, delay time.Duration) error
 }
 
-// Watcher watches every folder of each library set to realtime monitoring. inotify watches one
-// folder at a time and sees nothing on a network share, so the scan schedule stays the backstop.
+// Watcher watches every folder of each library set to realtime monitoring. Neither inotify nor
+// FSEvents sees what another machine changes on a network share, so the scan schedule stays the
+// backstop.
 type Watcher struct {
 	libs  libraries
 	log   *slog.Logger
@@ -50,11 +46,11 @@ func New(libs libraries, log *slog.Logger) *Watcher {
 }
 
 func (w *Watcher) Run(ctx context.Context) error {
-	n, err := fsnotify.NewWatcher()
+	n, err := newNotifier(ctx, w.log)
 	if err != nil {
 		return err
 	}
-	defer n.Close()
+	defer n.close()
 	w.sync(ctx, n)
 	tick := time.NewTicker(resync)
 	defer tick.Stop()
@@ -72,27 +68,18 @@ func (w *Watcher) Run(ctx context.Context) error {
 				w.scan(ctx, lib, slices.Collect(maps.Keys(folders)))
 			}
 			clear(changed)
-		case ev := <-n.Events:
-			lib, ok := w.owner(ev.Name)
-			if !ok || ev.Op == fsnotify.Chmod {
+		case p := <-n.changed:
+			lib, ok := w.owner(p)
+			if !ok || ignored(w.roots[lib], p) {
 				continue
 			}
-			if ev.Has(fsnotify.Create) {
-				if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-					w.add(ctx, n, lib, ev.Name)
-				}
-			}
-			if dir, ok := library.Changed(w.roots[lib], ev.Name); ok {
+			if dir, ok := library.Changed(w.roots[lib], p); ok {
 				if changed[lib] == nil {
 					changed[lib] = map[string]bool{}
 				}
 				changed[lib][dir] = true
 			}
-		case err := <-n.Errors:
-			if !errors.Is(err, fsnotify.ErrEventOverflow) {
-				w.log.WarnContext(ctx, "watching libraries", slog.Any("err", err))
-				continue
-			}
+		case <-n.lost:
 			// Events were lost: any folder of a watched library may have changed.
 			for lib := range w.roots {
 				changed[lib] = map[string]bool{".": true}
@@ -110,7 +97,7 @@ func (w *Watcher) scan(ctx context.Context, lib uuid.UUID, folders []string) {
 }
 
 // sync starts watching libraries newly set to realtime and stops watching the rest.
-func (w *Watcher) sync(ctx context.Context, n *fsnotify.Watcher) {
+func (w *Watcher) sync(ctx context.Context, n *notifier) {
 	libs, err := w.libs.Libraries(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -124,49 +111,20 @@ func (w *Watcher) sync(ctx context.Context, n *fsnotify.Watcher) {
 			want[l.ID] = filepath.Clean(l.Root)
 		}
 	}
-	for id, root := range w.roots {
-		if want[id] != root {
-			for _, p := range n.WatchList() {
-				if within(p, root) {
-					// One gone since is no longer watched anyway.
-					if err := n.Remove(p); err != nil && !errors.Is(err, fsnotify.ErrNonExistentWatch) {
-						w.log.WarnContext(ctx, "folder still watched", slog.String("folder", p), slog.Any("err", err))
-					}
-				}
-			}
-			delete(w.roots, id)
-		}
+	if maps.Equal(want, w.roots) {
+		return
 	}
-	for id, root := range want {
-		if _, ok := w.roots[id]; !ok {
-			w.roots[id] = root
-			w.add(ctx, n, id, root)
-		}
-	}
+	w.roots = want
+	n.watch(ctx, slices.Compact(slices.Sorted(maps.Values(want))))
 }
 
-// add watches a folder and every folder under it.
-func (w *Watcher) add(ctx context.Context, n *fsnotify.Watcher, lib uuid.UUID, dir string) {
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			// A folder that cannot be read is left to the scan schedule.
-			return fs.SkipDir
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		if p != dir && naming.Ignored(d.Name()) {
-			return filepath.SkipDir
-		}
-		return n.Add(p)
-	})
-	switch {
-	case errors.Is(err, syscall.ENOSPC):
-		w.log.WarnContext(ctx, "out of inotify watches: the rest of this library is scanned on schedule only; "+
-			"raise fs.inotify.max_user_watches", slog.String("library", lib.String()), slog.String("folder", dir))
-	case err != nil:
-		w.log.WarnContext(ctx, "folder not watched", slog.String("folder", dir), slog.Any("err", err))
+// ignored reports whether p, under root, is in a folder or is a file never part of a library.
+func ignored(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == "." {
+		return err != nil
 	}
+	return slices.ContainsFunc(strings.Split(rel, string(filepath.Separator)), naming.Ignored)
 }
 
 // owner is the library a path is in: the one whose root is longest of those it is under.

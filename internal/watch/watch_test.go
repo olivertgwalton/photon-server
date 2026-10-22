@@ -1,10 +1,13 @@
 package watch
 
 import (
+	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -47,7 +50,9 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 	// touch rewrites path until a scan of folder is queued, as the watcher may not yet watch its
 	// folder.
@@ -78,11 +83,12 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(films, "Heat (1995)"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// The new folder queues a scan of its own; only a scan after that one is the file's.
-	for quiet := time.After(300 * time.Millisecond); ; {
+	// The new folder queues a scan of its own, and the writes before it may be told of in the ask
+	// after theirs; only a scan after those is the file's.
+	for quiet := time.After(2 * askEvery); ; {
 		select {
 		case <-f.scanned:
-			quiet = time.After(300 * time.Millisecond)
+			quiet = time.After(2 * askEvery)
 			continue
 		case <-quiet:
 		}
@@ -110,7 +116,9 @@ func TestAFileBeingWrittenAsksForItsScanSeldom(t *testing.T) {
 	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 	path := filepath.Join(films, "Alien.mkv")
 	// Once one write is seen, the folder is watched.
@@ -148,5 +156,108 @@ func TestALibraryAtADrivesRootOwnsWhatIsUnderIt(t *testing.T) {
 	w := &Watcher{roots: map[uuid.UUID]string{films: root}}
 	if lib, ok := w.owner(filepath.Join(root, "Films", "Heat (1995)", "Heat.mkv")); !ok || lib != films {
 		t.Errorf("a file under %s belongs to %v, %t; want the library there", root, lib, ok)
+	}
+}
+
+// A library of thousands of files is watched with a handful open, not one for each: the server
+// has only so many files it may open, and its sockets and FFmpeg's need them.
+func TestWatchingALibraryHoldsAFewFilesOpen(t *testing.T) {
+	open := func() int {
+		t.Helper()
+		fds, err := os.ReadDir(cmp.Or(map[string]string{"linux": "/proc/self/fd"}[runtime.GOOS], "/dev/fd"))
+		if err != nil {
+			t.Skip("open files are not listed here:", err)
+		}
+		return len(fds)
+	}
+	films := t.TempDir()
+	for i := range 40 {
+		dir := filepath.Join(films, fmt.Sprintf("Film %d (2000)", i))
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for j := range 10 {
+			if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("%d.mkv", j)), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	lib := uuid.NewV7()
+	f := fakeLibraries{
+		libs:    []domain.Library{{ID: lib, Root: films, Monitor: domain.MonitorRealtime}},
+		scanned: make(chan ask, 64),
+	}
+	before := open()
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error)
+	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	})
+	for deadline := time.After(5 * time.Second); len(f.scanned) == 0; {
+		if err := os.WriteFile(filepath.Join(films, "Film 0 (2000)", "0.mkv"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-deadline:
+			t.Fatal("writing queued no scan")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	if n := open() - before; n > 20 {
+		t.Errorf("watching 40 folders of 10 files holds %d more files open, want a handful", n)
+	}
+}
+
+// Finder writes .DS_Store in every folder it shows, and a NAS keeps snapshots in dot-folders:
+// neither is a library's, so neither queues a scan.
+func TestAChangeToWhatNoLibraryHoldsQueuesNoScan(t *testing.T) {
+	films := t.TempDir()
+	if err := os.Mkdir(filepath.Join(films, ".snapshot"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lib := uuid.NewV7()
+	f := fakeLibraries{
+		libs:    []domain.Library{{ID: lib, Root: films, Monitor: domain.MonitorRealtime}},
+		scanned: make(chan ask, 64),
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error)
+	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	})
+	// Once a write is seen, the library is watched.
+	for deadline := time.After(5 * time.Second); len(f.scanned) == 0; {
+		if err := os.WriteFile(filepath.Join(films, "Alien.mkv"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-deadline:
+			t.Fatal("writing queued no scan")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	<-time.After(2 * askEvery)
+	for len(f.scanned) > 0 {
+		<-f.scanned
+	}
+	for i := range 10 {
+		for _, p := range []string{filepath.Join(films, ".DS_Store"), filepath.Join(films, ".snapshot", "Alien.mkv")} {
+			if err := os.WriteFile(p, []byte{byte(i)}, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		<-time.After(50 * time.Millisecond)
+	}
+	<-time.After(2 * askEvery)
+	if n := len(f.scanned); n != 0 {
+		t.Errorf("writing .DS_Store and into .snapshot queued %d scans, want none", n)
 	}
 }
