@@ -24,24 +24,27 @@ func asked(target, encoding string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// The description is JSON by its own type, application/vnd.oai.openapi+json.
 func TestALargeJSONAnswerIsGzipped(t *testing.T) {
-	plain := asked("/api/v1/profile/rows/next_up?limit=50", "")
-	zipped := asked("/api/v1/profile/rows/next_up?limit=50", "gzip, deflate, br")
-	if plain.Header().Get("Content-Encoding") != "" || zipped.Header().Get("Content-Encoding") != "gzip" ||
-		zipped.Header().Get("Vary") != "Accept-Encoding" {
-		t.Fatalf("Content-Encoding %q then %q, Vary %q: want gzip only when asked", plain.Header().Get("Content-Encoding"),
-			zipped.Header().Get("Content-Encoding"), zipped.Header().Get("Vary"))
-	}
-	r, err := gzip.NewReader(zipped.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, plain.Body.Bytes()) || zipped.Body.Len() >= plain.Body.Len() {
-		t.Errorf("gzipped %d bytes decoding to %d, plain %d: want the same JSON, smaller", zipped.Body.Len(), len(got), plain.Body.Len())
+	for _, target := range []string{"/api/v1/profile/rows/next_up?limit=50", "/api/v1/openapi.json"} {
+		plain := asked(target, "")
+		zipped := asked(target, "gzip, deflate, br")
+		if plain.Header().Get("Content-Encoding") != "" || zipped.Header().Get("Content-Encoding") != "gzip" ||
+			zipped.Header().Get("Vary") != "Accept-Encoding" {
+			t.Fatalf("%s: Content-Encoding %q then %q, Vary %q: want gzip only when asked", target, plain.Header().Get("Content-Encoding"),
+				zipped.Header().Get("Content-Encoding"), zipped.Header().Get("Vary"))
+		}
+		r, err := gzip.NewReader(zipped.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, plain.Body.Bytes()) || zipped.Body.Len() >= plain.Body.Len() {
+			t.Errorf("%s: gzipped %d bytes decoding to %d, plain %d: want the same JSON, smaller", target, zipped.Body.Len(), len(got), plain.Body.Len())
+		}
 	}
 }
 
@@ -99,7 +102,7 @@ func revalidated(target, encoding, tags string) *httptest.ResponseRecorder {
 
 func TestAnAnswerTheClientHoldsIsNotSentAgain(t *testing.T) {
 	// A page of fifty episodes is big enough to gzip; a title page is not.
-	for _, target := range []string{"/api/v1/profile/rows/next_up?limit=50", "/api/v1/titles/" + films.String()} {
+	for _, target := range []string{"/api/v1/profile/rows/next_up?limit=50", "/api/v1/titles/" + films.String(), "/api/v1/openapi.json"} {
 		plain := asked(target, "")
 		tag := plain.Header().Get("ETag")
 		if !strings.HasPrefix(tag, `W/"`) || plain.Header().Get("Cache-Control") != "private, no-cache" {

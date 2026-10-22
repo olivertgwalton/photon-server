@@ -95,7 +95,7 @@ func matchesAny(list, tag string) bool {
 
 func isJSON(contentType string) bool {
 	t, _, err := mime.ParseMediaType(contentType)
-	return err == nil && (t == "application/json" || t == "application/problem+json")
+	return err == nil && (t == "application/json" || strings.HasSuffix(t, "+json"))
 }
 
 // bufferingWriter holds back the status and the body until the handler is done.
