@@ -1,12 +1,12 @@
 package httpapi
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"mime"
@@ -14,7 +14,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/gzipped"
 )
@@ -23,8 +22,8 @@ import (
 // as Jellyfin and Plex serve their web clients.
 type Web struct {
 	files fs.FS
-	// index is the app's one page, with the policy that lets its own script run.
-	index   []byte
+	// tag is the app's one page's ETag, the same whichever copy of it is sent.
+	tag     string
 	scripts string
 	// objectOrigin is where artwork and previews are read from as the page is served, or "".
 	objectOrigin func() string
@@ -54,7 +53,11 @@ func NewWeb(files fs.FS, objectOrigin func() string, streamOrigins func(ctx cont
 		sum := sha256.Sum256(m[1])
 		scripts = append(scripts, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'")
 	}
-	return &Web{files: files, index: index, scripts: strings.Join(scripts, " "), objectOrigin: objectOrigin, streamOrigins: streamOrigins}, nil
+	sum := fnv.New64a()
+	// A hash's Write never fails.
+	sum.Write(index)
+	tag := fmt.Sprintf(`W/"%016x"`, sum.Sum64())
+	return &Web{files: files, tag: tag, scripts: strings.Join(scripts, " "), objectOrigin: objectOrigin, streamOrigins: streamOrigins}, nil
 }
 
 // csp is the page's policy. A browser holds a redirect's end to it too, so artwork and previews
@@ -100,29 +103,31 @@ func (a *API) serveWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+	var err error
 	if name == "" || name == "index.html" {
-		a.svc.Web.servePage(w, r)
-		return
-	}
-	switch info, err := fs.Stat(a.svc.Web.files, name); {
-	case err == nil && info.Mode().IsRegular():
-		if err := a.svc.Web.serveFile(w, r, name); err != nil {
-			a.internal(w, r, err)
+		err = a.svc.Web.servePage(w, r)
+	} else {
+		switch info, statErr := fs.Stat(a.svc.Web.files, name); {
+		case statErr == nil && info.Mode().IsRegular():
+			err = a.svc.Web.serveFile(w, r, name)
+		case path.Ext(name) == "":
+			err = a.svc.Web.servePage(w, r)
+		default:
+			writeProblem(w, a.logger, codeNotFound, "")
 		}
-	case path.Ext(name) == "":
-		a.svc.Web.servePage(w, r)
-	default:
-		writeProblem(w, a.logger, codeNotFound, "")
+	}
+	if err != nil {
+		a.internal(w, r, err)
 	}
 }
 
-func (web *Web) servePage(w http.ResponseWriter, r *http.Request) {
-	h := w.Header()
-	h.Set("Content-Type", "text/html; charset=utf-8")
-	// A new build names new files, so the page that names them is always asked for again.
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Content-Security-Policy", web.csp(r.Context()))
-	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(web.index))
+// servePage serves the app's one page, compressed as its other files are. A new build names new
+// files, so the page that names them is asked for again each time, and answered 304 while it is
+// the same build.
+func (web *Web) servePage(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("Content-Security-Policy", web.csp(r.Context()))
+	w.Header().Set("ETag", web.tag)
+	return web.serveFile(w, r, "index.html")
 }
 
 // encodings are the compressed copies adapter-static's precompress writes beside each file, best
@@ -164,8 +169,6 @@ func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) e
 	return nil
 }
 
-// accepts is whether the client takes the content coding token.
-// ponytail: Accept-Encoding is matched by name, not weighed by q; no client refuses br or gzip by q=0.
 // open opens the best compressed copy the browser takes, saying which, else the file itself.
 func (web *Web) open(w http.ResponseWriter, r *http.Request, name string) (fs.File, error) {
 	for _, e := range encodings {
