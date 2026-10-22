@@ -12,8 +12,8 @@ import (
 // frames, decoded before they are shown, never have a negative decode time that tfdt cannot hold.
 const clockOffset = 10 * time.Second
 
-// maxBox bounds one box read whole. Only an mdat, which is a fragment's pictures, is not read
-// whole but copied to where it is kept.
+// maxBox bounds one box read whole. An mdat, which is a fragment's pictures, is copied to where it
+// is kept as it is read, and read whole only to be rewritten.
 const maxBox = 256 << 20
 
 var errNotFMP4 = errors.New("hls: not fragmented MP4")
@@ -24,8 +24,10 @@ type stream struct {
 	r     io.Reader
 	video uint32
 	scale uint32
-	// rewrite, where it is set, rewrites each video sample as it is written.
-	rewrite func([]byte) ([]byte, error)
+	// rewrite, where it is set, rewrites each video sample as it is written, appending it to dst.
+	rewrite func(dst, sample []byte) ([]byte, error)
+	// body and out are a rewritten fragment's mdat as read and as written, kept for the next.
+	body, out []byte
 }
 
 // readInit reads the initialisation and learns the video track and its timescale.

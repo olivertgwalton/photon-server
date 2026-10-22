@@ -85,7 +85,7 @@ func FuzzReadInit(f *testing.F) {
 		if err != nil {
 			return
 		}
-		s.rewrite = func(b []byte) ([]byte, error) { return b, nil }
+		s.rewrite = func(dst, b []byte) ([]byte, error) { return append(dst, b...), nil }
 		for err == nil {
 			var frag fragment
 			if frag, err = s.next(); err == nil {
