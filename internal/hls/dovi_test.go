@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -211,5 +212,54 @@ func TestAnOversizedFragmentIsNotRewritten(t *testing.T) {
 	}
 	if !errors.Is(err, errNotFMP4) {
 		t.Errorf("a fragment of %d bytes: err = %v, want %v", maxBox+1, err, errNotFMP4)
+	}
+}
+
+// box is an MP4 box of a type holding body.
+func box(typ string, body ...[]byte) []byte {
+	b := slices.Concat(body...)
+	return slices.Concat(binary.BigEndian.AppendUint32(nil, uint32(8+len(b))), []byte(typ), b)
+}
+
+// fragmentSharingASize is a fragment of track 1's samples, whose trun gives no sizes, so each
+// takes the tfhd's default, as ffmpeg writes a fragment of one picture.
+func fragmentSharingASize(samples ...string) (fragment, []byte) {
+	be := binary.BigEndian.AppendUint32
+	tfhd := box("tfhd", be(nil, 0x020010), be(nil, 1), be(nil, uint32(len(samples[0]))))
+	trun := func(offset uint32) []byte {
+		return box("trun", be(nil, 0x000001), be(nil, uint32(len(samples))), be(nil, offset))
+	}
+	head := box("moof", box("mfhd", be(nil, 0), be(nil, 1)), box("traf", tfhd, trun(0)))
+	moof := box("moof", box("mfhd", be(nil, 0), be(nil, 1)), box("traf", tfhd, trun(uint32(len(head)+8))))
+	body := []byte(strings.Join(samples, ""))
+	return fragment{head: slices.Concat(moof, be(nil, uint32(8+len(body))), []byte("mdat")), body: int64(len(body))}, body
+}
+
+func TestAPictureSizedByItsTfhdIsRewritten(t *testing.T) {
+	f, body := fragmentSharingASize("abcdef")
+	s := &stream{r: bytes.NewReader(body), video: 1, rewrite: func(dst, b []byte) ([]byte, error) { return append(dst, b[:2]...), nil }}
+	var out bytes.Buffer
+	if err := s.writeRewritten(&out, f); err != nil {
+		t.Fatal(err)
+	}
+	moof, picture, _ := bytes.Cut(out.Bytes(), []byte("mdat"))
+	_, tfhd, _ := bytes.Cut(moof, []byte("tfhd"))
+	if size := binary.BigEndian.Uint32(tfhd[8:]); size != 2 {
+		t.Errorf("tfhd's default sample size %d, want the rewritten picture's 2", size)
+	}
+	if size := binary.BigEndian.Uint32(moof[len(moof)-4:]); size != 8+2 || string(picture) != "ab" {
+		t.Errorf("mdat of %d bytes holding %q, want the 2 rewritten", size, picture)
+	}
+}
+
+func TestPicturesSharingASizeRewrittenApartAreRefused(t *testing.T) {
+	f, body := fragmentSharingASize("abcd", "efgh")
+	cut := 0
+	s := &stream{r: bytes.NewReader(body), video: 1, rewrite: func(dst, b []byte) ([]byte, error) {
+		cut++
+		return append(dst, b[:cut]...), nil
+	}}
+	if err := s.writeRewritten(io.Discard, f); !errors.Is(err, errNotFMP4) {
+		t.Errorf("two pictures sharing a size rewritten to 1 and 2 bytes: err = %v, want %v", err, errNotFMP4)
 	}
 }
