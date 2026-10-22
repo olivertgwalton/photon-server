@@ -195,14 +195,14 @@ test("subtitles look as this device was set, in the player", async ({
 		.toBe("#ffe14d");
 });
 
-test("an episode not yet begun is blurred once the profile hides spoilers", async ({
+test("an episode not yet begun hides its still once the profile hides spoilers", async ({
 	page,
 }) => {
 	await logIn(page, "/titles/t-ep");
 	// The season's rail: the first is part way through, the second not begun.
 	const begun = page.locator('a[href="/titles/t-ep"] img');
 	const unbegun = page.locator('a[href="/titles/t-ep2"] img');
-	await expect(unbegun).not.toHaveClass(/spoiler-blur/);
+	await expect(unbegun).toBeVisible();
 
 	await page.goto("/settings/home");
 	await page.getByLabel("Hide episode spoilers").click();
@@ -210,8 +210,8 @@ test("an episode not yet begun is blurred once the profile hides spoilers", asyn
 	await expectAccessible(page);
 
 	await page.goto("/titles/t-ep");
-	await expect(unbegun).toHaveClass(/spoiler-blur/);
-	await expect(begun).not.toHaveClass(/spoiler-blur/);
+	await expect(begun).toBeVisible();
+	await expect(unbegun).toHaveCount(0);
 });
 
 test("a show's episode plays its theme once the profile asks for theme music", async ({
