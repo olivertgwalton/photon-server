@@ -194,8 +194,8 @@ func (a *API) workRoutes() []route {
 			status: http.StatusAccepted, handle: a.runTask,
 		},
 		{
-			pattern: "POST /api/v1/admin/tasks/{key}/stop", access: admin,
-			summary: "Stop a task's work: take the jobs it queued off the queue, running or not",
+			pattern: "DELETE /api/v1/admin/tasks/{key}/run", access: admin,
+			summary: "Stop a task's run: take the jobs it queued off the queue, running or not",
 			path:    []param{{"key", domain.TaskKey(""), "The task."}},
 			status:  http.StatusNoContent, handle: a.stopTask,
 		},

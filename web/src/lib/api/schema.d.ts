@@ -2757,26 +2757,11 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/tasks/{key}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Stop a task's work: take the jobs it queued off the queue, running or not
+         * Stop a task's run: take the jobs it queued off the queue, running or not
          * @description Admin only.
          */
-        post: {
+        delete: {
             parameters: {
                 query?: never;
                 header?: never;
@@ -2798,7 +2783,6 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
