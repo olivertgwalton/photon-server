@@ -28,20 +28,20 @@ type playlistJSON struct {
 	Name string    `json:"name"`
 	// Library and Rule are a smart playlist's: the library whose wall its rule reads, and the rule
 	// its entries are what of. A playlist made by hand has neither.
-	Library    uuid.UUID        `json:"library_id,omitzero"`
-	Rule       *store.SmartRule `json:"rule,omitzero"`
-	Entries    int              `json:"entries"`
-	DurationMS int64            `json:"duration_ms"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	Library    uuid.UUID      `json:"library_id,omitzero"`
+	Rule       *smartRuleJSON `json:"rule,omitzero"`
+	Entries    int            `json:"entries"`
+	DurationMS int64          `json:"duration_ms"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 // addPlaylistJSON is a playlist of the titles given, if any; given a rule and the library it
 // reads, a smart playlist of what the rule finds there, as Plex's smart playlists.
 type addPlaylistJSON struct {
-	Name      string           `json:"name"`
-	ItemIDs   []uuid.UUID      `json:"item_ids,omitzero"`
-	LibraryID uuid.UUID        `json:"library_id,omitzero"`
-	Rule      *store.SmartRule `json:"rule,omitzero"`
+	Name      string         `json:"name"`
+	ItemIDs   []uuid.UUID    `json:"item_ids,omitzero"`
+	LibraryID uuid.UUID      `json:"library_id,omitzero"`
+	Rule      *smartRuleJSON `json:"rule,omitzero"`
 }
 
 type nameJSON struct {
@@ -69,7 +69,9 @@ func (a *API) playlistsOf(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]playlistJSON, len(all))
 	for i, p := range all {
-		out[i] = playlistJSON(p)
+		out[i] = playlistJSON{
+			ID: p.ID, Name: p.Name, Library: p.Library, Rule: ruleOf(p.Rule), Entries: p.Entries, DurationMS: p.DurationMS, UpdatedAt: p.UpdatedAt,
+		}
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[playlistJSON]{Items: out})
 }
@@ -97,10 +99,10 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 	var id uuid.UUID
 	var err error
 	if req.Rule != nil {
-		if !a.checkedRule(w, req.Rule.CheckPlayable()) {
+		if !a.checkedRule(w, req.Rule.rule().CheckPlayable()) {
 			return
 		}
-		id, err = a.svc.Playlists.AddSmartPlaylist(r.Context(), profile, req.LibraryID, req.Name, *req.Rule)
+		id, err = a.svc.Playlists.AddSmartPlaylist(r.Context(), profile, req.LibraryID, req.Name, req.Rule.rule())
 		if a.answeredAs(w, r, err, "library_id names a library the profile sees") {
 			return
 		}
@@ -120,11 +122,11 @@ func (a *API) setPlaylistRule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req store.SmartRule
-	if !a.decode(w, r, &req) || !a.checkedRule(w, req.CheckPlayable()) {
+	var req smartRuleJSON
+	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckPlayable()) {
 		return
 	}
-	if a.answered(w, r, a.svc.Playlists.SetPlaylistRule(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req)) {
+	if a.answered(w, r, a.svc.Playlists.SetPlaylistRule(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.rule())) {
 		return
 	}
 	a.playlistChanged(r, id)
@@ -270,7 +272,7 @@ func (a *API) playlistsRoutes() []route {
 		{
 			pattern: "PUT /api/v1/playlists/{id}/rule", access: signedIn,
 			summary: "Replace a smart playlist's rule, and so its entries with what it finds",
-			body:    store.SmartRule{}, status: http.StatusNoContent, handle: a.setPlaylistRule,
+			body:    smartRuleJSON{}, status: http.StatusNoContent, handle: a.setPlaylistRule,
 		},
 		{
 			pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, summary: "Rename a playlist",

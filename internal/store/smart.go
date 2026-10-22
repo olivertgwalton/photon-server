@@ -10,7 +10,8 @@ import (
 
 // SmartRule is what a smart collection's titles, or a smart playlist's entries, are, as Plex's
 // smart collections and playlists: what the libraries it reads hold of the kind it names, as a
-// wall's filter narrows them, in a wall's order, at most Limit of them, 0 for all.
+// wall's filter narrows them, in a wall's order, at most Limit of them, 0 for all. Its JSON, and
+// its Filter's, is how a rule is kept in the rule column, not what the API writes.
 type SmartRule struct {
 	// Kind is what the rule finds, a wall's titles where it names none.
 	Kind   domain.WallKind `json:"kind,omitzero"`

@@ -99,7 +99,7 @@ type adminLibraryJSON struct {
 	Kind     domain.LibraryKind  `json:"kind"`
 	Media    domain.LibraryMedia `json:"media"`
 	Root     string              `json:"root,omitzero"`
-	List     *store.ListRef      `json:"list,omitzero"`
+	List     *listRefJSON        `json:"list,omitzero"`
 	Streams  domain.FieldSource  `json:"streams,omitzero"`
 	Discover domain.FieldSource  `json:"discover,omitzero"`
 	// Requests is the provider a library of files' approved requests are sent to.
@@ -164,7 +164,7 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		SubtitleMatch: l.SubtitleMatch,
 	}
 	if l.ListSource != "" {
-		j.List = &store.ListRef{Source: l.ListSource, ID: l.ListID}
+		j.List = &listRefJSON{Source: l.ListSource, ID: l.ListID}
 	}
 	for _, k := range l.Sources {
 		j.Sources = append(j.Sources, kindSourcesOf(k))
@@ -220,7 +220,7 @@ type addLibraryJSON struct {
 	Root string `json:"root,omitzero"`
 	// List is the list a remote library holds the titles of: one kept on a provider that keeps
 	// lists, by its id there, as a list collection names one.
-	List *store.ListRef `json:"list,omitzero"`
+	List *listRefJSON `json:"list,omitzero"`
 	// Discover is a provider that searches, whose finds a search of the server shows: as titles of
 	// a remote library, which become its own as they are opened; as titles a profile may ask a
 	// library of files for.
@@ -292,7 +292,7 @@ func (a *API) remoteRefused(ctx context.Context, req addLibraryJSON) string {
 		return "a remote library names its list, {source, id}, or discover, a provider that searches, or both, and streams, the provider that streams it"
 	}
 	if req.List != nil {
-		if err := req.List.Check(); err != nil {
+		if err := req.List.ref().Check(); err != nil {
 			return err.Error()
 		}
 		if p, ok, err := a.svc.Providers.Get(ctx, req.List.Source); err != nil || !ok || !answers[provider.Lister](p, domain.CapabilityList) {
