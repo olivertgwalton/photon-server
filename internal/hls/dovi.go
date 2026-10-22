@@ -209,8 +209,10 @@ func trackRuns(moof []byte, base int) ([]trackRun, error) {
 				}
 				if head&0x10 != 0 {
 					v, err := be32(b, at)
+					if err != nil {
+						return err
+					}
 					size, shared = int(v), b[at:at+4]
-					return err
 				}
 			case "trun":
 				r, err := readTrun(b, size)

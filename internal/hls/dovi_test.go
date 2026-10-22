@@ -263,3 +263,13 @@ func TestPicturesSharingASizeRewrittenApartAreRefused(t *testing.T) {
 		t.Errorf("two pictures sharing a size rewritten to 1 and 2 bytes: err = %v, want %v", err, errNotFMP4)
 	}
 }
+
+// A tfhd that says it holds a default sample size and ends the moof before it is refused, not
+// read past.
+func TestATfhdCutShortOfItsDefaultSizeIsRefused(t *testing.T) {
+	be := binary.BigEndian.AppendUint32
+	traf := slices.Clip(box("traf", box("tfhd", be(nil, 0x020010), be(nil, 1))))
+	if _, err := trackRuns(traf, 0); !errors.Is(err, errNotFMP4) {
+		t.Errorf("err = %v, want %v", err, errNotFMP4)
+	}
+}
