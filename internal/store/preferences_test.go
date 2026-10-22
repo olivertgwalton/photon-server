@@ -32,7 +32,7 @@ func TestAProfileKeepsItsPreferencesAndTheTracksItChose(t *testing.T) {
 	want := domain.DefaultPreferences()
 	want.AudioLanguage, want.SubtitleLanguage = language.Japanese, language.MustParse("en-GB")
 	want.SubtitleMode, want.MaxBitrateKbps, want.CreditsAction = domain.SubtitlesSmart, 8000, domain.SegmentSkip
-	want.CardArt = domain.CardBackdrop
+	want.CardArt, want.Spoilers = domain.CardBackdrop, domain.SpoilersHide
 	for range 2 {
 		got, err := s.SetPreferences(ctx, oliver, want)
 		if err != nil {

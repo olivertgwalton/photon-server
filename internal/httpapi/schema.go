@@ -117,6 +117,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.ThemeLookup]():         values(domain.ThemeLookups()),
 	reflect.TypeFor[domain.ThemeMusic]():          values(domain.ThemeMusics()),
 	reflect.TypeFor[domain.CardArt]():             values(domain.CardArts()),
+	reflect.TypeFor[domain.SpoilerMode]():         values(domain.SpoilerModes()),
 	reflect.TypeFor[tracker.LinkFlow]():           values(tracker.LinkFlows()),
 	reflect.TypeFor[domain.GroupKind]():           values(domain.GroupKinds()),
 	reflect.TypeFor[domain.Notify]():              values(domain.Notifies()),

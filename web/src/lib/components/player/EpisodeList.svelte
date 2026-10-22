@@ -8,6 +8,7 @@ import Artwork from "#lib/components/Artwork.svelte";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
 import * as Popover from "#lib/components/ui/popover/index.js";
 import { episodeLabel, timecode } from "#lib/format.js";
+import { hidesSpoiler } from "#lib/spoilers.js";
 
 type Schemas = components["schemas"];
 
@@ -76,14 +77,17 @@ const progress = (e: Schemas["Card"]) =>
 							}}
 						>
 							<div
-								class="bg-ink/8 relative aspect-video w-20 shrink-0 overflow-hidden rounded"
+								class="bg-ink/8 relative aspect-video w-20 shrink-0 overflow-hidden rounded @container"
 							>
 								{#if picture}
 									<Artwork
 										id={picture}
 										shape="still"
 										sizes="80px"
-										class="size-full object-cover"
+										class={[
+											"size-full object-cover",
+											hidesSpoiler(e) && "spoiler-blur",
+										]}
 									/>
 								{/if}
 								{#if done > 0}

@@ -39,6 +39,9 @@ type preferencesJSON struct {
 	ThemeMusic domain.ThemeMusic `json:"theme_music"`
 	// CardArt is what Continue Watching and Next Up draw a card by.
 	CardArt domain.CardArt `json:"card_art"`
+	// EpisodeSpoilers is whether an episode the profile has not started is drawn with its still
+	// blurred.
+	EpisodeSpoilers domain.SpoilerMode `json:"episode_spoilers"`
 	// Notify is what the profile is told of as it is added, QuietLibraries the libraries it is
 	// told nothing of.
 	Notify         domain.Notify `json:"notify"`
@@ -63,6 +66,7 @@ type preferencesChangeJSON struct {
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
 	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
 	CardArt           domain.CardArt       `json:"card_art,omitzero"`
+	EpisodeSpoilers   domain.SpoilerMode   `json:"episode_spoilers,omitzero"`
 	Notify            domain.Notify        `json:"notify,omitzero"`
 	// QuietLibraries replaces the libraries told nothing of; [] has every library tell.
 	QuietLibraries *[]uuid.UUID `json:"quiet_libraries,omitzero"`
@@ -90,7 +94,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,
-		CardArt: p.CardArt, Notify: p.Notify,
+		CardArt: p.CardArt, EpisodeSpoilers: p.Spoilers, Notify: p.Notify,
 		QuietLibraries: nonNil(p.QuietLibraries),
 		Home:           make([]homeSectionJSON, len(p.Home)),
 	}
@@ -148,6 +152,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
 	p.ThemeMusic = cmp.Or(req.ThemeMusic, p.ThemeMusic)
 	p.CardArt = cmp.Or(req.CardArt, p.CardArt)
+	p.Spoilers = cmp.Or(req.EpisodeSpoilers, p.Spoilers)
 	p.Notify = cmp.Or(req.Notify, p.Notify)
 	if req.QuietLibraries != nil {
 		p.QuietLibraries = *req.QuietLibraries
