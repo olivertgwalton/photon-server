@@ -4,34 +4,10 @@ import type { components } from "./api/schema.js";
 import { adminAffected, affected, type Change } from "./changes.js";
 import { inbox } from "./notifications.svelte.js";
 import { restoring } from "./restoring.svelte.js";
-
-// A scan sends a burst of changes; the pages reload once for the burst.
-const settle = 1000;
+import { settling } from "./settle.js";
 
 // A dropped socket is opened again after this long.
 const retryAfter = 5_000;
-
-// Reloads what the socket's events make stale, once the burst has settled.
-function invalidateLater() {
-	const stale = new Set<string>();
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	return {
-		add(keys: string[]) {
-			for (const key of keys) stale.add(key);
-			if (stale.size && !timer) {
-				timer = setTimeout(() => {
-					timer = undefined;
-					const keys = [...stale];
-					stale.clear();
-					for (const key of keys) invalidate(key);
-				}, settle);
-			}
-		},
-		stop() {
-			clearTimeout(timer);
-		},
-	};
-}
 
 type Feed = components["schemas"]["Feed"];
 
@@ -74,7 +50,10 @@ function openSocket(
 // Nothing is kept to resend, so after a reconnect every page loads again.
 export function connectLive(server?: LiveStream): () => void {
 	let reconnected = false;
-	const later = invalidateLater();
+	// Reloads what the socket's events make stale, once the burst has settled.
+	const later = settling((keys) => {
+		for (const key of keys) invalidate(key);
+	});
 	const close = openSocket(
 		server ? "server" : "profile",
 		({ feed, event, data }) => {
