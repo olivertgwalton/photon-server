@@ -18,6 +18,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -250,9 +251,11 @@ func (a *API) sending(d playback.Delivery, h http.HandlerFunc) http.HandlerFunc 
 }
 
 // handle answers the patterns with h for a signed-in profile alone; anyone answers them for
-// anyone.
+// anyone. A signed-in reply's JSON is gzipped for an app that takes it; the sign-ins, whose
+// replies carry a token, are anyone's and never gzipped, as BREACH reads a secret from the length
+// of a compressed reply.
 func (a *API) handle(h http.HandlerFunc, patterns ...string) {
-	a.anyone(a.signedIn(h), patterns...)
+	a.anyone(gzipped.JSON(a.signedIn(h), a.logger).ServeHTTP, patterns...)
 }
 
 // handleMedia answers the patterns with h for a signed-in profile, or for an address the server

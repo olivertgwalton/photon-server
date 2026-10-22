@@ -1,9 +1,10 @@
-// Package gzipped gzips replies for the clients that take gzip.
+// Package gzipped gzips JSON replies for the clients that take gzip.
 package gzipped
 
 import (
 	"compress/gzip"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
@@ -56,4 +57,111 @@ func Release(gz *gzip.Writer) error {
 	err := gz.Close()
 	writers.Put(gz)
 	return err
+}
+
+// JSON gzips each JSON reply of Above or more that h writes, as it is written, for a client that
+// takes gzip. What else h writes, and every reply to a client that does not, is left as it is.
+func JSON(h http.Handler, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Accept-Encoding")
+		if !Accepts(r, "gzip") {
+			h.ServeHTTP(w, r)
+			return
+		}
+		z := &writer{ResponseWriter: w}
+		h.ServeHTTP(z, r)
+		// A write fails only once the client has gone, and then there is no one left to tell.
+		if err := z.finish(); err != nil {
+			log.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+		}
+	})
+}
+
+// mode is what a writer has made of its reply.
+type mode int
+
+const (
+	// holding is a JSON reply not yet long enough to be worth compressing.
+	holding mode = iota
+	plain
+	zipped
+)
+
+type writer struct {
+	http.ResponseWriter
+	mode   mode
+	status int
+	held   []byte
+	gz     *gzip.Writer
+}
+
+func (z *writer) Unwrap() http.ResponseWriter { return z.ResponseWriter }
+
+func (z *writer) WriteHeader(status int) {
+	if z.status == 0 {
+		z.status = status
+	}
+}
+
+func (z *writer) Write(p []byte) (int, error) {
+	if z.status == 0 {
+		z.status = http.StatusOK
+	}
+	if z.mode == holding {
+		h := z.Header()
+		if z.status == http.StatusOK && IsJSON(h.Get("Content-Type")) && h.Get("Content-Encoding") == "" {
+			z.held = append(z.held, p...)
+			if len(z.held) < Above {
+				return len(p), nil
+			}
+			return len(p), z.become(zipped)
+		}
+		if err := z.become(plain); err != nil {
+			return 0, err
+		}
+	}
+	if z.mode == zipped {
+		return z.gz.Write(p)
+	}
+	return z.ResponseWriter.Write(p)
+}
+
+// become sends the header as m has it, and what was held.
+func (z *writer) become(m mode) error {
+	z.mode = m
+	if m == zipped {
+		z.Header().Set("Content-Encoding", "gzip")
+		z.Header().Del("Content-Length")
+	}
+	z.ResponseWriter.WriteHeader(z.status)
+	held := z.held
+	z.held = nil
+	if m == plain {
+		if len(held) == 0 {
+			return nil
+		}
+		_, err := z.ResponseWriter.Write(held)
+		return err
+	}
+	var err error
+	if z.gz, err = Writer(z.ResponseWriter); err != nil {
+		return err
+	}
+	_, err = z.gz.Write(held)
+	return err
+}
+
+// finish sends a reply too short to compress as it is, and ends a gzipped one.
+func (z *writer) finish() error {
+	switch z.mode {
+	case holding:
+		if z.status == 0 {
+			return nil
+		}
+		return z.become(plain)
+	case zipped:
+		return Release(z.gz)
+	case plain:
+	}
+	return nil
 }

@@ -1,6 +1,8 @@
 package jellyfin
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -145,6 +147,36 @@ func TestAnAppIsAnsweredALongListWhole(t *testing.T) {
 		if len(got.Items) != len(page) || len(page) > 0 && got.Items[len(page)-1].Name != page[len(page)-1].Title {
 			t.Errorf("%s: %d items", target, len(got.Items))
 		}
+	}
+}
+
+// Every app Jellyfin's clients are built on asks for gzip, as Jellyfin's own response compression
+// answers it: a library's list goes over the network a fraction of its size.
+func TestALongListIsGzippedForAnAppThatTakesIt(t *testing.T) {
+	api := longAPI(newLongLibrary(listChunk + 7))
+	const target = "/Items?Recursive=true&IncludeItemTypes=Movie&Fields=MediaSources,Overview,ProviderIds"
+	plain := serve(api, http.MethodGet, target, `MediaBrowser Token="pst_device"`, "")
+	r := httptest.NewRequest(http.MethodGet, target, nil)
+	r.Header.Set("Authorization", `MediaBrowser Token="pst_device"`)
+	r.Header.Set("Accept-Encoding", "gzip")
+	zipped := httptest.NewRecorder()
+	api.ServeHTTP(zipped, r)
+	if zipped.Code != http.StatusOK || zipped.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("%d, Content-Encoding %q: want it gzipped", zipped.Code, zipped.Header().Get("Content-Encoding"))
+	}
+	gz, err := gzip.NewReader(zipped.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, plain.Body.Bytes()) {
+		t.Fatalf("gzipped list decodes to %d bytes, want the %d of the list as it is", len(got), plain.Body.Len())
+	}
+	if n := zipped.Body.Len(); n*4 > plain.Body.Len() {
+		t.Errorf("gzipped to %d bytes from %d: want a fraction", n, plain.Body.Len())
 	}
 }
 
