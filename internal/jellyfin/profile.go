@@ -242,12 +242,7 @@ func (c condition) holds(s domain.Stream) bool {
 }
 
 func allHold(cs []condition, s domain.Stream) bool {
-	for _, c := range cs {
-		if !c.holds(s) {
-			return false
-		}
-	}
-	return true
+	return !slices.ContainsFunc(cs, func(c condition) bool { return !c.holds(s) })
 }
 
 // codecAllows is whether a track meets every codec profile of a kind that applies to it in a
