@@ -3,6 +3,11 @@
 A generic media server for films and television, in Go. Plex, Jellyfin and Emby are the references
 for behaviour; no client's or other server's vocabulary shapes the wire.
 
+The one exception is `internal/jellyfin`, which answers Jellyfin's own API so Jellyfin's apps play
+from photon. Its routes, names and auth are Jellyfin's, the `ApiKey` query among them, because the
+apps send nothing else. It is a translation onto the same store and playback as the native API,
+not a second server: what it needs that they lack is added to them, not written beside them.
+
 ## Workflow
 
 - **One concern per branch, one branch per PR.** Branch off `main` as `feature/…`, `fix/…` or
@@ -33,7 +38,9 @@ for behaviour; no client's or other server's vocabulary shapes the wire.
   profile is `/profile`, beside the household's `/profiles`. A path parameter is named for what
   it picks: `{id}` for a resource's own id, the resource's name for one under another (`{part}`,
   `{entry}`), and the key's name for a natural key (`{slug}`, `{name}`). A password, PIN or
-  pairing code goes in a body, never in a path or query a log keeps.
+  pairing code goes in a body, never in a path or query a log keeps. A signed media address is the
+  exception the players force: an HLS player fetches segments by URL alone, so its signature and
+  expiry are in the path, and they open only that playback's files until they lapse.
 - **Standard library first.** A dependency earns its place in the PR that adds it.
 - **Tests test behaviour** a client or operator would notice. No test that only restates the code.
 - **Comments only where something is surprising.** No doc comment that repeats the name.
