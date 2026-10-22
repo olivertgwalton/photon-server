@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 )
 
 // Web is the web app's build (web/, adapter-static), served for every path the API does not own,
@@ -164,14 +166,10 @@ func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) e
 
 // accepts is whether the client takes the content coding token.
 // ponytail: Accept-Encoding is matched by name, not weighed by q; no client refuses br or gzip by q=0.
-func accepts(r *http.Request, token string) bool {
-	return strings.Contains(r.Header.Get("Accept-Encoding"), token)
-}
-
 // open opens the best compressed copy the browser takes, saying which, else the file itself.
 func (web *Web) open(w http.ResponseWriter, r *http.Request, name string) (fs.File, error) {
 	for _, e := range encodings {
-		if !accepts(r, e.token) {
+		if !gzipped.Accepts(r, e.token) {
 			continue
 		}
 		if f, err := web.files.Open(name + e.ext); err == nil {
