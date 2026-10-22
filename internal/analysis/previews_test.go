@@ -161,7 +161,7 @@ func (f *fixture) setPreviews(level domain.PreviewLevel) {
 	}
 }
 
-// chapterImages answers the image address of each chapter of the title's copy on disk.
+// chapterImages answers the image address of each chapter of the title's version on disk.
 func (f *fixture) chapterImages(title uuid.UUID) []string {
 	f.t.Helper()
 	page, err := f.st.Title(f.t.Context(), f.admin.ID, title)

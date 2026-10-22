@@ -10,7 +10,7 @@ import (
 
 const contentSample = 64 << 10
 
-// ContentKey identifies a copy of parts parts by its bytes rather than its path: the part count,
+// ContentKey identifies a version of parts parts by its bytes rather than its path: the part count,
 // then its first part's size and first and last 64 KiB, first being that part open. A rename or a
 // move keeps the key; replacing the file changes it. It reads without moving the file's offset.
 func ContentKey(first *os.File, parts int) ([]byte, error) {

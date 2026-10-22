@@ -1,4 +1,4 @@
-// Package subtitles opens the subtitle files beside copies wherever they are kept.
+// Package subtitles opens the subtitle files beside versions wherever they are kept.
 package subtitles
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Files are the store, with the subtitle files beside copies found wherever they are kept: in a
+// Files are the store, with the subtitle files beside versions found wherever they are kept: in a
 // library, or, for one fetched, written from Postgres into dir the first time this node opens it,
 // so every node serves it as it serves a file of a library.
 type Files struct {

@@ -88,7 +88,7 @@ func NewSessions(live sessionStore, saved progressStore, st streams, raise func(
 	}
 }
 
-// Start opens playback id, of the copy of a title its card names, by its card's profile, from
+// Start opens playback id, of the version of a title its card names, by its card's profile, from
 // start, served by node, unless one is started under id already (ErrStarted). It is not said to have started until
 // its stream opens (Opened): one whose stream is refused is abandoned, and never started.
 func (s *Sessions) Start(ctx context.Context, id uuid.UUID, method domain.PlayMethod, card domain.PlaybackCard, start time.Duration, node uuid.UUID) (domain.Playback, error) {

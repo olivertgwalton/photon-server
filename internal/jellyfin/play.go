@@ -73,7 +73,7 @@ func (a *API) itemID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return id, err == nil
 }
 
-// playbackInfo answers a title's copies, as Jellyfin's PlaybackInfoResponse, the copy the app
+// playbackInfo answers a title's versions, as Jellyfin's PlaybackInfoResponse, the version the app
 // asked for or photon would play first, and the play session the app reports on. Where the app
 // sends its device profile, the first is decided for it: played as it is where it plays that,
 // else made into HLS it takes, at a TranscodingUrl. Nothing is started until the app plays.
@@ -92,9 +92,9 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
-	version = copyAsked(id, version)
+	version = versionAsked(id, version)
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	a.ensureCopies(r.Context(), id)
+	a.ensureVersions(r.Context(), id)
 	c, err := a.svc.Playing.Playable(r.Context(), profile, id, version)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)
@@ -121,7 +121,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
 	for _, v := range versions {
 		src := sourceOf(v, said)
-		// An app that names a copy is answered it alone, as Jellyfin answers it.
+		// An app that names a version is answered it alone, as Jellyfin answers it.
 		if v.ID == c.Version {
 			out.MediaSources = slices.Insert(out.MediaSources, 0, src)
 		} else if version == (uuid.UUID{}) {
@@ -153,7 +153,7 @@ type playbackRequest struct {
 	AllowAudioStreamCopy *bool `json:"AllowAudioStreamCopy"`
 }
 
-// decide says how the app plays a copy: as it is, where its profile plays that; else as HLS photon
+// decide says how the app plays a version: as it is, where its profile plays that; else as HLS photon
 // makes of it, copying what the app plays and encoding the rest, where the app takes HLS photon
 // makes; else neither, and the app plays what it can of the file. The app's bitrate is kept within
 // remote, the server's limit for it, in kbps.
@@ -172,7 +172,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	t, segments, takesHLS := p.hls(sound)
 	if (req.EnableDirectPlay == nil || *req.EnableDirectPlay) && p.playsDirectly(c, video, sound, picked, limit) {
-		// So Jellyfin's web app falls back to HLS where the copy fails to play, as Jellyfin answers.
+		// So Jellyfin's web app falls back to HLS where the version fails to play, as Jellyfin answers.
 		src.SupportsTranscoding = takesHLS
 		deliverSubtitles(a.mediaKey(r), src, item, c, p, nil, true)
 		return
@@ -191,7 +191,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	log := a.logger.With(slog.String("item", item.String()), slog.String("play_session", session.String()))
 	// Video is encoded on the node the transcode will be placed on, so it decides by what that
-	// node encodes; where no node encodes, this one decides, and a copy it would encode is refused.
+	// node encodes; where no node encodes, this one decides, and a version it would encode is refused.
 	candidates, err := a.svc.Placer.Candidates(r.Context(), playback.Need{})
 	if err != nil {
 		log.ErrorContext(r.Context(), "jellyfin transcode not placed", slog.Any("err", err))
@@ -204,7 +204,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	hp := p.hlsProfile(t, segments, c, limit)
 	hp.EncodeVideo = req.AllowVideoStreamCopy != nil && !*req.AllowVideoStreamCopy
 	hp.EncodeAudio = req.AllowAudioStreamCopy != nil && !*req.AllowAudioStreamCopy
-	d, err := playback.Decide(hp, playback.CopyOf(c), chosen, playback.EncodingOf(encoder))
+	d, err := playback.Decide(hp, playback.VersionOf(c), chosen, playback.EncodingOf(encoder))
 	if err == nil && d.Video != nil && d.Video.Encode != nil && len(candidates) == 0 {
 		err = a.svc.Placer.Refuse(candidates, nil)
 	}
@@ -231,7 +231,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 // transcodingContainers are Jellyfin's names for the segments of each format.
 var transcodingContainers = map[domain.SegmentFormat]string{domain.SegmentsFMP4: "mp4", domain.SegmentsMPEGTS: "ts"}
 
-// direct is a copy's tracks played as they are: its first video, and the audio an app chose, else
+// direct is a version's tracks played as they are: its first video, and the audio an app chose, else
 // its default, else its first.
 func direct(c store.PlayVersion, audio *int) (video, sound *domain.Stream) {
 	video, sound = playback.Pick(c.Streams, audio)
@@ -241,7 +241,7 @@ func direct(c store.PlayVersion, audio *int) (video, sound *domain.Stream) {
 	return video, sound
 }
 
-// subtitleOf is the subtitle an app chose by its index: one of the copy's own tracks, whose index
+// subtitleOf is the subtitle an app chose by its index: one of the version's own tracks, whose index
 // photon's decision takes, or a file beside it, numbered after them.
 func subtitleOf(c store.PlayVersion, index *int) (*int, *subtitleChoice) {
 	if index == nil || *index < 0 {
@@ -260,11 +260,11 @@ func subtitleOf(c store.PlayVersion, index *int) (*int, *subtitleChoice) {
 	return nil, nil
 }
 
-// errSeveralFiles is a copy in several files asked for as one: its files are joined only in HLS,
+// errSeveralFiles is a version in several files asked for as one: its files are joined only in HLS,
 // which every app taking HLS is given at its TranscodingUrl.
-var errSeveralFiles = errors.New("a copy in several files plays only as HLS")
+var errSeveralFiles = errors.New("a version in several files plays only as HLS")
 
-// stream serves a copy's file as it is, with ranges, so an app seeks by asking for the bytes it
+// stream serves a version's file as it is, with ranges, so an app seeks by asking for the bytes it
 // wants.
 func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	c, ok := a.oneFile(w, r)
@@ -274,8 +274,8 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	a.serveFile(w, r, func(ctx context.Context) (media.Input, error) { return a.svc.Parts.Open(ctx, c.Parts[0].ID) })
 }
 
-// oneFile is the copy an app names, or the one photon would play, of a title the profile may play,
-// where it is in one file. A copy in several files is refused: see errSeveralFiles.
+// oneFile is the version an app names, or the one photon would play, of a title the profile may play,
+// where it is in one file. A version in several files is refused: see errSeveralFiles.
 func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayVersion, bool) {
 	id, ok := a.itemID(w, r)
 	if !ok {
@@ -287,8 +287,8 @@ func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayVersion
 		return store.PlayVersion{}, false
 	}
 	// An app may stream a placeholder without asking for its playback info first.
-	a.ensureCopies(r.Context(), id)
-	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, copyAsked(id, version))
+	a.ensureVersions(r.Context(), id)
+	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, versionAsked(id, version))
 	switch {
 	case errors.Is(err, store.ErrNotFound) || err == nil && len(c.Parts) == 0:
 		a.refuse(w, http.StatusNotFound)
@@ -304,7 +304,7 @@ func (a *API) oneFile(w http.ResponseWriter, r *http.Request) (store.PlayVersion
 	return c, true
 }
 
-// download serves a copy's file as stream does, as an attachment named as the file is, which a
+// download serves a version's file as stream does, as an attachment named as the file is, which a
 // browser saves rather than plays: a .strm's as its media, by the container it is in.
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
 	c, ok := a.oneFile(w, r)
@@ -419,7 +419,7 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 	}
 }
 
-// startDirect starts the playback the dashboard shows of a copy an app plays as it is.
+// startDirect starts the playback the dashboard shows of a version an app plays as it is.
 func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	item, ok := parseID(rep.ItemID)
 	if !ok {
@@ -430,7 +430,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 		return store.ErrNotFound
 	}
 	s := auth.SessionOf(r.Context())
-	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, copyAsked(item, version))
+	c, err := a.svc.Playing.Playable(r.Context(), s.Profile.ID, item, versionAsked(item, version))
 	if err != nil {
 		return err
 	}

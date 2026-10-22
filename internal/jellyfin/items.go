@@ -80,7 +80,7 @@ type item struct {
 	MediaType               string              `json:"MediaType"`
 	PlaylistItemID          string              `json:"PlaylistItemId,omitempty"`
 
-	// Trickplay is each copy's thumbnail sheets, by the copy's id and their width.
+	// Trickplay is each version's thumbnail sheets, by the version's id and their width.
 	Trickplay map[string]map[int]trickplayInfo `json:"Trickplay,omitempty"`
 
 	Chapters []chapterInfo `json:"Chapters,omitempty"`
@@ -281,7 +281,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	return it
 }
 
-// sources fills a playable item's copies, and its running time and container from the first.
+// sources fills a playable item's versions, and its running time and container from the first.
 func (it *item) sources(versions []store.VersionPage, w words.Words) {
 	it.MediaSources = make([]mediaSource, len(versions))
 	for n, v := range versions {

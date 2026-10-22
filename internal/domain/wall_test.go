@@ -2,7 +2,7 @@ package domain
 
 import "testing"
 
-// A copy is named by the resolution a wall's filter finds it under, by its width, so a scope
+// A version is named by the resolution a wall's filter finds it under, by its width, so a scope
 // master is not taken for less than it is.
 func TestResolutionOf(t *testing.T) {
 	for width, want := range map[int]Resolution{

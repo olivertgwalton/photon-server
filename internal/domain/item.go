@@ -108,7 +108,7 @@ type Streamed struct {
 	Season, Episode int
 }
 
-// Offer is a copy of a film or an episode a provider streams. Key is which bytes it is, the same
+// Offer is a version of a film or an episode a provider streams. Key is which bytes it is, the same
 // each time it is offered; URL is where they are now, which may stop being, so it is never kept.
 type Offer struct {
 	Key      string
@@ -129,19 +129,19 @@ func OfferedFrom(address string) string {
 	return net.JoinHostPort(u.Hostname(), cmp.Or(u.Port(), map[string]string{"http": "80", "https": "443"}[u.Scheme]))
 }
 
-// Fingerprint is what the copy an offer is is known by among a library's, of the provider source
+// Fingerprint is what the version an offer is is known by among a library's, of the provider source
 // that offers it.
 func (o Offer) Fingerprint(source FieldSource) []byte {
 	sum := sha256.Sum256([]byte(string(source) + "\x00" + o.Key))
 	return sum[:]
 }
 
-// Place is where a part's bytes are: a file under a folder library's root, or a copy a provider
+// Place is where a part's bytes are: a file under a folder library's root, or a version a provider
 // streams of a remote library's film or episode.
 type Place struct {
 	Media LibraryMedia
 	Root  string
-	// Rel is the file's path under Root; of a copy streamed, its fingerprint's hex and its name,
+	// Rel is the file's path under Root; of a version streamed, its fingerprint's hex and its name,
 	// as {hex}/{name}.
 	Rel    string
 	Source FieldSource

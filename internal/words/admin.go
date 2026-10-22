@@ -28,7 +28,7 @@ var tasks = map[domain.TaskKey]Described{
 	domain.TaskPruneExpired:       {"Forget what has expired", "Forgets devices signed out for going unused, and webhook deliveries long past retrying."},
 	domain.TaskSyncLists:          {"Sync list collections", "Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has."},
 	domain.TaskRefreshCollections: {"Refresh smart collections", "Finds what each smart collection's filters hold again, catching what was matched or edited since."},
-	domain.TaskFetchSubtitles:     {"Download missing subtitles", "Fetches subtitles in the languages libraries name for copies with none in them."},
+	domain.TaskFetchSubtitles:     {"Download missing subtitles", "Fetches subtitles in the languages libraries name for versions with none in them."},
 	domain.TaskRefreshAnimeLists:  {"Refresh the anime lists", "Reads the Anime-Lists and Fribb lists again, which place AniDB and AniList entries in shows' seasons."},
 }
 

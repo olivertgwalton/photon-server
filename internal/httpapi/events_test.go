@@ -99,7 +99,7 @@ func TestAnAdminIsToldWhatHappensOnEveryNode(t *testing.T) {
 	go here.Run(running)
 
 	work := &fakeWork{}
-	srv := httptest.NewServer(New(log, domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: here, Audience: st, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
+	srv := httptest.NewServer(New(log, domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: here, Audience: st, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
 	defer srv.Close()
 	refused, res, err := websockettest.Dial(t.Context(), srv.URL+"/api/v1/events?feed=server", http.Header{"Authorization": {"Bearer " + memberToken}})
 	if refused != nil || err != nil || res.StatusCode != http.StatusForbidden {

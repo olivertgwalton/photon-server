@@ -43,7 +43,7 @@ func window(kind domain.MarkerKind, length time.Duration) (from, span time.Durat
 	return 0, min(length/4, introWindow)
 }
 
-// sound is one copy's fingerprint over a window of one of its parts.
+// sound is one version's fingerprint over a window of one of its parts.
 type sound struct {
 	episode uuid.UUID
 	// from is where the window starts in the part, and length is the part's.
@@ -82,7 +82,7 @@ func shared(kind domain.MarkerKind, prints []sound) []*domain.Marker {
 }
 
 // longer reports whether a stretch is too long to be kind: credits are never the whole window,
-// which two copies of one programme would share.
+// which two versions of one programme would share.
 func longer(kind domain.MarkerKind, p sound, r run) bool {
 	limit := kind.Longest()
 	if kind == domain.MarkerCredits {

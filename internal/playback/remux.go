@@ -29,10 +29,10 @@ type partOpener interface {
 }
 
 type remuxer interface {
-	Open(ctx context.Context, playback uuid.UUID, c hls.Copy) error
+	Open(ctx context.Context, playback uuid.UUID, c hls.Version) error
 }
 
-// Remuxes opens a playback's copy as HLS: each of its files cut at its keyframes where the video
+// Remuxes opens a playback's version as HLS: each of its files cut at its keyframes where the video
 // is copied and they are known, which are indexed in the background as a library is scanned; or
 // every SegmentLength where it is encoded or none are known, as Jellyfin cuts a file it has no
 // keyframes for. A play never waits on a file being read for them.
@@ -46,18 +46,18 @@ func NewRemuxes(st partStore, parts partOpener, h remuxer) *Remuxes {
 	return &Remuxes{store: st, parts: parts, hls: h}
 }
 
-// Renditions are the plain text subtitles of a copy its HLS offers as WebVTT.
+// Renditions are the plain text subtitles of a version its HLS offers as WebVTT.
 type Renditions string
 
 const (
 	// RenditionsAll are every one, embedded and beside it.
 	RenditionsAll Renditions = "all"
-	// RenditionsEmbedded are those embedded alone: the player fetches each file beside the copy
+	// RenditionsEmbedded are those embedded alone: the player fetches each file beside the version
 	// itself, and would show one offered twice.
 	RenditionsEmbedded Renditions = "embedded"
 )
 
-// Open starts a playback's HLS of a copy at start, in segments of the format asked for, carrying
+// Open starts a playback's HLS of a version at start, in segments of the format asked for, carrying
 // its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
 // subtitles as WebVTT, as renditions says.
 func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
@@ -97,13 +97,13 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVers
 			kbps += audio.Encode.BitrateKbps
 		}
 	}
-	h := hls.Copy{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
+	h := hls.Version{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
 	if video.Burns() {
 		return r.hls.Open(ctx, playback, h)
 	}
-	// The parts of a copy are cut from one master, so each holds the first's streams.
+	// The parts of a version are cut from one master, so each holds the first's streams.
 	for _, st := range c.Streams {
 		if st.Kind != domain.StreamSubtitle || !hls.TextSubtitle(st.Codec) {
 			continue
@@ -128,7 +128,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVers
 	return r.hls.Open(ctx, playback, h)
 }
 
-// file is a subtitle file beside a copy, in its language.
+// file is a subtitle file beside a version, in its language.
 func (r *Remuxes) file(ctx context.Context, c store.PlayVersion, id uuid.UUID) *hls.SubtitleSource {
 	src := &hls.SubtitleSource{Open: func() (media.Input, error) { return openFile(ctx, r.store.SubtitleFile, id) }}
 	if i := slices.IndexFunc(c.Subtitles, func(f store.SubtitleRef) bool { return f.ID == id }); i >= 0 && c.Subtitles[i].Language != language.Und {
@@ -137,7 +137,7 @@ func (r *Remuxes) file(ctx context.Context, c store.PlayVersion, id uuid.UUID) *
 	return src
 }
 
-// codecOf is the codec of a copy's stream.
+// codecOf is the codec of a version's stream.
 func codecOf(streams []domain.Stream, index int) string {
 	if i := slices.IndexFunc(streams, func(s domain.Stream) bool { return s.Index == index }); i >= 0 {
 		return streams[i].Codec
@@ -174,7 +174,7 @@ func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duratio
 	return keyframes, nil
 }
 
-// openFile opens a subtitle file beside a copy.
+// openFile opens a subtitle file beside a version.
 func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (string, string, error), id uuid.UUID) (media.Input, error) {
 	root, rel, err := where(ctx, id)
 	if err != nil {

@@ -20,7 +20,7 @@ type fingerprinter func(ctx context.Context, in media.Input, from, length time.D
 type shader func(ctx context.Context, in media.Input, from time.Duration) ([]media.Shade, error)
 
 // Markers finds the intro and credits a season's episodes share by comparing their sound, as
-// Plex's intro detection and Jellyfin's Intro Skipper do: each copy's first part for the intro,
+// Plex's intro detection and Jellyfin's Intro Skipper do: each version's first part for the intro,
 // its last for the credits. A season with nothing not yet compared is passed over. A film, which
 // has no other episode to compare with, has its credits found by its picture (see filmCredits).
 func Markers(st *store.Store, parts opener, fingerprint fingerprinter, shades shader) jobs.Handler {
@@ -43,9 +43,9 @@ func Markers(st *store.Store, parts opener, fingerprint fingerprinter, shades sh
 			for n < len(rest) && rest[n].Version == rest[0].Version {
 				n++
 			}
-			copyParts := rest[:n]
+			versionParts := rest[:n]
 			rest = rest[n:]
-			first, last := copyParts[0], copyParts[n-1]
+			first, last := versionParts[0], versionParts[n-1]
 			p, err := take(ctx, parts, fingerprint, first, domain.MarkerIntro)
 			// What is not compared is compared once the server has an FFmpeg that can.
 			if errors.Is(err, media.ErrNoChromaprint) {
@@ -59,7 +59,7 @@ func Markers(st *store.Store, parts opener, fingerprint fingerprinter, shades sh
 				return err
 			}
 			credits, creditParts = append(credits, p), append(creditParts, last.ID)
-			for _, p := range copyParts {
+			for _, p := range versionParts {
 				compared = append(compared, p.ID)
 			}
 		}
@@ -90,7 +90,7 @@ func take(ctx context.Context, parts opener, fingerprint fingerprinter, part sto
 	return sound{episode: part.Episode, from: from, length: part.Duration, points: points}, err
 }
 
-// filmMarkers finds the credits at the end of each copy of a film not yet read.
+// filmMarkers finds the credits at the end of each version of a film not yet read.
 func filmMarkers(ctx context.Context, st *store.Store, parts opener, shades shader, ends []store.FilmEnd) error {
 	found := map[uuid.UUID][]domain.Marker{}
 	var read []uuid.UUID

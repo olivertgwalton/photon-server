@@ -40,14 +40,14 @@ type authenticator interface {
 	Session(ctx context.Context, id uuid.UUID) (domain.Session, error)
 }
 
-// parts opens the parts of copies for players to fetch.
+// parts opens the parts of versions for players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
 }
 
-// copies give a remote library's films and episodes the copies their provider offers, as one is
+// remoteVersions give a remote library's films and episodes the remoteVersions their provider offers, as one is
 // opened or played.
-type copies interface {
+type remoteVersions interface {
 	Ensure(ctx context.Context, item uuid.UUID) error
 }
 
@@ -56,12 +56,12 @@ type discover interface {
 	Find(ctx context.Context, profile uuid.UUID, media domain.LibraryMedia, text string, kinds []domain.ItemKind) ([]store.Discovery, error)
 }
 
-// ensureCopies gives a remote film or episode the copies its provider offers as an app opens or
-// plays it, as the app chooses its copy from the item's media sources first; one its provider
+// ensureVersions gives a remote film or episode the versions its provider offers as an app opens or
+// plays it, as the app chooses its version from the item's media sources first; one its provider
 // cannot give is an item with none.
-func (a *API) ensureCopies(ctx context.Context, id uuid.UUID) {
-	if err := a.svc.Copies.Ensure(ctx, id); err != nil && !errors.Is(err, remote.ErrFetching) {
-		a.logger.WarnContext(ctx, "no copy of a remote title", slog.Any("err", err))
+func (a *API) ensureVersions(ctx context.Context, id uuid.UUID) {
+	if err := a.svc.RemoteVersions.Ensure(ctx, id); err != nil && !errors.Is(err, remote.ErrFetching) {
+		a.logger.WarnContext(ctx, "no version of a remote title", slog.Any("err", err))
 	}
 }
 
@@ -71,19 +71,19 @@ type Services struct {
 	Raise  func(ctx context.Context, e domain.Event)
 	// Subscribe is what happens on every node, which an app's socket is told as its profile may
 	// see it.
-	Subscribe func() (<-chan domain.Event, func())
-	Audience  audience
-	Reach     *reach.Reach
-	Catalogue catalogue
-	Playlists playlists
-	Displays  displays
-	Pictures  pictureFiles
-	Playing   playing
-	Parts     parts
-	Copies    copies
-	Discover  discover
-	Playbacks playbacks
-	Watching  watching
+	Subscribe      func() (<-chan domain.Event, func())
+	Audience       audience
+	Reach          *reach.Reach
+	Catalogue      catalogue
+	Playlists      playlists
+	Displays       displays
+	Pictures       pictureFiles
+	Playing        playing
+	Parts          parts
+	RemoteVersions remoteVersions
+	Discover       discover
+	Playbacks      playbacks
+	Watching       watching
 	// Previews are parts' trickplay sheets, which PreviewFiles keeps with their chapters' pictures.
 	Previews     previews
 	PreviewFiles previewFiles
@@ -167,7 +167,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.setConfiguration, "POST /Users/Configuration", "POST /Users/{userId}/Configuration")
 	a.handle(a.logout, "POST /Sessions/Logout")
 	// What an app says it can do, sent as it signs in: the media it plays and the commands it
-	// takes from another app. Photon sends no app commands, and chooses how a copy plays from the
+	// takes from another app. Photon sends no app commands, and chooses how a version plays from the
 	// device profile PlaybackInfo is sent, so none of it is kept.
 	a.handle(noContent, "POST /Sessions/Capabilities", "POST /Sessions/Capabilities/Full")
 	a.handle(a.displayPreferences, "GET /DisplayPreferences/{id}")
@@ -213,7 +213,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	// unlike the lists above, are a query result.
 	a.handle(a.constant(`{"Items":[],"TotalRecordCount":0,"StartIndex":0}`),
 		"GET /Items/{itemId}/Intros", "GET /Users/{userId}/Items/{itemId}/Intros")
-	// Playing: a title's copies, its file as it is, and where the app has got to.
+	// Playing: a title's versions, its file as it is, and where the app has got to.
 	a.handle(a.playbackInfo, "GET /Items/{itemId}/PlaybackInfo", "POST /Items/{itemId}/PlaybackInfo")
 	a.handleMedia(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
 	a.handleMedia(a.video, "GET /Videos/{itemId}/{file}")

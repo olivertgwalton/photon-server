@@ -1,4 +1,4 @@
-// Package hls serves a copy of a title as HLS: fragmented MP4 or MPEG-TS cut at the copy's own
+// Package hls serves a version of a title as HLS: fragmented MP4 or MPEG-TS cut at the version's own
 // keyframes, so video is copied rather than encoded and every segment is exactly the length its
 // playlist says.
 package hls
@@ -16,7 +16,7 @@ import (
 // SegmentLength is the target: Apple's recommendation, and what Jellyfin uses for remuxing.
 const SegmentLength = 6 * time.Second
 
-// Part is one file of a copy: how long it runs, and its video keyframes' presentation times.
+// Part is one file of a version: how long it runs, and its video keyframes' presentation times.
 type Part struct {
 	Duration  time.Duration
 	Keyframes []time.Duration

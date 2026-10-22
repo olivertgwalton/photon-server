@@ -62,7 +62,7 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type result struct {
 		Items []struct {
 			Name         string
@@ -88,7 +88,7 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 	}
 	_, one := similar("/movies/" + guid(ids["Heat"]) + "/similar?limit=1&fields=MediaSources")
 	if len(one.Items) != 1 || one.Items[0].Name != "Thief" || len(one.Items[0].MediaSources) != 1 {
-		t.Errorf("the one most like Heat, with its copies = %+v, want Thief with one", one)
+		t.Errorf("the one most like Heat, with its versions = %+v, want Thief with one", one)
 	}
 	if code, _ := similar("/Items/" + guid(uuid.NewV7()) + "/Similar"); code != http.StatusNotFound {
 		t.Errorf("like a title not there: %d, want 404", code)

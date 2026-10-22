@@ -36,25 +36,25 @@ func (indexed) Keyframes(context.Context, uuid.UUID) (store.PartKeyframes, error
 func (indexed) AskKeyframes(context.Context, uuid.UUID) error { return nil }
 
 // opened keeps the HLS each playback was opened as.
-type opened map[uuid.UUID]hls.Copy
+type opened map[uuid.UUID]hls.Version
 
-func (o opened) Open(_ context.Context, playback uuid.UUID, c hls.Copy) error {
+func (o opened) Open(_ context.Context, playback uuid.UUID, c hls.Version) error {
 	o[playback] = c
 	return nil
 }
 
 func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
-	copyOf := func(c Copy) store.PlayVersion {
+	versionOf := func(c Version) store.PlayVersion {
 		return store.PlayVersion{
 			BitrateKbps: c.BitrateKbps, Streams: c.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
 			Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
 		}
 	}
-	h264 := Copy{BitrateKbps: 8_000, Streams: []domain.Stream{
+	h264 := Version{BitrateKbps: 8_000, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Profile: "High", Level: 41, Range: domain.RangeSDR},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Profile: "LC"},
 	}}
-	av1 := Copy{BitrateKbps: 16_000, Streams: []domain.Stream{
+	av1 := Version{BitrateKbps: 16_000, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "av1", Profile: "Main", Level: 13, BitDepth: 10, Range: domain.RangeHDR10, Width: 3840, Height: 2160},
 		{Index: 1, Kind: domain.StreamAudio, Codec: "eac3"},
 	}}
@@ -66,51 +66,51 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 	dv7.Streams[0].DolbyVision = &domain.DolbyVision{Profile: 7, Level: 6, Compatibility: domain.CompatibleBluRay}
 	for _, tc := range []struct {
 		name      string
-		copy      Copy
+		version   Version
 		video     domain.VideoPlan
 		audio     *domain.AudioPlan
 		want      hls.Variant
 		subtitles []string
 	}{
 		{
-			name: "Dolby Vision and TrueHD copied", copy: film,
+			name: "Dolby Vision and TrueHD copied", version: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
 			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.00", "mlpa"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
-			name: "Dolby Vision 7 as 8.1", copy: dv7,
+			name: "Dolby Vision 7 as 8.1", version: dv7,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionConvert}, audio: &domain.AudioPlan{Stream: 2},
 			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"dvh1.08.06", "ac-3"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
-			name: "Dolby Vision's base layer alone", copy: film,
+			name: "Dolby Vision's base layer alone", version: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: domain.DolbyVisionStrip}, audio: &domain.AudioPlan{Stream: 2},
 			want:      hls.Variant{BandwidthKbps: 40_000, Codecs: []string{"hvc1.2.4.L153.B0", "ac-3"}, Range: "PQ", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 			subtitles: []string{"", "English"},
 		},
 		{
-			name: "AV1 copied", copy: av1,
+			name: "AV1 copied", version: av1,
 			video: domain.VideoPlan{Stream: 0, Codec: "av1"}, audio: &domain.AudioPlan{Stream: 1},
 			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"av01.0.13M.10", "ec-3"}, Range: "PQ", Width: 3840, Height: 2160},
 			subtitles: []string{"English"},
 		},
 		{
-			name: "Dolby Vision in AV1 copied", copy: av1DV,
+			name: "Dolby Vision in AV1 copied", version: av1DV,
 			video: domain.VideoPlan{Stream: 0, Codec: "av1", DolbyVision: domain.DolbyVisionKeep}, audio: &domain.AudioPlan{Stream: 1},
 			want:      hls.Variant{BandwidthKbps: 16_000, Codecs: []string{"av01.0.13M.10", "ec-3"}, SupplementalCodecs: "dav1.10.09/db1p", Range: "PQ", Width: 3840, Height: 2160},
 			subtitles: []string{"English"},
 		},
 		{
-			name: "H.264 copied, AAC encoded", copy: h264,
+			name: "H.264 copied, AAC encoded", version: h264,
 			video:     domain.VideoPlan{Stream: 0, Codec: "h264"},
 			audio:     &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "ac3", Channels: 6, BitrateKbps: 640}},
 			want:      hls.Variant{BandwidthKbps: 8_000, Codecs: []string{"avc1.640029", "ac-3"}, Range: "SDR"},
 			subtitles: []string{"English"},
 		},
 		{
-			name: "a picture subtitle drawn into 4K is the only subtitle", copy: film,
+			name: "a picture subtitle drawn into 4K is the only subtitle", version: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
 				Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000, Range: domain.RangeSDR, ToneMap: true, Burn: new(4),
 			}},
@@ -118,7 +118,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			want:  hls.Variant{BandwidthKbps: 20_256, Codecs: []string{"avc1.640033", "mp4a.40.2"}, Range: "SDR", Width: 3840, Height: 2160, FrameRate: 24000.0 / 1001},
 		},
 		{
-			name: "HDR10 kept in HEVC", copy: film,
+			name: "HDR10 kept in HEVC", version: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
 				Codec: domain.VideoHEVC, Width: 1920, Height: 1080, BitrateKbps: 8_000, Range: domain.RangeHDR10,
 			}},
@@ -127,7 +127,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 			subtitles: []string{"", "English"},
 		},
 		{
-			name: "HDR tone mapped into HEVC", copy: film,
+			name: "HDR tone mapped into HEVC", version: film,
 			video: domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
 				Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 8_000, Range: domain.RangeSDR, ToneMap: true,
 			}},
@@ -139,7 +139,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, copyOf(tc.copy), tc.video, tc.audio, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
+			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, versionOf(tc.version), tc.video, tc.audio, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -157,9 +157,9 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 	}
 }
 
-// A player that fetches each subtitle file beside a copy itself is offered only the copy's own
+// A player that fetches each subtitle file beside a version itself is offered only the version's own
 // plain text subtitles in its HLS, so none is shown twice.
-func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
+func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheVersionsOwn(t *testing.T) {
 	c := store.PlayVersion{
 		BitrateKbps: film.BitrateKbps, Streams: film.Streams, Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: 60_000}},
 		Subtitles: []store.SubtitleRef{{ID: uuid.NewV7(), Codec: "subrip", Title: "English"}},
@@ -171,13 +171,13 @@ func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheCopysOwn(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got := hlsOf[playback].Subtitles; len(got) != want || got[0].Stream == nil {
-			t.Errorf("%s: offered %+v, want the copy's own stream and %d in all", renditions, got, want)
+			t.Errorf("%s: offered %+v, want the version's own stream and %d in all", renditions, got, want)
 		}
 	}
 }
 
 // Styled text drawn in reaches each part's remux: a stream read out of that part, or the file
-// beside the copy.
+// beside the version.
 func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	file := uuid.NewV7()
 	c := store.PlayVersion{
@@ -244,7 +244,7 @@ func (k *knownKeyframes) AskKeyframes(context.Context, uuid.UUID) error {
 
 // A copied video is cut at its keyframes where they are known, and every segment length where
 // none are; a play never reads the file for them, and moves a part not reached yet to the front.
-func TestACopyIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
+func TestAVersionIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 	const duration = 20 * time.Second
 	cases := []struct {
 		name  string

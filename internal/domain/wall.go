@@ -12,7 +12,7 @@ const (
 	SortReleased WallSort = "released"
 	// SortRating is by one site's rating; a title it has not rated comes last.
 	SortRating WallSort = "rating"
-	// SortRuntime is by how long a film's longest copy runs.
+	// SortRuntime is by how long a film's longest version runs.
 	SortRuntime WallSort = "runtime"
 	// SortPlayed is by when the profile last played it; a title never played comes last.
 	SortPlayed WallSort = "played"

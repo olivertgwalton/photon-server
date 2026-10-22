@@ -7,7 +7,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// Card is what the dashboard shows of a playback a session starts from address, of a copy, as
+// Card is what the dashboard shows of a playback a session starts from address, of a version, as
 // decided, with the tracks asked for; its acceleration, where it is transcoded, is the encoder's to say.
 func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.PlayVersion, d Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
 	card := domain.PlaybackCard{

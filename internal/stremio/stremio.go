@@ -1,6 +1,6 @@
 // Package stremio speaks to a Stremio addon, which an admin registers as a plugin by the address of
 // its manifest, as Stremio installs one: its catalogs are lists a library's collections or titles
-// are made of, and its streams the copies a remote library plays. Its configuration, a debrid service's key among it, is in its address, which no
+// are made of, and its streams the versions a remote library plays. Its configuration, a debrid service's key among it, is in its address, which no
 // error or answer names.
 package stremio
 

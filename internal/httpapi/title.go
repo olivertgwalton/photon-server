@@ -36,11 +36,11 @@ func subtitleKindOf(codec string) subtitleKind {
 
 type titlePageJSON struct {
 	ID uuid.UUID `json:"id"`
-	// Fetching is a remote film or episode whose provider is fetching a copy: it plays once the
+	// Fetching is a remote film or episode whose provider is fetching a version: it plays once the
 	// provider has it, a while from now.
 	Fetching bool `json:"fetching,omitzero"`
 	// Requestable is a title no library holds that a search found for the profile to ask for,
-	// drawn as its provider describes it: it has no copies, seasons or state, and plays nothing.
+	// drawn as its provider describes it: it has no versions, seasons or state, and plays nothing.
 	Requestable   bool                       `json:"requestable,omitzero"`
 	LibraryID     *uuid.UUID                 `json:"library_id,omitzero"`
 	Kind          domain.ItemKind            `json:"kind"`
@@ -109,7 +109,7 @@ type titleRefJSON struct {
 
 type versionPageJSON struct {
 	ID uuid.UUID `json:"id"`
-	// DisplayTitle names the copy by its label or edition and its picture, in the reader's
+	// DisplayTitle names the version by its label or edition and its picture, in the reader's
 	// language.
 	DisplayTitle string            `json:"display_title"`
 	Edition      string            `json:"edition,omitzero"`
@@ -124,7 +124,7 @@ type versionPageJSON struct {
 	Subtitles    []subtitleRefJSON `json:"subtitles,omitzero"`
 	Chapters     []chapterRefJSON  `json:"chapters,omitzero"`
 	Markers      []markerRefJSON   `json:"markers,omitzero"`
-	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
+	// Files are its parts in order, each where it starts on the version's timeline, by the id the
 	// /api/v1/parts/{id} routes take.
 	Files []partRefJSON `json:"files"`
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
@@ -199,7 +199,7 @@ type ratingRefJSON struct {
 	Votes int               `json:"votes,omitzero"`
 }
 
-// chapterRefJSON is a chapter on the copy's whole timeline, across its parts. Image is the address
+// chapterRefJSON is a chapter on the version's whole timeline, across its parts. Image is the address
 // of its picture, for those that have one.
 type chapterRefJSON struct {
 	StartMS int64        `json:"start_ms"`

@@ -86,9 +86,9 @@ type adminLibraryJSON struct {
 	// expanded, each on its own; or beside, the set's tile among them. A filtered wall shows the
 	// titles alone whichever.
 	BoxSets domain.BoxSetMode `json:"box_sets"`
-	// SubtitleLanguages are the languages it fetches subtitles in for copies with none in them,
+	// SubtitleLanguages are the languages it fetches subtitles in for versions with none in them,
 	// as BCP 47 tags; none is no fetching. SubtitleMatch is which it takes: release, one made for
-	// the copy's very file; or any, the best found.
+	// the version's very file; or any, the best found.
 	SubtitleLanguages []domain.LanguageTag `json:"subtitle_languages"`
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match"`
 }

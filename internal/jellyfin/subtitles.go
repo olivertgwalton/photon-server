@@ -20,7 +20,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// subtitle serves a subtitle of a copy by the index its media source gives it: a stream of its
+// subtitle serves a subtitle of a version by the index its media source gives it: a stream of its
 // file, read out as it is, or a file beside it.
 func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.itemID(w, r)
@@ -63,7 +63,7 @@ type trackEvent struct {
 	EndPositionTicks   int64  `json:"EndPositionTicks"`
 }
 
-// subtitleFile serves a subtitle file beside a copy in the format the file name asks for, as
+// subtitleFile serves a subtitle file beside a version in the format the file name asks for, as
 // Jellyfin converts one: plain text as WebVTT, read in its charset as photon's player has it, or as
 // the JSON of its cues Jellyfin's web app reads every text track from; VobSub, its .idx and .sub, in
 // one Matroska file, as the web app's libbitsub reads it; else the file as it is, its text in UTF-8,
@@ -134,7 +134,7 @@ func (a *API) writeTrackEvents(w http.ResponseWriter, cues []hls.Cue) {
 	a.writeJSON(w, struct{ TrackEvents []trackEvent }{events})
 }
 
-// readOut serves a subtitle stream of a copy's file read out of it, where the file name asks for it
+// readOut serves a subtitle stream of a version's file read out of it, where the file name asks for it
 // in a format it is read out in, as Jellyfin answers any of a stream's: styled text and pictures as
 // they are, as the web player's are; plain text as WebVTT or the JSON of its cues, and SubRip as
 // itself too. A start in the path is not applied: Jellyfin serves a stream from its start.
@@ -196,7 +196,7 @@ func readsOutAs(codec, name, format string) bool {
 	return format == strings.TrimPrefix(path.Ext(name), ".") || slices.Contains(subtitleFormats(codec), format)
 }
 
-// deliverSubtitles says how the app is sent each subtitle of a copy, as Jellyfin does once it knows
+// deliverSubtitles says how the app is sent each subtitle of a version, as Jellyfin does once it knows
 // the app's profile: External, at the address Jellyfin gives it, carrying key for the app's token,
 // as an app sends none with what it fetches for its player, where it draws the subtitle beside the
 // video: a stream read out of the file, or a file beside it, in the format the app takes it in.
@@ -208,7 +208,7 @@ func deliverSubtitles(key string, src *mediaSource, item uuid.UUID, c store.Play
 		if s == nil {
 			continue
 		}
-		// A stream of a copy in several files is read out of none: see errSeveralFiles.
+		// A stream of a version in several files is read out of none: see errSeveralFiles.
 		format := ""
 		if len(c.Parts) == 1 {
 			format = p.readOut(s.codec)

@@ -302,7 +302,7 @@ func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// split splits a film's copies apart, each other than the one that plays first a film of its own.
+// split splits a film's versions apart, each other than the one that plays first a film of its own.
 func (a *API) split(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -437,7 +437,7 @@ func (a *API) editRoutes() []route {
 		},
 		{
 			pattern: "POST /api/v1/admin/titles/{id}/split", access: admin,
-			summary: "Split a film's copies apart: each but the one that plays first becomes a film of its own, and stays so",
+			summary: "Split a film's versions apart: each but the one that plays first becomes a film of its own, and stays so",
 			status:  http.StatusNoContent, handle: a.split,
 		},
 		{

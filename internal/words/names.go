@@ -209,7 +209,7 @@ var nodeRoles = map[domain.NodeRole]Described{
 	domain.NodeServe:     {"Serves only", "Transcodes nothing, for playback or downloads, leaving that to the others."},
 }
 
-// TranscodeReason is why a copy is not played as it is: what of it, and that in a sentence a
+// TranscodeReason is why a version is not played as it is: what of it, and that in a sentence a
 // player can show.
 func (w Words) TranscodeReason(r domain.TranscodeReason) Described {
 	return transcodeReasons[r]

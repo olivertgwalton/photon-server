@@ -191,13 +191,13 @@ type Services struct {
 	NowPlaying nowPlaying
 	Pictures   pictures
 	// Themes are titles' theme tunes, those from the theme host kept in Artwork.
-	Themes   themes
-	Watching watching
-	Playing  playing
-	Parts    parts
-	Copies   copies
-	Discover discover
-	// Subtitles are the subtitles fetched from providers for copies.
+	Themes         themes
+	Watching       watching
+	Playing        playing
+	Parts          parts
+	RemoteVersions remoteVersions
+	Discover       discover
+	// Subtitles are the subtitles fetched from providers for versions.
 	Subtitles fetchedSubtitles
 	Playbacks playbacks
 	// Downloads are each profile's, and Conversions make the ones not downloaded as they are.

@@ -39,7 +39,7 @@ func (f *fakeFetched) Fetch(_ context.Context, _, _, _ uuid.UUID, s domain.Found
 
 func (*fakeFetched) RemoveFetchedSubtitle(context.Context, uuid.UUID) error { return nil }
 
-func TestAViewerFindsAndFetchesSubtitlesForTheirCopy(t *testing.T) {
+func TestAViewerFindsAndFetchesSubtitlesForTheirVersion(t *testing.T) {
 	fetched := &fakeFetched{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Subtitles: fetched})
 	do := func(token, method, target, body string) *httptest.ResponseRecorder {

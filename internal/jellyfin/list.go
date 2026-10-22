@@ -17,7 +17,7 @@ import (
 // round trips to the database than the reply saves.
 const listChunk = 2500
 
-// list writes cards as items, with their copies, whether each downloads, trickplay, chapters and
+// list writes cards as items, with their versions, whether each downloads, trickplay, chapters and
 // providers' ids where the app asked for them: read for the whole page at once.
 func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, error) {
 	out := make([]item, len(cards))
@@ -42,7 +42,7 @@ func (a *API) list(ctx context.Context, cards []store.Card, l listed) ([]item, e
 			}
 			if len(v) > 0 && (l.fields["mediasources"] || l.fields["mediastreams"]) {
 				out[n].sources(v, l.words)
-				// Jellyfin writes the first copy's tracks beside it only when asked: they double
+				// Jellyfin writes the first version's tracks beside it only when asked: they double
 				// what is written of the item.
 				if l.fields["mediastreams"] {
 					out[n].MediaStreams = out[n].MediaSources[0].MediaStreams

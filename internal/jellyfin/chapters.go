@@ -23,7 +23,7 @@ type chapterInfo struct {
 	ImageDateModified  time.Time `json:"ImageDateModified"`
 }
 
-// chapters fills a title's chapters: those of its first copy, as a Jellyfin item's are its own
+// chapters fills a title's chapters: those of its first version, as a Jellyfin item's are its own
 // file's.
 func (it *item) chapters(versions []store.VersionPage) {
 	if len(versions) == 0 {

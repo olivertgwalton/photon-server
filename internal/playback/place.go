@@ -23,14 +23,14 @@ type starting interface {
 	Opened(ctx context.Context, p domain.Playback)
 }
 
-// Start is a playback a session asks for: its id, the copy it plays, the tracks asked for, and
+// Start is a playback a session asks for: its id, the version it plays, the tracks asked for, and
 // the remux a node is asked to open, whose video and audio are as the playback is decided.
 type Start struct {
 	ID      uuid.UUID
 	Session domain.Session
 	Address string
 	Title   domain.PlaybackTitle
-	Copy    store.PlayVersion
+	Version store.PlayVersion
 	Tracks  domain.ChosenTracks
 	Opening Opening
 }
@@ -84,7 +84,7 @@ func refused(err error) bool {
 
 // start starts s on node, and opens it there; one the node refuses is abandoned.
 func start(ctx context.Context, p placing, sessions starting, node domain.Node, s Start, d Decision) (domain.Playback, error) {
-	card := Card(s.Session, s.Address, s.Title, s.Copy, d, s.Tracks)
+	card := Card(s.Session, s.Address, s.Title, s.Version, d, s.Tracks)
 	if d.Video != nil && d.Video.Encode != nil {
 		card.Acceleration = node.Encoder.Acceleration
 	}
@@ -97,7 +97,7 @@ func start(ctx context.Context, p placing, sessions starting, node domain.Node, 
 	if d.Method != domain.PlayDirect {
 		o.Video, o.Audio = *d.Video, d.Audio
 	}
-	if err := p.Open(ctx, node, s.ID, s.Copy, o); err != nil {
+	if err := p.Open(ctx, node, s.ID, s.Version, o); err != nil {
 		// One not abandoned holds its id, so no other node is asked.
 		if aerr := sessions.Abandon(context.WithoutCancel(ctx), s.ID); aerr != nil {
 			return started, fmt.Errorf("abandoning a playback node %s did not open: %w", node.Name, aerr)

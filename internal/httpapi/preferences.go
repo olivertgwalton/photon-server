@@ -186,7 +186,7 @@ func (a *API) playingAs(ctx context.Context, profile, item uuid.UUID) (domain.Pr
 	return p, last, err
 }
 
-// chooseTracks says the tracks each copy of a film or episode plays with for a profile.
+// chooseTracks says the tracks each version of a film or episode plays with for a profile.
 func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.TitlePage) error {
 	if len(page.Versions) == 0 {
 		return nil

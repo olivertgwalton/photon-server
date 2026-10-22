@@ -1771,7 +1771,7 @@ const server_ = Bun.serve<Socket>({
 							title: "Bad Request",
 							status: 400,
 							code: "invalid_body",
-							detail: "part_id names which of the copy's 2 files",
+							detail: "part_id names which of the version's 2 files",
 						},
 						{ status: 400 },
 					);

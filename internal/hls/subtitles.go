@@ -21,8 +21,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
-// Subtitle is a text subtitle published beside the video as WebVTT: a stream every part of the copy
-// carries, read by the runs that remux them, or a file beside the copy, timed on its timeline.
+// Subtitle is a text subtitle published beside the video as WebVTT: a stream every part of the version
+// carries, read by the runs that remux them, or a file beside the version, timed on its timeline.
 type Subtitle struct {
 	Name     string
 	Language string
@@ -34,7 +34,7 @@ type Subtitle struct {
 	File            *SubtitleSource
 }
 
-// SubtitleSource is a file holding a subtitle: an external file, or a stream of one of a copy's
+// SubtitleSource is a file holding a subtitle: an external file, or a stream of one of a version's
 // parts.
 type SubtitleSource struct {
 	Open func() (media.Input, error)
@@ -48,7 +48,7 @@ type SubtitleSource struct {
 	Language string
 }
 
-// Cue is one WebVTT cue on the copy's timeline: its timing line's settings and its text.
+// Cue is one WebVTT cue on the version's timeline: its timing line's settings and its text.
 type Cue struct {
 	Start, End time.Duration
 	Settings   string
@@ -274,7 +274,7 @@ func (r *Remuxer) extract(ctx context.Context, src SubtitleSource, dir string) e
 }
 
 // styledLayer is styled text libass draws into a part's video: its file, the fonts the part
-// carries for it, the charset of a file beside the copy that is not UTF-8, where on the copy's
+// carries for it, the charset of a file beside the version that is not UTF-8, where on the version's
 // timeline, which such a file is timed on, the part starts, and the video's frame rate, unknown
 // as 0.
 type styledLayer struct {
@@ -283,11 +283,11 @@ type styledLayer struct {
 	rate                 float64
 }
 
-// styledName is what a styled file beside the copy is copied to in a playback's folder.
+// styledName is what a styled file beside the version is copied to in a playback's folder.
 const styledName = "styled.ass"
 
 // styled readies styled text for drawing into the video of a part starting at offset: a stream of
-// it, read out with its fonts, or a file beside the copy, copied into the playback's folder, where
+// it, read out with its fonts, or a file beside the version, copied into the playback's folder, where
 // FFmpeg opens it by name.
 func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, offset time.Duration) (*styledLayer, error) {
 	if src.Stream != nil {
@@ -317,7 +317,7 @@ func (r *Remuxer) styled(ctx context.Context, s *session, src SubtitleSource, of
 }
 
 // filter is the layer drawn in by FFmpeg's subtitles filter, given options of its own. A file
-// beside the copy is drawn with the part's frames moved onto the copy's timeline and back.
+// beside the version is drawn with the part's frames moved onto the version's timeline and back.
 func (l styledLayer) filter(options string) string {
 	f := "subtitles=f=" + filterValue(l.file) + options
 	if l.fonts != "" {
@@ -451,7 +451,7 @@ var subRipMarkup = regexp.MustCompile(`(?i)</?font[^>]*>|\{\\[^}]*\}`)
 func fromSubRip(text string) string { return subRipMarkup.ReplaceAllString(text, "") }
 
 // writeVTT writes the cues shown during [from, to) of a part whose time zero is at offset on the
-// copy's timeline, timed on the part's own clock and mapped to the video's (see clockOffset).
+// version's timeline, timed on the part's own clock and mapped to the video's (see clockOffset).
 func writeVTT(cues []Cue, offset, from, to time.Duration) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:%d,LOCAL:00:00:00.000\n", clockOffset.Milliseconds()*90)

@@ -197,7 +197,7 @@ func free(n domain.Node) float64 {
 	return float64(n.Limit-n.Transcodes) / float64(n.Limit)
 }
 
-// Opening is a playback as one node asks another to open it: the profile's copy, by ids the node
+// Opening is a playback as one node asks another to open it: the profile's version, by ids the node
 // it is asked of reads again, and how it is played, its remux's video and audio where it is not
 // played as it is.
 type Opening struct {

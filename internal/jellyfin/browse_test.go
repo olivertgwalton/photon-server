@@ -89,7 +89,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Version {
+	versions := func(rel string) []store.Version {
 		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1 << 30, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Duration: time.Hour, Container: "matroska,webm",
 			Streams: []domain.Stream{
@@ -100,14 +100,14 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		}}}}}
 	}
 	for _, f := range []string{"Heat", "Alien"} {
-		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: copies(f + "/" + f + ".mkv")}}, nil); err != nil {
+		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: versions(f + "/" + f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var eps []store.Episode
 	for _, se := range [][2]int{{1, 1}, {1, 2}, {2, 1}} {
 		rel := "Wire/S" + string(rune('0'+se[0])) + "E" + string(rune('0'+se[1])) + ".mkv"
-		eps = append(eps, store.Episode{Season: se[0], Episodes: []int{se[1]}, Title: rel, Folder: "Wire", ByNumber: true, Versions: copies(rel)})
+		eps = append(eps, store.Episode{Season: se[0], Episodes: []int{se[1]}, Title: rel, Folder: "Wire", ByNumber: true, Versions: versions(rel)})
 	}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": admin, "pst_kid": kid}, Catalogue: st, Playlists: st, Preferences: st,
 	})
 	get := func(token, target string) any {
@@ -178,7 +178,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	film := page[0]
 	sources, _ := film["MediaSources"].([]any)
 	if len(sources) != 1 {
-		t.Fatalf("a film's copies: %v", film["MediaSources"])
+		t.Fatalf("a film's versions: %v", film["MediaSources"])
 	}
 	source, _ := sources[0].(map[string]any)
 	requireKeys(t, "MediaSourceInfo", source, "Protocol", "Type", "IsRemote", "ReadAtNativeFramerate", "IgnoreDts", "IgnoreIndex",
@@ -198,11 +198,11 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	// Named as photon's own API names them, so an app shows the same words whichever it reads.
 	if source["Name"] != "4K (HEVC Dolby Vision)" || streams[1].(map[string]any)["DisplayTitle"] != "English (Dolby Digital+ 5.1)" ||
 		streams[2].(map[string]any)["DisplayTitle"] != "English (SRT)" {
-		t.Errorf("names: copy %v, tracks %v and %v", source["Name"], streams[1].(map[string]any)["DisplayTitle"], streams[2].(map[string]any)["DisplayTitle"])
+		t.Errorf("names: version %v, tracks %v and %v", source["Name"], streams[1].(map[string]any)["DisplayTitle"], streams[2].(map[string]any)["DisplayTitle"])
 	}
-	// Jellyfin's web app fetches the copy it plays by its id, as Jellyfin makes each copy an item.
-	if byCopy, _ := get("pst_ada", "/Users/"+guid(admin.ID)+"/Items/"+source["Id"].(string)).(map[string]any); byCopy["Id"] != film["Id"] {
-		t.Errorf("a copy by its id: %v, want its film", byCopy["Name"])
+	// Jellyfin's web app fetches the version it plays by its id, as Jellyfin makes each version an item.
+	if byVersion, _ := get("pst_ada", "/Users/"+guid(admin.ID)+"/Items/"+source["Id"].(string)).(map[string]any); byVersion["Id"] != film["Id"] {
+		t.Errorf("a version by its id: %v, want its film", byVersion["Name"])
 	}
 	userData, _ := film["UserData"].(map[string]any)
 	requireKeys(t, "UserItemDataDto", userData, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
@@ -344,13 +344,13 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Version {
+	versions := func(rel string) []store.Version {
 		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
-	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []store.Film{{Title: "Heat", Folder: "Heat", Versions: copies("Heat/Heat.mkv")}}, nil); err != nil {
+	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []store.Film{{Title: "Heat", Folder: "Heat", Versions: versions("Heat/Heat.mkv")}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Versions: copies("Wire/S01E01.mkv")}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Versions: versions("Wire/S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, lib.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: profiles{"pst_ada": admin}, Catalogue: st, Playlists: st, Preferences: st,
 	})
 	get := func(target string, v any) {

@@ -429,7 +429,7 @@ func TestWall(t *testing.T) {
 	}
 }
 
-// matroskaCatalogue has films as one copy in Matroska.
+// matroskaCatalogue has films as one version in Matroska.
 type matroskaCatalogue struct{ fakeCatalogue }
 
 func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitlePage, error) {
@@ -451,7 +451,7 @@ func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitleP
 // apart, as titles to ask for; a later page, or a search of one library, shows neither.
 func TestASearchShowsTitlesToAskForApart(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: findsOfEach{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, People: &fakePeople{},
+		RemoteVersions: noRemoteVersions{}, Discover: findsOfEach{}, Auth: fakeAuth{}, Catalogue: fakeCatalogue{}, People: &fakePeople{},
 	})
 	search := func(query string) searchJSON {
 		t.Helper()
@@ -486,11 +486,11 @@ func TestASearchShowsTitlesToAskForApart(t *testing.T) {
 	}
 }
 
-// A client shows a copy and its tracks by the names the server gives, in its reader's language,
+// A client shows a version and its tracks by the names the server gives, in its reader's language,
 // and the answer says which language that is so no cache serves it to another reader.
-func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
+func TestATitlesVersionsAndTracksAreNamedForTheReader(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
@@ -522,9 +522,9 @@ func TestATitlesCopiesAndTracksAreNamedForTheReader(t *testing.T) {
 	}
 }
 
-func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
+func TestAVersionsContainerIsNamedAsClientsNameIt(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{}, Catalogue: matroskaCatalogue{}, Preferences: &fakePreferences{},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
@@ -532,20 +532,20 @@ func TestACopysContainerIsNamedAsClientsNameIt(t *testing.T) {
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"container":"mkv"`) {
-		t.Errorf("a Matroska copy: %d %s, want its container named mkv", rec.Code, rec.Body)
+		t.Errorf("a Matroska version: %d %s, want its container named mkv", rec.Code, rec.Body)
 	}
 }
 
-// fetchingCopies is a remote library whose provider is fetching every title's copy.
-type fetchingCopies struct{}
+// fetchingRemoteVersions is a remote library whose provider is fetching every title's version.
+type fetchingRemoteVersions struct{}
 
-func (fetchingCopies) Ensure(context.Context, uuid.UUID) error { return remote.ErrFetching }
+func (fetchingRemoteVersions) Ensure(context.Context, uuid.UUID) error { return remote.ErrFetching }
 
-// A remote title whose provider is fetching its copy says so on its page, which a client shows in
+// A remote title whose provider is fetching its version says so on its page, which a client shows in
 // place of Play, and playing it says why it cannot yet.
 func TestATitleBeingFetchedSaysSo(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: fetchingCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: fetchingRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/titles/"+films.String(), nil)
@@ -583,7 +583,7 @@ func (ratedCatalogue) Facets(context.Context, []uuid.UUID, uuid.UUID, domain.Wal
 // 12; an edit and a filter still name its country, so parental controls read it in its system.
 func TestACertificateIsShownWithoutItsCountry(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Auth: fakeAuth{}, Catalogue: ratedCatalogue{}, Preferences: &fakePreferences{},
 	})
 	get := func(path string) string {

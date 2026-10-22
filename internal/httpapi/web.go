@@ -22,7 +22,7 @@ import (
 // as Jellyfin and Plex serve their web clients.
 type Web struct {
 	files fs.FS
-	// tag is the app's one page's ETag, the same whichever copy of it is sent.
+	// tag is the app's one page's ETag, the same whichever version of it is sent.
 	tag     string
 	scripts string
 	// objectOrigin is where artwork and previews are read from as the page is served, or "".
@@ -169,7 +169,7 @@ func (web *Web) serveFile(w http.ResponseWriter, r *http.Request, name string) e
 	return nil
 }
 
-// open opens the best compressed copy the browser takes, saying which, else the file itself.
+// open opens the best compressed version the browser takes, saying which, else the file itself.
 func (web *Web) open(w http.ResponseWriter, r *http.Request, name string) (fs.File, error) {
 	for _, e := range encodings {
 		if !gzipped.Accepts(r, e.token) {

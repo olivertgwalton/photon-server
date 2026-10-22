@@ -117,7 +117,7 @@ func join(t *testing.T, c *sharedValkey, limit int) *peerNode {
 		t.Fatal(err)
 	}
 	n.srv = httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent:    playback.NewSent(),
 		Network: fakeNetwork{}, Auth: fakeAuth{}, Preferences: &fakePreferences{}, Playing: fakePlaying{root: root},
 		Parts:     library.Parts{Places: fakePlaying{root: root}},
@@ -446,9 +446,9 @@ func TestANodeThatServesOnlyTranscodesNothing(t *testing.T) {
 	}
 }
 
-// With no node taking video to encode, a copy that needs encoding is refused, and one played as it
+// With no node taking video to encode, a version that needs encoding is refused, and one played as it
 // is still plays, from the node asked.
-func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
+func TestWithNoNodeTranscodingAVersionThatNeedsItIsRefused(t *testing.T) {
 	c := newSharedValkey()
 	only := join(t, c, 2)
 	only.role.Store(domain.NodeServe)
@@ -477,7 +477,7 @@ func TestWithNoNodeTranscodingACopyThatNeedsItIsRefused(t *testing.T) {
 		return resp.StatusCode, answer.Method + answer.Code
 	}
 	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`); status != http.StatusServiceUnavailable || said != "transcode_limit" {
-		t.Errorf("a copy to encode: %d %s, want 503 transcode_limit", status, said)
+		t.Errorf("a version to encode: %d %s, want 503 transcode_limit", status, said)
 	}
 	refusals := `# HELP photon_transcode_refusals_total The playbacks this node refused for want of a node to encode them, by why.
 # TYPE photon_transcode_refusals_total counter
@@ -489,6 +489,6 @@ photon_transcode_refusals_total{reason="no_space"} 0
 		t.Error(err)
 	}
 	if status, said := play(`{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "parts": "each"}}`); status != http.StatusOK || said == "transcode" {
-		t.Errorf("a copy played as it is: %d %s, want it played", status, said)
+		t.Errorf("a version played as it is: %d %s, want it played", status, said)
 	}
 }

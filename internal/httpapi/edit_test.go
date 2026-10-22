@@ -207,7 +207,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 	e, told := &fakeEditing{}, &fakeEvents{}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Identity: den(), Editing: e, Providers: provider.NewRegistry(nil, filmSearch{}), Events: told})
 	base := "/api/v1/admin/titles/" + films.String()
-	copyBase := "/api/v1/admin/versions/" + films.String() + "/markers"
+	versionBase := "/api/v1/admin/versions/" + films.String() + "/markers"
 	for _, tc := range []struct {
 		token, method, target, body string
 		want                        int
@@ -263,14 +263,14 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"chosen":true`},
 		{goodToken, http.MethodDelete, base + "/artwork/poster", "", http.StatusNoContent, ""},
 		{goodToken, http.MethodGet, base + "/artwork/candidates?kind=poster", "", http.StatusOK, `"chosen":false`},
-		{memberToken, http.MethodPut, copyBase, `{"markers": []}`, http.StatusForbidden, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "commercial", "start_ms": 0, "end_ms": 1000}]}`, http.StatusBadRequest, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 5000, "end_ms": 5000}]}`, http.StatusBadRequest, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 0, "end_ms": 1}, {"kind": "intro", "start_ms": 2, "end_ms": 3}]}`, http.StatusBadRequest, "one marker of each kind"},
+		{memberToken, http.MethodPut, versionBase, `{"markers": []}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [{"kind": "commercial", "start_ms": 0, "end_ms": 1000}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [{"kind": "intro", "start_ms": 5000, "end_ms": 5000}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [{"kind": "intro", "start_ms": 0, "end_ms": 1}, {"kind": "intro", "start_ms": 2, "end_ms": 3}]}`, http.StatusBadRequest, "one marker of each kind"},
 		{goodToken, http.MethodPut, "/api/v1/admin/versions/" + uuid.NewV7().String() + "/markers", `{"markers": []}`, http.StatusNotFound, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [], "absent": [{"kind": "commercial", "part": 0}]}`, http.StatusBadRequest, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [], "absent": [{"kind": "intro", "part": -1}]}`, http.StatusBadRequest, ""},
-		{goodToken, http.MethodPut, copyBase, `{"markers": [{"kind": "intro", "start_ms": 62000, "end_ms": 121500}], "absent": [{"kind": "recap", "part": 0}]}`, http.StatusNoContent, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [], "absent": [{"kind": "commercial", "part": 0}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [], "absent": [{"kind": "intro", "part": -1}]}`, http.StatusBadRequest, ""},
+		{goodToken, http.MethodPut, versionBase, `{"markers": [{"kind": "intro", "start_ms": 62000, "end_ms": 121500}], "absent": [{"kind": "recap", "part": 0}]}`, http.StatusNoContent, ""},
 	} {
 		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+tc.token)

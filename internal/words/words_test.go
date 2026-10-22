@@ -35,11 +35,11 @@ func TestATrackIsNamedAsPlexNamesOne(t *testing.T) {
 	}
 	file := store.SubtitleRef{Codec: "subrip", Language: language.French, Forced: true}
 	if got := w.SubtitleFile(file); got != "French Forced (SRT External)" {
-		t.Errorf("a subtitle file beside the copy: %q", got)
+		t.Errorf("a subtitle file beside the version: %q", got)
 	}
 }
 
-func TestACopyIsNamedByItsLabelAndPicture(t *testing.T) {
+func TestAVersionIsNamedByItsLabelAndPicture(t *testing.T) {
 	w := In(language.English)
 	uhd := []domain.Stream{{Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Range: domain.RangeHDR10}}
 	for _, c := range []struct {

@@ -62,7 +62,7 @@ type listed struct {
 	// episode's previous and next: of a show's seasons or episodes, which photon reads whole.
 	adjacentTo uuid.UUID
 	fields     map[string]bool
-	// words names its copies and tracks in the reader's language.
+	// words names its versions and tracks in the reader's language.
 	words words.Words
 }
 
@@ -417,8 +417,8 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A title a search found becomes its library's as an app opens it, and a remote film or
-	// episode is given a copy, as the app chooses its copy from the item's media sources.
-	a.ensureCopies(r.Context(), id)
+	// episode is given a version, as the app chooses its version from the item's media sources.
+	a.ensureVersions(r.Context(), id)
 	named, err := a.svc.Catalogue.Named(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
 		a.refuse(w, http.StatusNotFound)

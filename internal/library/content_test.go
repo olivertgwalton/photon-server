@@ -40,7 +40,7 @@ func TestContentKey(t *testing.T) {
 		t.Error("files differing in their last byte share a key")
 	}
 	if key("Heat/Heat (1995).mkv", "Short.mkv") == heat {
-		t.Error("a two-part copy shares a key with its first part alone")
+		t.Error("a two-part version shares a key with its first part alone")
 	}
 	key("Short.mkv")
 }

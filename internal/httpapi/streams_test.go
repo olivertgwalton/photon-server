@@ -55,7 +55,7 @@ func styled(line string) string {
 		"Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,," + line + "\r\n"
 }
 
-// A styled subtitle file beside a copy written before UTF-8 is sent in UTF-8, read in its
+// A styled subtitle file beside a version written before UTF-8 is sent in UTF-8, read in its
 // language's codepage, as JASSUB reads only UTF-8; one in UTF-8 is sent as it is.
 func TestAStyledSubtitleFileIsSentInUTF8(t *testing.T) {
 	root := t.TempDir()

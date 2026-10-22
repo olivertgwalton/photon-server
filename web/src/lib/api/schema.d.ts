@@ -3357,7 +3357,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Split a film's copies apart: each but the one that plays first becomes a film of its own, and stays so
+         * Split a film's versions apart: each but the one that plays first becomes a film of its own, and stays so
          * @description Admin only.
          */
         post: {
@@ -3483,7 +3483,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * Say where a copy's intro, credits, recap and preview are, or that a part has none, over what was found
+         * Say where a version's intro, credits, recap and preview are, or that a part has none, over what was found
          * @description Admin only.
          */
         put: {
@@ -5054,7 +5054,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A copy's file as it is, in byte ranges, at the address a download answered */
+        /** A version's file as it is, in byte ranges, at the address a download answered */
         get: {
             parameters: {
                 query?: {
@@ -5264,7 +5264,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A copy's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts */
+        /** A version's file as it is, in byte ranges, at the address play answered, for as long as the playback lasts */
         get: {
             parameters: {
                 query?: {
@@ -7137,7 +7137,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A subtitle file beside a copy, as it is, as WebVTT or in Matroska, at the address play answered */
+        /** A subtitle file beside a version, as it is, as WebVTT or in Matroska, at the address play answered */
         get: {
             parameters: {
                 query?: {
@@ -7596,7 +7596,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fetch a subtitle a search found and keep it beside the copy, for every profile */
+        /** Fetch a subtitle a search found and keep it beside the version, for every profile */
         post: {
             parameters: {
                 query?: never;
@@ -7637,13 +7637,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Find the subtitles providers have in a language for a copy of a film or episode, those made for its very file first */
+        /** Find the subtitles providers have in a language for a version of a film or episode, those made for its very file first */
         get: {
             parameters: {
                 query?: {
                     /** @description The language, a BCP 47 tag. */
                     language?: string;
-                    /** @description The copy; the title's longest where none is named. */
+                    /** @description The version; the title's longest where none is named. */
                     version_id?: string;
                 };
                 header?: never;

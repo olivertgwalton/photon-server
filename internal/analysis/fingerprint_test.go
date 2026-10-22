@@ -74,14 +74,14 @@ func TestAnIntroSharedBySomeEpisodes(t *testing.T) {
 	}
 }
 
-func TestTwoCopiesOfOneEpisodeShareNoIntro(t *testing.T) {
+func TestTwoVersionsOfOneEpisodeShareNoIntro(t *testing.T) {
 	ep, same := uuid.NewV7(), points(3, at(30*time.Second))
 	got := shared(domain.MarkerIntro, []sound{
 		{episode: ep, length: time.Hour, points: join(same, points(4, 1000))},
 		{episode: ep, length: time.Hour, points: join(same, points(5, 1000))},
 	})
 	if got[0] != nil || got[1] != nil {
-		t.Errorf("two copies of one episode: %+v, want nothing", got)
+		t.Errorf("two versions of one episode: %+v, want nothing", got)
 	}
 }
 

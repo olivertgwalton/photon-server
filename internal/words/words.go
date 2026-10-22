@@ -1,4 +1,4 @@
-// Package words names what the server holds in a reader's language: a track, a copy, a
+// Package words names what the server holds in a reader's language: a track, a version, a
 // resolution. The store and the domain hold values and know no language; the HTTP layers word them
 // as they answer, for both APIs, beside the values, so no client composes names of its own and none
 // parses these. Every word is a method of Words, so a translation changes this package alone.
@@ -83,7 +83,7 @@ func (w Words) Language(tag string) string {
 	return upperFirst(cmp.Or(w.names.Name(t), tag))
 }
 
-// Stream names a track of a copy by what tells it from the others, then how it is made, in
+// Stream names a track of a version by what tells it from the others, then how it is made, in
 // brackets: "French (Dolby Digital 5.1)". A menu that cuts the name short keeps the part that
 // matters. A track with a title of its own leads with it, as that is the name its maker gave it:
 // "Director's commentary (English AAC Stereo)".
@@ -105,14 +105,14 @@ func (w Words) Stream(s domain.Stream) string {
 	return s.Title
 }
 
-// SubtitleFile names a subtitle file beside a copy, as a subtitle track is named, marked as
+// SubtitleFile names a subtitle file beside a version, as a subtitle track is named, marked as
 // beside it.
 func (w Words) SubtitleFile(f store.SubtitleRef) string {
 	marks := append(mark(f.HearingImpaired, sdh), mark(f.Forced, forced)...)
 	return w.track(f.Title, string(domain.TagOf(f.Language)), marks, codecName(f.Codec), external)
 }
 
-// Version names a copy by its label or edition and its picture ("Director's Cut (4K HEVC Dolby
+// Version names a version by its label or edition and its picture ("Director's Cut (4K HEVC Dolby
 // Vision)"), or by its picture alone ("4K (HEVC Dolby Vision)"). A label that is the picture's
 // own name ("4K") says it once.
 func (w Words) Version(v store.VersionPage) string {

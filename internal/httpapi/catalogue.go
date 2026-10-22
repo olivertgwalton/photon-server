@@ -315,12 +315,12 @@ func (a *API) title(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	// A remote film or episode is given a copy as its page opens, as a player chooses its copy
+	// A remote film or episode is given a version as its page opens, as a player chooses its version
 	// from the page before it plays; one its provider cannot give is a page with none, and one
 	// it is fetching says so.
-	copied := a.svc.Copies.Ensure(r.Context(), id)
+	copied := a.svc.RemoteVersions.Ensure(r.Context(), id)
 	if copied != nil && !errors.Is(copied, remote.ErrFetching) {
-		a.logger.WarnContext(r.Context(), "no copy of a remote title", slog.Any("err", copied))
+		a.logger.WarnContext(r.Context(), "no version of a remote title", slog.Any("err", copied))
 	}
 	page, err := a.svc.Catalogue.Title(r.Context(), profile, id)
 	// One no library holds may be a title a search found for the profile to ask for.

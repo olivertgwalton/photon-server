@@ -62,7 +62,7 @@ func TestTheEventsSocketIsOpenedToAClientAskingForGzip(t *testing.T) {
 	t.Parallel()
 	work := &fakeWork{}
 	told := streamingEvents{fakeEvents: &fakeEvents{}, events: make(chan domain.Event), gone: make(chan struct{})}
-	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Tasks: work, Jobs: work, NowPlaying: work, Events: told, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{}}))
 	t.Cleanup(srv.Close)
 	c, res, err := websockettest.Dial(t.Context(), srv.URL+"/api/v1/events?feed=server", http.Header{
 		"Authorization": {"Bearer " + goodToken}, "Accept-Encoding": {"gzip"},

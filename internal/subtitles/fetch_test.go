@@ -56,11 +56,11 @@ func TestASubtitleIsSearchedForByItsFileAndKeptBesideIt(t *testing.T) {
 	}
 	c, err := st.Playable(ctx, uuid.UUID{}, item, version)
 	if err != nil || len(c.Subtitles) != 1 || c.Subtitles[0].ID != id || c.Subtitles[0].Language != language.French {
-		t.Errorf("the copy's subtitles: %+v, %v; want the French one fetched", c.Subtitles, err)
+		t.Errorf("the version's subtitles: %+v, %v; want the French one fetched", c.Subtitles, err)
 	}
 }
 
-func TestALibraryFetchesTheSubtitlesItsCopiesLack(t *testing.T) {
+func TestALibraryFetchesTheSubtitlesItsVersionsLack(t *testing.T) {
 	for _, tc := range []struct {
 		match domain.SubtitleMatch
 		err   error

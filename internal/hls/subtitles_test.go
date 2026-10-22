@@ -60,7 +60,7 @@ func TestSubtitlesAreCutWithTheVideo(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	// An external file over a film in two parts, the second an hour in.
-	err = r.Open(t.Context(), playback, Copy{
+	err = r.Open(t.Context(), playback, Version{
 		Parts:     []Source{part(time.Hour), part(time.Hour)},
 		Subtitles: []Subtitle{{Name: "English", Language: "en", Default: true, HearingImpaired: true, File: &SubtitleSource{Open: open}}},
 		Variant:   Variant{BandwidthKbps: 8000, Codecs: []string{"avc1.640029", "mp4a.40.2"}, Range: "SDR", Width: 1920, Height: 1080, FrameRate: 24000.0 / 1001},
@@ -356,7 +356,7 @@ func TestEmbeddedSubtitlesComeWithTheVideo(t *testing.T) {
 			t.Fatal(err)
 		}
 		playback := uuid.NewV7()
-		if err := r.Open(t.Context(), playback, Copy{
+		if err := r.Open(t.Context(), playback, Version{
 			Parts:     []Source{{Open: tc.open, Part: Part{Duration: time.Minute, Keyframes: Forced(time.Minute)}, Video: domain.VideoPlan{Codec: "h264"}}},
 			Subtitles: []Subtitle{{Name: "English", Stream: &english}, {Name: "French", Stream: &french}},
 			Start:     tc.start,

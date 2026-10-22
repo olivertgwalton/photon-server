@@ -51,9 +51,9 @@ var ErrNoRemux = errors.New("hls: no such remux")
 // asked for: asked for again, it is made.
 var ErrSuperseded = errors.New("hls: the remux moved on before making the segment")
 
-// ErrNoSegments is a copy no playlist can be cut from: a part that says nothing of how long it
+// ErrNoSegments is a version no playlist can be cut from: a part that says nothing of how long it
 // runs, and whose keyframes are not known either, has no length to cut into segments.
-var ErrNoSegments = errors.New("hls: the copy has no length to cut into segments")
+var ErrNoSegments = errors.New("hls: the version has no length to cut into segments")
 
 // ErrTranscodeLimit is a remux that would encode video on a remuxer already encoding its limit.
 var ErrTranscodeLimit = errors.New("hls: at the limit of transcodes at once")
@@ -74,7 +74,7 @@ var errIdle = errors.New("hls: no segment asked for")
 // Unlimited is a remuxer that encodes as many videos at once as it is asked to.
 const Unlimited = 0
 
-// Source is one file of a copy to remux: how to open it, its plan input, its video, and its audio
+// Source is one file of a version to remux: how to open it, its plan input, its video, and its audio
 // if it has any.
 type Source struct {
 	Open  func() (media.Input, error)
@@ -82,11 +82,11 @@ type Source struct {
 	Video domain.VideoPlan
 	Audio *domain.AudioPlan
 	// Styled is styled text drawn into its video (see VideoEncode's Burn): a stream of the file,
-	// or a file beside the copy timed on the copy's timeline.
+	// or a file beside the version timed on the version's timeline.
 	Styled *SubtitleSource
 }
 
-// Remuxer runs the remuxes of copies played as HLS, one per playback, each writing its segments
+// Remuxer runs the remuxes of versions played as HLS, one per playback, each writing its segments
 // into a folder of its own under dir, and keeps the subtitles read out of parts under subtitles. It keeps the node's one account of transcode slots, its download conversions' as well
 // as its own.
 type Remuxer struct {
@@ -139,10 +139,10 @@ func NewRemuxer(tools media.Tools, dir, subtitles string, hw Hardware, limit int
 	}, nil
 }
 
-// Copy is what a playback's HLS is made of: its parts in order, its text subtitles, how the
+// Version is what a playback's HLS is made of: its parts in order, its text subtitles, how the
 // master playlist describes its video, where on its timeline the player starts, and the
 // container of its segments, fragmented MP4 where it is not said.
-type Copy struct {
+type Version struct {
 	Parts     []Source
 	Subtitles []Subtitle
 	Variant   Variant
@@ -233,13 +233,13 @@ func (s *subtitle) add(c Cue) {
 	s.cues = slices.Insert(s.cues, i, c)
 }
 
-// Open starts the remux of a playback's copy at the segment holding c.Start, so it is under way
+// Open starts the remux of a playback's version at the segment holding c.Start, so it is under way
 // while the player reads its playlists. Addresses in its playlists are relative to the playlists'
-// own. A copy whose video is encoded is refused with ErrTranscodeLimit while playbacks hold every
+// own. A version whose video is encoded is refused with ErrTranscodeLimit while playbacks hold every
 // transcode slot; where a conversion holds one, the conversion is stopped and the playback has its
 // slot. One is refused with ErrNoSpace where the remuxer's folder has less than spareSpace free; a
-// copy whose video is copied is not, as no other node would make it.
-func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Copy) error {
+// version whose video is copied is not, as no other node would make it.
+func (r *Remuxer) Open(ctx context.Context, playback uuid.UUID, c Version) error {
 	parts := make([]Part, len(c.Parts))
 	offsets := make([]time.Duration, len(c.Parts))
 	var at time.Duration
@@ -330,7 +330,7 @@ func (r *Remuxer) SetHardware(hw Hardware) {
 	r.hw = hw
 }
 
-// encodes is whether a remux encodes video; every part of a copy is played to the same plan.
+// encodes is whether a remux encodes video; every part of a version is played to the same plan.
 func (s *session) encodes() bool { return len(s.sources) > 0 && s.sources[0].Video.Encode != nil }
 
 // Close ends a playback's remux and removes its segments.

@@ -17,7 +17,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/playback"
 )
 
-// defaultSubtitle is the subtitle Infuse plays a title's first copy with unasked for Ada, from its
+// defaultSubtitle is the subtitle Infuse plays a title's first version with unasked for Ada, from its
 // PlaybackInfo and from its item: nil for none.
 func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 	t.Helper()
@@ -30,7 +30,7 @@ func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 		}
 	}
 	if len(info.MediaSources) == 0 || len(it.MediaSources) == 0 {
-		t.Fatalf("no copies: %v, %v", info.MediaSources, it.MediaSources)
+		t.Fatalf("no versions: %v, %v", info.MediaSources, it.MediaSources)
 	}
 	if a, b := info.MediaSources[0]["DefaultSubtitleStreamIndex"], it.MediaSources[0]["DefaultSubtitleStreamIndex"]; a != b {
 		t.Errorf("PlaybackInfo's default subtitle %v, the item's %v", a, b)
@@ -43,11 +43,11 @@ func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 func TestAnAppsSubtitlesFollowTheProfilesPreferences(t *testing.T) {
 	st, ada, heat, _ := aFilm(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
 	})
-	// A file beside the copy is not the file's say, as a track marked default or forced is.
+	// A file beside the version is not the file's say, as a track marked default or forced is.
 	if got := defaultSubtitle(t, api, heat); got != nil {
 		t.Errorf("by default: subtitle %v, want none", got)
 	}
@@ -75,7 +75,7 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada, "pst_bea": bea}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
 	})
@@ -159,7 +159,7 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
 	st, ada, _, _ := aFilm(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
 	})

@@ -152,7 +152,7 @@ func DefaultPreferences() Preferences {
 const NoSubtitle = -1
 
 // ChosenTracks are the sound and subtitles of a title: as a player last chose them, or to play it
-// with. Subtitle is a track inside the copy or NoSubtitle, SubtitleFile one beside it; nil is
+// with. Subtitle is a track inside the version or NoSubtitle, SubtitleFile one beside it; nil is
 // nothing said.
 type ChosenTracks struct {
 	Audio        *int

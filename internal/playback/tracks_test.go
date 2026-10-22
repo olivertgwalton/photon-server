@@ -48,7 +48,7 @@ func TestTheSoundIsTheFilesDefaultOrInTheProfilesLanguage(t *testing.T) {
 		{"not where the profile forgets it", prefs(func(p *domain.Preferences) {
 			p.RememberAudio = domain.TrackForget
 		}), domain.ChosenTracks{Audio: new(3)}, 1},
-		{"not a track the copy lacks", domain.DefaultPreferences(), domain.ChosenTracks{Audio: new(9)}, 1},
+		{"not a track the version lacks", domain.DefaultPreferences(), domain.ChosenTracks{Audio: new(9)}, 1},
 	}
 	for _, tt := range tests {
 		if got := DefaultTracks(audio, nil, tt.p, tt.last).Audio; got == nil || *got != tt.want {
@@ -73,18 +73,18 @@ func TestSubtitlesComeOnAsTheModeSays(t *testing.T) {
 		want  domain.ChosenTracks
 	}{
 		{"the file's default", japanese, subs, domain.DefaultPreferences(), domain.ChosenTracks{}, stream(6)},
-		{"the copy's own default before a file beside it", japanese, append(subs, srtFile), domain.DefaultPreferences(), domain.ChosenTracks{}, stream(6)},
-		{"no file beside the copy only for being there", japanese, []Track{fullEnglish, srtFile}, domain.DefaultPreferences(), domain.ChosenTracks{}, none},
+		{"the version's own default before a file beside it", japanese, append(subs, srtFile), domain.DefaultPreferences(), domain.ChosenTracks{}, stream(6)},
+		{"no file beside the version only for being there", japanese, []Track{fullEnglish, srtFile}, domain.DefaultPreferences(), domain.ChosenTracks{}, none},
 		{
-			"a file beside the copy marked default", japanese,
+			"a file beside the version marked default", japanese,
 			[]Track{fullEnglish, defaultSrt},
 			domain.DefaultPreferences(),
 			domain.ChosenTracks{},
 			domain.ChosenTracks{Audio: new(1), SubtitleFile: &defaultSrt.File},
 		},
-		{"always, the copy's own track before a file beside it", japanese, []Track{englishSrt, fullEnglish}, inEnglish(domain.SubtitlesAlways), domain.ChosenTracks{}, stream(5)},
+		{"always, the version's own track before a file beside it", japanese, []Track{englishSrt, fullEnglish}, inEnglish(domain.SubtitlesAlways), domain.ChosenTracks{}, stream(5)},
 		{
-			"a remembered file beside the copy", japanese, append(subs, srtFile), domain.DefaultPreferences(),
+			"a remembered file beside the version", japanese, append(subs, srtFile), domain.DefaultPreferences(),
 			domain.ChosenTracks{SubtitleFile: &srtFile.File},
 			domain.ChosenTracks{Audio: new(1), SubtitleFile: &srtFile.File},
 		},

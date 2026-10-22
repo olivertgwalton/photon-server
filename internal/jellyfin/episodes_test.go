@@ -64,7 +64,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{Copies: noCopies{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Playlists: st})
 	names := func(target string) []string {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")

@@ -54,8 +54,8 @@ const assScript = "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 2
 
 // aSubtitledFilm is a film in an MKV of H.264 and AAC carrying PGS and ASS, with ASS, VobSub, PGS
 // and SubRip files beside it, the SubRip French in Windows-1252, and Japanese and Russian ASS files in
-// Shift_JIS and Windows-1251, served by an API that reads its subtitles with FFmpeg, and its copy.
-func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
+// Shift_JIS and Windows-1251, served by an API that reads its subtitles with FFmpeg, and its version.
+func aSubtitledFilm(t *testing.T) (api http.Handler, film, versionID uuid.UUID) {
 	t.Helper()
 	ctx := t.Context()
 	tool := func(name, env string) string {
@@ -160,7 +160,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 		t.Fatal(err)
 	}
 	api = New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
 		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(),
 		Watching: st, Preferences: st, HLS: remuxer, Placer: alone(newFakeRemuxes()), Owners: noOwners{}, Plans: newPlans(), Signer: playback.NewSigner([]byte("key")),
 	})
@@ -171,10 +171,10 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 // gives it: the stream is read out of the file as it is, in the format its name asks for, from
 // whatever start the address gives, and one it is not read out in is refused.
 func TestAnAppIsSentASubtitleStreamReadOutOfTheFile(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	get := func(index, file string, want int) []byte {
 		t.Helper()
-		w := serve(api, http.MethodGet, "/Videos/"+guid(film)+"/"+guid(copyID)+"/Subtitles/"+index+"/"+file, jellyfinWeb, "")
+		w := serve(api, http.MethodGet, "/Videos/"+guid(film)+"/"+guid(versionID)+"/Subtitles/"+index+"/"+file, jellyfinWeb, "")
 		if w.Code != want {
 			t.Fatalf("%s/%s: %d %s, want %d", index, file, w.Code, w.Body, want)
 		}
@@ -195,15 +195,15 @@ func TestAnAppIsSentASubtitleStreamReadOutOfTheFile(t *testing.T) {
 	get("1", "0/Stream.sup", http.StatusNotFound)
 }
 
-// An app asks for a subtitle file beside a copy as Jellyfin's apps do, by its index, in the format
+// An app asks for a subtitle file beside a version as Jellyfin's apps do, by its index, in the format
 // its name asks for: plain text as WebVTT, read in its charset, or as the JSON of its cues Jellyfin's
 // web app reads; VobSub in Matroska; any file as it is in its own format; and none in a format photon
 // does not make.
 func TestAnAppIsSentASubtitleFileInTheFormatItAsks(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	get := func(index int, file string, want int) []byte {
 		t.Helper()
-		w := serve(api, http.MethodGet, "/Videos/"+guid(film)+"/"+guid(copyID)+"/Subtitles/"+strconv.Itoa(index)+"/0/"+file, jellyfinWeb, "")
+		w := serve(api, http.MethodGet, "/Videos/"+guid(film)+"/"+guid(versionID)+"/Subtitles/"+strconv.Itoa(index)+"/0/"+file, jellyfinWeb, "")
 		if w.Code != want {
 			t.Fatalf("%d/%s: %d %s, want %d", index, file, w.Code, w.Body, want)
 		}
@@ -301,12 +301,12 @@ const webProfile = `{
 // read out for it at the address PlaybackInfo gives it, as Jellyfin's DeliveryUrl; an app that
 // does not is sent HLS with the subtitle drawn in.
 func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	src := playbackInfo(t, api, film, pgsStream, webProfile)
 	if src["SupportsDirectPlay"] != true || src["TranscodingUrl"] != nil {
 		t.Fatalf("the web app's source: %v, want the file as it is", src)
 	}
-	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	base := "/Videos/" + guid(film) + "/" + guid(versionID) + "/Subtitles/"
 	pgs, ass := subtitleStream(t, src, pgsStream), subtitleStream(t, src, assStream)
 	if pgs["DeliveryMethod"] != "External" || keyed(pgs["DeliveryUrl"].(string)) != base+"2/0/Stream.pgssub?ApiKey=KEY" {
 		t.Errorf("the PGS stream: %v", pgs)
@@ -337,12 +337,12 @@ func TestAnAppThatDrawsPGSItselfPlaysTheFileAsItIs(t *testing.T) {
 // than being sent HLS for want of it. Beside HLS, the stream is one of its renditions, and is not
 // sent beside it as well, which the app would show twice.
 func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	src := playbackInfo(t, api, film, srtStream, webProfile)
 	if src["SupportsDirectPlay"] != true || src["TranscodingUrl"] != nil {
 		t.Fatalf("the web app's source with a SubRip stream chosen: %v, want the file as it is", src)
 	}
-	want := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/" + strconv.Itoa(srtStream) + "/0/Stream.vtt?ApiKey=KEY"
+	want := "/Videos/" + guid(film) + "/" + guid(versionID) + "/Subtitles/" + strconv.Itoa(srtStream) + "/0/Stream.vtt?ApiKey=KEY"
 	srt := subtitleStream(t, src, srtStream)
 	address, _ := srt["DeliveryUrl"].(string)
 	if srt["DeliveryMethod"] != "External" || keyed(address) != want {
@@ -382,12 +382,12 @@ func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
 // itself from the address PlaybackInfo gives it, as Jellyfin's DeliveryUrl, in a format it draws:
 // plain text as WebVTT, whose JSON it reads at the same address by the name Stream.js.
 func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	src := playbackInfo(t, api, film, srtFile, webProfile)
 	if src["SupportsDirectPlay"] != true || src["TranscodingUrl"] != nil {
 		t.Fatalf("the web app's source with the SubRip chosen: %v, want the file as it is", src)
 	}
-	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	base := "/Videos/" + guid(film) + "/" + guid(versionID) + "/Subtitles/"
 	for index, want := range map[int]string{srtFile: strconv.Itoa(srtFile) + "/0/Stream.vtt", assFile: strconv.Itoa(assFile) + "/0/Stream.ass", pgsFile: strconv.Itoa(pgsFile) + "/0/Stream.pgssub", vobSubFile: strconv.Itoa(vobSubFile) + "/0/Stream.vobsub"} {
 		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || keyed(s["DeliveryUrl"].(string)) != base+want+"?ApiKey=KEY" {
 			t.Errorf("the file at %d: %v, want it at %s", index, s, want)
@@ -401,13 +401,13 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 	}
 }
 
-// Jellyfin's web app given HLS draws a subtitle file beside the copy itself, as it does the file
+// Jellyfin's web app given HLS draws a subtitle file beside the version itself, as it does the file
 // played as it is, fetched whole from the address PlaybackInfo gives it: the HLS keeps the film's
 // clock, so a cue is shown at its own time from wherever the app starts or seeks, and none is
 // offered in the HLS too. One drawn into the picture is said to be, and so is a file the app draws
 // in no format, which it is never sent to fetch.
 func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	burns := strings.Replace(webProfile, `{"Format": "pgssub", "Method": "External"}`, `{"Format": "pgssub", "Method": "Encode"}`, 1)
 	src := playbackInfo(t, api, film, pgsStream, burns)
 	transcoding, _ := src["TranscodingUrl"].(string)
@@ -417,7 +417,7 @@ func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
 	if tc := plannedFor(t, api, transcoding); tc.Renditions != playback.RenditionsEmbedded {
 		t.Errorf("HLS for the web app: %+v, want no subtitle file in it", tc)
 	}
-	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	base := "/Videos/" + guid(film) + "/" + guid(versionID) + "/Subtitles/"
 	for index, want := range map[int]string{srtFile: strconv.Itoa(srtFile) + "/0/Stream.vtt", assFile: strconv.Itoa(assFile) + "/0/Stream.ass", assStream: strconv.Itoa(assStream) + "/0/Stream.ass", vobSubFile: strconv.Itoa(vobSubFile) + "/0/Stream.vobsub"} {
 		if s := subtitleStream(t, src, index); s["DeliveryMethod"] != "External" || keyed(s["DeliveryUrl"].(string)) != base+want+"?ApiKey=KEY" {
 			t.Errorf("the subtitle at %d: %v, want it at %s", index, s, want)
@@ -438,9 +438,9 @@ func TestJellyfinWebDrawsASubtitleFileBesideHLS(t *testing.T) {
 // chose itself beside the video, as Jellyfin sends it, rather than have it drawn in: fetched whole,
 // it is timed on the film's clock, which the HLS keeps.
 func TestJellyfinWebDrawsAStyledOrPictureSubtitleBesideHLS(t *testing.T) {
-	api, film, copyID := aSubtitledFilm(t)
+	api, film, versionID := aSubtitledFilm(t)
 	noMKV := strings.Replace(webProfile, `"Container": "mkv,webm"`, `"Container": "mp4"`, 1)
-	base := "/Videos/" + guid(film) + "/" + guid(copyID) + "/Subtitles/"
+	base := "/Videos/" + guid(film) + "/" + guid(versionID) + "/Subtitles/"
 	for index, want := range map[int]string{pgsStream: strconv.Itoa(pgsStream) + "/0/Stream.pgssub", assStream: strconv.Itoa(assStream) + "/0/Stream.ass", pgsFile: strconv.Itoa(pgsFile) + "/0/Stream.pgssub", assFile: strconv.Itoa(assFile) + "/0/Stream.ass"} {
 		src := playbackInfo(t, api, film, index, noMKV)
 		transcoding, _ := src["TranscodingUrl"].(string)

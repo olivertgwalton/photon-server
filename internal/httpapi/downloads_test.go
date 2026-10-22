@@ -65,7 +65,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	}
 	signer := playback.NewSigner([]byte("key"))
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Copies: noCopies{}, Discover: noDiscoveries{},
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
 		Sent: playback.NewSent(),
 		Auth: fakeAuth{}, Playing: fakePlaying{}, Downloads: fakeDownloads{},
 		Conversions: fakeConversions{path: converted}, Signer: signer, HLS: fakeHLS{hw: hls.Hardware{HEVC: domain.HEVCAllow}},
@@ -83,7 +83,7 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 	}
 	film := `"title_id": "` + films.String() + `"`
 	if code, _ := ask(`{` + film + `, "max_bitrate_kbps": 10000}`); code != http.StatusBadRequest {
-		t.Errorf("a two-file copy without part_id: %d, want 400", code)
+		t.Errorf("a two-file version without part_id: %d, want 400", code)
 	}
 	part := `, "part_id": "` + partOne.String() + `"`
 	// The film is 8 Mbps H.264 1080p or smaller.
