@@ -736,8 +736,8 @@ export async function admin(
 			} satisfies Schemas["TaskList"]);
 		case "POST /api/v1/admin/tasks/backup_database/run":
 			return done(202);
-		case "POST /api/v1/admin/tasks/backfill_previews/stop":
-			return done(202);
+		case "DELETE /api/v1/admin/tasks/backfill_previews/run":
+			return done();
 		case "GET /api/v1/admin/maintenance":
 			return json(maintenance);
 		case "PUT /api/v1/admin/maintenance":
