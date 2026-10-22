@@ -79,9 +79,9 @@ func CleanName(stem string) Name {
 }
 
 type token struct {
-	text       string
-	start, end int
-	bracketed  bool
+	text      string
+	start     int
+	bracketed bool
 }
 
 func isSeparator(r rune) bool {
@@ -100,7 +100,7 @@ func tokenize(s string) []token {
 			continue
 		}
 		if start >= 0 {
-			toks = append(toks, token{text: s[start:i], start: start, end: i, bracketed: depth > 0})
+			toks = append(toks, token{text: s[start:i], start: start, bracketed: depth > 0})
 			start = -1
 		}
 		switch r {
@@ -111,7 +111,7 @@ func tokenize(s string) []token {
 		}
 	}
 	if start >= 0 {
-		toks = append(toks, token{text: s[start:], start: start, end: len(s), bracketed: depth > 0})
+		toks = append(toks, token{text: s[start:], start: start, bracketed: depth > 0})
 	}
 	return toks
 }

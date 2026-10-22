@@ -397,12 +397,11 @@ func inScope(column, param string) string {
 }
 
 func firstVideo(f *domain.Facts) *domain.Stream {
-	for i := range f.Streams {
-		if f.Streams[i].Kind == domain.StreamVideo {
-			return &f.Streams[i]
-		}
+	i := slices.IndexFunc(f.Streams, func(s domain.Stream) bool { return s.Kind == domain.StreamVideo })
+	if i < 0 {
+		return nil
 	}
-	return nil
+	return &f.Streams[i]
 }
 
 // optional is v, or NULL for its zero.

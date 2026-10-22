@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 	"uuid"
 
@@ -171,10 +172,9 @@ func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 }
 
 func label(m *dto.Metric, name string) string {
-	for _, l := range m.GetLabel() {
-		if l.GetName() == name {
-			return l.GetValue()
-		}
+	labels := m.GetLabel()
+	if i := slices.IndexFunc(labels, func(l *dto.LabelPair) bool { return l.GetName() == name }); i >= 0 {
+		return labels[i].GetValue()
 	}
 	return ""
 }
