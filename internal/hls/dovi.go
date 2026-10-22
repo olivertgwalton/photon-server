@@ -100,13 +100,15 @@ func profile81Sample(out, b []byte, length int) ([]byte, error) {
 }
 
 // trackRun is a trun: its track, where its samples begin in the mdat, their sizes, and the fields
-// in the moof to rewrite once they move or change size.
+// in the moof to rewrite once they move or change size: each sample's own, or, for a trun that
+// gives none, the tfhd's default every one of them takes.
 type trackRun struct {
 	track  uint32
 	start  int
 	sizes  []int
 	offset []byte
 	sized  [][]byte
+	shared []byte
 }
 
 // writeRewritten writes fragment f with its video samples rewritten, every sample moved to where
@@ -125,6 +127,8 @@ func (s *stream) writeRewritten(w io.Writer, f fragment) error {
 	if err != nil {
 		return err
 	}
+	// The size each tfhd's default is rewritten to, which every sample taking it must come to.
+	shared := map[*byte]uint32{}
 	slices.SortFunc(runs, func(a, b trackRun) int { return cmp.Compare(a.start, b.start) })
 	out := slices.Grow(s.out[:0], len(body))
 	defer func() { s.out = out[:0] }()
@@ -146,14 +150,21 @@ func (s *stream) writeRewritten(w io.Writer, f fragment) error {
 				out = append(out, sample...)
 				continue
 			}
-			if r.sized == nil {
-				return fmt.Errorf("%w: a video trun with no sample sizes", errNotFMP4)
-			}
 			before := len(out)
 			if out, err = s.rewrite(out, sample); err != nil {
 				return err
 			}
-			binary.BigEndian.PutUint32(r.sized[i], uint32(len(out)-before))
+			size := uint32(len(out) - before)
+			if r.sized != nil {
+				binary.BigEndian.PutUint32(r.sized[i], size)
+				continue
+			}
+			// ffmpeg gives a fragment of one picture its size in the tfhd, not the trun.
+			if was, ok := shared[&r.shared[0]]; ok && was != size {
+				return fmt.Errorf("%w: samples sharing a size rewritten to different sizes", errNotFMP4)
+			}
+			shared[&r.shared[0]] = size
+			binary.BigEndian.PutUint32(r.shared, size)
 		}
 	}
 	out = append(out, body[at:]...)
@@ -176,6 +187,7 @@ func trackRuns(moof []byte, base int) ([]trackRun, error) {
 		}
 		var track uint32
 		size := -1
+		var shared []byte
 		return children(traf, func(typ string, b []byte) error {
 			switch typ {
 			case "tfhd":
@@ -197,11 +209,16 @@ func trackRuns(moof []byte, base int) ([]trackRun, error) {
 				}
 				if head&0x10 != 0 {
 					v, err := be32(b, at)
-					size = int(v)
-					return err
+					if err != nil {
+						return err
+					}
+					size, shared = int(v), b[at:at+4]
 				}
 			case "trun":
 				r, err := readTrun(b, size)
+				if r.sized == nil {
+					r.shared = shared
+				}
 				r.track = track
 				r.start -= base
 				runs = append(runs, r)
