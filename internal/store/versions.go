@@ -1,7 +1,6 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"path"
@@ -86,19 +85,14 @@ type ChapterRef struct {
 	Image   string
 }
 
-// Versions answers the copies of each of items, those on disk first, then in the order Playable
-// chooses one to play: the longest first; a title with none is left out. However many titles, it is the same few queries.
+// Versions answers the versions of each of items, in versionOrder; a title with none is left out.
+// However many titles, it is the same few queries.
 func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]VersionPage, error) {
-	rows, err := queryRows[model.Version](ctx, s.pool, `SELECT `+versionColumns+` FROM versions WHERE item_id = ANY($1)`, items)
+	rows, err := queryRows[model.Version](ctx, s.pool, `
+		SELECT `+versionColumns+` FROM versions WHERE item_id = ANY($1) ORDER BY `+versionOrder, items)
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
-	slices.SortStableFunc(rows, func(a, b *model.Version) int {
-		if (a.MissingSince == nil) != (b.MissingSince == nil) {
-			return map[bool]int{true: -1, false: 1}[a.MissingSince == nil]
-		}
-		return cmp.Or(cmp.Compare(b.DurationMS, a.DurationMS), a.ID.Compare(b.ID))
-	})
 	in, err := s.versionsIn(ctx, rows)
 	if err != nil {
 		return nil, err
