@@ -29,11 +29,11 @@ type PlayCopy struct {
 	BitrateKbps int
 	Parts       []PlayPart
 	Streams     []domain.Stream
-	Subtitles   []PlaySubtitle
+	Subtitles   []SubtitleRef
 }
 
-// PlaySubtitle is a subtitle file beside a copy, timed on the copy's whole timeline.
-type PlaySubtitle struct {
+// SubtitleRef is a subtitle file beside a version, timed on the version's whole timeline.
+type SubtitleRef struct {
 	ID              uuid.UUID
 	Codec           string
 	Language        language.Tag
@@ -74,7 +74,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 		Container: row.Container, BitrateKbps: row.BitrateKbps, Streams: streams,
 	}
 	for _, f := range subs {
-		c.Subtitles = append(c.Subtitles, playSubtitle(f))
+		c.Subtitles = append(c.Subtitles, subtitleRef(f))
 	}
 	for _, pt := range parts {
 		c.Parts = append(c.Parts, PlayPart{ID: pt.ID, OffsetMS: pt.OffsetMS, DurationMS: pt.DurationMS})
@@ -82,9 +82,9 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 	return c, nil
 }
 
-func playSubtitle(f *model.SubtitleFile) PlaySubtitle {
+func subtitleRef(f *model.SubtitleFile) SubtitleRef {
 	lang := language.Make(deref(f.Language))
-	return PlaySubtitle{
+	return SubtitleRef{
 		ID: f.ID, Codec: f.Codec, Language: lang, Title: deref(f.Title), Default: f.IsDefault,
 		Forced: f.Forced, HearingImpaired: f.HearingImpaired,
 	}
@@ -150,12 +150,12 @@ func (s *Store) SeesPart(ctx context.Context, profile, part uuid.UUID) error {
 }
 
 // Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.
-func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (PlaySubtitle, error) {
+func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (SubtitleRef, error) {
 	f, err := queryRows[model.SubtitleFile](ctx, s.pool, `SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE id = $1`, id)
 	if err != nil || len(f) == 0 {
-		return PlaySubtitle{}, cmp.Or(err, ErrNotFound)
+		return SubtitleRef{}, cmp.Or(err, ErrNotFound)
 	}
-	return playSubtitle(f[0]), nil
+	return subtitleRef(f[0]), nil
 }
 
 // PartKeyframes is how a part's library finds keyframes, and those found: none where the part has

@@ -21,6 +21,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -940,7 +941,7 @@ func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
 	if len(long.Streams) != 2 || long.Streams[0].Range != domain.RangeHDR10 {
 		t.Errorf("streams = %+v, want the first part's HDR10 video and its audio", long.Streams)
 	}
-	if len(short.Subtitles) != 1 || short.Subtitles[0].Language != "en" || len(long.Subtitles) != 0 {
+	if len(short.Subtitles) != 1 || short.Subtitles[0].Language != language.English || len(long.Subtitles) != 0 {
 		t.Errorf("subtitles = %+v and %+v, want the English file on the 1080p copy alone", long.Subtitles, short.Subtitles)
 	}
 	if len(page.Extras) != 1 || page.Extras[0].Kind != domain.ExtraTrailer {

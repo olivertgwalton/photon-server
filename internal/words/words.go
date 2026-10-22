@@ -109,7 +109,7 @@ func (w Words) Stream(s domain.Stream) string {
 // beside it.
 func (w Words) SubtitleFile(f store.SubtitleRef) string {
 	marks := append(mark(f.HearingImpaired, sdh), mark(f.Forced, forced)...)
-	return w.track(f.Title, f.Language, marks, codecName(f.Codec), external)
+	return w.track(f.Title, string(domain.TagOf(f.Language)), marks, codecName(f.Codec), external)
 }
 
 // Version names a copy by its label or edition and its picture ("Director's Cut (4K HEVC Dolby

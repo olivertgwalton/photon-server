@@ -341,7 +341,7 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 		Streams: each(v.Streams, func(s domain.Stream) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{
-				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.LanguageTag(s.Language), Title: s.Title,
+				ID: s.ID, DisplayTitle: w.SubtitleFile(s), Codec: s.Codec, Kind: subtitleKindOf(s.Codec), Language: domain.TagOf(s.Language), Title: s.Title,
 				Default: s.Default, Forced: s.Forced, HearingImpaired: s.HearingImpaired,
 			}
 		}),

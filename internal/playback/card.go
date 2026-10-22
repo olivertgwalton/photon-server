@@ -59,7 +59,7 @@ func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.Play
 			Stream: tracks.Subtitle, Codec: src.Codec, Language: domain.TagOf(src.Language), Burned: burned,
 		}
 	case tracks.SubtitleFile != nil:
-		if i := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == *tracks.SubtitleFile }); i >= 0 {
+		if i := slices.IndexFunc(c.Subtitles, func(f store.SubtitleRef) bool { return f.ID == *tracks.SubtitleFile }); i >= 0 {
 			card.Subtitle = &domain.PlaybackSubtitle{
 				File: tracks.SubtitleFile, Codec: c.Subtitles[i].Codec, Language: domain.TagOf(c.Subtitles[i].Language), Burned: burned,
 			}

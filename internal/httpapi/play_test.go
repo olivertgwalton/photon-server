@@ -58,7 +58,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 				{Index: 1, Kind: domain.StreamSubtitle, Codec: "ass", Language: language.Japanese},
 				{Index: 2, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle", Language: language.English},
 			},
-			Subtitles: []store.PlaySubtitle{
+			Subtitles: []store.SubtitleRef{
 				{ID: signsID, Codec: "ass", Language: language.English}, {ID: subtitleID, Codec: "subrip", Language: language.English},
 			},
 		}, nil
@@ -75,7 +75,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 			{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 			{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2},
 		},
-		Subtitles: []store.PlaySubtitle{{ID: subtitleID, Codec: "subrip", Language: language.English}, {ID: pictureID, Codec: "dvd_subtitle"}},
+		Subtitles: []store.SubtitleRef{{ID: subtitleID, Codec: "subrip", Language: language.English}, {ID: pictureID, Codec: "dvd_subtitle"}},
 	}, nil
 }
 
@@ -91,14 +91,14 @@ var (
 	pictureID = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d2")
 )
 
-func (fakePlaying) Subtitle(_ context.Context, id uuid.UUID) (store.PlaySubtitle, error) {
+func (fakePlaying) Subtitle(_ context.Context, id uuid.UUID) (store.SubtitleRef, error) {
 	switch id {
 	case subtitleID:
-		return store.PlaySubtitle{ID: id, Codec: "subrip", Language: language.English}, nil
+		return store.SubtitleRef{ID: id, Codec: "subrip", Language: language.English}, nil
 	case pictureID:
-		return store.PlaySubtitle{ID: id, Codec: "dvd_subtitle"}, nil
+		return store.SubtitleRef{ID: id, Codec: "dvd_subtitle"}, nil
 	}
-	return store.PlaySubtitle{}, store.ErrNotFound
+	return store.SubtitleRef{}, store.ErrNotFound
 }
 
 func (f fakePlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, string, error) {

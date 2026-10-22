@@ -47,15 +47,16 @@ func DefaultTracks(audio, subtitles []Track, p domain.Preferences, last domain.C
 // ChooseTracks says the tracks each copy plays with unasked for a profile, by DefaultTracks.
 func ChooseTracks(versions []store.VersionPage, p domain.Preferences, last domain.ChosenTracks) {
 	for i, v := range versions {
-		audio, subtitles := pageTracks(v)
+		audio, subtitles := Tracks(v.Streams, v.Subtitles)
 		d := DefaultTracks(audio, subtitles, p, last)
 		versions[i].DefaultAudioStream, versions[i].DefaultSubtitleStream, versions[i].DefaultSubtitleFile = d.Audio, d.Subtitle, d.SubtitleFile
 	}
 }
 
-// pageTracks are a copy's sound and subtitles as its page lists them.
-func pageTracks(v store.VersionPage) (audio, subtitles []Track) {
-	for _, s := range v.Streams {
+// Tracks are a version's sound and subtitles to choose from: its streams, and the subtitle files
+// beside it.
+func Tracks(streams []domain.Stream, files []store.SubtitleRef) (audio, subtitles []Track) {
+	for _, s := range streams {
 		t := Track{Stream: s.Index, Language: s.Language, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
 		switch s.Kind {
 		case domain.StreamAudio:
@@ -65,9 +66,8 @@ func pageTracks(v store.VersionPage) (audio, subtitles []Track) {
 		case domain.StreamVideo:
 		}
 	}
-	for _, f := range v.Subtitles {
-		l := language.Make(f.Language)
-		subtitles = append(subtitles, Track{File: f.ID, Language: l, Default: f.Default, Forced: f.Forced})
+	for _, f := range files {
+		subtitles = append(subtitles, Track{File: f.ID, Language: f.Language, Default: f.Default, Forced: f.Forced})
 	}
 	return audio, subtitles
 }

@@ -34,12 +34,12 @@ type sidecar struct {
 	lang        language.Tag
 }
 
-func (p sidecarPlaying) Subtitle(_ context.Context, id uuid.UUID) (store.PlaySubtitle, error) {
+func (p sidecarPlaying) Subtitle(_ context.Context, id uuid.UUID) (store.SubtitleRef, error) {
 	f, ok := p.files[id]
 	if !ok {
-		return store.PlaySubtitle{}, store.ErrNotFound
+		return store.SubtitleRef{}, store.ErrNotFound
 	}
-	return store.PlaySubtitle{ID: id, Codec: f.codec, Language: f.lang}, nil
+	return store.SubtitleRef{ID: id, Codec: f.codec, Language: f.lang}, nil
 }
 
 func (p sidecarPlaying) SubtitleFile(_ context.Context, id uuid.UUID) (string, string, error) {

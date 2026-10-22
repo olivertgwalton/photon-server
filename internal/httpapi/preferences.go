@@ -199,24 +199,6 @@ func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.T
 	return nil
 }
 
-// copyTracks are a copy's sound and subtitles as it is played.
-func copyTracks(c store.PlayCopy) (audio, subtitles []playback.Track) {
-	for _, s := range c.Streams {
-		t := playback.Track{Stream: s.Index, Language: s.Language, Default: s.Default, Forced: s.Forced, Commentary: s.Commentary}
-		switch s.Kind {
-		case domain.StreamAudio:
-			audio = append(audio, t)
-		case domain.StreamSubtitle:
-			subtitles = append(subtitles, t)
-		case domain.StreamVideo:
-		}
-	}
-	for _, f := range c.Subtitles {
-		subtitles = append(subtitles, playback.Track{File: f.ID, Language: f.Language, Default: f.Default, Forced: f.Forced})
-	}
-	return audio, subtitles
-}
-
 func (a *API) preferencesRoutes() []route {
 	return []route{
 		{

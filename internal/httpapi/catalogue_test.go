@@ -441,7 +441,7 @@ func (matroskaCatalogue) Title(_ context.Context, _, id uuid.UUID) (store.TitleP
 				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Range: domain.RangeDV},
 				{Index: 1, Kind: domain.StreamAudio, Codec: "eac3", Language: language.English, Channels: 6},
 			},
-			Subtitles: []store.SubtitleRef{{ID: id, Codec: "subrip", Language: "de", Forced: true}},
+			Subtitles: []store.SubtitleRef{{ID: id, Codec: "subrip", Language: language.German, Forced: true}},
 		}},
 	}, nil
 }

@@ -64,16 +64,6 @@ type PartTrickplay struct {
 	Trickplay
 }
 
-type SubtitleRef struct {
-	ID              uuid.UUID
-	Codec           string
-	Language        string
-	Title           string
-	Default         bool
-	Forced          bool
-	HearingImpaired bool
-}
-
 // ChapterRef is a chapter on the copy's whole timeline, across its parts: the Idx'th of Part's own.
 // Image is the address of its picture, for those that have one.
 type ChapterRef struct {
@@ -239,10 +229,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 	}
 	for _, f := range in.subs {
 		if f.VersionID == r.ID {
-			vp.Subtitles = append(vp.Subtitles, SubtitleRef{
-				ID: f.ID, Codec: f.Codec, Language: deref(f.Language), Title: deref(f.Title), Default: f.IsDefault,
-				Forced: f.Forced, HearingImpaired: f.HearingImpaired,
-			})
+			vp.Subtitles = append(vp.Subtitles, subtitleRef(f))
 		}
 	}
 	return vp

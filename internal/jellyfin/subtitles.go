@@ -51,7 +51,7 @@ func (a *API) subtitle(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	n := slices.IndexFunc(c.Subtitles, func(f store.PlaySubtitle) bool { return f.ID == chosen.file })
+	n := slices.IndexFunc(c.Subtitles, func(f store.SubtitleRef) bool { return f.ID == chosen.file })
 	a.subtitleFile(w, r, c.Subtitles[n])
 }
 
@@ -69,7 +69,7 @@ type trackEvent struct {
 // one Matroska file, as the web app's libbitsub reads it; else the file as it is, its text in UTF-8,
 // asked for in its own format. Any other format is refused: photon converts to no other. As for a
 // stream, a start in the path is not applied.
-func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.PlaySubtitle) {
+func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.SubtitleRef) {
 	ctx := r.Context()
 	open := func() (media.Input, error) {
 		root, rel, err := a.svc.Playing.SubtitleFile(ctx, f.ID)
