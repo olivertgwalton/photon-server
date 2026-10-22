@@ -1176,3 +1176,83 @@ func TestASegmentSeekedToBeginsOnItsKeyframe(t *testing.T) {
 		t.Errorf("segment 2, started at, has fragments shown at %v, want %v", got, want)
 	}
 }
+
+// A player waiting on a segment while another of its requests seeks the remux elsewhere is told
+// at once to ask again, not left waiting until it gives up.
+func TestASegmentTheRemuxMovesAwayFromIsAnsweredToAskAgain(t *testing.T) {
+	raw, err := os.ReadFile("testdata/fragments.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, init, err := readInit(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What ffmpeg writes before it stalls: the fragments shown in the first 8 seconds.
+	partial := bytes.NewBuffer(bytes.Clone(init))
+	for {
+		f, err := st.next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err == nil && f.shown <= 8*time.Second {
+			err = st.write(partial, f)
+		} else if err == nil {
+			err = st.write(io.Discard, f)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := t.TempDir()
+	written := filepath.Join(dir, "written.mp4")
+	if err := os.WriteFile(written, partial.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ffmpeg := testtool.Script(t, dir, "ffmpeg", "trap 'exit 255' TERM\ncat '"+written+"'\nsleep 60 >/dev/null 2>&1 &\nwait $!\n")
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyframes []time.Duration
+	for k := range 30 {
+		keyframes = append(keyframes, time.Duration(2*k)*time.Second)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Copy{Parts: []Source{{
+		Open: opening("testdata/fragments.mp4"), Part: Part{Duration: 60 * time.Second, Keyframes: keyframes},
+		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(playback)
+	f, err := r.Segment(t.Context(), playback, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	waiting := make(chan error, 1)
+	go func() {
+		f, err := r.Segment(t.Context(), playback, 3)
+		if err == nil {
+			_ = f.Close()
+		}
+		waiting <- err
+	}()
+	<-time.After(200 * time.Millisecond)
+	seek, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	go func() {
+		if f, err := r.Segment(seek, playback, 8); err == nil {
+			_ = f.Close()
+		}
+	}()
+	select {
+	case err := <-waiting:
+		if !errors.Is(err, ErrSuperseded) {
+			t.Errorf("segment 3 after a seek to 8: err = %v, want %v", err, ErrSuperseded)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("segment 3 was still waited on 10 s after the remux moved to 8")
+	}
+}

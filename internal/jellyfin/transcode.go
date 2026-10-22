@@ -142,11 +142,14 @@ func (a *API) hls(w http.ResponseWriter, r *http.Request, name string) {
 // serveHLS serves a file of a play session this node runs.
 func (a *API) serveHLS(w http.ResponseWriter, r *http.Request, session uuid.UUID, name string) {
 	res, err := a.svc.HLS.Resource(r.Context(), session, name)
-	if errors.Is(err, hls.ErrNoRemux) {
+	switch {
+	case errors.Is(err, hls.ErrNoRemux):
 		a.refuse(w, http.StatusNotFound)
 		return
-	}
-	if err != nil {
+	case errors.Is(err, hls.ErrSuperseded):
+		a.refuse(w, http.StatusServiceUnavailable)
+		return
+	case err != nil:
 		a.internal(w, r, err)
 		return
 	}
