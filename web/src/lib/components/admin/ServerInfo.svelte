@@ -160,7 +160,7 @@ const folders = $derived<[string, components["schemas"]["Folder"]][]>([
 							{transcodeLoad(up.streams, node.stream_limit)}
 							<span class="text-ink-3 block text-xs"
 								>{bitrate(up.egress_kbps)}{node.egress_limit_mbps
-									? ` of ${node.egress_limit_mbps} Mbps`
+									? ` of ${bitrate(node.egress_limit_mbps * 1000)}`
 									: ""}</span
 							>
 						{:else}

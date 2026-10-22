@@ -74,7 +74,7 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await expect(gpu).toContainText("NVENC · H.264, HEVC");
 	await expect(gpu).toContainText("3 of 8");
 	await expect(gpu).toContainText("2, no limit");
-	await expect(gpu).toContainText("48 Mbps");
+	await expect(gpu).toContainText("48 Mb/s");
 	await expect(gpu).toContainText("1 for downloads");
 	await expect(
 		nodes.getByRole("row", { name: /den \(this node\)/ }),
@@ -702,10 +702,10 @@ test("Jellyfin's apps are let in on a port of their own", async ({ page }) => {
 	await expectAccessible(page);
 });
 
-test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
+test("remote streams are kept within a limit, in Mb/s", async ({ page }) => {
 	await logIn(page, "/settings/server/network");
 	await page.getByLabel("Local networks").fill("192.168.1.0/24, 100.64.0.0/10");
-	await page.getByLabel("Limit (Mbps)").fill("8");
+	await page.getByLabel("Limit (Mb/s)").fill("8");
 	const saved = page.waitForRequest(
 		(r) => r.method() === "PUT" && r.url().endsWith("/api/v1/admin/network"),
 	);
@@ -716,7 +716,7 @@ test("remote streams are kept within a limit, in Mbps", async ({ page }) => {
 	await expect(page.getByText(/^Saved/)).toBeVisible();
 
 	await page.reload();
-	await expect(page.getByLabel("Limit (Mbps)")).toHaveValue("8");
+	await expect(page.getByLabel("Limit (Mb/s)")).toHaveValue("8");
 	await expect(page.getByLabel("Local networks")).toHaveValue(
 		"192.168.1.0/24, 100.64.0.0/10",
 	);

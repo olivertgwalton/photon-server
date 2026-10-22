@@ -22,10 +22,10 @@ test("a resume point reads as a player's clock", () => {
 	expect(timecode(3_849_000)).toBe("1:04:09");
 });
 
-test("a bitrate reads in Mbps from a thousand kbps, a whole one without a point", () => {
-	expect(bitrate(40_000)).toBe("40 Mbps");
-	expect(bitrate(8_460)).toBe("8.5 Mbps");
-	expect(bitrate(420)).toBe("420 kbps");
+test("a bitrate reads in Mb/s from a thousand kb/s, a whole one without a point", () => {
+	expect(bitrate(40_000)).toBe("40 Mb/s");
+	expect(bitrate(8_460)).toBe("8.5 Mb/s");
+	expect(bitrate(420)).toBe("420 kb/s");
 });
 
 test("an episode is placed by season and number, a double by both ends", () => {

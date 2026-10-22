@@ -6,7 +6,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Dialog from "#lib/components/ui/dialog/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { fields } from "#lib/form.js";
-import { runtime } from "#lib/format.js";
+import { bitrate, runtime } from "#lib/format.js";
 
 // Asks the server for a copy to keep, as Plex's Download asks: the file as it
 // is, or converted down to a size for a phone or a slow connection. A copy
@@ -28,10 +28,10 @@ let {
 // The most the picture may be. Original is any size at all.
 const qualities = [
 	{ name: "Original", detail: "The file as it is", kbps: 1_000_000 },
-	{ name: "1080p", detail: "20 Mbps", kbps: 20_000, width: 1920 },
-	{ name: "1080p", detail: "8 Mbps", kbps: 8000, width: 1920 },
-	{ name: "720p", detail: "4 Mbps", kbps: 4000, width: 1280 },
-	{ name: "480p", detail: "1.5 Mbps", kbps: 1500, width: 854 },
+	{ name: "1080p", kbps: 20_000, width: 1920 },
+	{ name: "1080p", kbps: 8000, width: 1920 },
+	{ name: "720p", kbps: 4000, width: 1280 },
+	{ name: "480p", kbps: 1500, width: 854 },
 ];
 
 const files = $derived(version?.files ?? []);
@@ -120,7 +120,9 @@ async function request(event: SubmitEvent) {
 								class="accent-ink"
 							>
 							<span class="text-ink font-semibold">{quality.name}</span>
-							<span class="text-ink-3 text-sm">{quality.detail}</span>
+							<span class="text-ink-3 text-sm"
+								>{quality.detail ?? bitrate(quality.kbps)}</span
+							>
 						</label>
 					{/each}
 				</div>

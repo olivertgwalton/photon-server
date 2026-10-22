@@ -142,7 +142,7 @@ export function score(site: Schemas["RatingSite"], value: number): string {
 	}
 }
 
-const units = ["B", "KB", "MB", "GB", "TB"];
+const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
 
 export function bytes(n: number): string {
 	let i = 0;
@@ -150,15 +150,32 @@ export function bytes(n: number): string {
 		n /= 1000;
 		i++;
 	}
-	return `${n.toFixed(i && n < 10 ? 1 : 0)} ${units[i]}`;
+	return new Intl.NumberFormat(undefined, {
+		style: "unit",
+		unit: units[i],
+		maximumFractionDigits: i && n < 10 ? 1 : 0,
+	}).format(n);
 }
 
-// "8.5 Mbps", "40 Mbps", "420 kbps".
+const kilobits = new Intl.NumberFormat(undefined, {
+	style: "unit",
+	unit: "kilobit-per-second",
+});
+const megabits = new Intl.NumberFormat(undefined, {
+	style: "unit",
+	unit: "megabit-per-second",
+	maximumFractionDigits: 1,
+});
+
+// "8.5 Mb/s", "40 Mb/s", "420 kb/s".
 export function bitrate(kbps: number): string {
-	return kbps >= 1000
-		? `${Number((kbps / 1000).toFixed(1))} Mbps`
-		: `${kbps} kbps`;
+	return kbps >= 1000 ? megabits.format(kbps / 1000) : kilobits.format(kbps);
 }
+
+// "Mb/s" alone, for a field that takes a number of them.
+export const megabitUnit = megabits
+	.formatToParts(0)
+	.find((p) => p.type === "unit")?.value;
 
 const languages = new Intl.DisplayNames(undefined, { type: "language" });
 

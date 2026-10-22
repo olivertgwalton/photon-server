@@ -8,6 +8,7 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { fields, text } from "#lib/form.js";
+import { megabitUnit } from "#lib/format.js";
 
 let { data } = $props();
 
@@ -228,7 +229,7 @@ function save(event: SubmitEvent) {
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="remote-max">Limit (Mbps)</Field.Label>
+			<Field.Label for="remote-max">Limit ({megabitUnit})</Field.Label>
 			<Input
 				id="remote-max"
 				name="remote_max_mbps"
