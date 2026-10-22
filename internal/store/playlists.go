@@ -162,13 +162,15 @@ func (s *Store) MovePlaylistEntry(ctx context.Context, profile, playlist, entry 
 		moved := entries[from]
 		entries = slices.Delete(entries, from, from+1)
 		entries = slices.Insert(entries, min(max(position, 0), len(entries)), moved)
+		order := make([]uuid.UUID, len(entries))
 		for n, x := range entries {
-			if x.Position == n {
-				continue
-			}
-			if _, err := tx.Exec(ctx, `UPDATE playlist_entries SET position = $2 WHERE id = $1`, x.ID, n); err != nil {
-				return err
-			}
+			order[n] = x.ID
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE playlist_entries e SET position = m.n - 1
+			FROM unnest($2::uuid[]) WITH ORDINALITY AS m(id, n)
+			WHERE e.playlist_id = $1 AND e.id = m.id AND e.position <> m.n - 1`, playlist, order); err != nil {
+			return err
 		}
 		return touch(ctx, tx, playlist)
 	})
