@@ -2,6 +2,7 @@ package hls
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -185,4 +186,30 @@ func FuzzReadTrun(f *testing.F) {
 			t.Fatalf("%d sample sizes, %d of them given", len(r.sizes), len(r.sized))
 		}
 	})
+}
+
+// A fragment's pictures to rewrite are read whole, so a fragment claiming more than maxBox of them
+// is refused before any is read.
+func TestAnOversizedFragmentIsNotRewritten(t *testing.T) {
+	data, err := os.ReadFile("testdata/dovi7.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Clone(data)
+	at := bytes.Index(data, []byte("mdat")) - 4
+	binary.BigEndian.PutUint32(data[at:], maxBox+9)
+	s, init, err := readInit(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.profile81(init); err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.next()
+	if err == nil {
+		err = s.write(io.Discard, f)
+	}
+	if !errors.Is(err, errNotFMP4) {
+		t.Errorf("a fragment of %d bytes: err = %v, want %v", maxBox+1, err, errNotFMP4)
+	}
 }

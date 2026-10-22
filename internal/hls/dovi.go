@@ -49,7 +49,7 @@ func (s *stream) profile81(init []byte) error {
 	if err != nil {
 		return err
 	}
-	s.rewrite = func(sample []byte) ([]byte, error) { return profile81Sample(sample, length) }
+	s.rewrite = func(dst, sample []byte) ([]byte, error) { return profile81Sample(dst, sample, length) }
 	return nil
 }
 
@@ -66,10 +66,9 @@ func descend(b []byte, path []string, f func([]byte) error) error {
 	})
 }
 
-// profile81Sample takes the enhancement layer's NAL units out of an HEVC sample, its NAL units
-// each after its length in length bytes, and rewrites its RPU as profile 8.1.
-func profile81Sample(b []byte, length int) ([]byte, error) {
-	out := make([]byte, 0, len(b))
+// profile81Sample appends to out an HEVC sample, its NAL units each after its length in length
+// bytes, with its enhancement layer's NAL units taken out and its RPU rewritten as profile 8.1.
+func profile81Sample(out, b []byte, length int) ([]byte, error) {
 	for len(b) > 0 {
 		if len(b) < length {
 			return nil, errors.New("hls: a sample ends inside a NAL unit's length")
@@ -113,8 +112,12 @@ type trackRun struct {
 // writeRewritten writes fragment f with its video samples rewritten, every sample moved to where
 // the ones rewritten before it leave it, and the moof's offsets and sizes made to match.
 func (s *stream) writeRewritten(w io.Writer, f fragment) error {
+	if f.body > maxBox {
+		return fmt.Errorf("%w: an mdat of %d bytes to rewrite", errNotFMP4, f.body)
+	}
 	moof := slices.Clone(f.head[:len(f.head)-8])
-	body := make([]byte, f.body)
+	body := slices.Grow(s.body[:0], int(f.body))[:f.body]
+	s.body = body
 	if _, err := io.ReadFull(s.r, body); err != nil {
 		return io.ErrUnexpectedEOF
 	}
@@ -123,7 +126,8 @@ func (s *stream) writeRewritten(w io.Writer, f fragment) error {
 		return err
 	}
 	slices.SortFunc(runs, func(a, b trackRun) int { return cmp.Compare(a.start, b.start) })
-	out := make([]byte, 0, len(body))
+	out := slices.Grow(s.out[:0], len(body))
+	defer func() { s.out = out[:0] }()
 	at := 0
 	for _, r := range runs {
 		if r.start < at || r.start > len(body) {
@@ -138,16 +142,18 @@ func (s *stream) writeRewritten(w io.Writer, f fragment) error {
 			}
 			sample := body[at : at+n]
 			at += n
-			if r.track == s.video {
-				if r.sized == nil {
-					return fmt.Errorf("%w: a video trun with no sample sizes", errNotFMP4)
-				}
-				if sample, err = s.rewrite(sample); err != nil {
-					return err
-				}
-				binary.BigEndian.PutUint32(r.sized[i], uint32(len(sample)))
+			if r.track != s.video {
+				out = append(out, sample...)
+				continue
 			}
-			out = append(out, sample...)
+			if r.sized == nil {
+				return fmt.Errorf("%w: a video trun with no sample sizes", errNotFMP4)
+			}
+			before := len(out)
+			if out, err = s.rewrite(out, sample); err != nil {
+				return err
+			}
+			binary.BigEndian.PutUint32(r.sized[i], uint32(len(out)-before))
 		}
 	}
 	out = append(out, body[at:]...)
