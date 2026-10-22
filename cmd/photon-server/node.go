@@ -357,8 +357,10 @@ func (n *node) serve(ctx context.Context) error {
 		stopBackground()
 		wg.Wait()
 	}()
-	// On the signal's context, not background's, so its streams end before Shutdown waits on them.
-	wg.Go(func() { n.hub.Run(ctx) })
+	// Events are told until the node has drained, and their streams end then, before Shutdown: a
+	// client reconnecting while streams play to their end is told events, not ended at once.
+	events, stopEvents := context.WithCancel(background)
+	wg.Go(func() { n.hub.Run(events) })
 	wg.Go(func() { n.scheduler.Run(ctx) })
 	wg.Go(func() { n.gate.Run(background) })
 	for _, w := range n.workers() {
@@ -387,6 +389,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { n.signIns.Run(ctx) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
+		defer stopEvents()
 		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {
 			endStreams(n.self, n.sessions)
 			return
