@@ -490,7 +490,7 @@ function seek(seconds: number) {
 }
 
 // Shows the subtitle chosen in the playback there is: styled text drawn by
-// JASSUB, pictures drawn by libbitsub, a file beside the copy as a track, or one of
+// JASSUB, pictures drawn by libbitsub, a file beside the version as a track, or one of
 // the HLS playlist's renditions.
 async function showSubtitle() {
 	if (!playback || !video) return;

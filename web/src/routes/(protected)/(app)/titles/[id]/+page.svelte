@@ -448,7 +448,7 @@ async function ask() {
 							</Button>
 						{/if}
 					{:else if t.fetching}
-						<!-- A remote title whose provider is fetching its copy plays once it has it. -->
+						<!-- A remote title whose provider is fetching its version plays once it has it. -->
 						<p class="text-ink-2 text-sm">
 							Being fetched. It plays once its provider has it; look again in a
 							few minutes.

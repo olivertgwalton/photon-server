@@ -12,7 +12,7 @@ type Thumbnail = {
 	sheetHeight: number;
 };
 
-// The thumbnail for a moment on the copy's timeline: the sheet of the part it
+// The thumbnail for a moment on the version's timeline: the sheet of the part it
 // falls in, and where in that sheet's grid the picture is.
 export function thumbnail(
 	parts: PartTrickplay[],

@@ -5,7 +5,7 @@ import { page } from "$app/state";
 let { data } = $props();
 
 // ?t= is where to start, in seconds; without it the reader resumes where they
-// left off. ?version=, ?audio= and ?subtitle= choose the copy and its tracks,
+// left off. ?version=, ?audio= and ?subtitle= choose the version and its tracks,
 // the tracks by stream index.
 const number = (name: string) => {
 	const value = page.url.searchParams.get(name);

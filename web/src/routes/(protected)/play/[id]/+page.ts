@@ -1,7 +1,7 @@
 import { client, need } from "#lib/api/client.js";
 import type { PageLoad } from "./$types";
 
-// What the player needs before it asks to play: the copies, their tracks,
+// What the player needs before it asks to play: the versions, their tracks,
 // chapters, markers and thumbnails, where the reader left off, and how the
 // profile plays.
 export const load: PageLoad = async ({ fetch, params }) => {

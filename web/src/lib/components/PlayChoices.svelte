@@ -5,8 +5,8 @@ import { onDisk } from "#lib/format.js";
 
 type Version = components["schemas"]["VersionPage"];
 
-// Which copy, which sound and which subtitles a title is played with: only
-// what the reader changed is bound. A choice with one answer is not offered. Subtitle files beside the copy are
+// Which version, which sound and which subtitles a title is played with: only
+// what the reader changed is bound. A choice with one answer is not offered. Subtitle files beside the version are
 // the player's to offer: the server hands them over when the title starts.
 let {
 	versions,
@@ -29,7 +29,7 @@ const subtitles = $derived(
 	chosen?.streams.filter((s) => s.kind === "subtitle") ?? [],
 );
 
-// What plays when the reader chooses nothing: the copy's default track, and
+// What plays when the reader chooses nothing: the version's default track, and
 // its default or forced subtitles. Left unchosen, nothing is sent and the
 // server decides as it would for any client.
 const audible = $derived(audios.find((s) => s.default) ?? audios[0]);
@@ -69,7 +69,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 				disabled: !!v.missing_since,
 			})),
 			(value) => {
-				// Tracks are numbered per copy, so a new copy starts unchosen.
+				// Tracks are numbered per version, so a new version starts unchosen.
 				version = value;
 				audio = subtitle = undefined;
 			},

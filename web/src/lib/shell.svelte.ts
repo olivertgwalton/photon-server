@@ -92,7 +92,7 @@ export class Shell {
 		Object.assign(this.sharing, { open: true, url, title });
 	};
 
-	// Which copy, as Plex's Play Version and Save File ask, of its copies on
+	// Which version, as Plex's Play Version and Save File ask, of its versions on
 	// disk, asked each time. One alone is no choice: it plays, or its download
 	// is asked about, at once.
 	versions = $state({
@@ -103,7 +103,7 @@ export class Shell {
 		use: "play" as VersionUse,
 	});
 	onDisk = $state.raw<Version[]>([]);
-	copy = $state.raw<Version>();
+	toDownload = $state.raw<Version>();
 
 	chooseVersion = async (id: string, title: string, use: VersionUse) => {
 		const { data, error } = await client().GET("/api/v1/titles/{id}", {
@@ -125,7 +125,7 @@ export class Shell {
 			goto(playHref(this.versions.id, { version: v.id }));
 			return;
 		}
-		this.copy = v;
+		this.toDownload = v;
 		this.versions.downloading = true;
 	};
 
@@ -159,7 +159,7 @@ export class Shell {
 	askToSplit = (id: string, name: string) =>
 		this.confirmFirst(
 			`Split ${name} apart?`,
-			"Each of its copies but the one that plays first becomes a film of its own, matched afresh, and stays so through every scan.",
+			"Each of its versions but the one that plays first becomes a film of its own, matched afresh, and stays so through every scan.",
 			"Split apart",
 			() => splitTitle(id, name),
 		);

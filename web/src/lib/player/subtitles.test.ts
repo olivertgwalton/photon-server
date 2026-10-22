@@ -225,7 +225,7 @@ test("a picture handed beside the video shows without a new playback", () => {
 	expect(needsReplay(pgs, handed)).toBe(false);
 });
 
-test("a picture beside the copy is asked for, and shows once handed beside the video", () => {
+test("a picture beside the version is asked for, and shows once handed beside the video", () => {
 	const vobsub = choices(version)[4];
 	expect(wants(vobsub)).toEqual({ subtitle_file: "s2", viaHLS: false });
 	expect(needsReplay(vobsub, direct)).toBe(true);

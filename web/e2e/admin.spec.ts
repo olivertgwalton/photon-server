@@ -1038,7 +1038,7 @@ test("a title is unmatched from its card", async ({ page }) => {
 	).toBeVisible();
 });
 
-test("a film of two copies is split apart from its card, once asked", async ({
+test("a film of two versions is split apart from its card, once asked", async ({
 	page,
 }) => {
 	await logIn(page);

@@ -2,8 +2,8 @@ import type { components } from "#lib/api/schema.js";
 
 type Schemas = components["schemas"];
 
-// A subtitle the reader can choose: a track inside the copy, by its stream
-// index, or a file beside it, by its place among the copy's files.
+// A subtitle the reader can choose: a track inside the version, by its stream
+// index, or a file beside it, by its place among the version's files.
 type Choice = {
 	key: string;
 	label: string;
@@ -14,7 +14,7 @@ type Choice = {
 	// A file's id, which a play names it by.
 	id?: string;
 	// Its place among an HLS playlist's subtitles: every plain text track
-	// inside the copy, then every plain text file beside it. A picture or
+	// inside the version, then every plain text file beside it. A picture or
 	// styled text has none.
 	rendition?: number;
 };
@@ -38,7 +38,7 @@ export function choices(version: Schemas["VersionPage"]): Choice[] {
 			rendition: s.subtitle_kind === "text" ? rendition++ : undefined,
 		});
 	}
-	// A picture beside the copy is never drawn into the video: it shows only
+	// A picture beside the version is never drawn into the video: it shows only
 	// where the browser draws it, which it does of PGS and VobSub.
 	(version.subtitles ?? []).forEach((f, i) => {
 		if (f.kind === "picture" && !drawnPictures.has(f.codec)) return;
@@ -87,7 +87,7 @@ export function wants(choice: Choice | undefined): {
 }
 
 // The subtitle a playback hands the browser to draw beside the video for a
-// choice: a file beside the copy, or a styled or picture track read out of it.
+// choice: a file beside the version, or a styled or picture track read out of it.
 export function beside(
 	choice: Choice | undefined,
 	playback: Schemas["Playback"],

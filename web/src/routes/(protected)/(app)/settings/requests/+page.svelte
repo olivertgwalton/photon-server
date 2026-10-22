@@ -135,8 +135,8 @@ const { offset, total } = $derived(data.requests);
 	bind:open={
 		() => !!declining,
 		(open) => {
-			if (!open) declining = undefined;
-		}
+	if (!open) declining = undefined;
+}
 	}
 >
 	<AlertDialog.Content>

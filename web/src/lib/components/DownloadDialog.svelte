@@ -9,8 +9,8 @@ import { fields } from "#lib/form.js";
 import { bitrate, runtime } from "#lib/format.js";
 
 // Asks the server for a copy to keep, as Plex's Download asks: the file as it
-// is, or converted down to a size for a phone or a slow connection. A copy
-// already within the choice comes back as itself. A copy in several files is
+// is, or converted down to a size for a phone or a slow connection. A version
+// already within the choice comes back as itself. A version in several files is
 // kept a file at a time, all of them unless one is chosen: Plex's Save File and
 // Jellyfin's Download give its first file alone.
 let {

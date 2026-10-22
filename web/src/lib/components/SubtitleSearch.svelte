@@ -16,7 +16,7 @@ const shell = getShell();
 type Found = components["schemas"]["FoundSubtitles"];
 
 // Finds subtitles for a film or an episode on the providers an admin set up,
-// in a language, and keeps the one chosen beside its copy for everyone, as
+// in a language, and keeps the one chosen beside its version for everyone, as
 // Plex's and Jellyfin's subtitle search do. One made for the very file, found
 // by its hash, is starred and comes first.
 

@@ -7,7 +7,7 @@ import { vocabulary } from "#lib/vocabulary.js";
 type Version = components["schemas"]["VersionPage"];
 type Stream = components["schemas"]["StreamPage"];
 
-// What a title's copies are made of, as Jellyfin's Media Info lists it.
+// What a title's versions are made of, as Jellyfin's Media Info lists it.
 let {
 	open = $bindable(false),
 	title,

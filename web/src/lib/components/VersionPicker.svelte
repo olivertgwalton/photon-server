@@ -17,7 +17,7 @@ const asked = shell.versions;
 			<Dialog.Description>{asked.title}</Dialog.Description>
 		</Dialog.Header>
 		{#if !shell.onDisk.length}
-			<p class="text-ink-3">None of its copies is on disk.</p>
+			<p class="text-ink-3">None of its versions is on disk.</p>
 		{:else}
 			<ul class="-mx-2 grid">
 				{#each shell.onDisk as v (v.id)}
@@ -40,5 +40,5 @@ const asked = shell.versions;
 	bind:open={asked.downloading}
 	id={asked.id}
 	title={asked.title}
-	version={shell.copy}
+	version={shell.toDownload}
 />

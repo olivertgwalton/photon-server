@@ -222,7 +222,7 @@ test("the bar says what the server is doing: who is watching, a scan as it goes,
 	await expectAccessible(page);
 });
 
-test("a film's page plays the copy and tracks chosen", async ({ page }) => {
+test("a film's page plays the version and tracks chosen", async ({ page }) => {
 	await logIn(page, "/titles/t-film");
 	await expect(
 		page.getByRole("heading", { level: 1, name: "Quiet Hours" }),
@@ -264,7 +264,7 @@ test("a film's page plays the copy and tracks chosen", async ({ page }) => {
 	await page.getByRole("menuitem", { name: "Download…" }).click();
 	await page.getByRole("radio", { name: /720p/ }).check();
 	await page.getByRole("button", { name: "Download", exact: true }).click();
-	// The 1080p copy is in two files: each is a download of its own.
+	// The 1080p version is in two files: each is a download of its own.
 	await expect(page.getByText(/2 downloads requested/)).toBeVisible();
 
 	const extras = page.getByRole("region", { name: "Extras" });
@@ -705,7 +705,9 @@ test("favourites, history and downloads list the reader's own", async ({
 	await expectAccessible(page);
 });
 
-test("a copy in two files is downloaded a file at a time", async ({ page }) => {
+test("a version in two files is downloaded a file at a time", async ({
+	page,
+}) => {
 	const asked: (string | undefined)[] = [];
 	page.on("request", (r) => {
 		if (r.method() === "POST" && r.url().endsWith("/api/v1/downloads")) {
@@ -813,7 +815,7 @@ test("a version is chosen from a card to play or to download", async ({
 	).toBeVisible();
 });
 
-test("a title's one copy goes to its download without a choice", async ({
+test("a title's one version goes to its download without a choice", async ({
 	page,
 }) => {
 	let answer = () => {};
