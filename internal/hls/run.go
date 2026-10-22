@@ -28,9 +28,10 @@ func (r *Remuxer) start(ctx context.Context, s *session, n int) {
 	// run waits ahead of that, not ahead of the furthest it ever asked for.
 	s.furthest = n
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	run := &run{cancel: cancel, part: s.plan[n].Part, first: n, at: n, more: make(chan struct{}, 1)}
+	run := &run{cancel: cancel, part: s.plan[n].Part, first: n, at: n, more: make(chan struct{}, 1), done: make(chan struct{})}
 	s.run = run
 	s.runs.Go(func() {
+		defer close(run.done)
 		err := r.produce(ctx, s, run)
 		s.mu.Lock()
 		defer s.mu.Unlock()

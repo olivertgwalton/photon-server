@@ -245,24 +245,43 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 		r.log.WarnContext(ctx, "segment not removed", slog.String("dir", s.dir), slog.Any("err", err))
 	}
 	wait := waiter(s.ready, n)
-	select {
-	case <-wait:
-	default:
-		if s.run == nil || s.run.part != s.plan[n].Part || n < s.run.at || n > s.run.at+jump {
-			r.start(ctx, s, n)
-		}
-	}
-	if s.run != nil {
+	for {
 		select {
-		case s.run.more <- struct{}{}:
+		case <-wait:
 		default:
+			if !s.makes(n) {
+				r.start(ctx, s, n)
+			}
 		}
-	}
-	s.mu.Unlock()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-wait:
+		var stopped <-chan struct{}
+		if s.run != nil {
+			stopped = s.run.done
+			select {
+			case s.run.more <- struct{}{}:
+			default:
+			}
+		}
+		s.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-wait:
+		case <-stopped:
+			// The run that was to make it stopped short of it, replaced by a seek. One that will make
+			// it is waited on, and none started where there is none; one another request moved
+			// elsewhere is not moved back, or two players' requests would keep moving it apart.
+			s.mu.Lock()
+			if s.ended {
+				s.mu.Unlock()
+				return nil, ErrNoRemux
+			}
+			if s.run != nil && !s.makes(n) && !closed(wait) {
+				s.mu.Unlock()
+				return nil, ErrSuperseded
+			}
+			continue
+		}
+		break
 	}
 	r.segmentWait.Observe(time.Since(asked).Seconds())
 	s.mu.Lock()
@@ -277,6 +296,11 @@ func (r *Remuxer) Segment(ctx context.Context, playback uuid.UUID, n int) (*os.F
 
 // waiter answers the channel closed when what waiting names n of is made: a segment, a part's
 // initialisation, or a segment's cues; the session's lock is held.
+// makes reports whether the session's run will make segment n without being moved.
+func (s *session) makes(n int) bool {
+	return s.run != nil && s.run.part == s.plan[n].Part && n >= s.run.at && n <= s.run.at+jump
+}
+
 func waiter(waiting map[int]chan struct{}, n int) chan struct{} {
 	c, ok := waiting[n]
 	if !ok {

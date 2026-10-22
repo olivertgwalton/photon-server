@@ -47,6 +47,10 @@ const (
 // ErrNoRemux is a remux that has ended, or never was.
 var ErrNoRemux = errors.New("hls: no such remux")
 
+// ErrSuperseded is a segment its remux moved away from before making it, for another the player
+// asked for: asked for again, it is made.
+var ErrSuperseded = errors.New("hls: the remux moved on before making the segment")
+
 // ErrNoSegments is a copy no playlist can be cut from: a part that says nothing of how long it
 // runs, and whose keyframes are not known either, has no length to cut into segments.
 var ErrNoSegments = errors.New("hls: the copy has no length to cut into segments")
@@ -203,6 +207,8 @@ type run struct {
 	first  int
 	at     int // the next segment it will finish
 	more   chan struct{}
+	// done is closed once the run has stopped, whatever it made.
+	done chan struct{}
 }
 
 // subtitle is a subtitle of a session: a file's cues read once, when first asked for, or a
