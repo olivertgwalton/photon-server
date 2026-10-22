@@ -79,6 +79,10 @@ func episodeOrderOf(alias string) string {
 	return "(" + strings.Join(episodeOrder(alias), ", ") + ")"
 }
 
+// versionOrder is the order of a title's versions: those on disk first, then the longest. The first
+// is the one a title plays unasked.
+const versionOrder = `missing_since IS NOT NULL, duration_ms DESC, id`
+
 // The columns of the other rows read whole.
 const (
 	versionColumns = `id, item_id, library_id, fingerprint, edition, label, container, width, height, video_codec,

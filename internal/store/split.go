@@ -27,8 +27,7 @@ func (s *Store) SplitTitle(ctx context.Context, id uuid.UUID) error {
 			return ErrNotFound
 		}
 		versions, err := queryColumn[uuid.UUID](ctx, tx, `
-			SELECT id FROM versions WHERE item_id = $1
-			ORDER BY missing_since IS NOT NULL, duration_ms DESC, id`, id)
+			SELECT id FROM versions WHERE item_id = $1 ORDER BY `+versionOrder, id)
 		if err != nil {
 			return err
 		}
