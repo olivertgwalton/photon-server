@@ -27,7 +27,7 @@ type fakeLibraries struct {
 	libs    []domain.Library
 	scanned []uuid.UUID
 	folders []string
-	// missing is how many copies on no disk each library holds, as an ask to forget them takes.
+	// missing is how many versions on no disk each library holds, as an ask to forget them takes.
 	missing map[uuid.UUID]int64
 }
 
@@ -90,7 +90,7 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 		f.libs[i].SubtitleLanguages = c.SubtitleLanguages
 	}
 	f.libs[i].SubtitleMatch = cmp.Or(c.SubtitleMatch, f.libs[i].SubtitleMatch)
-	f.libs[i].MissingCopies = cmp.Or(c.MissingCopies, f.libs[i].MissingCopies)
+	f.libs[i].MissingVersions = cmp.Or(c.MissingVersions, f.libs[i].MissingVersions)
 	f.libs[i].BoxSets = cmp.Or(c.BoxSets, f.libs[i].BoxSets)
 	if c.Requests != nil {
 		f.libs[i].RequestSource = *c.Requests
@@ -98,8 +98,8 @@ func (f *fakeLibraries) SetLibrary(_ context.Context, id uuid.UUID, c store.Libr
 	return nil
 }
 
-// ForgetMissingCopies takes the copies on no disk of the library, as one title apiece.
-func (f *fakeLibraries) ForgetMissingCopies(_ context.Context, lib uuid.UUID) (int64, store.Changed, error) {
+// ForgetMissingVersions takes the versions on no disk of the library, as one title apiece.
+func (f *fakeLibraries) ForgetMissingVersions(_ context.Context, lib uuid.UUID) (int64, store.Changed, error) {
 	if !slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.ID == lib }) {
 		return 0, nil, store.ErrNotFound
 	}
@@ -230,11 +230,11 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"subtitle_languages":["fr","pt-BR"],"subtitle_match":"any"`) {
 		t.Errorf("setting subtitle languages: %d %s", rec.Code, rec.Body)
 	}
-	// Forgetting a library's copies on no disk says how many went, as Plex's Empty Trash does.
+	// Forgetting a library's versions on no disk says how many went, as Plex's Empty Trash does.
 	libs.missing = map[uuid.UUID]int64{added.ID: 3}
 	rec = do(goodToken, http.MethodDelete, "/api/v1/admin/libraries/"+added.ID.String()+"/missing", "")
-	if !strings.Contains(rec.Body.String(), `"copies":3`) {
-		t.Errorf("forgetting the copies on no disk: %d %s", rec.Code, rec.Body)
+	if !strings.Contains(rec.Body.String(), `"versions":3`) {
+		t.Errorf("forgetting the versions on no disk: %d %s", rec.Code, rec.Body)
 	}
 	// Their titles are told as a scan's are, so what is gone leaves every client's catalogue.
 	if n := len(told.changed[added.ID][domain.TitleRemoved]); n != 3 {
@@ -264,8 +264,8 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"themes": "off"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_languages": ["fr", "Klingon!"]}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"subtitle_match": "perfect"}`, http.StatusBadRequest},
-		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "bin"}`, http.StatusBadRequest},
-		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_copies": "forget"}`, http.StatusOK},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_versions": "bin"}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"missing_versions": "forget"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "grouped"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "expanded"}`, http.StatusOK},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"box_sets": "beside"}`, http.StatusOK},

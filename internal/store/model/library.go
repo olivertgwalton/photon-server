@@ -7,24 +7,24 @@ import (
 )
 
 type Library struct {
-	ID             uuid.UUID
-	Name           string
-	Kind           domain.LibraryKind
-	Media          domain.LibraryMedia
-	Root           *string
-	ListSource     *domain.FieldSource
-	ListID         *string
-	StreamSource   *domain.FieldSource
-	DiscoverSource *domain.FieldSource
-	RequestSource  *domain.FieldSource
-	Monitor        domain.Monitor
-	RefreshDays    int16
-	Previews       domain.PreviewLevel
-	Markers        domain.MarkerDetection
-	Keyframes      domain.KeyframeMode
-	Deletion       domain.MediaDeletion
-	MissingCopies  domain.MissingCopy
-	Themes         domain.ThemeLookup
+	ID              uuid.UUID
+	Name            string
+	Kind            domain.LibraryKind
+	Media           domain.LibraryMedia
+	Root            *string
+	ListSource      *domain.FieldSource
+	ListID          *string
+	StreamSource    *domain.FieldSource
+	DiscoverSource  *domain.FieldSource
+	RequestSource   *domain.FieldSource
+	Monitor         domain.Monitor
+	RefreshDays     int16
+	Previews        domain.PreviewLevel
+	Markers         domain.MarkerDetection
+	Keyframes       domain.KeyframeMode
+	Deletion        domain.MediaDeletion
+	MissingVersions domain.MissingVersion
+	Themes          domain.ThemeLookup
 	// MetadataLanguage and CertificationCountry are nil for the server's own.
 	MetadataLanguage     *string
 	CertificationCountry *string

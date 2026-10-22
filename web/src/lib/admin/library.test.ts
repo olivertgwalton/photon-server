@@ -32,7 +32,7 @@ const tv: Schemas["AdminLibrary"] = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
-	missing_copies: "keep",
+	missing_versions: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
 	box_sets: "collapsed",

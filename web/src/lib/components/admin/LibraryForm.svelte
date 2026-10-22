@@ -61,7 +61,7 @@ const defaults = {
 	keyframes: "index",
 	themes: "local",
 	deletion: "off",
-	missing_copies: "keep",
+	missing_versions: "keep",
 	artwork_language: "localized",
 	title_language: "localized",
 	box_sets: "expanded",
@@ -623,19 +623,19 @@ const refreshOptions = $derived(
 					</Field.Field>
 					<Field.Field>
 						<Field.Label for="{id}-library-missing"
-							>Copies on no disk</Field.Label
+							>Versions on no disk</Field.Label
 						>
 						<Choice
 							id="{id}-library-missing"
-							name="missing_copies"
-							value={library?.missing_copies ?? defaults.missing_copies}
+							name="missing_versions"
+							value={library?.missing_versions ?? defaults.missing_versions}
 							options={[
 								{ value: "keep", label: "Kept, marked missing" },
 								{ value: "forget", label: "Forgotten at the end of a scan" },
 							]}
 						/>
 						<Field.Description>
-							Kept, a copy whose files have gone stays, marked missing, so a
+							Kept, a version whose files have gone stays, marked missing, so a
 							mount down for repair costs no titles; forget it instead and each
 							scan takes it, and the titles left with nothing, out of the
 							library.

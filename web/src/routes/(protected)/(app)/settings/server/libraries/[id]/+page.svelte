@@ -61,9 +61,9 @@ function save(event: SubmitEvent) {
 				variant="outline"
 				size="sm"
 				onclick={() =>
-					shell.askToForgetMissingCopies(data.library.id, data.library.name)}
+					shell.askToForgetMissingVersions(data.library.id, data.library.name)}
 			>
-				Forget copies on no disk
+				Forget versions on no disk
 				<span class="sr-only">in {data.library.name}</span>
 			</Button>
 		{/if}

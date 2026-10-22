@@ -3,7 +3,7 @@ import { toast } from "svelte-sonner";
 import { goto } from "$app/navigation";
 import {
 	deleteTitle,
-	forgetMissingCopies,
+	forgetMissingVersions,
 	type RefreshOf,
 	removeLibrary,
 	splitTitle,
@@ -172,12 +172,12 @@ export class Shell {
 			() => deleteTitle(id, name),
 		);
 
-	askToForgetMissingCopies = (id: string, name: string) =>
+	askToForgetMissingVersions = (id: string, name: string) =>
 		this.confirmFirst(
-			`Forget the copies on no disk in ${name}?`,
-			"Each copy whose files have gone leaves the library, and the titles left with nothing go with them. What is watched of them is forgotten. The files that are still there are not touched.",
+			`Forget the versions on no disk in ${name}?`,
+			"Each version whose files have gone leaves the library, and the titles left with nothing go with them. What is watched of them is forgotten. The files that are still there are not touched.",
 			"Forget them",
-			() => forgetMissingCopies(id, name),
+			() => forgetMissingVersions(id, name),
 		);
 
 	askToRemoveLibrary = (id: string, name: string, here: string) =>

@@ -29,7 +29,7 @@ var (
 // libraryColumns and librarySourceColumns are model.Library's and model.LibrarySource's, for a
 // statement that reads whole rows.
 const (
-	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, request_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_copies,
+	libraryColumns = `id, name, kind, media, root, list_source, list_id, stream_source, discover_source, request_source, monitor, refresh_days, previews, markers, keyframes, themes, deletion, missing_versions,
 		metadata_language, certification_country, artwork_language, title_language, box_sets, subtitle_languages, subtitle_match`
 	librarySourceColumns = `library_id, item_kind, fetcher, source, position, enabled`
 )
@@ -168,8 +168,8 @@ type LibraryChange struct {
 	Themes domain.ThemeLookup
 	// Deletion is whether an admin may delete its titles with their files.
 	Deletion domain.MediaDeletion
-	// MissingCopies is what becomes of its versions on no disk at the end of a scan.
-	MissingCopies domain.MissingCopy
+	// MissingVersions is what becomes of its versions on no disk at the end of a scan.
+	MissingVersions domain.MissingVersion
 	// MetadataLanguage and CertificationCountry, where set, replace its locale's: "" is the
 	// server's own. With either changed its titles are described again in it.
 	MetadataLanguage     *string
@@ -354,8 +354,8 @@ func setColumns(ctx context.Context, tx db, id uuid.UUID, change LibraryChange) 
 			return err
 		}
 	}
-	if change.MissingCopies != "" {
-		if err := setColumn(ctx, tx, id, "missing_copies", change.MissingCopies); err != nil {
+	if change.MissingVersions != "" {
+		if err := setColumn(ctx, tx, id, "missing_versions", change.MissingVersions); err != nil {
 			return err
 		}
 	}
@@ -483,7 +483,7 @@ func library(r model.Library, sources []domain.KindSources, extras []domain.Extr
 		RequestSource: deref(r.RequestSource),
 		Sources:       sources, RemoteExtras: extras,
 		Monitor: r.Monitor, RefreshDays: int(r.RefreshDays), Previews: r.Previews, Markers: r.Markers,
-		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion, MissingCopies: r.MissingCopies,
+		Keyframes: r.Keyframes, Themes: r.Themes, Deletion: r.Deletion, MissingVersions: r.MissingVersions,
 		Locale: domain.Locale{Language: deref(r.MetadataLanguage), Country: deref(r.CertificationCountry), Artwork: r.ArtworkLanguage},
 		Titles: r.TitleLanguage, BoxSets: r.BoxSets, SubtitleLanguages: tags(r.SubtitleLanguages), SubtitleMatch: r.SubtitleMatch,
 	}
