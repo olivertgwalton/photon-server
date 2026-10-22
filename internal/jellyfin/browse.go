@@ -74,11 +74,13 @@ func (l listed) page() store.Page {
 
 func listedOf(w http.ResponseWriter, r *http.Request) listed {
 	l := listed{limit: math.MaxInt32, fields: map[string]bool{}, words: words.Negotiate(w, r)}
+	// A list asked for from past its end, or longer than it, is answered with what there is, as
+	// Jellyfin answers it.
 	if n, err := strconv.Atoi(query(r, "startIndex")); err == nil && n > 0 {
-		l.start = n
+		l.start = min(n, store.MaxOffset)
 	}
 	if n, err := strconv.Atoi(query(r, "limit")); err == nil && n >= 0 {
-		l.limit = n
+		l.limit = min(n, math.MaxInt32)
 	}
 	if id, err := uuid.Parse(query(r, "adjacentTo")); err == nil {
 		l.adjacentTo = id

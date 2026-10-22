@@ -79,7 +79,7 @@ func queryEnum[T ~string](a *API, w http.ResponseWriter, r *http.Request, name s
 
 // paging reads a page's offset and limit, as walls page, and whether it asks how many there are.
 func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (page store.Page, ok bool) {
-	if page.Offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
+	if page.Offset, ok = a.queryNumber(w, r, "offset", 0, 0, store.MaxOffset); !ok {
 		return page, false
 	}
 	if page.Limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit); !ok {

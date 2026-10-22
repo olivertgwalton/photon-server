@@ -212,6 +212,9 @@ func TestProfileRow(t *testing.T) {
 		{"/api/v1/profile/rows/watchlist?total=all", http.StatusBadRequest, ""},
 		{"/api/v1/profile/rows/recently_added_films", http.StatusNotFound, ""},
 		{"/api/v1/profile/rows/watchlist?limit=0", http.StatusBadRequest, ""},
+		// An offset past where any list reaches is refused, not added to its page's length.
+		{"/api/v1/profile/rows/watchlist?offset=2147483647", http.StatusOK, `{"items":[],"offset":2147483647,"more":false}`},
+		{"/api/v1/profile/rows/watchlist?offset=9223372036854775807", http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, http.MethodGet, tc.target, goodToken, "")
 		if rec.Code != tc.want || !strings.Contains(rec.Body.String(), tc.wantBody) {

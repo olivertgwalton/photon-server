@@ -121,6 +121,8 @@ func TestAnAppIsAnsweredALongListWhole(t *testing.T) {
 		"/Items?Recursive=true&IncludeItemTypes=Movie&StartIndex=3&Fields=DateCreated,Etag,Genres,MediaSources,Overview,ParentId,Path,ProviderIds,SortName",
 		"/Items?Recursive=true&IncludeItemTypes=Movie&Fields=MediaSources,MediaStreams,Chapters,Trickplay",
 		"/Items?Recursive=true&IncludeItemTypes=Movie&StartIndex=" + strconv.Itoa(len(l.cards)),
+		// Asked from as far as an int reaches, it is answered empty rather than overflowing.
+		"/Items?Recursive=true&IncludeItemTypes=Movie&StartIndex=9223372036854775807&Limit=9223372036854775807",
 	} {
 		w := serve(api, http.MethodGet, target, `MediaBrowser Token="pst_device"`, "")
 		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/json; charset=utf-8" {

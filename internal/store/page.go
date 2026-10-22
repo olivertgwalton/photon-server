@@ -1,6 +1,15 @@
 package store
 
-import "github.com/olivertgwalton/photon-server/internal/domain"
+import (
+	"math"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
+)
+
+// MaxOffset is the furthest a page may start, as far as Jellyfin's StartIndex, an int32, reaches:
+// past the end of any library, and so far below the largest int that a page's length added to it
+// cannot wrap round.
+const MaxOffset = math.MaxInt32
 
 // Page is where a page of a list starts, how many it holds at most, and whether it asks how many
 // the list holds in all.
