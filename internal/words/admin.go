@@ -25,6 +25,7 @@ var tasks = map[domain.TaskKey]Described{
 	domain.TaskBackfillPreviews:   {"Make previews", "Makes the chapter images and seek previews libraries ask for, and clears unused ones."},
 	domain.TaskSweepDownloads:     {"Clear old downloads", "Forgets downloads kept past their time, and conversions nothing needs."},
 	domain.TaskPruneActivity:      {"Prune the activity log", "Forgets activity older than 30 days."},
+	domain.TaskPruneExpired:       {"Forget what has expired", "Forgets devices signed out for going unused, and webhook deliveries long past retrying."},
 	domain.TaskSyncLists:          {"Sync list collections", "Reads each list collection's TMDB or MDBList list again and keeps the titles of it the library has."},
 	domain.TaskRefreshCollections: {"Refresh smart collections", "Finds what each smart collection's filters hold again, catching what was matched or edited since."},
 	domain.TaskFetchSubtitles:     {"Download missing subtitles", "Fetches subtitles in the languages libraries name for copies with none in them."},

@@ -82,6 +82,35 @@ const activityKept = 30 * 24 * time.Hour
 // pruneActivityEvery is how often entries older than that are forgotten.
 const pruneActivityEvery = 24 * time.Hour
 
+// deliveryKept is how long a webhook delivery that failed for good is kept to be retried: the 30
+// days Stripe keeps its events.
+const deliveryKept = 30 * 24 * time.Hour
+
+// pruneExpiredEvery is how often what has expired is forgotten: daily, as Django's clearsessions
+// is meant to run.
+const pruneExpiredEvery = 24 * time.Hour
+
+func pruneExpiredTask(st *store.Store, logger *slog.Logger) task.Task {
+	return task.Task{
+		Key:     domain.TaskPruneExpired,
+		Trigger: task.Trigger{Kind: task.TriggerEvery, Every: pruneExpiredEvery},
+		Run: func(ctx context.Context, _ task.Start) error {
+			devices, err := st.PruneExpiredDevices(ctx)
+			if devices > 0 {
+				logger.InfoContext(ctx, "expired devices forgotten", slog.Int64("devices", devices))
+			}
+			if err != nil {
+				return err
+			}
+			deliveries, err := st.PruneFailedDeliveries(ctx, time.Now().Add(-deliveryKept))
+			if deliveries > 0 {
+				logger.InfoContext(ctx, "failed webhook deliveries forgotten", slog.Int64("deliveries", deliveries))
+			}
+			return err
+		},
+	}
+}
+
 func pruneActivityTask(st *store.Store, logger *slog.Logger) task.Task {
 	return task.Task{
 		Key:     domain.TaskPruneActivity,
