@@ -77,10 +77,10 @@ func (a *API) members(w http.ResponseWriter, r *http.Request) {
 // given a rule, a smart collection of the titles the rule finds in LibraryIDs, as Plex's; or given
 // a list kept on a provider, the titles of it LibraryIDs have, as Kometa's list builders.
 type addCollectionJSON struct {
-	Title      string           `json:"title"`
-	Rule       *store.SmartRule `json:"rule,omitzero"`
-	List       *store.ListRef   `json:"list,omitzero"`
-	LibraryIDs []uuid.UUID      `json:"library_ids,omitzero"`
+	Title      string         `json:"title"`
+	Rule       *smartRuleJSON `json:"rule,omitzero"`
+	List       *listRefJSON   `json:"list,omitzero"`
+	LibraryIDs []uuid.UUID    `json:"library_ids,omitzero"`
 }
 
 // addCollection makes an admin's collection.
@@ -101,20 +101,20 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "library_ids names the libraries a rule or a list reads, and a collection made by hand none")
 		return
 	}
-	if req.Rule != nil && !a.checkedRule(w, req.Rule.CheckShared()) {
+	if req.Rule != nil && !a.checkedRule(w, req.Rule.rule().CheckShared()) {
 		return
 	}
 	var id uuid.UUID
 	var err error
 	switch {
 	case req.Rule != nil:
-		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryIDs, req.Title, *req.Rule)
+		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryIDs, req.Title, req.Rule.rule())
 	case req.List != nil:
-		listed, ok := a.readList(w, r, *req.List)
+		listed, ok := a.readList(w, r, req.List.ref())
 		if !ok {
 			return
 		}
-		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryIDs, req.Title, *req.List, listed)
+		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryIDs, req.Title, req.List.ref(), listed)
 	default:
 		id, err = a.svc.Collections.AddCollection(r.Context(), req.Title)
 	}
@@ -217,11 +217,11 @@ func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req store.SmartRule
-	if !a.decode(w, r, &req) || !a.checkedRule(w, req.CheckShared()) {
+	var req smartRuleJSON
+	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckShared()) {
 		return
 	}
-	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req)) {
+	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req.rule())) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -334,7 +334,7 @@ func (a *API) collectionsRoutes() []route {
 		{
 			pattern: "PUT /api/v1/admin/collections/{id}/rule", access: admin,
 			summary: "Replace a smart collection's rule, and its titles with what it finds",
-			body:    store.SmartRule{}, status: http.StatusNoContent, handle: a.setRule,
+			body:    smartRuleJSON{}, status: http.StatusNoContent, handle: a.setRule,
 		},
 		{
 			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,

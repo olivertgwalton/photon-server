@@ -480,9 +480,9 @@ func (s *Store) RefreshSmartCollections(ctx context.Context, libs ...uuid.UUID) 
 // ListRef is the list kept on a provider a list collection holds, as Kometa's list builders read
 // one, and how many of its titles the libraries it reads lack.
 type ListRef struct {
-	Source  domain.FieldSource `json:"source"`
-	ID      string             `json:"id"`
-	Missing int                `json:"missing,omitzero"`
+	Source  domain.FieldSource
+	ID      string
+	Missing int
 }
 
 // ErrNoSuchList is a list id no provider could name.
