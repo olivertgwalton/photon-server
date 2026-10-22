@@ -162,3 +162,33 @@ func TestNoBuildNoWebApp(t *testing.T) {
 		t.Error("a build with no index.html was taken")
 	}
 }
+
+// The page is the first thing every visit loads: compressed as the app's other files are, and not
+// sent again to a browser holding it while the build is the same.
+func TestThePageIsCompressedAndRevalidated(t *testing.T) {
+	web, err := NewWeb(fstest.MapFS{
+		"index.html":    {Data: []byte(`<!doctype html><script>` + startScript + `</script>`)},
+		"index.html.br": {Data: []byte(`brotli page`)},
+	}, func() string { return "" }, func(context.Context) []string { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Ready: func(context.Context) error { return nil }, Auth: fakeAuth{}, Limits: &fakeLimiter{}, Web: web, Identity: den(),
+	})
+	plain := get(a, "/")
+	tag := plain.Header().Get("ETag")
+	if !strings.HasPrefix(tag, `W/"`) || plain.Header().Get("Content-Encoding") != "" || !strings.Contains(plain.Body.String(), startScript) {
+		t.Fatalf("plain: ETag %q, Content-Encoding %q, body %q", tag, plain.Header().Get("Content-Encoding"), plain.Body)
+	}
+	for _, path := range []string{"/", "/titles/0199"} {
+		brotli := get(a, path, "Accept-Encoding", "gzip, deflate, br")
+		if brotli.Body.String() != "brotli page" || brotli.Header().Get("Content-Encoding") != "br" || brotli.Header().Get("ETag") != tag ||
+			!strings.HasPrefix(brotli.Header().Get("Content-Type"), "text/html") || brotli.Header().Get("Content-Security-Policy") == "" {
+			t.Errorf("%s with br: headers %v, body %q; want the brotli page, tagged as the plain one", path, brotli.Header(), brotli.Body)
+		}
+	}
+	if again := get(a, "/", "If-None-Match", tag); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
+		t.Errorf("asked again with its tag: %d, %d bytes; want 304 and nothing", again.Code, again.Body.Len())
+	}
+}
