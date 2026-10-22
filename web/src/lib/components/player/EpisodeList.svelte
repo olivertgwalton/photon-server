@@ -4,6 +4,7 @@ import EpisodesIcon from "@lucide/svelte/icons/list";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
+import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { buttonVariants } from "#lib/components/ui/button/index.js";
 import * as Popover from "#lib/components/ui/popover/index.js";
@@ -77,17 +78,15 @@ const progress = (e: Schemas["Card"]) =>
 							}}
 						>
 							<div
-								class="bg-ink/8 relative aspect-video w-20 shrink-0 overflow-hidden rounded @container"
+								class="bg-ink/8 relative aspect-video w-20 shrink-0 overflow-hidden rounded"
+								style={picture ? blurStyle(e.blurhashes?.[picture]) : undefined}
 							>
-								{#if picture}
+								{#if picture && !hidesSpoiler(e)}
 									<Artwork
 										id={picture}
 										shape="still"
 										sizes="80px"
-										class={[
-											"size-full object-cover",
-											hidesSpoiler(e) && "spoiler-blur",
-										]}
+										class="size-full object-cover"
 									/>
 								{/if}
 								{#if done > 0}

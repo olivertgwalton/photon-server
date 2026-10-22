@@ -61,8 +61,10 @@ const progress = $derived(
 		: 0,
 );
 const unwatched = $derived(card.state?.unwatched ?? 0);
+// A spoiler is drawn by the frame's blurhash alone, not a blurred picture: a
+// blur that wide is drawn blocky, and the picture itself need not be sent.
 // Drawn as a poster, an episode wears its season's art, which tells nothing.
-const blurred = $derived(shape !== "poster" && hidesSpoiler(card));
+const hidden = $derived(shape !== "poster" && hidesSpoiler(card));
 // Watched again part way, it is the progress that shows.
 const watched = $derived(!!card.state?.watched_at && !progress);
 </script>
@@ -78,19 +80,14 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 	>
 		<div
 			class={[
-				"card-frame @container",
+				"card-frame",
 				current && "ring-ink ring-2",
 				shape === "poster" ? "aspect-2/3" : "aspect-video",
 			]}
 			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
 		>
-			{#if picture}
-				<Artwork
-					id={picture}
-					{shape}
-					{sizes}
-					class={["card-picture", blurred && "spoiler-blur"]}
-				/>
+			{#if picture && !hidden}
+				<Artwork id={picture} {shape} {sizes} class="card-picture" />
 			{/if}
 			<div class="absolute top-2 left-2 flex gap-1">
 				{#if watched}
