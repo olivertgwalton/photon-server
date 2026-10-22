@@ -328,6 +328,7 @@ func (a *API) routes() []route {
 		a.vocabularyRoutes(),
 		a.openAPIRoutes(),
 		a.metricsRoutes(),
+		a.profilingRoutes(),
 		a.sessionRoutes(),
 		a.setupRoutes(),
 		a.pairingRoutes(),
