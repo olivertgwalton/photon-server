@@ -578,3 +578,70 @@ func TestAShowsEpisodesLeftFollowItsScans(t *testing.T) {
 		t.Errorf("the second forgotten: %d left, want 1", n)
 	}
 }
+
+func TestEachProfileCountsItsOwnEpisodesLeft(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sam, err := s.AddProfile(ctx, "Sam", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var episodes []Episode
+	for n := 1; n <= 2; n++ {
+		episodes = append(episodes, Episode{
+			Season: 1, Episodes: []int{n}, Title: "episode", Folder: "The Wire/Season 1", ByNumber: true,
+			Copies: []Copy{{ContentKey: []byte{byte(n)}, Parts: []Part{{
+				RelPath: "The Wire/Season 1/" + string(rune('0'+n)) + ".mkv", Size: 1, ModTime: time.Unix(0, 0),
+				Facts: &domain.Facts{Duration: time.Hour},
+			}}}},
+		})
+	}
+	if _, err := s.SaveShowFolder(ctx, lib.ID, "The Wire/Season 1", []byte("v1"), Show{Title: "the wire", Folder: "The Wire"}, episodes, nil); err != nil {
+		t.Fatal(err)
+	}
+	first := oneItem(t, s, `kind = 'episode' AND episode_number = 1`).ID
+	state := func(profile uuid.UUID) TitleState {
+		t.Helper()
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: profile, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 1})
+		if err != nil || len(cards) != 1 {
+			t.Fatalf("wall = %+v, %v", cards, err)
+		}
+		return cards[0].State
+	}
+
+	played := time.Now().Add(-time.Hour).Truncate(time.Microsecond)
+	if _, err := saveProgress(ctx, s, oliver.ID, first, 10*time.Minute, domain.ReachStart, &played); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(oliver.ID); st.LastPlayedAt == nil || !st.LastPlayedAt.Equal(played) || st.Unwatched != 2 {
+		t.Errorf("Oliver part way through: %+v, want last played %v and 2 left", st, played)
+	}
+	if st := state(sam.ID); st.LastPlayedAt != nil || st.Unwatched != 2 {
+		t.Errorf("Sam, who played nothing: %+v, want never played and 2 left", st)
+	}
+
+	if err := s.MarkWatched(ctx, oliver.ID, first, nil); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(oliver.ID); st.Unwatched != 1 {
+		t.Errorf("Oliver watched the first: %d left, want 1", st.Unwatched)
+	}
+	if st := state(sam.ID); st.Unwatched != 2 {
+		t.Errorf("Sam, after Oliver watched the first: %d left, want 2", st.Unwatched)
+	}
+
+	if err := s.MarkUnwatched(ctx, oliver.ID, first); err != nil {
+		t.Fatal(err)
+	}
+	if st := state(oliver.ID); st.Unwatched != 2 {
+		t.Errorf("Oliver unwatched the first: %d left, want 2", st.Unwatched)
+	}
+}
