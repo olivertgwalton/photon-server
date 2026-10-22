@@ -47,7 +47,9 @@ func TestAChangeInAWatchedLibraryQueuesItsScan(t *testing.T) {
 	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 	// touch rewrites path until a scan of folder is queued, as the watcher may not yet watch its
 	// folder.
@@ -110,7 +112,9 @@ func TestAFileBeingWrittenAsksForItsScanSeldom(t *testing.T) {
 	go func() { done <- New(f, slog.New(slog.DiscardHandler)).Run(ctx) }()
 	t.Cleanup(func() {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
 	})
 	path := filepath.Join(films, "Alien.mkv")
 	// Once one write is seen, the folder is watched.
