@@ -119,7 +119,7 @@ func (f *fixture) film(seed string) (title, part uuid.UUID) {
 			{Start: 10 * time.Minute, End: 1050 * time.Second, Title: "Heist"},
 		},
 	}
-	film := store.Film{Title: "Heat", Year: 1995, Copies: []store.Copy{{
+	film := store.Film{Title: "Heat", Year: 1995, Versions: []store.Version{{
 		ContentKey: key[:], Parts: []store.Part{{RelPath: rel, Size: int64(len(seed)), ModTime: time.Now(), Facts: facts}},
 	}}}
 	if _, err := f.st.SaveFolder(f.t.Context(), f.lib.ID, "", key[:], []store.Film{film}, nil); err != nil {
@@ -422,8 +422,8 @@ func TestAnExtraIsPicturedByAStill(t *testing.T) {
 	film := store.Film{Title: "Heat", Year: 1995, Folder: "Heat (1995)"}
 	trailer := store.Extra{
 		Kind: domain.ExtraTrailer, Title: "Trailer", Folder: "Heat (1995)",
-		Owner: store.Owner{Kind: domain.ItemMovie, Folder: "Heat (1995)", Title: "Heat"},
-		Copy:  store.Copy{ContentKey: []byte("trailer"), Parts: []store.Part{{RelPath: rel, Size: 7, ModTime: time.Now(), Facts: facts}}},
+		Owner:   store.Owner{Kind: domain.ItemMovie, Folder: "Heat (1995)", Title: "Heat"},
+		Version: store.Version{ContentKey: []byte("trailer"), Parts: []store.Part{{RelPath: rel, Size: 7, ModTime: time.Now(), Facts: facts}}},
 	}
 	if _, err := f.st.SaveFolder(t.Context(), f.lib.ID, "Heat (1995)", []byte("v1"), []store.Film{film}, []store.Extra{trailer}); err != nil {
 		t.Fatal(err)

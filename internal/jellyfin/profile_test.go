@@ -89,8 +89,8 @@ func TestAnAppsProfileDecidesHowACopyPlays(t *testing.T) {
 	p := profileOf(t, swiftfin)
 	video := domain.Stream{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Level: 150, Range: domain.RangeSDR}
 	audio := domain.Stream{Index: 1, Kind: domain.StreamAudio, Codec: "aac", Channels: 2}
-	copyOf := func(container string, parts int) store.PlayCopy {
-		return store.PlayCopy{Container: container, BitrateKbps: 8000, Parts: make([]store.PlayPart, parts), Streams: []domain.Stream{video, audio}}
+	copyOf := func(container string, parts int) store.PlayVersion {
+		return store.PlayVersion{Container: container, BitrateKbps: 8000, Parts: make([]store.PlayPart, parts), Streams: []domain.Stream{video, audio}}
 	}
 	if !p.playsDirectly(copyOf("mov,mp4,m4a,3gp,3g2,mj2", 1), &video, &audio, nil, p.MaxStreamingBitrate) {
 		t.Error("an MP4 of HEVC and AAC does not play as it is")
@@ -140,7 +140,7 @@ func TestRangesAnAppTakesNarrowWhatHLSCarries(t *testing.T) {
 		t.Fatal("no HLS photon makes")
 	}
 	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
-	hp := p.hlsProfile(tp, segments, store.PlayCopy{Streams: []domain.Stream{dv}}, 0)
+	hp := p.hlsProfile(tp, segments, store.PlayVersion{Streams: []domain.Stream{dv}}, 0)
 	if slices.Contains(hp.Video[0].Ranges, domain.RangeDV) || !slices.Contains(hp.Video[0].Ranges, domain.RangeHDR10) {
 		t.Errorf("ranges for a Dolby Vision profile 5 copy: %v", hp.Video[0].Ranges)
 	}

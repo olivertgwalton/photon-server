@@ -29,9 +29,9 @@ type Card struct {
 	Backdrop uuid.UUID
 	// State is what the profile asking has made of it.
 	State TitleState
-	// DurationMS is how long it runs, for a progress bar: its longest copy on disk.
+	// DurationMS is how long it runs, for a progress bar: its longest version on disk.
 	DurationMS int64
-	// VersionCount is how many copies of it are on disk, for a choice of which to play.
+	// VersionCount is how many versions of it are on disk, for a choice of which to play.
 	VersionCount int
 	// An episode's card says which show and season it is of, where in them, and carries its still
 	// and its season's poster, which a search shows it by.
@@ -168,7 +168,7 @@ func (p WallPage) sortKey(args pgx.NamedArgs) (join, key, nulls string) {
 		key, nulls = "rated.score", " NULLS LAST"
 		args["sort_site"], args["sort_kinds"] = p.RatingSite, cmp.Or(p.Kind, domain.WallTitles).Of(domain.LibraryMixed)
 	case domain.SortRuntime:
-		// Each is its longest copy on disk, the wall's copies read once rather than asked after for
+		// Each is its longest version on disk, the wall's versions read once rather than asked after for
 		// each title: a third quicker over seventy thousand.
 		join = ` LEFT JOIN (SELECT v.item_id, max(v.duration_ms) AS ms FROM versions v
 			WHERE v.library_id = ANY(@libs) AND v.missing_since IS NULL GROUP BY v.item_id) runtime ON runtime.item_id = items.id`

@@ -90,8 +90,8 @@ func TestSearchMatchesTheStartOfWords(t *testing.T) {
 func TestSearchFindsATitleInSeveralLibrariesOnce(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	part := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	part := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	var heats []uuid.UUID
 	var libs []uuid.UUID
@@ -100,7 +100,7 @@ func TestSearchFindsATitleInSeveralLibrariesOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: part("Heat/" + name + ".mkv")}}, nil); err != nil {
+		if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Versions: part("Heat/" + name + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 		heat := oneItem(t, s, "title = 'Heat' AND library_id = '"+lib.ID.String()+"'").ID

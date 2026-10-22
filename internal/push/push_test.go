@@ -100,7 +100,7 @@ func fixture(t *testing.T) (*store.Store, uuid.UUID, uuid.UUID, func(more ...int
 			rel := fmt.Sprintf("Severance/S01E%02d.mkv", n)
 			eps = append(eps, store.Episode{
 				Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true,
-				Copies: []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+				Versions: []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
 			})
 		}
 		if _, err := st.SaveShowFolder(ctx, tv.ID, "Severance", fmt.Append(nil, episodes), store.Show{Title: "Severance", Folder: "Severance"}, eps, nil); err != nil {

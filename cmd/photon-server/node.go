@@ -77,7 +77,7 @@ type node struct {
 	conversions *playback.Conversions
 	parts       library.Parts
 	plugins     *plugin.Plugins
-	copies      *remote.Copies
+	copies      *remote.Versions
 	discover    *remote.Discover
 	identify    jobs.Handler
 	auth        *auth.Service
@@ -191,7 +191,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	}
 	n.hub = events.New(n.st, n.cache, n.server, n.identity.Name, n.logger)
 	n.identify = identify.Handler(n.st, n.providers, n.pictures, n.identity.Locale, n.hub.Raise, n.logger)
-	n.copies = remote.NewCopies(n.st, offers, n.tools, n.identify)
+	n.copies = remote.NewVersions(n.st, offers, n.tools, n.identify)
 	n.discover = remote.NewDiscover(n.st, n.providers, n.identity.Locale, n.logger)
 	n.restores = backup.Restores{Restorer: rest, Dir: n.dumper.Dir, Node: n.id, KV: n.cache, Raise: n.hub.Raise}
 	return nil

@@ -68,7 +68,7 @@ func TestARemoteLibraryHasNoFolder(t *testing.T) {
 	for name, change := range map[string]LibraryChange{
 		"watched":      {Monitor: domain.MonitorRealtime},
 		"deleted from": {Deletion: domain.DeletionFiles},
-		"made to forget the copies it is no longer offered": {MissingCopies: domain.MissingForgotten},
+		"made to forget the versions it is no longer offered": {MissingCopies: domain.MissingForgotten},
 	} {
 		if err := s.SetLibrary(t.Context(), lib.ID, change); !errors.Is(err, ErrRemoteUntouched) {
 			t.Errorf("set to be %s: %v, want ErrRemoteUntouched", name, err)
@@ -78,20 +78,20 @@ func TestARemoteLibraryHasNoFolder(t *testing.T) {
 		t.Errorf("asked for chapter previews: %v", err)
 	}
 	if _, _, err := s.ForgetMissingCopies(t.Context(), lib.ID); !errors.Is(err, ErrRemoteUntouched) {
-		t.Errorf("forgetting its copies on no disk: %v, want ErrRemoteUntouched", err)
+		t.Errorf("forgetting its versions on no disk: %v, want ErrRemoteUntouched", err)
 	}
 }
 
-// An admin's ask empties what a library kept: every copy whose files have gone leaves it, the
+// An admin's ask empties what a library kept: every version whose files have gone leaves it, the
 // titles left with nothing go with them, and both are told as a scan's changes are.
-func TestForgettingALibrarysCopiesOnNoDisk(t *testing.T) {
+func TestForgettingALibrarysVersionsOnNoDisk(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
 	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	film := Film{Title: "Heat", Folder: "H", Copies: []Copy{{
+	film := Film{Title: "Heat", Folder: "H", Versions: []Version{{
 		ContentKey: []byte("c"), Parts: []Part{{RelPath: "H/heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}
 	if _, err := s.SaveFolder(ctx, lib.ID, "H", []byte("v1"), []Film{film}, nil); err != nil {
@@ -101,23 +101,23 @@ func TestForgettingALibrarysCopiesOnNoDisk(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
-	// The file has gone, and the library keeps the copy, marked missing.
+	// The file has gone, and the library keeps the version, marked missing.
 	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	copies, changed, err := s.ForgetMissingCopies(ctx, lib.ID)
-	if err != nil || copies != 1 {
-		t.Fatalf("ForgetMissingCopies = %d, %v; want the one copy on no disk", copies, err)
+	versions, changed, err := s.ForgetMissingCopies(ctx, lib.ID)
+	if err != nil || versions != 1 {
+		t.Fatalf("ForgetMissingCopies = %d, %v; want the one version on no disk", versions, err)
 	}
 	if !slices.Equal(changed[domain.TitleRemoved], []uuid.UUID{item}) {
 		t.Errorf("told %v changed, want %v removed", changed, item)
 	}
 	var left int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM items`).Scan(&left); err != nil || left != 0 {
-		t.Errorf("%d titles left, %v; want the film gone with its only copy", left, err)
+		t.Errorf("%d titles left, %v; want the film gone with its only version", left, err)
 	}
-	if copies, _, err := s.ForgetMissingCopies(ctx, lib.ID); err != nil || copies != 0 {
-		t.Errorf("asking again = %d, %v; want nothing left to forget", copies, err)
+	if versions, _, err := s.ForgetMissingCopies(ctx, lib.ID); err != nil || versions != 0 {
+		t.Errorf("asking again = %d, %v; want nothing left to forget", versions, err)
 	}
 }
 

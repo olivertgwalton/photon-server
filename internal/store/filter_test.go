@@ -33,8 +33,8 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyOf := func(name string, width int, rng domain.Range, d time.Duration) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+	versionOf := func(name string, width int, rng domain.Range, d time.Duration) Version {
+		return Version{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Duration: d, Streams: []domain.Stream{{Kind: domain.StreamVideo, Codec: "hevc", Width: width, Height: width * 9 / 16, Range: rng}},
 		}}}}
 	}
@@ -52,7 +52,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		{"Brazil", "15", 1985, []string{"Comedy", "Science Fiction"}, 1920, domain.RangeSDR, 142 * time.Minute, 79},
 		{"Émile", "PG", 2001, []string{"Drama"}, 720, domain.RangeSDR, 90 * time.Minute, 0},
 	} {
-		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{copyOf(f.title, f.width, f.rng, f.length)}}
+		film := Film{Title: f.title, Folder: f.title, Versions: []Version{versionOf(f.title, f.width, f.rng, f.length)}}
 		if _, err := s.SaveFolder(ctx, lib.ID, f.title, []byte("v1"), []Film{film}, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	episode := func(n int) Episode {
 		return Episode{
 			Season: 1, Episodes: []int{n}, Title: "Cosmos", Folder: "Cosmos/Season 1", ByNumber: true,
-			Copies: []Copy{copyOf("Cosmos"+string(rune('0'+n)), 1920, domain.RangeSDR, time.Hour)},
+			Versions: []Version{versionOf("Cosmos"+string(rune('0'+n)), 1920, domain.RangeSDR, time.Hour)},
 		}
 	}
 	if _, err := s.SaveShowFolder(ctx, shows.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, []Episode{episode(1), episode(2)}, nil); err != nil {
@@ -193,12 +193,12 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 	if diff := cmp.Diff(want, facets); diff != "" {
 		t.Errorf("facets of a profile kept to 15 (-want +got):\n%s", diff)
 	}
-	// A show's copies are its episodes'.
+	// A show's versions are its episodes'.
 	if facets, err = s.Facets(ctx, []uuid.UUID{shows.ID}, oliver.ID, domain.WallTitles); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(facets.Resolutions, []domain.Resolution{domain.ResolutionFHD}) || !slices.Equal(facets.Ranges, []domain.Range{domain.RangeSDR}) {
-		t.Errorf("a shows library's copies: %v %v, want its episodes' 1080p SDR", facets.Resolutions, facets.Ranges)
+		t.Errorf("a shows library's versions: %v %v, want its episodes' 1080p SDR", facets.Resolutions, facets.Ranges)
 	}
 	letters, err := s.Letters(ctx, lib.ID, oliver.ID, domain.WallTitles, WallFilter{Marks: []domain.Mark{domain.MarkUnwatched}})
 	if err != nil || !slices.Equal(letters, []Letter{{"B", 1}, {"E", 1}}) {

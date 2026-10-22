@@ -27,8 +27,8 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
+	part := func(name string) Version {
+		return Version{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
 	ids := map[string]uuid.UUID{}
 	for _, f := range []struct {
@@ -37,7 +37,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 	}{
 		{films.ID, "Paddington", "PG"}, {films.ID, "Heat", "15"}, {films.ID, "Home Movie", ""}, {other.ID, "Up", "U"},
 	} {
-		if _, err := s.SaveFolder(ctx, f.lib, f.title, []byte("v1"), []Film{{Title: f.title, Folder: f.title, Copies: []Copy{part(f.title)}}}, nil); err != nil {
+		if _, err := s.SaveFolder(ctx, f.lib, f.title, []byte("v1"), []Film{{Title: f.title, Folder: f.title, Versions: []Version{part(f.title)}}}, nil); err != nil {
 			t.Fatal(err)
 		}
 		ids[f.title] = oneItem(t, s, "title = $1", f.title).ID
@@ -47,7 +47,7 @@ func TestAProfileSeesOnlyWhatItMay(t *testing.T) {
 			}
 		}
 	}
-	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true, Copies: []Copy{part("Show1")}}
+	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true, Versions: []Version{part("Show1")}}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -149,8 +149,8 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	if err := s.SetServerSettings(ctx, domain.ServerSettings{Locale: domain.Locale{Language: "hi-IN", Country: "in"}, ReleaseCheck: domain.ReleaseCheckOn}); err != nil {
 		t.Fatal(err)
 	}
-	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
+	part := func(name string) Version {
+		return Version{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}
 	}
 	rate := func(id uuid.UUID, cert string) {
 		t.Helper()
@@ -161,7 +161,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	films := map[string]string{"Heat": "US:R", "Fanny and Alexander": "SE:15 / SE:15+", "Sholay": "A", "Paddington": "U"}
 	ids := map[string]uuid.UUID{}
 	for title, cert := range films {
-		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title, Copies: []Copy{part(title)}}}, nil); err != nil {
+		if _, err := s.SaveFolder(ctx, lib.ID, title, []byte("v1"), []Film{{Title: title, Folder: title, Versions: []Version{part(title)}}}, nil); err != nil {
 			t.Fatal(err)
 		}
 		ids[title] = oneItem(t, s, "title = $1", title).ID
@@ -170,7 +170,7 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 	var eps []Episode
 	for n := 1; n <= 2; n++ {
 		name := "Show" + string(rune('0'+n))
-		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: name, Folder: "Show/Season 1", ByNumber: true, Copies: []Copy{part(name)}})
+		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: name, Folder: "Show/Season 1", ByNumber: true, Versions: []Version{part(name)}})
 	}
 	if _, err := s.SaveShowFolder(ctx, lib.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, eps, nil); err != nil {
 		t.Fatal(err)

@@ -20,7 +20,7 @@ type LibraryFile struct {
 	Rel  string
 }
 
-// TitleFiles answers every file a title is made of, so it may be deleted: each copy's parts and
+// TitleFiles answers every file a title is made of, so it may be deleted: each version's parts and
 // subtitles, a show's seasons' and episodes' and a film's extras' with them. A title whose library
 // does not allow its titles' files deleted is refused, and a collection, made of no files of its
 // own, is no title here.
@@ -46,15 +46,15 @@ func (s *Store) TitleFiles(ctx context.Context, id uuid.UUID) ([]LibraryFile, er
 			SELECT id FROM items WHERE id = $1
 			UNION ALL
 			SELECT i.id FROM items i JOIN under u ON i.parent_id = u.id
-		), copies AS (
+		), title_versions AS (
 			SELECT id FROM versions WHERE item_id IN (SELECT id FROM under)
 		)
 		SELECT l.root, f.rel_path AS rel FROM part_files f
 		JOIN parts p ON p.id = f.part_id JOIN libraries l ON l.id = f.library_id
-		WHERE p.version_id IN (SELECT id FROM copies)
+		WHERE p.version_id IN (SELECT id FROM title_versions)
 		UNION
 		SELECT l.root, f.rel_path FROM subtitle_files f JOIN libraries l ON l.id = f.library_id
-		WHERE f.version_id IN (SELECT id FROM copies) AND f.body IS NULL
+		WHERE f.version_id IN (SELECT id FROM title_versions) AND f.body IS NULL
 		ORDER BY rel`, id)
 }
 

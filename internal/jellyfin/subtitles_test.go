@@ -132,7 +132,7 @@ func aSubtitledFilm(t *testing.T) (api http.Handler, film, copyID uuid.UUID) {
 			{Index: srtStream, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English},
 		},
 	}}
-	if _, err := st.SaveFolder(ctx, films.ID, "Akira", []byte("v"), []store.Film{{Title: "Akira", Folder: "Akira", Copies: []store.Copy{
+	if _, err := st.SaveFolder(ctx, films.ID, "Akira", []byte("v"), []store.Film{{Title: "Akira", Folder: "Akira", Versions: []store.Version{
 		{ContentKey: []byte("akira"), Parts: []store.Part{part}, Subtitles: []store.Subtitle{
 			sidecar("Akira.en.ass", "ass", language.English), sidecar("Akira.en.idx", "dvd_subtitle", language.English),
 			sidecar("Akira.en.sup", "hdmv_pgs_subtitle", language.English), sidecar("Akira.fr.srt", "subrip", language.French),

@@ -21,7 +21,7 @@ func TestASplitFilmStaysApartThroughAScan(t *testing.T) {
 	part := func(rel string, d time.Duration) Part {
 		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: d}}
 	}
-	film := Film{Title: "Lawrence", Folder: "L", Copies: []Copy{
+	film := Film{Title: "Lawrence", Folder: "L", Versions: []Version{
 		{ContentKey: []byte("cut"), Label: "theatrical", Parts: []Part{part("L/theatrical.mkv", 3*time.Hour)}},
 		{ContentKey: []byte("long"), Label: "restored", Parts: []Part{part("L/restored.mkv", 4*time.Hour)}},
 	}}
@@ -52,7 +52,7 @@ func TestASplitFilmStaysApartThroughAScan(t *testing.T) {
 		return out
 	}
 	if got := films(); len(got) != 1 {
-		t.Fatalf("before splitting: %v, want one film of two copies", got)
+		t.Fatalf("before splitting: %v, want one film of two versions", got)
 	}
 	id := oneItem(t, s, "kind = 'movie'").ID
 
@@ -61,7 +61,7 @@ func TestASplitFilmStaysApartThroughAScan(t *testing.T) {
 	}
 	after := films()
 	if len(after) != 2 || len(after[id]) != 1 || after[id][0] != "restored" {
-		t.Fatalf("after splitting: %v, want the restored copy, which plays first, kept and the theatrical one apart", after)
+		t.Fatalf("after splitting: %v, want the restored version, which plays first, kept and the theatrical one apart", after)
 	}
 	// The scan that grouped them would group them again; it leaves them apart.
 	scan()
@@ -69,8 +69,8 @@ func TestASplitFilmStaysApartThroughAScan(t *testing.T) {
 		t.Errorf("after a scan: %v, want the two films still apart", again)
 	}
 
-	if err := s.SplitTitle(ctx, id); !errors.Is(err, ErrOneCopy) {
-		t.Errorf("splitting a film of one copy: %v, want ErrOneCopy", err)
+	if err := s.SplitTitle(ctx, id); !errors.Is(err, ErrOneVersion) {
+		t.Errorf("splitting a film of one version: %v, want ErrOneCopy", err)
 	}
 	if err := s.SplitTitle(ctx, uuid.NewV7()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("splitting no film: %v, want ErrNotFound", err)

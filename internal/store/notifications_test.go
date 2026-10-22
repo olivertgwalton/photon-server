@@ -168,8 +168,8 @@ func TestNotify(t *testing.T) {
 // as a scan finding them would, and tells who cares of them.
 func showScans(t *testing.T, s *Store, lib uuid.UUID) func(more ...int) []uuid.UUID {
 	t.Helper()
-	copies := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	versions := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
 	}
 	var episodes []int
 	return func(more ...int) []uuid.UUID {
@@ -179,7 +179,7 @@ func showScans(t *testing.T, s *Store, lib uuid.UUID) func(more ...int) []uuid.U
 		var eps []Episode
 		for _, n := range episodes {
 			rel := fmt.Sprintf("Severance/S01E%02d.mkv", n)
-			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Copies: copies(rel)})
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "Severance", ByNumber: true, Versions: versions(rel)})
 		}
 		if _, err := s.SaveShowFolder(t.Context(), lib, "Severance", fmt.Append(nil, episodes), Show{Title: "Severance", Folder: "Severance"}, eps, nil); err != nil {
 			t.Fatal(err)

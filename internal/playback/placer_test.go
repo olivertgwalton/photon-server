@@ -132,11 +132,11 @@ func TestAPlaybackPlayedAsItIsIsDeliveredNearAndByTheLeastBusy(t *testing.T) {
 func TestANodeSendingAsFastAsItMayRefusesAPlayback(t *testing.T) {
 	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeActive, ID: uuid.NewV7(), EgressKbps: 500_000, EgressLimitMbps: 500}
 	p := NewPlacer(told{}, func() domain.Node { return self }, nil, everyDelivery{}, nodecall.Key{})
-	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayCopy{}, Opening{Method: domain.PlayDirect}); !errors.Is(err, ErrStreamLimit) {
+	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayVersion{}, Opening{Method: domain.PlayDirect}); !errors.Is(err, ErrStreamLimit) {
 		t.Errorf("at its limit: %v, want ErrStreamLimit", err)
 	}
 	self.EgressKbps = 499_000
-	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayCopy{}, Opening{Method: domain.PlayDirect}); err != nil {
+	if err := p.Open(t.Context(), self, uuid.NewV7(), store.PlayVersion{}, Opening{Method: domain.PlayDirect}); err != nil {
 		t.Errorf("under its limit: %v, want it delivered", err)
 	}
 }
@@ -169,7 +169,7 @@ func TestNodesOtherwiseEqualTakeTurns(t *testing.T) {
 	if n != "other" {
 		t.Fatalf("first asked %s, want other, before any were opened, in the order told", n)
 	}
-	if err := p.Open(t.Context(), other, uuid.NewV7(), store.PlayCopy{}, Opening{}); err != nil {
+	if err := p.Open(t.Context(), other, uuid.NewV7(), store.PlayVersion{}, Opening{}); err != nil {
 		t.Fatal(err)
 	}
 	if n := first(); n != "self" {

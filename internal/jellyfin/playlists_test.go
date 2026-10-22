@@ -45,7 +45,7 @@ func newHousehold(t *testing.T) household {
 	}
 	h := household{st: st, films: map[string]uuid.UUID{}, raised: &[]domain.Event{}}
 	for _, f := range []string{"Heat", "Alien", "Thief"} {
-		film := store.Film{Title: f, Folder: f, Copies: []store.Copy{{ContentKey: []byte(f), Parts: []store.Part{{
+		film := store.Film{Title: f, Folder: f, Versions: []store.Version{{ContentKey: []byte(f), Parts: []store.Part{{
 			RelPath: f + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}}
 		if _, err := st.SaveFolder(ctx, lib.ID, f, []byte("v"), []store.Film{film}, nil); err != nil {

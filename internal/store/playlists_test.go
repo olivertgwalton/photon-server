@@ -34,15 +34,15 @@ func TestAPlaylistKeepsItsOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := func(name string) Copy {
-		return Copy{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}
+	part := func(name string) Version {
+		return Version{ContentKey: []byte(name), Parts: []Part{{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}
 	}
-	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat", Copies: []Copy{part("Heat")}}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{{Title: "Heat", Folder: "Heat", Versions: []Version{part("Heat")}}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var episodes []Episode
 	for n := range 3 {
-		episodes = append(episodes, Episode{Season: 1, Episodes: []int{n + 1}, Title: "Cosmos", Folder: "Cosmos/Season 1", ByNumber: true, Copies: []Copy{part("Cosmos" + string(rune('1'+n)))}})
+		episodes = append(episodes, Episode{Season: 1, Episodes: []int{n + 1}, Title: "Cosmos", Folder: "Cosmos/Season 1", ByNumber: true, Versions: []Version{part("Cosmos" + string(rune('1'+n)))}})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Cosmos/Season 1", []byte("v1"), Show{Title: "Cosmos", Folder: "Cosmos"}, episodes, nil); err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestASmartPlaylistPlaysWhatItsRuleFinds(t *testing.T) {
 		name := "Cosmos" + string(rune('1'+n))
 		episodes = append(episodes, Episode{
 			Season: 1, Episodes: []int{n + 1}, Title: name, Folder: "Cosmos/Season 1", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(name), Parts: []Part{
+			Versions: []Version{{ContentKey: []byte(name), Parts: []Part{
 				{RelPath: name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}},
 			}}},
 		})

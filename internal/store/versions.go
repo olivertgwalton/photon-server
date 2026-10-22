@@ -15,7 +15,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// VersionPage is one copy: what it is, the tracks in it and the subtitles beside it. A copy whose
+// VersionPage is one version: what it is, the tracks in it and the subtitles beside it. A version whose
 // files are gone says since when.
 type VersionPage struct {
 	ID           uuid.UUID
@@ -27,12 +27,12 @@ type VersionPage struct {
 	BitrateKbps  int
 	Parts        int
 	MissingSince *time.Time
-	// Streams are the first part's; the parts of one copy are cut from one master.
+	// Streams are the first part's; the parts of one version are cut from one master.
 	Streams   []domain.Stream
 	Subtitles []SubtitleRef
 	Chapters  []ChapterRef
 	Markers   []MarkerRef
-	// Files are its parts in order, each where it starts on the copy's timeline, by the id the
+	// Files are its parts in order, each where it starts on the version's timeline, by the id the
 	// /api/v1/parts/{id} routes take.
 	Files []PartRef
 	// Trickplay is the thumbnail sheets of each part that has them; a part's sheets are at
@@ -45,7 +45,7 @@ type VersionPage struct {
 	DefaultSubtitleFile   *uuid.UUID
 }
 
-// PartRef is one file of a copy.
+// PartRef is one file of a version.
 type PartRef struct {
 	ID uuid.UUID
 	// File is the name of the part's file, without the folders it is in.
@@ -56,7 +56,7 @@ type PartRef struct {
 	OffsetMS   int64
 }
 
-// PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the copy's
+// PartTrickplay is a part's thumbnail sheets, its thumbnails timed from OffsetMS on the version's
 // timeline.
 type PartTrickplay struct {
 	PartID   uuid.UUID
@@ -64,7 +64,7 @@ type PartTrickplay struct {
 	Trickplay
 }
 
-// ChapterRef is a chapter on the copy's whole timeline, across its parts: the Idx'th of Part's own.
+// ChapterRef is a chapter on the version's whole timeline, across its parts: the Idx'th of Part's own.
 // Image is the address of its picture, for those that have one.
 type ChapterRef struct {
 	Part    uuid.UUID
@@ -94,7 +94,7 @@ func (s *Store) Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]
 	return out, nil
 }
 
-// versionRows is what is in a set of copies: their parts, and the tracks, chapters, markers and
+// versionRows is what is in a set of versions: their parts, and the tracks, chapters, markers and
 // pictures of those, and the subtitles beside them.
 type versionRows struct {
 	byVersion map[uuid.UUID][]*model.Part
@@ -115,7 +115,7 @@ func (s *Store) versionsIn(ctx context.Context, versions []*model.Version) (vers
 		vids[n] = r.ID
 	}
 	in := versionRows{byVersion: map[uuid.UUID][]*model.Part{}}
-	// Each read waits only on those it needs, so the copies cost two round trips rather than eight.
+	// Each read waits only on those it needs, so the versions cost two round trips rather than eight.
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
 		in.subs, err = queryRows[model.SubtitleFile](gctx, s.pool, `
@@ -182,7 +182,7 @@ func (s *Store) partFiles(ctx context.Context, parts []uuid.UUID) (map[uuid.UUID
 	return files, err
 }
 
-// page is the copy r, from what is in it.
+// page is the version r, from what is in it.
 func (in versionRows) page(r *model.Version) VersionPage {
 	vp := VersionPage{
 		ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
@@ -235,7 +235,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 	return vp
 }
 
-// markerDetection answers how each copy's library finds markers.
+// markerDetection answers how each version's library finds markers.
 func (s *Store) markerDetection(ctx context.Context, versions []*model.Version) (map[uuid.UUID]domain.MarkerDetection, error) {
 	libs := make([]uuid.UUID, len(versions))
 	for n, v := range versions {

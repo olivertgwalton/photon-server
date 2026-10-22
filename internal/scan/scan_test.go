@@ -100,7 +100,7 @@ func newFixture(t *testing.T, kind domain.LibraryKind) *fixture {
 	return &fixture{t: t, root: root, lib: lib, db: db, st: st, scanner: New(st, fakeProber{}, lists(nil), log)}
 }
 
-// put writes a file whose bytes are its seed repeated, so different seeds are different copies.
+// put writes a file whose bytes are its seed repeated, so different seeds are different versions.
 func (f *fixture) put(rel, seed string) {
 	f.t.Helper()
 	p := filepath.Join(f.root, rel)
@@ -152,7 +152,7 @@ func TestScanFilms(t *testing.T) {
 	}
 	if n := f.count(`SELECT count(*) FROM parts p JOIN versions v ON v.id = p.version_id JOIN items i ON i.id = v.item_id
 		WHERE i.title = 'Lawrence of Arabia' AND (p.idx, p.offset_ms) IN ((0, 0), (1, 7200000))`); n != 2 {
-		t.Error("Lawrence's two parts are not one copy on one timeline")
+		t.Error("Lawrence's two parts are not one version on one timeline")
 	}
 	if n := f.count(`SELECT count(*) FROM streams WHERE kind = 'video' AND video_range = 'hdr10'`); n != 5 {
 		t.Errorf("%d video streams recorded, want 5", n)
@@ -216,16 +216,16 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	f.scan()
 	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id
 		WHERE i.title = 'Heat' AND v.missing_since IS NOT NULL`); n != 1 {
-		t.Error("the removed copy is not marked missing")
+		t.Error("the removed version is not marked missing")
 	}
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 1 {
-		t.Error("the copy still on disk is marked missing")
+		t.Error("the version still on disk is marked missing")
 	}
 
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
-		t.Error("a copy that came back is still missing")
+		t.Error("a version that came back is still missing")
 	}
 
 	if err := os.RemoveAll(filepath.Join(f.root, "Alien (1979)")); err != nil {
@@ -237,20 +237,20 @@ func TestRemovedFileIsMissingNotForgotten(t *testing.T) {
 	}
 }
 
-// A file overwritten with other bytes is a new copy in its old copy's place, as riven re-pointing a
-// .strm is, and the old copy goes rather than waiting as missing. Bytes moved off a path in the
-// same scan as others land on it keep their copy.
-func TestAReplacedFileReplacesItsCopy(t *testing.T) {
+// A file overwritten with other bytes is a new version in its old version's place, as riven re-pointing a
+// .strm is, and the old version goes rather than waiting as missing. Bytes moved off a path in the
+// same scan as others land on it keep their version.
+func TestAReplacedFileReplacesItsVersion(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
 	f.put("Heat (1995)/Heat (1995).mkv", "HEAT")
 	f.scan()
 	if n := f.count(`SELECT count(*) FROM versions`); n != 1 {
-		t.Errorf("%d copies after the file was overwritten, want 1", n)
+		t.Errorf("%d versions after the file was overwritten, want 1", n)
 	}
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
-		t.Error("the overwritten copy is kept as missing")
+		t.Error("the overwritten version is kept as missing")
 	}
 
 	var version string
@@ -264,15 +264,15 @@ func TestAReplacedFileReplacesItsCopy(t *testing.T) {
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 2 {
-		t.Errorf("%d copies after a move and a new file in its place, want 2", n)
+		t.Errorf("%d versions after a move and a new file in its place, want 2", n)
 	}
 	if n := f.count(`SELECT count(*) FROM versions v JOIN parts p ON p.version_id = v.id JOIN part_files pf ON pf.part_id = p.id
 		WHERE v.id::text = '` + version + `' AND pf.rel_path = 'Heat (1995)/Heat (1995) - Remastered.mkv'`); n != 1 {
-		t.Error("the moved bytes lost their copy")
+		t.Error("the moved bytes lost their version")
 	}
 }
 
-// A library that forgets its copies on no disk loses the removed file's copy there and then, and
+// A library that forgets its versions on no disk loses the removed file's version there and then, and
 // the title left with nothing with it, where Plex's trash emptied after every scan would.
 func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
@@ -287,10 +287,10 @@ func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
 	}
 	f.scan()
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
-		t.Error("a copy on no disk was kept")
+		t.Error("a version on no disk was kept")
 	}
 	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Heat'`); n != 0 {
-		t.Error("the title left with no copy was kept")
+		t.Error("the title left with no version was kept")
 	}
 	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Alien'`); n != 1 {
 		t.Error("the title still on disk went with it")
@@ -352,7 +352,7 @@ func TestIdenticalCopiesAreOneVersionInTwoPlaces(t *testing.T) {
 	}
 	f.scan()
 	if n := f.count("SELECT count(*) FROM versions WHERE missing_since IS NULL"); n != 1 {
-		t.Error("removing one of two copies made the version missing")
+		t.Error("removing one of two versions made the version missing")
 	}
 	if n := f.count("SELECT count(*) FROM part_files"); n != 1 {
 		t.Errorf("%d places after removing the backup, want 1", n)
@@ -362,11 +362,11 @@ func TestIdenticalCopiesAreOneVersionInTwoPlaces(t *testing.T) {
 	}
 	f.scan()
 	if n := f.count("SELECT count(*) FROM versions WHERE missing_since IS NOT NULL"); n != 1 {
-		t.Error("removing every copy did not make the version missing")
+		t.Error("removing every version did not make the version missing")
 	}
 }
 
-// episodes answers each episode as its number and the paths its copies are read from.
+// episodes answers each episode as its number and the paths its versions are read from.
 func (f *fixture) episodes() string {
 	f.t.Helper()
 	return f.title(`SELECT coalesce(string_agg(e, '; ' ORDER BY e), '') FROM (
@@ -587,7 +587,7 @@ func TestAStrmIsAFilmWhoseMediaIsWhereItNames(t *testing.T) {
 	}
 }
 
-func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
+func TestOneFileInTwoLibrariesIsAVersionInEach(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.scan()
@@ -611,7 +611,7 @@ func TestOneFileInTwoLibrariesIsACopyInEach(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := f.count(`SELECT count(DISTINCT i.library_id) FROM versions v JOIN items i ON i.id = v.item_id`); n != 2 {
-		t.Errorf("the file is a copy in %d libraries, want 2", n)
+		t.Errorf("the file is a version in %d libraries, want 2", n)
 	}
 	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id WHERE v.library_id <> i.library_id`); n != 0 {
 		t.Error("a version belongs to a title in another library")
@@ -641,7 +641,7 @@ func TestScanShows(t *testing.T) {
 		{"seasons 0, 1 and 2", `SELECT count(*) FROM items s JOIN items sh ON sh.id = s.parent_id
 			WHERE s.kind = 'season' AND sh.kind = 'show' AND s.season_number IN (0, 1, 2)`, 3},
 		{"episodes", `SELECT count(*) FROM items e JOIN items s ON s.id = e.parent_id WHERE e.kind = 'episode' AND s.kind = 'season'`, 4},
-		{"copies of S02E01", `SELECT count(*) FROM versions v JOIN items e ON e.id = v.item_id
+		{"versions of S02E01", `SELECT count(*) FROM versions v JOIN items e ON e.id = v.item_id
 			WHERE e.season_number = 2 AND e.episode_number = 1`, 2},
 		{"the show's TVDB id", `SELECT count(*) FROM external_ids x JOIN items i ON i.id = x.item_id
 			WHERE i.kind = 'show' AND x.provider = 'tvdb' AND x.value = '79126'`, 1},
@@ -786,7 +786,7 @@ func TestExtrasBelongToTheirTitles(t *testing.T) {
 			WHERE e.kind = 'extra' AND e.extra_kind = 'trailer' AND e.title = 'Trailer' AND m.title = 'Heat'`, 1},
 		{"Heat's featurette", `SELECT count(*) FROM items e JOIN items m ON m.id = e.parent_id
 			WHERE e.extra_kind = 'featurette' AND e.title = 'Making Of' AND m.title = 'Heat'`, 1},
-		{"extras with a playable copy", `SELECT count(*) FROM items e JOIN versions v ON v.item_id = e.id WHERE e.kind = 'extra'`, 2},
+		{"extras with a playable version", `SELECT count(*) FROM items e JOIN versions v ON v.item_id = e.id WHERE e.kind = 'extra'`, 2},
 		{"films", `SELECT count(*) FROM items WHERE kind = 'movie'`, 3},
 		{"anything made of the sample", `SELECT count(*) FROM items WHERE title ILIKE '%sample%'`, 0},
 	} {
@@ -815,7 +815,7 @@ func TestShowExtrasBelongToShowSeasonOrEpisode(t *testing.T) {
 	}
 }
 
-func TestAnExtraThatIsAFilmsCopyLeavesTheFilmAlone(t *testing.T) {
+func TestAnExtraThatIsAFilmsVersionLeavesTheFilmAlone(t *testing.T) {
 	f := newFixture(t, domain.LibraryMovies)
 	f.put("Heat (1995)/Heat (1995).mkv", "heat")
 	f.put("Alien (1979)/Alien (1979).mkv", "alien")
@@ -933,7 +933,7 @@ func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
 	}
 	long, short := page.Versions[0], page.Versions[1]
 	if long.Label != "2160p" || long.Parts != 2 || long.DurationMS != 4*3600*1000 {
-		t.Errorf("first version = %q in %d parts, %d ms; want the two-part 2160p copy, longest first", long.Label, long.Parts, long.DurationMS)
+		t.Errorf("first version = %q in %d parts, %d ms; want the two-part 2160p version, longest first", long.Label, long.Parts, long.DurationMS)
 	}
 	if len(long.Chapters) != 2 || long.Chapters[1].StartMS != 2*3600*1000 || long.Chapters[1].Part != long.Files[1].ID || long.Chapters[1].Idx != 0 {
 		t.Errorf("chapters = %+v, want one per part on one timeline, each the first of its own part", long.Chapters)
@@ -942,7 +942,7 @@ func TestTitlePagesShowWhatTheScanFound(t *testing.T) {
 		t.Errorf("streams = %+v, want the first part's HDR10 video and its audio", long.Streams)
 	}
 	if len(short.Subtitles) != 1 || short.Subtitles[0].Language != language.English || len(long.Subtitles) != 0 {
-		t.Errorf("subtitles = %+v and %+v, want the English file on the 1080p copy alone", long.Subtitles, short.Subtitles)
+		t.Errorf("subtitles = %+v and %+v, want the English file on the 1080p version alone", long.Subtitles, short.Subtitles)
 	}
 	if len(page.Extras) != 1 || page.Extras[0].Kind != domain.ExtraTrailer {
 		t.Errorf("extras = %+v, want the trailer", page.Extras)
@@ -974,7 +974,7 @@ func TestAShowsPageListsItsSeasonsAndASeasonsItsEpisodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if episode.Season == nil || episode.Show == nil || episode.Show.Title != "The Wire" || len(episode.Versions) != 1 {
-		t.Errorf("episode page = %+v, want its season, its show and its copy", episode)
+		t.Errorf("episode page = %+v, want its season, its show and its version", episode)
 	}
 }
 
@@ -1148,7 +1148,7 @@ func TestAScanTellsWhichTitlesItChanged(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(f.root, "Alien (1979)")); err != nil {
 		t.Fatal(err)
 	}
-	// Alien's copy is missing, kept for a disk that comes back.
+	// Alien's version is missing, kept for a disk that comes back.
 	if got := scan(); !slices.Equal(got[domain.TitleUpdated], []string{"Alien", "Heat"}) || len(got[domain.TitleAdded])+len(got[domain.TitleRemoved]) != 0 {
 		t.Errorf("second scan told %v, want Heat and Alien updated", got)
 	}
@@ -1242,18 +1242,18 @@ func TestAScanOfAFolderReadsAndSettlesThatFolderAlone(t *testing.T) {
 		return r
 	}
 	if r := scan("Heat (1995)"); r.Folders != 1 || r.Probed != 1 {
-		t.Errorf("scanning Heat's folder: %+v, want it alone read and its new copy probed", r)
+		t.Errorf("scanning Heat's folder: %+v, want it alone read and its new version probed", r)
 	}
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NOT NULL`); n != 0 {
 		t.Error("scanning Heat's folder marked Alien, outside it, missing")
 	}
-	// Alien's folder is gone; scanning it finds its copy nowhere.
+	// Alien's folder is gone; scanning it finds its version nowhere.
 	scan("Alien (1979)")
 	if n := f.count(`SELECT count(*) FROM versions v JOIN items i ON i.id = v.item_id
 		WHERE i.title = 'Alien' AND v.missing_since IS NOT NULL`); n != 1 {
-		t.Error("scanning a removed folder did not mark its copy missing")
+		t.Error("scanning a removed folder did not mark its version missing")
 	}
 	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 2 {
-		t.Errorf("%d copies of Heat present, want 2", n)
+		t.Errorf("%d versions of Heat present, want 2", n)
 	}
 }

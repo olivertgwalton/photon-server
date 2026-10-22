@@ -150,7 +150,7 @@ type Marker struct {
 	EndMS   *int64
 }
 
-// SubtitleFile is a subtitle beside a copy rather than inside it.
+// SubtitleFile is a subtitle beside a version rather than inside it.
 type SubtitleFile struct {
 	ID              uuid.UUID
 	VersionID       uuid.UUID

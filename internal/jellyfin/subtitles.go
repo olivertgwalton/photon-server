@@ -138,7 +138,7 @@ func (a *API) writeTrackEvents(w http.ResponseWriter, cues []hls.Cue) {
 // in a format it is read out in, as Jellyfin answers any of a stream's: styled text and pictures as
 // they are, as the web player's are; plain text as WebVTT or the JSON of its cues, and SubRip as
 // itself too. A start in the path is not applied: Jellyfin serves a stream from its start.
-func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayCopy, s domain.Stream) {
+func (a *API) readOut(w http.ResponseWriter, r *http.Request, c store.PlayVersion, s domain.Stream) {
 	format := strings.ToLower(strings.TrimPrefix(path.Ext(r.PathValue("file")), "."))
 	var name string
 	cues := false
@@ -202,7 +202,7 @@ func readsOutAs(codec, name, format string) bool {
 // video: a stream read out of the file, or a file beside it, in the format the app takes it in.
 // Encode where it is drawn in, the subtitle burn draws, or is a file the app draws in no format.
 // A subtitle is fetched whole, from the start, beside HLS too: that keeps the film's own clock.
-func deliverSubtitles(key string, src *mediaSource, item uuid.UUID, c store.PlayCopy, p deviceProfile, burn *domain.VideoEncode, direct bool) {
+func deliverSubtitles(key string, src *mediaSource, item uuid.UUID, c store.PlayVersion, p deviceProfile, burn *domain.VideoEncode, direct bool) {
 	for i, m := range src.MediaStreams {
 		_, s := subtitleOf(c, &m.Index)
 		if s == nil {

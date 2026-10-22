@@ -11,10 +11,10 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// ErrOneCopy refuses to split apart a film with one copy.
-var ErrOneCopy = errors.New("it has one copy, so nothing to split apart")
+// ErrOneVersion refuses to split apart a film with one version.
+var ErrOneVersion = errors.New("it has one version, so nothing to split apart")
 
-// SplitTitle splits a film's copies apart, as Plex's Split Apart does: the copy that plays by
+// SplitTitle splits a film's versions apart, as Plex's Split Apart does: the version that plays by
 // default stays, and each other becomes a film of its own, named as the files are and matched
 // afresh. A scan leaves each where it was split to, as Plex's does not.
 func (s *Store) SplitTitle(ctx context.Context, id uuid.UUID) error {
@@ -32,7 +32,7 @@ func (s *Store) SplitTitle(ctx context.Context, id uuid.UUID) error {
 			return err
 		}
 		if len(versions) < 2 {
-			return ErrOneCopy
+			return ErrOneVersion
 		}
 		for _, version := range versions[1:] {
 			film := model.Item{

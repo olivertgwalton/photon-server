@@ -29,12 +29,12 @@ type streaming struct {
 
 func (s streaming) Ensure(ctx context.Context, item uuid.UUID) error {
 	if !s.streams[item] {
-		return remote.ErrNoCopy
+		return remote.ErrNoVersion
 	}
 	facts := domain.Facts{Container: "matroska,webm", Size: 1 << 30, Duration: 2 * time.Hour, Streams: []domain.Stream{
 		{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR},
 	}}
-	return s.st.SaveCopy(ctx, s.lib, item, store.Copy{
+	return s.st.SaveVersion(ctx, s.lib, item, store.Version{
 		ContentKey: item[:], Parts: []store.Part{{RelPath: "k/Heat.mkv", Size: facts.Size, ModTime: time.Unix(0, 0), Facts: &facts}},
 	})
 }

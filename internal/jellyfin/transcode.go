@@ -37,7 +37,7 @@ type hlsFiles interface {
 type placer interface {
 	Candidates(ctx context.Context, need playback.Need) ([]domain.Node, error)
 	Deliverers(ctx context.Context, network domain.ClientNetwork) ([]domain.Node, error)
-	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o playback.Opening) error
+	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayVersion, o playback.Opening) error
 	Self() domain.Node
 	Refuse(candidates []domain.Node, refused error) error
 }

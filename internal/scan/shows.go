@@ -11,7 +11,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/naming"
 )
 
-// episodePlan is one episode a folder holds, with every copy of it.
+// episodePlan is one episode a folder holds, with every version of it.
 type episodePlan struct {
 	season   int
 	episodes []int
@@ -21,7 +21,7 @@ type episodePlan struct {
 	// byNumber is true when the episode was read from a canonical form, so its numbers may join it
 	// to an episode already known; a bare number never does.
 	byNumber bool
-	versions []copyPlan
+	versions []versionPlan
 }
 
 // holdsEpisodes reports whether a folder of a series can hold episodes: nothing under an extras
@@ -39,13 +39,13 @@ func holdsEpisodes(series, rel string) bool {
 }
 
 // planEpisodes reads one folder of a series. A file's own season wins over its folder's, and an
-// episode named by date with no season takes its air year, as Plex files daily shows. Copies of an
+// episode named by date with no season takes its air year, as Plex files daily shows. Versions of an
 // episode are grouped only on a canonical key, never on a bare number, so two "- 01" files stay
 // two episodes rather than silently merging (Jellyfin #18081).
 func planEpisodes(f library.Folder, folderSeason *int, series string) (episodes []episodePlan, unread []string) {
 	byKey := map[string]int{}
-	copies := stacks(f.Files)
-	for _, c := range copies {
+	stacked := stacks(f.Files)
+	for _, c := range stacked {
 		s := stem(c[0].Name)
 		if p, ok := naming.StackPart(s); ok {
 			s = p.Base
@@ -59,7 +59,7 @@ func planEpisodes(f library.Folder, folderSeason *int, series string) (episodes 
 		plan := episodePlan{
 			episodes: ep.Episodes, airDate: ep.AirDate, title: episodeTitle(ep), name: n,
 			byNumber: ep.Confidence == naming.ConfidenceHigh,
-			versions: []copyPlan{{parts: c, edition: n.Edition, subtitles: subtitlesFor(f.Files, copyStem(c), "", len(copies) == 1)}},
+			versions: []versionPlan{{parts: c, edition: n.Edition, subtitles: subtitlesFor(f.Files, versionStem(c), "", len(stacked) == 1)}},
 		}
 		switch {
 		case ep.Season != nil:

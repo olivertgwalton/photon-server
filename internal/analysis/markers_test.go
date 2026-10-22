@@ -52,7 +52,7 @@ func lost(t *testing.T, markers domain.MarkerDetection, chapters ...domain.Chapt
 		}
 		episodes = append(episodes, store.Episode{
 			Season: 1, Episodes: []int{n}, Title: "Lost", Folder: "Lost/Season 1", ByNumber: true,
-			Copies: []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+			Versions: []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 				Duration: 44 * time.Minute, Streams: []domain.Stream{{Kind: domain.StreamAudio, Codec: "aac"}}, Chapters: chapters,
 			}}}}},
 		})
@@ -233,7 +233,7 @@ func TestAFilmsCreditsAreFoundByItsPicture(t *testing.T) {
 	if err := st.SetLibrary(ctx, lib.ID, store.LibraryChange{Markers: domain.MarkersAll}); err != nil {
 		t.Fatal(err)
 	}
-	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{{
+	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{{ContentKey: []byte("heat"), Parts: []store.Part{{
 		RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Duration: 2 * time.Hour, Streams: []domain.Stream{{Kind: domain.StreamVideo, Codec: "h264", Range: domain.RangeSDR}},
 		},

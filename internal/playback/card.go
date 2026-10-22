@@ -9,7 +9,7 @@ import (
 
 // Card is what the dashboard shows of a playback a session starts from address, of a copy, as
 // decided, with the tracks asked for; its acceleration, where it is transcoded, is the encoder's to say.
-func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.PlayCopy, d Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
+func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.PlayVersion, d Decision, tracks domain.ChosenTracks) domain.PlaybackCard {
 	card := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{ID: s.Profile.ID, Name: s.Profile.Name},
 		Device: domain.PlaybackDevice{

@@ -11,16 +11,16 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// PlayPart is one file of a copy, in play order, where it starts on the copy's timeline.
+// PlayPart is one file of a version, in play order, where it starts on the version's timeline.
 type PlayPart struct {
 	ID         uuid.UUID
 	OffsetMS   int64
 	DurationMS int64
 }
 
-// PlayCopy is a copy to play: what it is, its container, bitrate and length, its parts, its first
+// PlayVersion is a version to play: what it is, its container, bitrate and length, its parts, its first
 // part's streams, and the subtitle files beside it.
-type PlayCopy struct {
+type PlayVersion struct {
 	Version     uuid.UUID
 	Edition     string
 	Label       string
@@ -46,30 +46,30 @@ type SubtitleRef struct {
 // Playable answers the version of a film or episode to play: the one asked for, else the first on
 // disk in versionOrder. ErrNotFound for no such title, one the profile may not see, or none of its
 // versions on disk.
-func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) (PlayCopy, error) {
+func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) (PlayVersion, error) {
 	rows, err := queryRows[model.Version](ctx, s.pool, `
 		SELECT `+versionColumns+` FROM versions
 		WHERE item_id = $1 AND missing_since IS NULL AND ($3::uuid IS NULL OR id = $3)
 			AND EXISTS (SELECT 1 FROM items i, viewer($2) v WHERE i.id = item_id AND sees(v, i))
 		ORDER BY `+versionOrder+` LIMIT 1`, item, profile, optional(version))
 	if err != nil || len(rows) == 0 {
-		return PlayCopy{}, cmp.Or(err, ErrNotFound)
+		return PlayVersion{}, cmp.Or(err, ErrNotFound)
 	}
 	row := rows[0]
 	parts, err := queryRows[model.Part](ctx, s.pool, `SELECT `+partColumns+` FROM parts WHERE version_id = $1 ORDER BY idx`, row.ID)
 	if err != nil || len(parts) == 0 {
-		return PlayCopy{}, cmp.Or(err, ErrNotFound)
+		return PlayVersion{}, cmp.Or(err, ErrNotFound)
 	}
 	streams, err := s.partStreams(ctx, parts[0].ID)
 	if err != nil {
-		return PlayCopy{}, err
+		return PlayVersion{}, err
 	}
 	subs, err := queryRows[model.SubtitleFile](ctx, s.pool, `
 		SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE version_id = $1 ORDER BY rel_path`, row.ID)
 	if err != nil {
-		return PlayCopy{}, err
+		return PlayVersion{}, err
 	}
-	c := PlayCopy{
+	c := PlayVersion{
 		Version: row.ID, Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
 		Container: row.Container, BitrateKbps: row.BitrateKbps, Streams: streams,
 	}
@@ -149,7 +149,7 @@ func (s *Store) SeesPart(ctx context.Context, profile, part uuid.UUID) error {
 	return found(err)
 }
 
-// Subtitle answers what a subtitle file beside a copy is, or ErrNotFound.
+// Subtitle answers what a subtitle file beside a version is, or ErrNotFound.
 func (s *Store) Subtitle(ctx context.Context, id uuid.UUID) (SubtitleRef, error) {
 	f, err := queryRows[model.SubtitleFile](ctx, s.pool, `SELECT `+subtitleFileColumns+` FROM subtitle_files WHERE id = $1`, id)
 	if err != nil || len(f) == 0 {

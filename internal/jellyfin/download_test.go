@@ -85,7 +85,7 @@ func TestAnAppOffersToDownloadOnlyWhatDownloads(t *testing.T) {
 	part := func(rel string) store.Part {
 		return store.Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour, Container: "matroska,webm"}}
 	}
-	film := store.Film{Title: "Shoah", Folder: "Shoah", Copies: []store.Copy{{ContentKey: []byte("shoah"), Parts: []store.Part{part("Shoah/1.mkv"), part("Shoah/2.mkv")}}}}
+	film := store.Film{Title: "Shoah", Folder: "Shoah", Versions: []store.Version{{ContentKey: []byte("shoah"), Parts: []store.Part{part("Shoah/1.mkv"), part("Shoah/2.mkv")}}}}
 	if _, err := st.SaveFolder(t.Context(), long.ID, "Shoah", []byte("v"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 		Container: "matroska,webm", Size: 10, Duration: time.Hour,
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "h264", Width: 1920, Height: 1080, Range: domain.RangeSDR}},
 	}}
-	film := store.Film{Title: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{part}}}}
+	film := store.Film{Title: "Heat", Versions: []store.Version{{ContentKey: []byte("heat"), Parts: []store.Part{part}}}}
 	if _, err := st.SaveFolder(ctx, films.ID, ".", []byte("v"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}

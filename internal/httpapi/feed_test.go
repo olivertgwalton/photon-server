@@ -66,7 +66,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		lib        uuid.UUID
 		name, cert string
 	}{{films.ID, "Paddington", "PG"}, {films.ID, "Heat", "15"}, {other.ID, "Up", "U"}} {
-		saved, err := st.SaveFolder(ctx, f.lib, f.name, []byte("v1"), []store.Film{{Title: f.name, Folder: f.name, Copies: []store.Copy{{
+		saved, err := st.SaveFolder(ctx, f.lib, f.name, []byte("v1"), []store.Film{{Title: f.name, Folder: f.name, Versions: []store.Version{{
 			ContentKey: []byte(f.name), Parts: []store.Part{{RelPath: f.name + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}}}}, nil)
 		if err != nil {
@@ -78,7 +78,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		}
 	}
 	// The same Paddington is in Other, which Sam may not see.
-	if _, err := st.SaveFolder(ctx, other.ID, "Paddington", []byte("v1"), []store.Film{{Title: "Paddington", Folder: "Paddington", Copies: []store.Copy{{
+	if _, err := st.SaveFolder(ctx, other.ID, "Paddington", []byte("v1"), []store.Film{{Title: "Paddington", Folder: "Paddington", Versions: []store.Version{{
 		ContentKey: []byte("Paddington"), Parts: []store.Part{{RelPath: "Paddington.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 	}}}}, nil); err != nil {
 		t.Fatal(err)

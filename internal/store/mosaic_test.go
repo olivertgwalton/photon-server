@@ -25,7 +25,7 @@ func TestACollectionWithNoPosterWearsAMosaicOfItsTitles(t *testing.T) {
 	for _, f := range []struct{ title, cert string }{{"Alien", "15"}, {"Brazil", "15"}, {"Casino", "18"}, {"Dune", "12"}, {"Emma", "U"}} {
 		film := Film{
 			Title: f.title, Folder: f.title, Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: f.title + "/poster.jpg"}},
-			Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{
+			Versions: []Version{{ContentKey: []byte(f.title), Parts: []Part{{
 				RelPath: f.title + "/" + f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 			}}}},
 		}

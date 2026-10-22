@@ -42,9 +42,9 @@ type Episode struct {
 	NFO      *domain.Metadata
 	Artwork  []domain.Artwork
 	// ByNumber lets the episode join one already known by its season and numbers. It is false for
-	// an episode read from a bare number, which joins nothing but its own copies.
+	// an episode read from a bare number, which joins nothing but its own versions.
 	ByNumber bool
-	Copies   []Copy
+	Versions []Version
 }
 
 // SaveShowFolder writes a folder of a series' episodes and extras and remembers its fingerprint,
@@ -65,7 +65,7 @@ func (s *Store) SaveShowFolder(ctx context.Context, lib uuid.UUID, path string, 
 			seasons := map[int]uuid.UUID{}
 			var saving []string
 			for _, e := range episodes {
-				saving = append(saving, partPathsOf(e.Copies)...)
+				saving = append(saving, partPathsOf(e.Versions)...)
 			}
 			for _, e := range episodes {
 				seasonID, ok := seasons[e.Season]
@@ -231,29 +231,29 @@ func saveEpisode(ctx context.Context, tx db, lib uuid.UUID, settings analysis, s
 	if err := saveFolderArtwork(ctx, tx, row.ID, e.Folder, e.Artwork); err != nil {
 		return err
 	}
-	for _, c := range e.Copies {
-		if err := saveCopy(ctx, tx, lib, settings, row.ID, c); err != nil {
+	for _, c := range e.Versions {
+		if err := saveVersion(ctx, tx, lib, settings, row.ID, c); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// episodeItem is the episode a copy belongs to: the episode read from one of its paths, else the
+// episodeItem is the episode a version belongs to: the episode read from one of its paths, else the
 // episode of the same bytes moved or renamed from elsewhere, else, for an episode read from a
 // canonical form, the episode of its season with the same numbers or date. An episode under other
 // numbers is taken only when none of its other paths is among saving, the paths of the folder
 // being saved: the same bytes under two numbers at once are two episodes, as Jellyfin's items are
 // one per path.
 func episodeItem(ctx context.Context, tx db, lib uuid.UUID, e Episode, row model.Item, saving []string) (uuid.UUID, error) {
-	keys := make([][]byte, len(e.Copies))
-	for i, c := range e.Copies {
+	keys := make([][]byte, len(e.Versions))
+	for i, c := range e.Versions {
 		keys[i] = c.ContentKey
 	}
-	own := partPathsOf(e.Copies)
+	own := partPathsOf(e.Versions)
 	var id uuid.UUID
-	// The copies found by path and by bytes are looked up apart: asked for at once, by an OR across
-	// two joins, Postgres reads every episode copy of the library to answer.
+	// The versions found by path and by bytes are looked up apart: asked for at once, by an OR across
+	// two joins, Postgres reads every episode version of the library to answer.
 	err := tx.QueryRow(ctx, `
 		WITH found AS (
 			SELECT p.version_id, true AS own FROM part_files f JOIN parts p ON p.id = f.part_id
@@ -317,9 +317,9 @@ func saveSeasonArtwork(ctx context.Context, tx db, showID uuid.UUID, folder stri
 	return nil
 }
 
-func partPathsOf(copies []Copy) []string {
+func partPathsOf(versions []Version) []string {
 	var paths []string
-	for _, c := range copies {
+	for _, c := range versions {
 		for _, p := range c.Parts {
 			paths = append(paths, p.RelPath)
 		}

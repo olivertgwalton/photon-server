@@ -14,9 +14,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// Copy is one version. Facts is nil for a copy whose content key is already known: nothing about
-// its bytes has changed, only perhaps its paths.
-type Copy struct {
+// Version is one version of a title as a scan reads it. Facts is nil for a version whose content
+// key is already known: nothing about its bytes has changed, only perhaps its paths.
+type Version struct {
 	ContentKey []byte
 	Edition    string
 	Label      string
@@ -24,7 +24,7 @@ type Copy struct {
 	Subtitles  []Subtitle
 }
 
-// Subtitle is a subtitle file beside a copy.
+// Subtitle is a subtitle file beside a version.
 type Subtitle struct {
 	RelPath  string
 	Size     int64
@@ -38,7 +38,7 @@ type Subtitle struct {
 	HearingImpaired bool
 }
 
-// Part is a file of a copy. Its Size and ModTime are the file's, which say whether it changed;
+// Part is a file of a version. Its Size and ModTime are the file's, which say whether it changed;
 // its media's size is its Facts', which a .strm's differs from.
 type Part struct {
 	RelPath string
@@ -47,7 +47,7 @@ type Part struct {
 	Facts   *domain.Facts
 }
 
-func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, itemID uuid.UUID, c Copy) error {
+func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, itemID uuid.UUID, c Version) error {
 	edition, label := optional(c.Edition), optional(c.Label)
 	var known uuid.UUID
 	var anotherEpisodes bool
@@ -57,10 +57,10 @@ func saveCopy(ctx context.Context, tx db, lib uuid.UUID, settings analysis, item
 		WHERE v.library_id = $1 AND v.fingerprint = $2 ORDER BY v.item_id = $3 DESC LIMIT 1`,
 		lib, c.ContentKey, itemID).Scan(&known, &anotherEpisodes)
 	if err == nil && anotherEpisodes {
-		return copyVersion(ctx, tx, lib, settings, known, itemID, c)
+		return cloneVersion(ctx, tx, lib, settings, known, itemID, c)
 	}
 	if err == nil {
-		// A copy an admin split off stays on its own title.
+		// A version an admin split off stays on its own title.
 		_, err := tx.Exec(ctx, `
 			UPDATE versions SET item_id = CASE WHEN split_at IS NULL THEN $2 ELSE item_id END, edition = $3, label = $4,
 				missing_since = NULL
@@ -147,10 +147,10 @@ func indexVideo(ctx context.Context, tx db, settings analysis, part uuid.UUID) e
 	return nil
 }
 
-// copyVersion gives an episode a version of its own of bytes another episode already holds, with
+// cloneVersion gives an episode a version of its own of bytes another episode already holds, with
 // what was read of them: the same bytes under two numbers are two episodes, each read from its own
 // path, as Jellyfin keeps an item per path.
-func copyVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, from, itemID uuid.UUID, c Copy) error {
+func cloneVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, from, itemID uuid.UUID, c Version) error {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO versions (item_id, library_id, fingerprint, edition, label, container, width, height,
@@ -195,8 +195,8 @@ func copyVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f
 	return saveSubtitles(ctx, tx, lib, id, c.Subtitles)
 }
 
-// addPlaces records where a known copy's parts and subtitles are found this time.
-func addPlaces(ctx context.Context, tx db, lib, versionID uuid.UUID, c Copy) error {
+// addPlaces records where a known version's parts and subtitles are found this time.
+func addPlaces(ctx context.Context, tx db, lib, versionID uuid.UUID, c Version) error {
 	for idx, part := range c.Parts {
 		var id uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT id FROM parts WHERE version_id = $1 AND idx = $2 LIMIT 1`, versionID, int16(idx)).Scan(&id)
@@ -210,7 +210,7 @@ func addPlaces(ctx context.Context, tx db, lib, versionID uuid.UUID, c Copy) err
 	return saveSubtitles(ctx, tx, lib, versionID, c.Subtitles)
 }
 
-// saveSubtitles records a copy's subtitle files. A path already known moves to this copy, so a
+// saveSubtitles records a version's subtitle files. A path already known moves to this version, so a
 // subtitle renamed onto another version follows it.
 func saveSubtitles(ctx context.Context, tx db, lib, versionID uuid.UUID, subs []Subtitle) error {
 	if len(subs) == 0 {

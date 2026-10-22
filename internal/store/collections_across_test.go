@@ -38,7 +38,7 @@ func TestACollectionHoldsTheTitlesOfEveryLibrary(t *testing.T) {
 		lib   uuid.UUID
 		set   bool
 	}{{"Alien", films.ID, true}, {"Alien 3", films.ID, true}, {"Heat", films.ID, false}, {"Aliens", uhd.ID, true}} {
-		film := Film{Title: f.title, Folder: f.title, Copies: []Copy{{ContentKey: []byte(f.title), Parts: []Part{{
+		film := Film{Title: f.title, Folder: f.title, Versions: []Version{{ContentKey: []byte(f.title), Parts: []Part{{
 			RelPath: f.title + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{},
 		}}}}}
 		if _, err := s.SaveFolder(ctx, f.lib, f.title, []byte("v1"), []Film{film}, nil); err != nil {

@@ -17,7 +17,7 @@ const (
 	NamedAnnounced NamedKind = "announced"
 	NamedPerson    NamedKind = "person"
 	NamedPlaylist  NamedKind = "playlist"
-	// NamedVersion is a copy of a title, which Jellyfin's apps open as an item of its own.
+	// NamedVersion is a version of a title, which Jellyfin's apps open as an item of its own.
 	NamedVersion NamedKind = "version"
 )
 

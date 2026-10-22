@@ -120,7 +120,7 @@ func aFilm(t *testing.T) (*store.Store, domain.Profile, uuid.UUID, uuid.UUID) {
 		},
 		Chapters: []domain.Chapter{{End: 40 * time.Minute, Title: "The Bank"}, {Start: 40 * time.Minute, End: time.Hour}},
 	}}
-	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{{ContentKey: []byte("heat"), Parts: []store.Part{part}, Subtitles: []store.Subtitle{
+	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{{ContentKey: []byte("heat"), Parts: []store.Part{part}, Subtitles: []store.Subtitle{
 		{RelPath: "Heat/Heat.en.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English},
 	}}}}
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{film}, nil); err != nil {
@@ -340,7 +340,7 @@ func newFakeRemuxes() *fakeRemuxes {
 	return &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}, audio: map[uuid.UUID]*domain.AudioPlan{}, segments: map[uuid.UUID]domain.SegmentFormat{}}
 }
 
-func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
+func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
 	f.opened[id], f.audio[id], f.segments[id] = video, audio, segments
 	return nil
 }
@@ -755,7 +755,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 
 // alone places every playback on this node, as a server of one does.
 func alone(local interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayCopy, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions playback.Renditions) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions playback.Renditions) error
 },
 ) *playback.Placer {
 	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Role: domain.NodeAll, Availability: domain.NodeActive, Limit: 4, Encoder: domain.Encoder{
@@ -794,13 +794,13 @@ func TestAnAppIsAnsweredTheCopyItAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyOf := func(name string, width, height int, codec string) store.Copy {
-		return store.Copy{ContentKey: []byte(name), Parts: []store.Part{{RelPath: "Heat/" + name, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+	copyOf := func(name string, width, height int, codec string) store.Version {
+		return store.Version{ContentKey: []byte(name), Parts: []store.Part{{RelPath: "Heat/" + name, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Size: 1, Duration: time.Hour, Container: "matroska,webm",
 			Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: codec, Width: width, Height: height, Range: domain.RangeSDR}},
 		}}}}
 	}
-	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{copyOf("hd.mkv", 1920, 1080, "h264"), copyOf("uhd.mkv", 3840, 2160, "hevc")}}
+	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{copyOf("hd.mkv", 1920, 1080, "h264"), copyOf("uhd.mkv", 3840, 2160, "hevc")}}
 	if _, err := st.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -894,7 +894,7 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 		Size: 40, Duration: 2 * time.Hour, Container: "matroska,webm",
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeSDR}},
 	}}
-	film := store.Film{Title: "Heat", Folder: "Heat", Copies: []store.Copy{
+	film := store.Film{Title: "Heat", Folder: "Heat", Versions: []store.Version{
 		{ContentKey: []byte("heat"), Parts: []store.Part{{RelPath: "Heat/Heat.mkv", Size: 3_600_000_000, ModTime: time.Unix(0, 0)}}, Subtitles: []store.Subtitle{
 			{RelPath: "Heat/Heat.en.srt", Size: 1, ModTime: time.Unix(0, 0), Codec: "subrip", Language: language.English},
 		}},

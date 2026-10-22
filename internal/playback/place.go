@@ -14,7 +14,7 @@ import (
 
 type placing interface {
 	Self() domain.Node
-	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayCopy, o Opening) error
+	Open(ctx context.Context, node domain.Node, playback uuid.UUID, c store.PlayVersion, o Opening) error
 }
 
 type starting interface {
@@ -30,7 +30,7 @@ type Start struct {
 	Session domain.Session
 	Address string
 	Title   domain.PlaybackTitle
-	Copy    store.PlayCopy
+	Copy    store.PlayVersion
 	Tracks  domain.ChosenTracks
 	Opening Opening
 }

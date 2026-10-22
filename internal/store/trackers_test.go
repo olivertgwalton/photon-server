@@ -135,14 +135,14 @@ func TestAnAccountIsRefreshedOnceWhoeverAsks(t *testing.T) {
 func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	hour := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	hour := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	heat := Film{Title: "Heat", Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Copies: hour("Heat/h.mkv")}
+	heat := Film{Title: "Heat", Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949"}, Versions: hour("Heat/h.mkv")}
 	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{heat}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestATrackerIsToldWhatAProfileWatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	wire := Show{Title: "The Wire", Folder: "Wire", IDs: map[domain.Provider]string{domain.ProviderTVDB: "79126"}}
-	pilot := Episode{Season: 1, Episodes: []int{2}, Title: "The Detail", Folder: "Wire", ByNumber: true, Copies: hour("Wire/S01E02.mkv")}
+	pilot := Episode{Season: 1, Episodes: []int{2}, Title: "The Detail", Folder: "Wire", ByNumber: true, Versions: hour("Wire/S01E02.mkv")}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), wire, []Episode{pilot}, nil); err != nil {
 		t.Fatal(err)
 	}

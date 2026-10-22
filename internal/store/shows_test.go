@@ -35,7 +35,7 @@ func TestAShowsEpisodesInOrder(t *testing.T) {
 		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
 		eps = append(eps, Episode{
 			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+			Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {

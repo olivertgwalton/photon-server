@@ -29,19 +29,19 @@ func TestHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{
+	part := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{
 			RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour},
 		}}}}
 	}
-	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Copies: part("Heat/Heat.mkv")}}, nil); err != nil {
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v"), []Film{{Title: "Heat", Folder: "Heat", Versions: part("Heat/Heat.mkv")}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var eps []Episode
 	for season, numbers := range map[int][]int{0: {1}, 1: {1, 2, 3}} {
 		for _, n := range numbers {
 			rel := "Wire/S" + string(rune('0'+season)) + "E" + string(rune('0'+n)) + ".mkv"
-			eps = append(eps, Episode{Season: season, Episodes: []int{n}, Title: rel, Folder: "Wire", ByNumber: true, Copies: part(rel)})
+			eps = append(eps, Episode{Season: season, Episodes: []int{n}, Title: rel, Folder: "Wire", ByNumber: true, Versions: part(rel)})
 		}
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
@@ -170,7 +170,7 @@ func TestNextEpisode(t *testing.T) {
 		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
 		eps = append(eps, Episode{
 			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+			Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
@@ -258,7 +258,7 @@ func TestNextUpGoesOnFromTheFurthestEpisodeWatched(t *testing.T) {
 		rel := fmt.Sprintf("Wire/S%dE%d.mkv", se[0], se[1])
 		eps = append(eps, Episode{
 			Season: se[0], Episodes: []int{se[1]}, Title: fmt.Sprintf("S%dE%d", se[0], se[1]), Folder: "Wire", ByNumber: true,
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+			Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
@@ -363,16 +363,16 @@ func homeLibraries(t *testing.T, s *Store, films, shows []string) (admin, kid uu
 	if err != nil {
 		t.Fatal(err)
 	}
-	part := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	part := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	for _, f := range films {
-		if _, err := s.SaveFolder(ctx, filmLib.ID, f, []byte("v"), []Film{{Title: f, Folder: f, Copies: part(f + "/" + f + ".mkv")}}, nil); err != nil {
+		if _, err := s.SaveFolder(ctx, filmLib.ID, f, []byte("v"), []Film{{Title: f, Folder: f, Versions: part(f + "/" + f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, sh := range shows {
-		ep := Episode{Season: 1, Episodes: []int{1}, Title: sh + " S1E1", Folder: sh, ByNumber: true, Copies: part(sh + "/S1E1.mkv")}
+		ep := Episode{Season: 1, Episodes: []int{1}, Title: sh + " S1E1", Folder: sh, ByNumber: true, Versions: part(sh + "/S1E1.mkv")}
 		if _, err := s.SaveShowFolder(ctx, tv.ID, sh, []byte("v"), Show{Title: sh, Folder: sh}, []Episode{ep}, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -503,7 +503,7 @@ func TestWatchlist(t *testing.T) {
 	var eps []Episode
 	for _, n := range []int{1, 2} {
 		rel := fmt.Sprintf("The Wire/S1E%d.mkv", n)
-		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "The Wire", ByNumber: true, Copies: []Copy{{
+		eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: rel, Folder: "The Wire", ByNumber: true, Versions: []Version{{
 			ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 		}}})
 	}
@@ -613,8 +613,8 @@ func TestRowPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tv := libs[slices.IndexFunc(libs, func(l domain.Library) bool { return l.Kind == domain.LibraryShows })].ID
-	part := func(rel string) []Copy {
-		return []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	part := func(rel string) []Version {
+		return []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
 	ago := func(days int) *time.Time {
 		at := time.Now().AddDate(0, 0, -days)
@@ -626,7 +626,7 @@ func TestRowPage(t *testing.T) {
 		var eps []Episode
 		for n := 1; n <= 2; n++ {
 			rel := fmt.Sprintf("%s/S1E%d.mkv", sh, n)
-			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("%s S1E%d", sh, n), Folder: sh, ByNumber: true, Copies: part(rel)})
+			eps = append(eps, Episode{Season: 1, Episodes: []int{n}, Title: fmt.Sprintf("%s S1E%d", sh, n), Folder: sh, ByNumber: true, Versions: part(rel)})
 		}
 		if _, err := s.SaveShowFolder(ctx, tv, sh, []byte("v"), Show{Title: sh, Folder: sh}, eps, nil); err != nil {
 			t.Fatal(err)
@@ -748,7 +748,7 @@ func TestPlayFollowsTheEpisodesPage(t *testing.T) {
 		rel := "Wire/" + e.title + ".mkv"
 		eps = append(eps, Episode{
 			Season: 1, Episodes: e.n, AirDate: e.aired, Title: e.title, Folder: "Wire",
-			Copies: []Copy{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
+			Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}},
 		})
 	}
 	if _, err := s.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {

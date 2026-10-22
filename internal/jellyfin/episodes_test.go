@@ -48,7 +48,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 		meta := map[int]domain.Metadata{}
 		for _, n := range episodes {
 			file := fmt.Sprintf("S01E0%d.mkv", n)
-			eps = append(eps, store.Episode{Season: 1, Episodes: []int{n}, Title: file, Folder: show, ByNumber: true, Copies: []store.Copy{{
+			eps = append(eps, store.Episode{Season: 1, Episodes: []int{n}, Title: file, Folder: show, ByNumber: true, Versions: []store.Version{{
 				ContentKey: []byte(show + file), Parts: []store.Part{{RelPath: show + "/" + file, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}},
 			}}})
 			meta[n] = domain.Metadata{Title: fmt.Sprintf("%s %d", show, n), ReleaseDate: aired}

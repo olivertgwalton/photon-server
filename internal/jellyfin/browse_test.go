@@ -89,8 +89,8 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Copy {
-		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1 << 30, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+	copies := func(rel string) []store.Version {
+		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1 << 30, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
 			Duration: time.Hour, Container: "matroska,webm",
 			Streams: []domain.Stream{
 				{Index: 0, Kind: domain.StreamVideo, Codec: "hevc", Width: 3840, Height: 2160, Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 8, Compatibility: domain.CompatibleHDR10}},
@@ -100,14 +100,14 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 		}}}}}
 	}
 	for _, f := range []string{"Heat", "Alien"} {
-		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Copies: copies(f + "/" + f + ".mkv")}}, nil); err != nil {
+		if _, err := st.SaveFolder(ctx, films.ID, f, []byte("v"), []store.Film{{Title: f, Folder: f, Versions: copies(f + "/" + f + ".mkv")}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var eps []store.Episode
 	for _, se := range [][2]int{{1, 1}, {1, 2}, {2, 1}} {
 		rel := "Wire/S" + string(rune('0'+se[0])) + "E" + string(rune('0'+se[1])) + ".mkv"
-		eps = append(eps, store.Episode{Season: se[0], Episodes: []int{se[1]}, Title: rel, Folder: "Wire", ByNumber: true, Copies: copies(rel)})
+		eps = append(eps, store.Episode{Season: se[0], Episodes: []int{se[1]}, Title: rel, Folder: "Wire", ByNumber: true, Versions: copies(rel)})
 	}
 	if _, err := st.SaveShowFolder(ctx, tv.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, eps, nil); err != nil {
 		t.Fatal(err)
@@ -344,13 +344,13 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copies := func(rel string) []store.Copy {
-		return []store.Copy{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
+	copies := func(rel string) []store.Version {
+		return []store.Version{{ContentKey: []byte(rel), Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}}}}
 	}
-	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []store.Film{{Title: "Heat", Folder: "Heat", Copies: copies("Heat/Heat.mkv")}}, nil); err != nil {
+	if _, err := st.SaveFolder(ctx, lib.ID, "Heat", []byte("v"), []store.Film{{Title: "Heat", Folder: "Heat", Versions: copies("Heat/Heat.mkv")}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Copies: copies("Wire/S01E01.mkv")}
+	ep := store.Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire", ByNumber: true, Versions: copies("Wire/S01E01.mkv")}
 	if _, err := st.SaveShowFolder(ctx, lib.ID, "Wire", []byte("v"), store.Show{Title: "The Wire", Folder: "Wire"}, []store.Episode{ep}, nil); err != nil {
 		t.Fatal(err)
 	}

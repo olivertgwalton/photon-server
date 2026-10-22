@@ -25,11 +25,11 @@ type Owner struct {
 }
 
 type Extra struct {
-	Kind   domain.ExtraKind
-	Title  string
-	Folder string
-	Owner  Owner
-	Copy   Copy
+	Kind    domain.ExtraKind
+	Title   string
+	Folder  string
+	Owner   Owner
+	Version Version
 }
 
 var errNoOwner = errors.New("no single title owns it")
@@ -41,7 +41,7 @@ func saveExtras(ctx context.Context, tx db, lib uuid.UUID, settings analysis, ex
 	for _, e := range extras {
 		owner, err := ownerOf(ctx, tx, lib, e.Owner)
 		if errors.Is(err, errNoOwner) {
-			unowned = append(unowned, e.Copy.Parts[0].RelPath)
+			unowned = append(unowned, e.Version.Parts[0].RelPath)
 			continue
 		}
 		if err != nil {
@@ -102,13 +102,13 @@ func saveExtra(ctx context.Context, tx db, lib uuid.UUID, settings analysis, own
 	var kind domain.ItemKind
 	err := tx.QueryRow(ctx, `
 		SELECT v.id, i.id, i.kind FROM versions v JOIN items i ON i.id = v.item_id
-		WHERE v.library_id = $1 AND v.fingerprint = $2 LIMIT 1`, lib, e.Copy.ContentKey).Scan(&version, &row.ID, &kind)
+		WHERE v.library_id = $1 AND v.fingerprint = $2 LIMIT 1`, lib, e.Version.ContentKey).Scan(&version, &row.ID, &kind)
 	switch {
 	case err == nil:
-		// The same bytes are already a film's or an episode's copy: this file is another place to
+		// The same bytes are already a film's or an episode's version: this file is another place to
 		// read it, and that title stays what it is.
 		if kind != domain.ItemExtra {
-			return addPlaces(ctx, tx, lib, version, e.Copy)
+			return addPlaces(ctx, tx, lib, version, e.Version)
 		}
 		_, err = tx.Exec(ctx, `UPDATE items SET parent_id = $2, extra_kind = $3, scan_title = $4, folder = $5 WHERE id = $1`,
 			row.ID, row.ParentID, row.ExtraKind, row.ScanTitle, row.Folder)
@@ -121,7 +121,7 @@ func saveExtra(ctx context.Context, tx db, lib uuid.UUID, settings analysis, own
 	if err := describe(ctx, tx, row.ID, e.Title, 0, nil, nil); err != nil {
 		return err
 	}
-	return saveCopy(ctx, tx, lib, settings, row.ID, e.Copy)
+	return saveVersion(ctx, tx, lib, settings, row.ID, e.Version)
 }
 
 // ExtraCard is a trailer or other extra, pictured by a still of its video where its previews are
@@ -170,7 +170,7 @@ type still struct {
 	idx  int
 }
 
-// stills answers each title's first chapter picture: of its first copy's first part pictured.
+// stills answers each title's first chapter picture: of its first version's first part pictured.
 func (s *Store) stills(ctx context.Context, items []*model.Item) (map[uuid.UUID]still, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (v.item_id) v.item_id, p.id, (SELECT min(x) FROM unnest(pv.chapter_images) x)
