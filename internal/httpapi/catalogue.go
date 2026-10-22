@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -364,15 +363,6 @@ var wallFilterParameters = []param{
 	{"person", []uuid.UUID{}, "People credited."},
 }
 
-// list is the values of the list parameter name, repeated or comma-separated.
-func list(q url.Values, name string) []string {
-	var out []string
-	for _, v := range q[name] {
-		out = append(out, strings.Split(v, ",")...)
-	}
-	return out
-}
-
 func wallFilter(q url.Values) (store.WallFilter, error) {
 	f := store.WallFilter{StartsWith: strings.ToUpper(q.Get("starts_with"))}
 	var err error
@@ -404,23 +394,6 @@ func wallFilter(q url.Values) (store.WallFilter, error) {
 		f.RatingSite = cmp.Or(f.RatingSite, domain.SiteIMDb)
 	}
 	return f, f.Check()
-}
-
-// enum parses one of all for parseAll.
-func enum[T ~string](what string, all []T) func(string) (T, error) {
-	return func(s string) (T, error) { return domain.Parse(what, s, all) }
-}
-
-func parseAll[T any](values []string, parse func(string) (T, error)) ([]T, error) {
-	out := make([]T, 0, len(values))
-	for _, v := range values {
-		p, err := parse(v)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, nil
 }
 
 type facetsJSON struct {
@@ -502,18 +475,6 @@ func (a *API) playable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
-}
-
-// paging reads a page's offset and limit, as walls page, and whether it asks how many there are.
-func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (page store.Page, ok bool) {
-	if page.Offset, ok = a.queryNumber(w, r, "offset", 0, 0, math.MaxInt); !ok {
-		return page, false
-	}
-	if page.Limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit); !ok {
-		return page, false
-	}
-	page.Count, ok = queryEnum(a, w, r, "total", domain.CountNone, domain.Countings())
-	return page, ok
 }
 
 func (a *API) catalogueRoutes() []route {
