@@ -36,11 +36,19 @@ var (
 
 type fakeAuth struct{}
 
-func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) (string, domain.Profile, error) {
-	if name == "Oliver" && password == "correct horse" {
+// SignIn knows Oliver's password, and Sam's, whose authenticator app's code is 123456.
+func (fakeAuth) SignIn(_ context.Context, name, password, code string, _ auth.Device) (string, domain.Profile, error) {
+	switch {
+	case name == "Oliver" && password == "correct horse":
 		return goodToken, oliver, nil
+	case name != "Sam" || password != "battery staple":
+		return "", domain.Profile{}, auth.ErrInvalidCredentials
+	case code == "":
+		return "", domain.Profile{}, auth.ErrCodeRequired
+	case code != "123456":
+		return "", domain.Profile{}, auth.ErrWrongCode
 	}
-	return "", domain.Profile{}, auth.ErrInvalidCredentials
+	return managerToken, sam, nil
 }
 
 // SetUp makes the first admin Oliver, under any name, refusing a short password.
@@ -108,11 +116,35 @@ func (fakeAuth) WaitingPairing(context.Context, uuid.UUID, string) (auth.Pairing
 
 func (fakeAuth) FoundPairing(context.Context, uuid.UUID, string) (bool, error) { return false, nil }
 
-func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret string) (domain.Profile, error) {
+func (fakeAuth) SwitchProfile(_ context.Context, _ domain.Session, target uuid.UUID, secret, _ string) (domain.Profile, error) {
 	if target == oliver.ID && secret != "correct horse" {
 		return domain.Profile{}, auth.ErrWrongSecret
 	}
 	return oliver, nil
+}
+
+// SetAuthenticator takes the code 123456 for a key of 160 bits.
+func (fakeAuth) SetAuthenticator(_ context.Context, _ uuid.UUID, secret, code string) error {
+	switch {
+	case len(secret) < 32:
+		return auth.ErrBadSecret
+	case code != "123456":
+		return auth.ErrWrongCode
+	}
+	return nil
+}
+
+// Authenticator is Oliver's alone, which a manager does not keep.
+func (fakeAuth) Authenticator(_ context.Context, profile uuid.UUID, by *uuid.UUID) (time.Time, error) {
+	if profile != oliver.ID || by != nil {
+		return time.Time{}, store.ErrNotFound
+	}
+	return time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC), nil
+}
+
+func (f fakeAuth) RemoveAuthenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) error {
+	_, err := f.Authenticator(ctx, profile, by)
+	return err
 }
 
 func (fakeAuth) SetPIN(_ context.Context, _ uuid.UUID, pin string) error {
@@ -192,6 +224,8 @@ func TestLogin(t *testing.T) {
 	}{
 		{"right password", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`, http.StatusOK, ""},
 		{"wrong password", `{"method":"password","name":"Oliver","password":"guess","device":"Living room","client":"Photon"}`, http.StatusUnauthorized, codeSignInRefused},
+		{"right password, no code", `{"method":"password","name":"Sam","password":"battery staple","device":"d","client":"c"}`, http.StatusForbidden, codeCodeRequired},
+		{"right password, wrong code", `{"method":"password","name":"Sam","password":"battery staple","code":"000000","device":"d","client":"c"}`, http.StatusUnauthorized, codeSignInRefused},
 		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
 		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
 		{"not json", `name=Oliver`, http.StatusBadRequest, codeInvalidBody},
@@ -258,6 +292,34 @@ func TestSwitchingNeedsTheLocksSecret(t *testing.T) {
 	}
 	if rec := serve(t, http.MethodPut, "/api/v1/profile/pin", goodToken, `{"pin":"12"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a two-digit PIN: status %d, want 400", rec.Code)
+	}
+}
+
+func TestAnAuthenticatorIsAddedByItsCode(t *testing.T) {
+	const key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	for _, c := range []struct {
+		name, body string
+		want       int
+	}{
+		{"no code", `{"secret":"` + key + `"}`, http.StatusBadRequest},
+		{"a short key", `{"secret":"GEZDGNBV","code":"123456"}`, http.StatusBadRequest},
+		{"a wrong code", `{"secret":"` + key + `","code":"000000"}`, http.StatusForbidden},
+		{"its code", `{"secret":"` + key + `","code":"123456"}`, http.StatusNoContent},
+	} {
+		if rec := serve(t, http.MethodPut, "/api/v1/profile/authenticator", goodToken, c.body); rec.Code != c.want {
+			t.Errorf("%s: status %d, want %d: %s", c.name, rec.Code, c.want, rec.Body)
+		}
+	}
+	admins := "/api/v1/admin/profiles/" + oliver.ID.String() + "/authenticator"
+	if rec := serve(t, http.MethodGet, "/api/v1/profile/authenticator", goodToken, ""); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `"added_at":"2026-10-01T09:00:00Z"`) {
+		t.Errorf("its own: %d %s", rec.Code, rec.Body)
+	}
+	if rec := serve(t, http.MethodDelete, admins, managerToken, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("a manager removing the admin's: status %d, want 404", rec.Code)
+	}
+	if rec := serve(t, http.MethodDelete, admins, goodToken, ""); rec.Code != http.StatusNoContent {
+		t.Errorf("the admin removing it: status %d, want 204", rec.Code)
 	}
 }
 

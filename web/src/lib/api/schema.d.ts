@@ -1970,6 +1970,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/profiles/{id}/authenticator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Any profile's authenticator app
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Authenticator"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Take any profile's authenticator app away, for one whose phone is lost
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/profiles/{id}/avatar": {
         parameters: {
             query?: never;
@@ -5889,6 +5955,85 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/profile/authenticator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The authenticator app whose code signing in by the profile's password also asks for */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Authenticator"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /** Give the profile an authenticator app, in place of any before, by the key it holds and its code now */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AuthenticatorChange"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        /** Take the profile's authenticator app away, so its password alone signs it in */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/avatar": {
         parameters: {
             query?: never;
@@ -8045,6 +8190,14 @@ export interface components {
         };
         /** @enum {string} */
         AudioTrack: "default" | "language";
+        Authenticator: {
+            /** Format: date-time */
+            added_at: string;
+        };
+        AuthenticatorChange: {
+            code: string;
+            secret: string;
+        };
         /** @enum {string} */
         Availability: "available" | "announced";
         Backend: {
@@ -8899,6 +9052,7 @@ export interface components {
         };
         LoginRequest: {
             client?: string;
+            code?: string;
             device?: string;
             device_code?: string;
             keep?: components["schemas"]["Keep"];
@@ -9467,7 +9621,7 @@ export interface components {
             title: string;
         };
         /** @enum {string} */
-        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "stream_limit" | "no_space" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token";
+        ProblemCode: "not_found" | "method_not_allowed" | "unknown_parameter" | "invalid_parameter" | "not_ready" | "invalid_body" | "unauthenticated" | "sign_in_refused" | "internal" | "pairing_not_found" | "wrong_secret" | "rate_limited" | "no_compatible_stream" | "forbidden" | "conflict" | "transcode_limit" | "stream_limit" | "no_space" | "provider_unavailable" | "authorization_pending" | "slow_down" | "expired_token" | "authenticator_code_required";
         Profile: {
             /** Format: uuid */
             avatar?: string;
@@ -9959,6 +10113,7 @@ export interface components {
             delivery: components["schemas"]["SubtitleDelivery"];
         };
         Switch: {
+            code?: string;
             secret?: string;
         };
         Task: {

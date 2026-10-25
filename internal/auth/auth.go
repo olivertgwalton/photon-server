@@ -60,9 +60,9 @@ type Device struct {
 	Client string
 }
 
-// SignIn checks a profile's password and starts a session for the device, answering the token
-// the device sends from then on.
-func (s *Service) SignIn(ctx context.Context, name, password string, device Device) (string, domain.Profile, error) {
+// SignIn checks a profile's password, and code from its authenticator app where it has one, and
+// starts a session for the device, answering the token the device sends from then on.
+func (s *Service) SignIn(ctx context.Context, name, password, code string, device Device) (string, domain.Profile, error) {
 	profile, hash, err := s.store.ProfileByName(ctx, name)
 	if errors.Is(err, store.ErrNotFound) {
 		hash, err = "", nil
@@ -76,6 +76,9 @@ func (s *Service) SignIn(ctx context.Context, name, password string, device Devi
 	}
 	if !match {
 		return "", domain.Profile{}, ErrInvalidCredentials
+	}
+	if err := s.secondFactor(ctx, profile.ID, code); err != nil {
+		return "", domain.Profile{}, err
 	}
 	if stale {
 		fresh, err := s.hasher.Hash(ctx, password)

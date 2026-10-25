@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -104,13 +105,16 @@ type authenticator interface {
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	HashPassword(ctx context.Context, password string) (string, error)
 	SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device auth.Device) (string, error)
-	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error)
+	SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret, code string) (domain.Profile, error)
 	WaitingPairing(ctx context.Context, finder uuid.UUID, userCode string) (auth.Pairing, error)
 	FoundPairing(ctx context.Context, profile uuid.UUID, userCode string) (bool, error)
 	StartReset(ctx context.Context, name string) (string, error)
 	RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
+	SetAuthenticator(ctx context.Context, profile uuid.UUID, secret, code string) error
+	Authenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) (time.Time, error)
+	RemoveAuthenticator(ctx context.Context, profile uuid.UUID, by *uuid.UUID) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
 	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
 	CreateKey(ctx context.Context, creator domain.Session, name string) (uuid.UUID, string, error)
@@ -338,6 +342,7 @@ func (a *API) routes() []route {
 		a.pushRoutes(),
 		a.catalogueRoutes(),
 		a.avatarsRoutes(),
+		a.authenticatorRoutes(),
 		a.devicesRoutes(),
 		a.collectionsRoutes(),
 		a.peopleRoutes(),

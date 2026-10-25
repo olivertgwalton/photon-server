@@ -92,7 +92,7 @@ type fakeAuth struct {
 	pairing *kv.PairingState
 }
 
-func (fakeAuth) SignIn(_ context.Context, name, password string, _ auth.Device) (string, domain.Profile, error) {
+func (fakeAuth) SignIn(_ context.Context, name, password, _ string, _ auth.Device) (string, domain.Profile, error) {
 	if name == "Ada" && password == "correct horse" {
 		return "pst_device", ada, nil
 	}
