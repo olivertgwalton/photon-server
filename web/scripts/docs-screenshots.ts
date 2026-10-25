@@ -473,7 +473,7 @@ export const shots: Shot[] = [
 				await p.request.post("/api/v1/downloads", {
 					data: {
 						title_id: id,
-						max_bitrate_kbps: id === "t-film" ? 8000 : 1_000_000,
+						max_bitrate_kbps: id === "t-film" ? 8000 : undefined,
 					},
 				});
 			}

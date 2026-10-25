@@ -92,6 +92,13 @@ func TestADownloadIsTheFileOrAConversionServedInRanges(t *testing.T) {
 		!strings.HasPrefix(string(d.URL), "/api/v1/parts/"+partOne.String()+"/stream?") {
 		t.Errorf("within the quality, asked before: %d %+v; want 200 and the part's own file, ready", code, d)
 	}
+	code, d = ask(`{` + film + part + `}`)
+	if code != http.StatusOK || d.Method != domain.PlayDirect || d.State != domain.DownloadReady {
+		t.Errorf("at no bitrate: %d %+v; want 200 and the part's own file, ready", code, d)
+	}
+	if code, _ := ask(`{` + film + part + `, "max_bitrate_kbps": -1}`); code != http.StatusBadRequest {
+		t.Errorf("a bitrate below nothing: %d, want 400", code)
+	}
 	code, d = ask(`{` + film + part + `, "max_bitrate_kbps": 2000, "max_width": 1280}`)
 	if code != http.StatusCreated || d.Method != domain.PlayTranscode || d.State != domain.DownloadQueued || d.URL != "" ||
 		d.MaxBitrateKbps != 2000 || d.MaxWidth != 1280 {

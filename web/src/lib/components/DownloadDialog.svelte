@@ -27,7 +27,7 @@ let {
 
 // The most the picture may be. Original is any size at all.
 const qualities = [
-	{ name: "Original", detail: "The file as it is", kbps: 1_000_000 },
+	{ name: "Original", detail: "The file as it is" },
 	{ name: "1080p", kbps: 20_000, width: 1920 },
 	{ name: "1080p", kbps: 8000, width: 1920 },
 	{ name: "720p", kbps: 4000, width: 1280 },

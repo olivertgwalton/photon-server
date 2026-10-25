@@ -49,8 +49,9 @@ type downloadRequestJSON struct {
 	// VersionID is the version, else the longest on disk.
 	VersionID uuid.UUID `json:"version_id,omitzero"`
 	// PartID is which of a version's several files.
-	PartID         uuid.UUID `json:"part_id,omitzero"`
-	MaxBitrateKbps int       `json:"max_bitrate_kbps"`
+	PartID uuid.UUID `json:"part_id,omitzero"`
+	// MaxBitrateKbps is the most the video may be; zero leaves it as it is.
+	MaxBitrateKbps int `json:"max_bitrate_kbps,omitzero"`
 	// MaxWidth is the widest the picture may be; zero keeps it as shot.
 	MaxWidth int `json:"max_width,omitzero"`
 	// VideoCodecs are the codecs the device plays, by FFmpeg's names; a conversion is HEVC where
@@ -118,8 +119,8 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 	if !a.decode(w, r, &req) {
 		return
 	}
-	if req.MaxBitrateKbps <= 0 || (req.MaxWidth != 0 && req.MaxWidth < narrowest) {
-		writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is above 0, and max_width 0 or at least "+strconv.Itoa(narrowest))
+	if req.MaxBitrateKbps < 0 || (req.MaxWidth != 0 && req.MaxWidth < narrowest) {
+		writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is 0 or more, and max_width 0 or at least "+strconv.Itoa(narrowest))
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
