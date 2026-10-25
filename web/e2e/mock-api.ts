@@ -1786,7 +1786,7 @@ const server_ = Bun.serve<Socket>({
 					part_index: body.part_id === "p-hd2" ? 1 : 0,
 					parts: body.version_id === "v-hd" ? 2 : 1,
 					device_id: "device-1",
-					method: body.max_bitrate_kbps >= 1_000_000 ? "direct" : "transcode",
+					method: body.max_bitrate_kbps ? "transcode" : "direct",
 					max_bitrate_kbps: body.max_bitrate_kbps,
 					state: "ready",
 					progress: 1,

@@ -8425,7 +8425,7 @@ export interface components {
             items: components["schemas"]["Download"][];
         };
         DownloadRequest: {
-            max_bitrate_kbps: number;
+            max_bitrate_kbps?: number;
             max_width?: number;
             /** Format: uuid */
             part_id?: string;
