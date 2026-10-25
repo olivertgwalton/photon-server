@@ -18,6 +18,8 @@ func TestADownloadIsTheFileUnlessItIsOverTheQuality(t *testing.T) {
 		{"over the bitrate", Version{BitrateKbps: 8000, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
 		{"wider than asked", Version{BitrateKbps: 1500, Streams: hd}, domain.Quality{MaxBitrateKbps: 2000, MaxWidth: 1280}, false},
 		{"of a bitrate nobody knows", Version{Streams: hd}, domain.Quality{MaxBitrateKbps: 2000}, false},
+		{"of any bitrate where there is no most", Version{BitrateKbps: 80_000, Streams: hd}, domain.Quality{}, true},
+		{"of any bitrate, but wider than asked", Version{BitrateKbps: 80_000, Streams: hd}, domain.Quality{MaxWidth: 1280}, false},
 	} {
 		if got := Fits(tc.version, tc.q); got != tc.fits {
 			t.Errorf("%s: fits %t, want %t", tc.name, got, tc.fits)

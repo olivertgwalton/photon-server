@@ -19,11 +19,11 @@ import (
 )
 
 // Fits reports whether a version is downloaded as it is at a quality: its bitrate no more than the
-// most, one nobody knows taken as a transcode takes it, and its picture no wider. Its codecs do
-// not matter.
+// most where there is one, one nobody knows taken as a transcode takes it, and its picture no
+// wider. Its codecs do not matter.
 func Fits(c Version, q domain.Quality) bool {
 	video, _ := Pick(c.Streams, nil)
-	return cmp.Or(c.BitrateKbps, sourceKbps) <= q.MaxBitrateKbps &&
+	return (q.MaxBitrateKbps == 0 || cmp.Or(c.BitrateKbps, sourceKbps) <= q.MaxBitrateKbps) &&
 		(q.MaxWidth == 0 || video == nil || video.Width <= q.MaxWidth)
 }
 
