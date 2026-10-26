@@ -72,8 +72,9 @@ export function startingSubtitle(
 }
 
 // What a play asks for so the choice can be shown: a picture or styled text
-// handed to the browser where it draws it and drawn in where it does not, and plain text a browser cannot read from a file played
-// as it is (a track inside it) carried in HLS as WebVTT.
+// handed to the browser where it draws it and drawn in where it does not, a
+// plain track inside the file read out of it as WebVTT, and a plain file
+// beside it the browser cannot read carried in HLS as WebVTT.
 export function wants(choice: Choice | undefined): {
 	subtitle_stream?: number;
 	subtitle_file?: string;
@@ -82,12 +83,12 @@ export function wants(choice: Choice | undefined): {
 	if (!choice) return { viaHLS: false };
 	const asked = { subtitle_stream: choice.stream, subtitle_file: choice.id };
 	if (choice.rendition === undefined) return { ...asked, viaHLS: false };
-	const beside = choice.file !== undefined && drawnBeside.has(choice.codec);
+	const beside = choice.stream !== undefined || drawnBeside.has(choice.codec);
 	return { ...asked, viaHLS: !beside };
 }
 
 // The subtitle a playback hands the browser to draw beside the video for a
-// choice: a file beside the version, or a styled or picture track read out of it.
+// choice: a file beside the version, or a track read out of it.
 export function beside(
 	choice: Choice | undefined,
 	playback: Schemas["Playback"],

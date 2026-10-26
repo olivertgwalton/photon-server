@@ -5098,7 +5098,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A styled (ASS) or picture (PGS, VobSub) subtitle stream of a part, read out as it is, at the address play answered */
+        /** A subtitle stream of a part, read out at the address play answered: styled (ASS) or pictures (PGS, VobSub) as it is, plain text as WebVTT */
         get: {
             parameters: {
                 query?: {
@@ -5124,6 +5124,7 @@ export interface paths {
                     };
                     content: {
                         "application/octet-stream": unknown;
+                        "text/vtt": unknown;
                         "text/x-ssa": unknown;
                     };
                 };
