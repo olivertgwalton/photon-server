@@ -226,7 +226,7 @@ var transcodeReasons = map[domain.TranscodeReason]Described{
 	domain.AudioCodecNotSupported:      {"Audio codec", "The player doesn't play the audio's codec."},
 	domain.AudioChannelsNotSupported:   {"Audio channels", "The audio has more channels than the player plays."},
 	domain.BitrateExceedsLimit:         {"Bitrate", "The file is above the quality chosen."},
-	domain.SubtitleCodecNotSupported:   {"Subtitles", "The subtitles are pictures, drawn into the video."},
+	domain.SubtitleCodecNotSupported:   {"Subtitles", "The player doesn't draw the subtitles as they are."},
 	domain.PartsNotSupported:           {"Several files", "The title is in several files, played as one."},
 	domain.DirectPlayError:             {"Playback failed", "The player failed to play it as it is."},
 }

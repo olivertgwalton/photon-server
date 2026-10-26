@@ -750,7 +750,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 		},
 		subtitle_codec_not_supported: {
 			name: "Subtitles",
-			description: "The subtitles are pictures, drawn into the video.",
+			description: "The player doesn't draw the subtitles as they are.",
 		},
 		video_bit_depth_not_supported: {
 			name: "Bit depth",
