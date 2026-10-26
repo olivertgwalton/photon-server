@@ -82,8 +82,9 @@ function stop() {
 				class="col-start-1 row-start-1 size-full object-cover opacity-70"
 			/>
 		{/if}
+		<!-- Above the picture, which its opacity paints over anything unpositioned. -->
 		<div
-			class="col-start-1 row-start-1 grid gap-1 self-end bg-linear-to-t from-black/90 to-transparent p-4 pt-10"
+			class="z-10 col-start-1 row-start-1 grid gap-1 self-end bg-linear-to-t from-black/90 to-transparent p-4 pt-10"
 		>
 			<h3 class="font-heading text-ink text-base leading-tight font-bold">
 				<a
