@@ -120,11 +120,20 @@ type Decision struct {
 }
 
 // Sidecar reports whether a client draws a subtitle from a file of its own beside the video: a
-// file beside the version in a format it draws so, or a styled or PGS stream of a version in one file,
-// read out as it is. A stream of a version in several files is in each of them, timed on each one's clock, and
-// is never read out into one file.
+// file beside the version in a format it draws so, or a stream of a version in one file read out:
+// a styled or picture one as it is, a plain text one as WebVTT, as Jellyfin reads it out. A stream
+// of a version in several files is in each of them, timed on each one's clock, and is never read out
+// into one file.
 func (p Profile) Sidecar(codec string, file bool, parts int) bool {
-	return p.Draws(codec, domain.SubtitleSidecar) && (file || hls.ReadOut(codec) && parts == 1)
+	switch {
+	case file:
+		return p.Draws(codec, domain.SubtitleSidecar)
+	case parts > 1:
+		return false
+	case hls.TextSubtitle(codec):
+		return p.Draws("webvtt", domain.SubtitleSidecar)
+	}
+	return hls.ReadOut(codec) && p.Draws(codec, domain.SubtitleSidecar)
 }
 
 func (p Profile) Draws(codec string, d domain.SubtitleDelivery) bool {

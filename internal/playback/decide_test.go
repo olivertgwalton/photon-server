@@ -62,7 +62,11 @@ func TestDecide(t *testing.T) {
 	drawsASS.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleEmbedded}}
 	// A browser opens Matroska but draws only what it is given beside the video.
 	browser := everything
-	browser.Subtitles = []SubtitleSupport{{Codec: "ass", Delivery: domain.SubtitleSidecar}, {Codec: "subrip", Delivery: domain.SubtitleSidecar}}
+	browser.Subtitles = []SubtitleSupport{
+		{Codec: "ass", Delivery: domain.SubtitleSidecar},
+		{Codec: "subrip", Delivery: domain.SubtitleSidecar},
+		{Codec: "webvtt", Delivery: domain.SubtitleSidecar},
+	}
 	browserNoMKV := appleTV
 	browserNoMKV.Subtitles = browser.Subtitles
 	drawsPGSBeside := appleTV
@@ -254,6 +258,18 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1},
 				Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
+			},
+		},
+		{
+			name: "plain text a client draws beside the video is read out of the file played as it is", profile: browser, subtitle: new(3),
+			want: Decision{Method: domain.PlayDirect, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 1}},
+		},
+		{
+			name: "plain text a client draws beside the video is carried in HLS where the file is not played as it is", profile: browserNoMKV,
+			subtitle: new(3), audio: new(2),
+			want: Decision{
+				Method: domain.PlayRemux, Video: hevc(domain.DolbyVisionKeep), Audio: &domain.AudioPlan{Stream: 2},
+				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported},
 			},
 		},
 		{

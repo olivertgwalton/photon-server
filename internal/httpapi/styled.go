@@ -46,7 +46,8 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 	return hls.SubtitleSource{Open: open, Part: part, Streams: streams}, nil
 }
 
-// readOutStream serves a styled or picture subtitle stream of a part, read out as it is.
+// readOutStream serves a subtitle stream of a part, read out: styled or pictures as it is, plain text
+// as WebVTT.
 func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 	part, ok := a.pathID(w, r, "id")
 	if !ok {
@@ -62,15 +63,20 @@ func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i := slices.IndexFunc(src.Streams, func(s domain.Stream) bool {
-		return s.Index == n && s.Kind == domain.StreamSubtitle && hls.ReadOut(s.Codec)
+		return s.Index == n && s.Kind == domain.StreamSubtitle && (hls.ReadOut(s.Codec) || hls.TextSubtitle(s.Codec))
 	})
 	if i < 0 {
 		writeProblem(w, a.logger, codeNotFound, "")
 		return
 	}
-	name, typ := hls.StyledName(n), "text/x-ssa; charset=utf-8"
-	if hls.PictureSubtitle(src.Streams[i].Codec) {
-		name, typ = hls.PictureName(n, src.Streams[i].Codec), "application/octet-stream"
+	var name, typ string
+	switch codec := src.Streams[i].Codec; {
+	case hls.TextSubtitle(codec):
+		name, typ = hls.TextName(n), "text/vtt; charset=utf-8"
+	case hls.PictureSubtitle(codec):
+		name, typ = hls.PictureName(n, codec), "application/octet-stream"
+	default:
+		name, typ = hls.StyledName(n), "text/x-ssa; charset=utf-8"
 	}
 	dir, err := a.svc.HLS.Extracted(r.Context(), src, name)
 	if a.answered(w, r, err) {
@@ -160,9 +166,9 @@ func (a *API) styledRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/parts/{id}/subtitles/{subtitle}", access: signedAddress,
-			summary: "A styled (ASS) or picture (PGS, VobSub) subtitle stream of a part, read out as it is, at the address play answered",
+			summary: "A subtitle stream of a part, read out at the address play answered: styled (ASS) or pictures (PGS, VobSub) as it is, plain text as WebVTT",
 			path:    []param{{"subtitle", "", "The stream's index in the part's file."}},
-			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa", "application/octet-stream"},
+			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa", "text/vtt", "application/octet-stream"},
 			handle: a.readOutStream,
 		},
 		{

@@ -325,13 +325,14 @@ func (a *API) opened(p playback.Profile, c store.PlayVersion, d playback.Decisio
 
 // sidecars are the subtitles a playback hands the client to draw beside its video, but none
 // beside one drawn in: the files beside the version it draws so, but plain ones HLS carries itself,
-// and a VobSub's in Matroska, and the styled and picture streams of a version in one file, read out as they are, but those it draws
-// from the file it plays.
+// and a VobSub's in Matroska, and the streams of a version in one file, read out, but those it draws
+// from the file it plays and plain ones HLS carries itself.
 func (a *API) sidecars(p playback.Profile, c store.PlayVersion, method domain.PlayMethod, until time.Time) []subtitleJSON {
 	var out []subtitleJSON
 	for _, s := range c.Streams {
 		if s.Kind != domain.StreamSubtitle || !p.Sidecar(s.Codec, false, len(c.Parts)) ||
-			method == domain.PlayDirect && p.Draws(s.Codec, domain.SubtitleEmbedded) {
+			method == domain.PlayDirect && p.Draws(s.Codec, domain.SubtitleEmbedded) ||
+			method != domain.PlayDirect && hls.TextSubtitle(s.Codec) {
 			continue
 		}
 		part := "/api/v1/parts/" + c.Parts[0].ID.String()

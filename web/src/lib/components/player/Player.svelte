@@ -132,7 +132,7 @@ let quality = $derived(prefs.max_bitrate_kbps);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
 let trackSrc = $state<string>();
-let trackFile: string | undefined;
+let trackURL: string | undefined;
 // The styled subtitle JASSUB draws over the video, by its address.
 let styled: JASSUB | undefined;
 let styledURL: string | undefined;
@@ -296,8 +296,8 @@ async function open(at: number) {
 	const profile = session
 		? castProfile(quality)
 		: browserProfile(caps, quality);
-	// A file opened as it is shows no subtitle inside it, so a profile that
-	// wants one opens nothing as it is and the server carries it in HLS.
+	// A plain file the browser cannot read is carried in HLS, so a profile that
+	// wants one opens nothing as it is.
 	if (asked.viaHLS || convert) profile.containers = [];
 	const { data, error } = await api.POST("/api/v1/titles/{id}/play", {
 		params: { path: { id: title.id } },
@@ -448,7 +448,7 @@ function detach() {
 function clearTrack() {
 	if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
 	trackSrc = undefined;
-	trackFile = undefined;
+	trackURL = undefined;
 }
 
 function partAt(seconds: number): number {
@@ -490,8 +490,8 @@ function seek(seconds: number) {
 }
 
 // Shows the subtitle chosen in the playback there is: styled text drawn by
-// JASSUB, pictures drawn by libbitsub, a file beside the version as a track, or one of
-// the HLS playlist's renditions.
+// JASSUB, pictures drawn by libbitsub, plain text beside the version or read
+// out of it as a track, or one of the HLS playlist's renditions.
 async function showSubtitle() {
 	if (!playback || !video) return;
 	if (casting) {
@@ -504,17 +504,18 @@ async function showSubtitle() {
 	void showPictures(given?.kind === "picture" ? given : undefined);
 	if (playback.method === "direct") {
 		const file = drawn ? undefined : given;
-		if (file?.id === trackFile) return;
+		if (file?.url === trackURL) return;
 		clearTrack();
-		trackFile = file?.id;
+		trackURL = file?.url;
 		if (!file) return;
-		if (file.codec === "webvtt") {
+		// A track inside the file is read out as WebVTT.
+		if (file.codec === "webvtt" || file.stream != null) {
 			trackSrc = file.url;
 			return;
 		}
 		const srt = await fetch(file.url).then((r) => r.text());
 		// Another file was chosen, or the playback closed, while this one came.
-		if (trackFile !== file.id) return;
+		if (trackURL !== file.url) return;
 		trackSrc = URL.createObjectURL(
 			new Blob([webVTT(srt)], { type: "text/vtt" }),
 		);

@@ -151,10 +151,17 @@ test("a file a browser reads plays beside the file as it is", () => {
 	expect(needsReplay(srt, direct)).toBe(false);
 });
 
-test("a plain track inside the file comes through HLS", () => {
+test("a plain track inside the file is read out beside the file as it is", () => {
 	const inside = choices(version)[1];
-	expect(wants(inside)).toEqual({ subtitle_stream: 3, viaHLS: true });
-	expect(needsReplay(inside, direct)).toBe(true);
+	expect(wants(inside)).toEqual({ subtitle_stream: 3, viaHLS: false });
+	const handed = {
+		...direct,
+		subtitles: [
+			{ stream: 3, codec: "subrip", kind: "text" as const, url: "/vtt" },
+		],
+	};
+	expect(beside(inside, handed)?.url).toBe("/vtt");
+	expect(needsReplay(inside, handed)).toBe(false);
 	expect(needsReplay(inside, remux)).toBe(false);
 });
 
