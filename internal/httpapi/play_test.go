@@ -402,8 +402,14 @@ func TestSubtitlesAreReadOutOfTheFile(t *testing.T) {
 		t.Errorf("the PGS stream: %d %x %q, want it as it is", rec.Code, rec.Body.Bytes(), rec.Header().Get("Content-Type"))
 	}
 
-	// Plain text inside the file is read out as WebVTT, which is all a browser's track reads.
-	text := do(httptest.NewRequest(http.MethodGet, playback.NewSigner([]byte("key")).Sign("/api/v1/parts/"+animePart.String()+"/subtitles/3", time.Now().Add(time.Hour)), nil))
+	// Plain text inside the file is read out as WebVTT, which is all a browser's track reads, and
+	// the file still plays as it is.
+	plain := play(3, `[{"codec": "subrip", "delivery": "sidecar"}, {"codec": "webvtt", "delivery": "sidecar"}]`)
+	if plain.Method != "direct" || len(plain.Subtitles) != 2 || plain.Subtitles[0].Stream == nil || *plain.Subtitles[0].Stream != 3 ||
+		plain.Subtitles[0].Kind != subtitleText {
+		t.Fatalf("a browser's play of the SubRip stream = %+v, want the file as it is and the stream beside it", plain)
+	}
+	text := do(httptest.NewRequest(http.MethodGet, string(plain.Subtitles[0].URL), nil))
 	if text.Code != http.StatusOK || !strings.HasPrefix(text.Body.String(), "WEBVTT") ||
 		!strings.Contains(text.Body.String(), "00:01.000 --> 00:03.000\nGood morning.") || text.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
 		t.Errorf("the SubRip stream: %d %q %q, want it as WebVTT", text.Code, text.Body.String(), text.Header().Get("Content-Type"))
