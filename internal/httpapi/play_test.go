@@ -38,8 +38,8 @@ import (
 var (
 	partOne = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b1")
 	partTwo = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b2")
-	// anime is a film in one file with signs and songs in ASS, inside it and beside it, and PGS
-	// inside it.
+	// anime is a film in one file with signs and songs in ASS, inside it and beside it, and PGS and
+	// SubRip inside it.
 	anime     = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000a1")
 	animePart = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000b3")
 	signsID   = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000d3")
@@ -57,6 +57,7 @@ func (fakePlaying) Playable(_ context.Context, _, item, _ uuid.UUID) (store.Play
 				{Index: 0, Kind: domain.StreamVideo, Codec: "h264"},
 				{Index: 1, Kind: domain.StreamSubtitle, Codec: "ass", Language: language.Japanese},
 				{Index: 2, Kind: domain.StreamSubtitle, Codec: "hdmv_pgs_subtitle", Language: language.English},
+				{Index: 3, Kind: domain.StreamSubtitle, Codec: "subrip", Language: language.English},
 			},
 			Subtitles: []store.SubtitleRef{
 				{ID: signsID, Codec: "ass", Language: language.English}, {ID: subtitleID, Codec: "subrip", Language: language.English},
@@ -292,9 +293,9 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 }
 
 // A browser that draws styled text beside the video plays a film in one file as it is, and reads
-// its ASS out of it as it was authored, with the fonts the file carries for it; another client
-// has it drawn into the video, and nothing beside it.
-func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
+// its ASS out of it as it was authored, with the fonts the file carries for it, and its SubRip as
+// WebVTT; another client has the ASS drawn into the video, and nothing beside it.
+func TestSubtitlesAreReadOutOfTheFile(t *testing.T) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skipf("needs ffmpeg: %v", err)
@@ -309,7 +310,10 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 		"Style: Sign,Shop Sans,24,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,8,10,10,10,1\n\n[Events]\n" +
 		"Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
 		"Dialogue: 0,0:00:01.00,0:00:03.00,Sign,,0,0,0,,{\\pos(160,40)}Bakery\n"
-	for name, text := range map[string]string{"signs.ass": signs, "Shop Sans.ttf": "a font", "en.sup": string(testtool.PGS(0, 2*90000))} {
+	dialogue := "1\n00:00:01,000 --> 00:00:03,000\nGood morning.\n"
+	for name, text := range map[string]string{
+		"signs.ass": signs, "Shop Sans.ttf": "a font", "en.sup": string(testtool.PGS(0, 2*90000)), "en.srt": dialogue,
+	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -319,8 +323,8 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	}
 	made := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
 		"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-i", filepath.Join(dir, "signs.ass"), "-i", filepath.Join(dir, "en.sup"),
-		"-attach", filepath.Join(dir, "Shop Sans.ttf"), "-metadata:s:t:0", "mimetype=font/ttf",
-		"-t", "4", "-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-c:s", "copy", filepath.Join(root, "Anime", "Anime.mkv"))
+		"-i", filepath.Join(dir, "en.srt"), "-attach", filepath.Join(dir, "Shop Sans.ttf"), "-metadata:s:t:0", "mimetype=font/ttf",
+		"-t", "4", "-map", "0", "-map", "1", "-map", "2", "-map", "3", "-c:v", "libx264", "-c:s", "copy", filepath.Join(root, "Anime", "Anime.mkv"))
 	if out, err := made.CombinedOutput(); err != nil {
 		t.Fatalf("making the film: %v: %s", err, out)
 	}
@@ -376,14 +380,14 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	}
 	var fonts fontsJSON
 	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.Fonts), nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
-		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "3.ttf" {
+		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "4.ttf" {
 		t.Fatalf("fonts: %d %+v, want the one the file carries", rec.Code, fonts)
 	}
 	if rec := do(httptest.NewRequest(http.MethodGet, string(fonts.Fonts[0].URL), nil)); rec.Code != http.StatusOK || rec.Body.String() != "a font" ||
 		rec.Header().Get("Content-Type") != "font/ttf" {
 		t.Errorf("the font: %d %q %q, want it as the file carries it", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
-	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(string(fonts.Fonts[0].URL), "3.ttf", "4.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
+	if rec := do(httptest.NewRequest(http.MethodGet, strings.Replace(string(fonts.Fonts[0].URL), "4.ttf", "5.ttf", 1), nil)); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a font the list did not sign: %d, want 401", rec.Code)
 	}
 
@@ -396,6 +400,13 @@ func TestStyledTextIsReadOutOfTheFileWithItsFonts(t *testing.T) {
 	if rec := do(httptest.NewRequest(http.MethodGet, string(pictures.Subtitles[0].URL), nil)); rec.Code != http.StatusOK ||
 		!bytes.Equal(rec.Body.Bytes(), testtool.PGS(0, 2*90000)) || rec.Header().Get("Content-Type") != "application/octet-stream" {
 		t.Errorf("the PGS stream: %d %x %q, want it as it is", rec.Code, rec.Body.Bytes(), rec.Header().Get("Content-Type"))
+	}
+
+	// Plain text inside the file is read out as WebVTT, which is all a browser's track reads.
+	text := do(httptest.NewRequest(http.MethodGet, playback.NewSigner([]byte("key")).Sign("/api/v1/parts/"+animePart.String()+"/subtitles/3", time.Now().Add(time.Hour)), nil))
+	if text.Code != http.StatusOK || !strings.HasPrefix(text.Body.String(), "WEBVTT") ||
+		!strings.Contains(text.Body.String(), "00:01.000 --> 00:03.000\nGood morning.") || text.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
+		t.Errorf("the SubRip stream: %d %q %q, want it as WebVTT", text.Code, text.Body.String(), text.Header().Get("Content-Type"))
 	}
 
 	drawsNothing := play(1, `[]`)
