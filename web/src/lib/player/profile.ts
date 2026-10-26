@@ -72,7 +72,10 @@ const questions = [
 // speakers it has, as Jellyfin's web profile assumes.
 const surround = 6;
 
-const hdrScreen = new MediaQuery("dynamic-range: high");
+// Firefox answers only for video: its page is drawn in SDR on an HDR screen.
+const hdrScreen = new MediaQuery(
+	"(dynamic-range: high), (video-dynamic-range: high)",
+);
 
 // The profile sent with a play, built from what the browser answered, as
 // Jellyfin's browserDeviceProfile builds its own. A browser draws no subtitle
