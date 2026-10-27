@@ -294,12 +294,15 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := oneItem(t, s, "title = $1", "Inception")
-	told, err := s.Identified(ctx, item.ID)
+	fulfilled, err := s.Identified(ctx, item.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(told) != 1 || told[0].ProfileID != asker.ID {
+	if told := fulfilled.Told; len(told) != 1 || told[0].ProfileID != asker.ID {
 		t.Errorf("told %+v, want the asker alone", told)
+	}
+	if done := fulfilled.Requests; len(done) != 1 || done[0].ID != r.ID || done[0].State != domain.RequestAvailable || done[0].Item != item.ID {
+		t.Errorf("fulfilled %+v, want the request, available", done)
 	}
 	mine, _, err := totalled(s.Requests(ctx, asker.ID, totalledPage(0, 1)))
 	if err != nil || mine[0].State != domain.RequestAvailable || mine[0].Item != item.ID || mine[0].AvailableAt.IsZero() {
@@ -309,8 +312,8 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if err != nil || inbox.Unread != 1 || len(inbox.Notifications) != 1 {
 		t.Errorf("the asker's inbox %+v, %v; want Inception in it", inbox, err)
 	}
-	if again, err := s.Identified(ctx, item.ID); err != nil || len(again) != 0 {
-		t.Errorf("identified again: told %+v, %v; want no one twice", again, err)
+	if again, err := s.Identified(ctx, item.ID); err != nil || len(again.Told) != 0 || len(again.Requests) != 0 {
+		t.Errorf("identified again: %+v, %v; want no request or one told twice", again, err)
 	}
 }
 
@@ -335,9 +338,9 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
 		t.Fatal(err)
 	}
-	told, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
-	if err != nil || len(told) != 0 {
-		t.Errorf("told %+v, %v; want no one", told, err)
+	fulfilled, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
+	if err != nil || len(fulfilled.Told) != 0 || len(fulfilled.Requests) != 1 {
+		t.Errorf("fulfilled %+v, %v; want the request available, telling no one", fulfilled, err)
 	}
 	if mine, _, err := totalled(s.Requests(ctx, quiet.ID, totalledPage(0, 1))); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
 		t.Errorf("the request %+v, %v; want it available", mine, err)

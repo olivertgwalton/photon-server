@@ -86,17 +86,20 @@ const telling = `kept AS (
 	SELECT profile_id, array_agg(id) AS ids, profile_id IN (SELECT profile_id FROM subscribed) AS push
 	FROM kept GROUP BY profile_id`
 
-// fulfilled marks the requests for a title, by the ids it is identified by, available, and tells
-// each profile that asked of it as a scan tells of titles added: of the film, or of a show's
-// episodes, that it may see and was never told, unless its notify is none. Asked for, the title is
-// one it cares for, whatever else its notify says.
+// fulfilling marks the requests for a title, by the ids it is identified by, available.
+const fulfilling = `
+	UPDATE requests r SET state = 'available', item_id = @item, available_at = now()
+	FROM items i
+	WHERE i.id = @item AND r.kind = i.kind AND r.state NOT IN ('declined', 'available')
+		AND EXISTS (SELECT 1 FROM external_ids e WHERE e.item_id = i.id AND e.provider = r.provider AND e.value = r.value)
+	RETURNING r.id`
+
+// fulfilled tells each profile whose request for a title is available of it as a scan tells of
+// titles added: of the film, or of a show's episodes, that it may see and was never told, unless
+// its notify is none. Asked for, the title is one it cares for, whatever else its notify says.
 const fulfilled = `
 	WITH done AS (
-		UPDATE requests r SET state = 'available', item_id = @item, available_at = now()
-		FROM items i
-		WHERE i.id = @item AND r.kind = i.kind AND r.state NOT IN ('declined', 'available')
-			AND EXISTS (SELECT 1 FROM external_ids e WHERE e.item_id = i.id AND e.provider = r.provider AND e.value = r.value)
-		RETURNING r.profile_id
+		SELECT DISTINCT unnest(@profiles::uuid[]) AS profile_id
 	), fresh AS (
 		SELECT DISTINCT d.profile_id, @item AS title_id, x.id AS item_id
 		FROM done d CROSS JOIN LATERAL viewer(d.profile_id) v
@@ -107,8 +110,30 @@ const fulfilled = `
 			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = x.id AND n.profile_id = d.profile_id)
 	), ` + telling
 
-func fulfil(ctx context.Context, tx db, item uuid.UUID) ([]Told, error) {
-	return tell(ctx, tx, fulfilled, pgx.NamedArgs{"item": item})
+// Fulfilled is what came of a title's requests as it was matched: those now available, and the
+// profiles told of it.
+type Fulfilled struct {
+	Requests []Request
+	Told     []Told
+}
+
+func fulfil(ctx context.Context, tx db, item uuid.UUID) (Fulfilled, error) {
+	ids, err := queryColumn[uuid.UUID](ctx, tx, fulfilling, pgx.NamedArgs{"item": item})
+	if err != nil || len(ids) == 0 {
+		return Fulfilled{}, err
+	}
+	var out Fulfilled
+	profiles := make([]uuid.UUID, len(ids))
+	for i, id := range ids {
+		r, err := requestOf(ctx, tx, id)
+		if err != nil {
+			return Fulfilled{}, err
+		}
+		out.Requests = append(out.Requests, r)
+		profiles[i] = r.Profile
+	}
+	out.Told, err = tell(ctx, tx, fulfilled, pgx.NamedArgs{"item": item, "profiles": profiles})
+	return out, err
 }
 
 // Told is a profile told of titles added, and its notifications added or gathering more.

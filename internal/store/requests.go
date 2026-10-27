@@ -91,7 +91,7 @@ func (r requestRow) request() Request {
 	}
 }
 
-func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error) {
+func requestOf(ctx context.Context, q db, id uuid.UUID) (Request, error) {
 	r, err := readRow[requestRow](ctx, q, `SELECT `+requestColumns+`
 		FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE r.id = $1`, id)
 	return r.request(), err
@@ -137,7 +137,7 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 	case err != nil:
 		return Request{}, err
 	}
-	return s.request(ctx, s.pool, id)
+	return requestOf(ctx, s.pool, id)
 }
 
 // Requests answers a page of a profile's requests, newest first, and what the page tells of the
@@ -229,7 +229,7 @@ func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, 
 	case !decidable(was):
 		return Request{}, ErrDecided
 	}
-	return s.request(ctx, s.pool, id)
+	return requestOf(ctx, s.pool, id)
 }
 
 func decidable(s domain.RequestState) bool {
@@ -251,7 +251,7 @@ func send(ctx context.Context, tx db, id uuid.UUID) error {
 // Sending is an approved request as it is sent: the title it wants, and the library whose requests
 // go somewhere. False for a request decided otherwise since, or whose library now sends none.
 func (s *Store) Sending(ctx context.Context, id uuid.UUID) (domain.Wanted, domain.Library, bool, error) {
-	r, err := s.request(ctx, s.pool, id)
+	r, err := requestOf(ctx, s.pool, id)
 	if errors.Is(err, ErrNotFound) || err == nil && r.State != domain.RequestApproved {
 		return domain.Wanted{}, domain.Library{}, false, nil
 	}
@@ -273,7 +273,7 @@ func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.Requ
 	err := affected(s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason))
 	if err == nil {
 		var r Request
-		r, err = s.request(ctx, s.pool, id)
+		r, err = requestOf(ctx, s.pool, id)
 		if err == nil {
 			return r, true, nil
 		}
