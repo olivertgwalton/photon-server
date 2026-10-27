@@ -8,12 +8,6 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-// AskedFor says who asked for a request's title, beside its name, as it is pushed to whoever
-// decides it.
-func (w Words) AskedFor(profile string) string {
-	return profile + " asked for it"
-}
-
 // Notification says what a notification brings, beside its title's name: "New film", "New episode:
 // S1, E3 · Half Loop", or "3 new episodes, the latest S1, E5 · The You You Are". The comma
 // is how the web app and the Photon apps place an episode, and this is read beside them.

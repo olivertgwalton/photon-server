@@ -37,12 +37,10 @@ const (
 	JobPush JobKind = "push"
 	// JobSendRequest sends an approved request to where its library's requests go.
 	JobSendRequest JobKind = "send_request"
-	// JobPushRequest pushes a request, while it waits, to the browsers of those who decide it.
-	JobPushRequest JobKind = "push_request"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush, JobSendRequest, JobPushRequest}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush, JobSendRequest}
 }
 
 type JobState string
@@ -101,7 +99,7 @@ func (j Job) About() (item, library uuid.UUID) {
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject
-	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory, JobPush, JobSendRequest, JobPushRequest:
+	case JobKeyframes, JobKeyframeWalk, JobPreviews, JobProbe, JobConvert, JobDeliverWebhook, JobImportHistory, JobPush, JobSendRequest:
 	}
 	return uuid.UUID{}, uuid.UUID{}
 }
