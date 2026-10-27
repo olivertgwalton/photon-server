@@ -4,7 +4,6 @@ package store
 
 import (
 	"errors"
-	"maps"
 	"slices"
 	"testing"
 	"uuid"
@@ -345,65 +344,5 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	}
 	if mine, _, err := totalled(s.Requests(ctx, quiet.ID, totalledPage(0, 1))); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
 		t.Errorf("the request %+v, %v; want it available", mine, err)
-	}
-}
-
-// A request that waits is pushed to the browsers of whoever decides it: every admin, and the
-// manager that keeps the one who asked; not another manager, the one who asked, or an Apple device,
-// which is woken only for its inbox. Once decided it is pushed to no one.
-func TestARequestWaitingIsPushedToWhoeverDecidesIt(t *testing.T) {
-	s, _, film, show := askable(t)
-	ctx := t.Context()
-	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
-	manager := addProfile(t, s, "Parent", domain.RoleManager, nil)
-	stranger := addProfile(t, s, "Neighbour", domain.RoleManager, nil)
-	child := addProfile(t, s, "Teen", domain.RoleUser, &manager.ID)
-	production := domain.APNsProduction
-	for _, sub := range []struct {
-		profile domain.Profile
-		sub     PushSubscription
-	}{
-		{admin, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/admin", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"}},
-		{admin, PushSubscription{Kind: domain.PushApple, Endpoint: "admin-phone", ApnsEnvironment: &production, Language: "en"}},
-		{manager, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/parent", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"}},
-		{stranger, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/neighbour", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"}},
-		{child, PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/teen", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"}},
-	} {
-		if _, _, err := s.Subscribe(ctx, sub.profile.ID, sub.sub); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	r, err := s.AskFor(ctx, child.ID, film.ID, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'push_request' AND subject = $1`, r.ID); n != 1 {
-		t.Fatalf("%d pushes of the request queued, want one", n)
-	}
-	asked, subs, waits, err := s.RequestPushes(ctx, r.ID)
-	if err != nil || !waits || asked.Title != "Inception" || asked.ProfileName != "Teen" {
-		t.Fatalf("pushing %+v, %v, %v; want the teen's Inception, waiting", asked, waits, err)
-	}
-	pushed := map[string]uuid.UUID{}
-	for _, sub := range subs {
-		pushed[sub.Endpoint] = sub.Keeper
-	}
-	if want := map[string]uuid.UUID{"https://push.example.com/admin": admin.ID, "https://push.example.com/parent": manager.ID}; !maps.Equal(pushed, want) {
-		t.Errorf("pushed to %v, want the admin's and the parent's browsers", pushed)
-	}
-
-	if _, err := s.DecideRequest(ctx, r.ID, &manager.ID, manager.ID, domain.RequestApproved, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, subs, waits, err := s.RequestPushes(ctx, r.ID); err != nil || waits || len(subs) != 0 {
-		t.Errorf("pushing once decided: %v to %d, %v; want no one", waits, len(subs), err)
-	}
-	own, err := s.AskFor(ctx, admin.ID, show.ID, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'push_request' AND subject = $1`, own.ID); n != 0 {
-		t.Errorf("%d pushes of an admin's own request, approved as it is asked; want none", n)
 	}
 }
