@@ -73,13 +73,6 @@ const (
 	// EventNotificationsChanged is a profile's inbox changed: notified of new titles, or read on
 	// another device, told to the profile so each of its pages shows it.
 	EventNotificationsChanged EventKind = "notifications.changed"
-	// EventRequestAdded is a profile asking for a title, told to it and to whoever decides it; an
-	// admin's is approved as it is asked.
-	EventRequestAdded EventKind = "request.added"
-	// EventRequestChanged is a request decided, sent where its library's requests go, or available.
-	EventRequestChanged EventKind = "request.changed"
-	// EventRequestRemoved is a request taken back while it waited.
-	EventRequestRemoved EventKind = "request.removed"
 )
 
 func EventKinds() []EventKind {
@@ -91,7 +84,6 @@ func EventKinds() []EventKind {
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
 		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged,
 		EventRestoreStarted, EventTrackerChanged, EventNotificationsChanged,
-		EventRequestAdded, EventRequestChanged, EventRequestRemoved,
 	}
 }
 
@@ -101,8 +93,7 @@ func (k EventKind) Logged() bool {
 	switch k {
 	case EventPlaybackStarted, EventPlaybackStopped, EventSignedIn, EventSignInRefused,
 		EventProfileAdded, EventProfileRemoved, EventLibraryAdded, EventLibraryRemoved,
-		EventLibraryScanned, EventTitlesAdded, EventTaskFailed, EventBackupMade, EventJobDead,
-		EventRequestAdded, EventRequestChanged, EventRequestRemoved:
+		EventLibraryScanned, EventTitlesAdded, EventTaskFailed, EventBackupMade, EventJobDead:
 		return true
 	case EventPlaybackPaused, EventPlaybackResumed, EventLibraryChanged, EventTitleUpdated,
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
@@ -122,7 +113,7 @@ func (k EventKind) Hookable() bool {
 	case EventPlaybackStarted, EventPlaybackPaused, EventPlaybackResumed, EventPlaybackStopped,
 		EventSignedIn, EventSignInRefused, EventProfileAdded, EventProfileRemoved,
 		EventLibraryAdded, EventLibraryRemoved, EventLibraryScanned, EventTitlesAdded,
-		EventTaskFailed, EventBackupMade, EventRequestAdded, EventRequestChanged, EventRequestRemoved:
+		EventTaskFailed, EventBackupMade:
 		return true
 	case EventLibraryChanged, EventTitleUpdated, EventUserDataChanged, EventScanProgress,
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
@@ -213,8 +204,6 @@ func DetailsOf(k EventKind, raw []byte) (EventDetails, error) {
 		return detailsOf[TrackerDetails](raw)
 	case EventNotificationsChanged:
 		return detailsOf[NotificationsDetails](raw)
-	case EventRequestAdded, EventRequestChanged, EventRequestRemoved:
-		return detailsOf[RequestDetails](raw)
 	case EventTitleUpdated, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
 		EventStorageChanged, EventNodesChanged, EventServerChanged:
 	}
@@ -320,16 +309,6 @@ type TrackerDetails struct {
 	Tracker Tracker `json:"tracker"`
 }
 
-// RequestDetails is a request, the title it asks for, and where it stands: a request taken back
-// stands where it was.
-type RequestDetails struct {
-	// Reason is why it was declined, or why it failed where it was sent.
-	Reason    string       `json:"reason,omitzero"`
-	RequestID uuid.UUID    `json:"request_id"`
-	State     RequestState `json:"state"`
-	Title     string       `json:"title"`
-}
-
 func (NoDetails) eventDetails()             {}
 func (PlaybackDetails) eventDetails()       {}
 func (PlaybackClosedDetails) eventDetails() {}
@@ -347,7 +326,6 @@ func (JobDetails) eventDetails()            {}
 func (BacklogDetails) eventDetails()        {}
 func (TrackerDetails) eventDetails()        {}
 func (NotificationsDetails) eventDetails()  {}
-func (RequestDetails) eventDetails()        {}
 
 // TitleChange is what happened to a library's titles.
 type TitleChange string

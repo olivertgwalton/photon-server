@@ -4417,7 +4417,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping, its trackers linking and the requests it asked for or decides, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data */
+        /** Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data */
         get: {
             parameters: {
                 query?: {
@@ -8565,7 +8565,7 @@ export interface components {
             next?: string;
         };
         /** @enum {string} */
-        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed" | "notifications.changed" | "request.added" | "request.changed" | "request.removed";
+        EventKind: "playback.started" | "playback.paused" | "playback.resumed" | "playback.stopped" | "auth.signed_in" | "auth.sign_in_refused" | "profile.added" | "profile.removed" | "library.added" | "library.removed" | "library.scanned" | "library.changed" | "title.updated" | "userdata.changed" | "library.titles_added" | "scan.progress" | "task.started" | "task.finished" | "task.failed" | "backup.made" | "job.started" | "job.finished" | "job.failed" | "job.dead" | "jobs.progress" | "webhook.test" | "maintenance.changed" | "network.changed" | "storage.changed" | "nodes.changed" | "server.changed" | "restore.started" | "tracker.changed" | "notifications.changed";
         ExtraCard: {
             /** Format: int64 */
             duration_ms?: number;

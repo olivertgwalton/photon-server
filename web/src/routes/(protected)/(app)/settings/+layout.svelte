@@ -28,7 +28,6 @@ import UserIcon from "@lucide/svelte/icons/user";
 import UsersIcon from "@lucide/svelte/icons/users";
 import WebhookIcon from "@lucide/svelte/icons/webhook";
 import type { Component } from "svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
 import { Input } from "#lib/components/ui/input/index.js";
 import { settings } from "#lib/settings.js";
 import { afterNavigate, goto } from "$app/navigation";
@@ -293,9 +292,6 @@ function current(href: string) {
 									<a
 										{href}
 										aria-current={current(href) ? "page" : undefined}
-										aria-label={href === requests[0] && data.waiting
-											? `${label}: ${data.waiting} waiting`
-											: undefined}
 										class={[
 											"flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors duration-200 lg:rounded-lg",
 											current(href)
@@ -308,11 +304,6 @@ function current(href: string) {
 											aria-hidden="true"
 										/>
 										{label}
-										{#if href === requests[0] && data.waiting}
-											<Badge class="h-4 min-w-4 px-1 tabular-nums lg:ml-auto">
-												{data.waiting > 99 ? "99+" : data.waiting}
-											</Badge>
-										{/if}
 									</a>
 								</li>
 							{/each}

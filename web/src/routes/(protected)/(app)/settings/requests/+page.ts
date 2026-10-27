@@ -1,6 +1,5 @@
 import { client, need } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
-import { keys } from "#lib/changes.js";
 import { offsetOf, pageSize } from "#lib/paging.js";
 import type { PageLoad } from "./$types";
 
@@ -8,8 +7,7 @@ type RequestState = components["schemas"]["RequestState"];
 
 // Those waiting first: the page is where they are decided. ?state= is another
 // state's, or every one's where it is "all".
-export const load: PageLoad = async ({ fetch, url, depends }) => {
-	depends(keys.requests);
+export const load: PageLoad = async ({ fetch, url }) => {
 	const asked = url.searchParams.get("state") ?? "pending";
 	const state = asked === "all" ? undefined : (asked as RequestState);
 	const offset = offsetOf(url);

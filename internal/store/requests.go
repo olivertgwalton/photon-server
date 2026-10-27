@@ -75,13 +75,6 @@ type requestRow struct {
 const requestColumns = `r.id, r.profile_id, p.name AS profile_name, r.library_id, r.kind, r.provider, r.value, r.title,
 	r.year, r.seasons, r.state, r.reason, r.decided_by, r.asked_at, r.decided_at, r.item_id, r.available_at`
 
-// Event is the request as an event of kind tells it.
-func (r Request) Event(kind domain.EventKind) domain.Event {
-	return domain.Event{Kind: kind, Profile: r.Profile, Library: r.Library, Item: r.Item, Details: domain.RequestDetails{
-		RequestID: r.ID, State: r.State, Title: r.Title, Reason: r.Reason,
-	}}
-}
-
 func (r requestRow) request() Request {
 	return Request{
 		ID: r.ID, Profile: r.ProfileID, ProfileName: r.ProfileName, Library: r.LibraryID, Kind: r.Kind,
@@ -91,7 +84,7 @@ func (r requestRow) request() Request {
 	}
 }
 
-func requestOf(ctx context.Context, q db, id uuid.UUID) (Request, error) {
+func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error) {
 	r, err := readRow[requestRow](ctx, q, `SELECT `+requestColumns+`
 		FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE r.id = $1`, id)
 	return r.request(), err
@@ -137,7 +130,7 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 	case err != nil:
 		return Request{}, err
 	}
-	return requestOf(ctx, s.pool, id)
+	return s.request(ctx, s.pool, id)
 }
 
 // Requests answers a page of a profile's requests, newest first, and what the page tells of the
@@ -175,28 +168,23 @@ func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs, 
 	return out, Extent{More: more, Total: total}, nil
 }
 
-// WithdrawRequest takes back a profile's request while it waits, answering it as it was:
-// ErrDecided once it is decided, ErrNotFound for none of the profile's.
-func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) (Request, error) {
-	r := Request{ID: id, Profile: profile}
-	var library *uuid.UUID
+// WithdrawRequest takes back a profile's request while it waits: ErrDecided once it is decided,
+// ErrNotFound for none of the profile's.
+func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error {
+	var state domain.RequestState
 	err := s.pool.QueryRow(ctx, `
-		WITH gone AS (
-			DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state, title, library_id
-		)
-		SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), ''),
-			coalesce((SELECT title FROM gone), ''), (SELECT library_id FROM gone)`,
-		id, profile).Scan(&r.State, &r.Title, &library)
+		WITH gone AS (DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state)
+		SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), '')`,
+		id, profile).Scan(&state)
 	switch {
 	case err != nil:
-		return Request{}, err
-	case r.State == "":
-		return Request{}, ErrNotFound
-	case library == nil:
-		return Request{}, ErrDecided
+		return err
+	case state == "":
+		return ErrNotFound
+	case state != domain.RequestPending:
+		return ErrDecided
 	}
-	r.Library = *library
-	return r, nil
+	return nil
 }
 
 // DecideRequest approves or declines a request while it waits, or once it failed where it was sent,
@@ -229,7 +217,7 @@ func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, 
 	case !decidable(was):
 		return Request{}, ErrDecided
 	}
-	return requestOf(ctx, s.pool, id)
+	return s.request(ctx, s.pool, id)
 }
 
 func decidable(s domain.RequestState) bool {
@@ -251,7 +239,7 @@ func send(ctx context.Context, tx db, id uuid.UUID) error {
 // Sending is an approved request as it is sent: the title it wants, and the library whose requests
 // go somewhere. False for a request decided otherwise since, or whose library now sends none.
 func (s *Store) Sending(ctx context.Context, id uuid.UUID) (domain.Wanted, domain.Library, bool, error) {
-	r, err := requestOf(ctx, s.pool, id)
+	r, err := s.request(ctx, s.pool, id)
 	if errors.Is(err, ErrNotFound) || err == nil && r.State != domain.RequestApproved {
 		return domain.Wanted{}, domain.Library{}, false, nil
 	}
@@ -266,20 +254,9 @@ func (s *Store) Sending(ctx context.Context, id uuid.UUID) (domain.Wanted, domai
 	return w, lib, true, nil
 }
 
-// SentRequest records where an approved request was sent: sent, or failed, saying why, answering
-// it as it now is. A request decided otherwise meanwhile, or taken back, is left as it is, and
-// answered false.
-func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.RequestState, reason string) (Request, bool, error) {
-	err := affected(s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason))
-	if err == nil {
-		var r Request
-		r, err = requestOf(ctx, s.pool, id)
-		if err == nil {
-			return r, true, nil
-		}
-	}
-	if errors.Is(err, ErrNotFound) {
-		return Request{}, false, nil
-	}
-	return Request{}, false, err
+// SentRequest records where an approved request was sent: sent, or failed, saying why. A request
+// decided otherwise meanwhile is left as it is.
+func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.RequestState, reason string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason)
+	return err
 }
