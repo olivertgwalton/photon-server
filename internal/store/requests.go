@@ -266,9 +266,20 @@ func (s *Store) Sending(ctx context.Context, id uuid.UUID) (domain.Wanted, domai
 	return w, lib, true, nil
 }
 
-// SentRequest records where an approved request was sent: sent, or failed, saying why. A request
-// decided otherwise meanwhile is left as it is.
-func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.RequestState, reason string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason)
-	return err
+// SentRequest records where an approved request was sent: sent, or failed, saying why, answering
+// it as it now is. A request decided otherwise meanwhile, or taken back, is left as it is, and
+// answered false.
+func (s *Store) SentRequest(ctx context.Context, id uuid.UUID, state domain.RequestState, reason string) (Request, bool, error) {
+	err := affected(s.pool.Exec(ctx, `UPDATE requests SET state = $2, reason = nullif($3, '') WHERE id = $1 AND state = 'approved'`, id, state, reason))
+	if err == nil {
+		var r Request
+		r, err = s.request(ctx, s.pool, id)
+		if err == nil {
+			return r, true, nil
+		}
+	}
+	if errors.Is(err, ErrNotFound) {
+		return Request{}, false, nil
+	}
+	return Request{}, false, err
 }

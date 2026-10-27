@@ -240,8 +240,11 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 		t.Errorf("sending %+v to %q, %v, %v", w, lib.RequestSource, ok, err)
 	}
 
-	if err := s.SentRequest(ctx, r.ID, domain.RequestFailed, "no release found"); err != nil {
-		t.Fatal(err)
+	if failed, ok, err := s.SentRequest(ctx, r.ID, domain.RequestFailed, "no release found"); err != nil || !ok || failed.State != domain.RequestFailed || failed.Reason != "no release found" {
+		t.Fatalf("failed where it was sent: %+v, %v, %v", failed, ok, err)
+	}
+	if _, ok, err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil || ok {
+		t.Errorf("a failed request sent: %v, %v; want it left as it is", ok, err)
 	}
 	if _, _, ok, err := s.Sending(ctx, r.ID); err != nil || ok {
 		t.Errorf("a failed request is still being sent: %v, %v", ok, err)
@@ -250,8 +253,8 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 	if err != nil || again.State != domain.RequestApproved || again.Reason != "" {
 		t.Errorf("approved again once failed: %+v, %v", again, err)
 	}
-	if err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil {
-		t.Fatal(err)
+	if _, ok, err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil || !ok {
+		t.Fatalf("sent once approved again: %v, %v", ok, err)
 	}
 	if sent, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("a sent request declined: %+v, %v; want ErrDecided", sent, err)

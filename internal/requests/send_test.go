@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"testing"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
+	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
 // request is one approved request of a library that searches TMDB and sends to a fetcher, and
@@ -26,9 +28,9 @@ func (r *request) Sending(context.Context, uuid.UUID) (domain.Wanted, domain.Lib
 	return w, r.lib, r.state == domain.RequestApproved, nil
 }
 
-func (r *request) SentRequest(_ context.Context, _ uuid.UUID, state domain.RequestState, reason string) error {
+func (r *request) SentRequest(_ context.Context, id uuid.UUID, state domain.RequestState, reason string) (store.Request, bool, error) {
 	r.state, r.reason = state, reason
-	return nil
+	return store.Request{ID: id, Title: "Breaking Bad", State: state, Reason: reason}, true, nil
 }
 
 // tmdb knows the show's TheTVDB id.
@@ -69,7 +71,8 @@ func (r registry) Get(_ context.Context, id domain.FieldSource) (provider.Provid
 
 // An approved request is sent with every id its library's search knows the title by, and is sent;
 // refused, it fails with the fetcher's words; a fetcher that is down is asked again later; one
-// that fetches nothing fails it; a request decided otherwise since is left alone.
+// that fetches nothing fails it; a request decided otherwise since is left alone. Whatever came of
+// it is told; a request still waiting to be sent again is not.
 func TestAnApprovedRequestIsSentToItsLibrarysFetcher(t *testing.T) {
 	riven := domain.PluginSource("riven")
 	lib := domain.Library{DiscoverSource: domain.SourceTMDB, RequestSource: riven}
@@ -91,9 +94,18 @@ func TestAnApprovedRequestIsSentToItsLibrarysFetcher(t *testing.T) {
 		{name: "fetches nothing", fetcher: tmdb{}, wantState: domain.RequestFailed, wantReason: "plugin:riven fetches no titles"},
 	} {
 		r := &request{lib: lib, state: domain.RequestApproved}
-		err := Send(r, registry{domain.SourceTMDB: tmdb{}, riven: tc.fetcher}, server, log)(t.Context(), uuid.NewV7())
+		var told []domain.RequestState
+		raise := func(_ context.Context, e domain.Event) {
+			if d, ok := e.Details.(domain.RequestDetails); ok && e.Kind == domain.EventRequestChanged {
+				told = append(told, d.State)
+			}
+		}
+		err := Send(r, registry{domain.SourceTMDB: tmdb{}, riven: tc.fetcher}, server, raise, log)(t.Context(), uuid.NewV7())
 		if (err != nil) != tc.wantErr || r.state != tc.wantState || r.reason != tc.wantReason {
 			t.Errorf("%s: %v, %s %q; want %s %q", tc.name, err, r.state, r.reason, tc.wantState, tc.wantReason)
+		}
+		if want := []domain.RequestState{tc.wantState}; tc.wantErr && told != nil || !tc.wantErr && !slices.Equal(told, want) {
+			t.Errorf("%s: told %v", tc.name, told)
 		}
 		if f, ok := tc.fetcher.(*fetcher); ok && (f.asked.IDs[domain.ProviderTVDB] != "81189" || f.asked.IDs[domain.ProviderTMDB] != "1396") {
 			t.Errorf("%s: asked by %v, want TMDB's and TheTVDB's ids", tc.name, f.asked.IDs)
@@ -101,7 +113,7 @@ func TestAnApprovedRequestIsSentToItsLibrarysFetcher(t *testing.T) {
 	}
 	declined := &request{lib: lib, state: domain.RequestDeclined}
 	f := &fetcher{}
-	if err := Send(declined, registry{riven: f}, server, log)(t.Context(), uuid.NewV7()); err != nil || f.asked.Title != "" {
+	if err := Send(declined, registry{riven: f}, server, func(context.Context, domain.Event) { t.Error("a request decided otherwise is told") }, log)(t.Context(), uuid.NewV7()); err != nil || f.asked.Title != "" {
 		t.Errorf("a request decided otherwise: %v, asked %+v", err, f.asked)
 	}
 }
