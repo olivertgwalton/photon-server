@@ -26,12 +26,6 @@ test("a code entered on a tracker reloads the profile's trackers alone", () => {
 	expect(affected({ kind: "tracker.changed" })).toEqual([keys.trackers]);
 });
 
-test("a request asked for, decided or taken back reloads the requests alone", () => {
-	for (const kind of ["request.added", "request.changed", "request.removed"]) {
-		expect(affected({ kind })).toEqual([keys.requests]);
-	}
-});
-
 test("a scan's progress reloads nothing: the page draws it as it comes", () => {
 	expect(affected({ kind: "scan.progress", library_id: "l-1" })).toEqual([]);
 });

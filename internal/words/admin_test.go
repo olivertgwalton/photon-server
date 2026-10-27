@@ -18,8 +18,8 @@ func (n known) Library(id uuid.UUID) string { return n[id] }
 // activity log as JSON.
 func TestAnEventReadsAsASentence(t *testing.T) {
 	w := In(language.English)
-	films, ada := uuid.NewV7(), uuid.NewV7()
-	known := known{films: "Films", ada: "Ada"}
+	films := uuid.NewV7()
+	known := known{films: "Films"}
 	two, three, one := 2, 3, 1
 	episode := domain.PlaybackCard{
 		Profile: domain.PlaybackProfile{Name: "Ada"},
@@ -41,10 +41,6 @@ func TestAnEventReadsAsASentence(t *testing.T) {
 		{domain.Event{Kind: domain.EventTaskFailed, Details: domain.TaskDetails{Task: domain.TaskBackupDatabase, Error: "disk full"}}, "Back up the database failed: disk full"},
 		{domain.Event{Kind: domain.EventJobDead, Details: domain.JobDetails{JobKind: domain.JobPreviews, Attempt: 5, Error: "no ffmpeg"}}, "Make previews gave up after 5 tries: no ffmpeg"},
 		{domain.Event{Kind: domain.EventLibraryChanged, Library: uuid.NewV7()}, "A library changed"},
-		{domain.Event{Kind: domain.EventRequestAdded, Profile: ada, Details: domain.RequestDetails{Title: "Dune", State: domain.RequestPending}}, "Ada asked for Dune"},
-		{domain.Event{Kind: domain.EventRequestChanged, Profile: ada, Details: domain.RequestDetails{Title: "Dune", State: domain.RequestDeclined, Reason: "on another service"}}, "Ada's request for Dune was declined: on another service"},
-		{domain.Event{Kind: domain.EventRequestChanged, Profile: ada, Details: domain.RequestDetails{Title: "Dune", State: domain.RequestAvailable}}, "Dune, which Ada asked for, was added"},
-		{domain.Event{Kind: domain.EventRequestRemoved, Profile: ada, Details: domain.RequestDetails{Title: "Dune", State: domain.RequestPending}}, "Ada took back their request for Dune"},
 	} {
 		if got := w.Event(c.event, known); got != c.want {
 			t.Errorf("%s: %q, want %q", c.event.Kind, got, c.want)

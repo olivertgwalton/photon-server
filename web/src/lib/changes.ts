@@ -7,8 +7,6 @@ export const keys = {
 	downloads: "photon:downloads",
 	// The profile's accounts on its trackers, and the codes it is entering.
 	trackers: "photon:trackers",
-	// The requests the profile asked for, and those it decides.
-	requests: "photon:requests",
 	library: (id: string) => `photon:library:${id}` as const,
 	title: (id: string) => `photon:title:${id}` as const,
 	// What the dashboard's pages load, as the admin stream tells of it.
@@ -59,11 +57,6 @@ export function affected(change: Change): `photon:${string}`[] {
 			break;
 		case "tracker.changed":
 			out.add(keys.trackers);
-			break;
-		case "request.added":
-		case "request.changed":
-		case "request.removed":
-			out.add(keys.requests);
 			break;
 	}
 	return [...out];
