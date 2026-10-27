@@ -88,11 +88,11 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 		t.Errorf("waiting for an admin %+v of %d, %v", waiting, total, err)
 	}
 
-	if err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("taken back by another: %v, want ErrNotFound", err)
 	}
-	if err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil {
-		t.Fatal(err)
+	if gone, err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil || gone.Title != r.Title || gone.Library != r.Library || gone.State != domain.RequestPending {
+		t.Fatalf("taken back %+v, %v; want %s as it waited", gone, err, r.Title)
 	}
 	if _, err := s.AskFor(ctx, other.ID, film.ID, nil); err != nil {
 		t.Errorf("asked for once taken back: %v", err)
@@ -186,7 +186,7 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("decided again: %v, want ErrDecided", err)
 	}
-	if err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
+	if _, err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
 		t.Errorf("taken back once declined: %v, want ErrDecided", err)
 	}
 	again, err := s.AskFor(ctx, child.ID, film.ID, nil)

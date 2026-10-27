@@ -75,6 +75,13 @@ type requestRow struct {
 const requestColumns = `r.id, r.profile_id, p.name AS profile_name, r.library_id, r.kind, r.provider, r.value, r.title,
 	r.year, r.seasons, r.state, r.reason, r.decided_by, r.asked_at, r.decided_at, r.item_id, r.available_at`
 
+// Event is the request as an event of kind tells it.
+func (r Request) Event(kind domain.EventKind) domain.Event {
+	return domain.Event{Kind: kind, Profile: r.Profile, Library: r.Library, Item: r.Item, Details: domain.RequestDetails{
+		RequestID: r.ID, State: r.State, Title: r.Title, Reason: r.Reason,
+	}}
+}
+
 func (r requestRow) request() Request {
 	return Request{
 		ID: r.ID, Profile: r.ProfileID, ProfileName: r.ProfileName, Library: r.LibraryID, Kind: r.Kind,
@@ -168,23 +175,28 @@ func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs, 
 	return out, Extent{More: more, Total: total}, nil
 }
 
-// WithdrawRequest takes back a profile's request while it waits: ErrDecided once it is decided,
-// ErrNotFound for none of the profile's.
-func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error {
-	var state domain.RequestState
+// WithdrawRequest takes back a profile's request while it waits, answering it as it was:
+// ErrDecided once it is decided, ErrNotFound for none of the profile's.
+func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) (Request, error) {
+	r := Request{ID: id, Profile: profile}
+	var library *uuid.UUID
 	err := s.pool.QueryRow(ctx, `
-		WITH gone AS (DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state)
-		SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), '')`,
-		id, profile).Scan(&state)
+		WITH gone AS (
+			DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state, title, library_id
+		)
+		SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), ''),
+			coalesce((SELECT title FROM gone), ''), (SELECT library_id FROM gone)`,
+		id, profile).Scan(&r.State, &r.Title, &library)
 	switch {
 	case err != nil:
-		return err
-	case state == "":
-		return ErrNotFound
-	case state != domain.RequestPending:
-		return ErrDecided
+		return Request{}, err
+	case r.State == "":
+		return Request{}, ErrNotFound
+	case library == nil:
+		return Request{}, ErrDecided
 	}
-	return nil
+	r.Library = *library
+	return r, nil
 }
 
 // DecideRequest approves or declines a request while it waits, or once it failed where it was sent,
