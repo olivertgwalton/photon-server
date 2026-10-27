@@ -47,6 +47,13 @@ func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) (sto
 	return store.Request{}, store.ErrDecided
 }
 
+func (*fakeRequests) RequestKept(_ context.Context, id uuid.UUID, by *uuid.UUID) (store.Request, error) {
+	if by != nil {
+		return store.Request{}, store.ErrNotFound
+	}
+	return store.Request{ID: id, Title: "Inception", State: domain.RequestPending}, nil
+}
+
 func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error) {
 	f.by, f.decider, f.reason = by, decider, reason
 	return store.Request{ID: id, State: state, Reason: reason, DecidedBy: decider}, nil
@@ -98,6 +105,15 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	rec = do(http.MethodPost, "/api/v1/admin/requests/"+id+"/decline", managerToken, `{"reason":"Not this week"}`)
 	if rec.Code != http.StatusOK || f.by == nil || *f.by != sam.ID || f.decider != sam.ID || f.reason != "Not this week" {
 		t.Errorf("declined by a manager: %d, over %v as %v for %q; want Sam's users, as Sam, saying why", rec.Code, f.by, f.decider, f.reason)
+	}
+	if rec := do(http.MethodGet, "/api/v1/admin/requests/"+id, goodToken, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"title":"Inception"`) {
+		t.Errorf("one request to an admin: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(http.MethodGet, "/api/v1/admin/requests/"+id, managerToken, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("one request a manager does not keep: %d, want 404", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/api/v1/admin/requests/"+id, memberToken, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("one request to a user: %d, want 403", rec.Code)
 	}
 	if rec := do(http.MethodGet, "/api/v1/admin/requests?state=waiting", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("requests in no state: %d, want 400", rec.Code)

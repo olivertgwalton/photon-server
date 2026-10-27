@@ -313,11 +313,12 @@ func (n *node) workers() []*jobs.Worker {
 		matching[domain.JobTheme] = themerr.Fetch(st, n.pictures, n.cache, themerr.DB, n.tools.YTDLP.Path, n.tools.FFmpeg.Path, logger)
 	}
 	matcher := jobs.NewWorker(st, logger, n.id, identifySlots, matching, hub, nil, n.finished)
+	relay := pushrelay.New(pushrelay.URL, n.server, st)
 	notifier := jobs.NewWorker(st, logger, n.id, webhookSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobDeliverWebhook: webhook.Deliver(st),
-		domain.JobPush:           push.Job(st, n.pusher, pushrelay.New(pushrelay.URL, n.server, st)),
+		domain.JobPush:           push.Job(st, n.pusher, relay),
 		domain.JobSendRequest:    requests.Send(st, n.providers, n.identity.Locale, hub.Raise, logger),
-		domain.JobPushRequest:    push.Requested(st, n.pusher),
+		domain.JobPushRequest:    push.Requested(st, n.pusher, relay),
 	}, hub, nil, n.finished)
 	importer := jobs.NewWorker(st, logger, n.id, importSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobImportHistory: n.imports.Run,

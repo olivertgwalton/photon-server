@@ -348,9 +348,9 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	}
 }
 
-// A request that waits is pushed to the browsers of whoever decides it: every admin, and the
-// manager that keeps the one who asked; not another manager, the one who asked, or an Apple device,
-// which is woken only for its inbox. Once decided it is pushed to no one.
+// A request that waits is pushed to the devices of whoever decides it: every admin, and the
+// manager that keeps the one who asked; not another manager or the one who asked. Once decided it is
+// pushed to no one.
 func TestARequestWaitingIsPushedToWhoeverDecidesIt(t *testing.T) {
 	s, _, film, show := askable(t)
 	ctx := t.Context()
@@ -389,8 +389,14 @@ func TestARequestWaitingIsPushedToWhoeverDecidesIt(t *testing.T) {
 	for _, sub := range subs {
 		pushed[sub.Endpoint] = sub.Keeper
 	}
-	if want := map[string]uuid.UUID{"https://push.example.com/admin": admin.ID, "https://push.example.com/parent": manager.ID}; !maps.Equal(pushed, want) {
-		t.Errorf("pushed to %v, want the admin's and the parent's browsers", pushed)
+	if want := map[string]uuid.UUID{"https://push.example.com/admin": admin.ID, "admin-phone": admin.ID, "https://push.example.com/parent": manager.ID}; !maps.Equal(pushed, want) {
+		t.Errorf("pushed to %v, want the admin's devices and the parent's browser", pushed)
+	}
+	if kept, err := s.RequestKept(ctx, r.ID, &manager.ID); err != nil || kept.ID != r.ID || kept.ProfileName != "Teen" {
+		t.Errorf("the parent's own %+v, %v; want the teen's", kept, err)
+	}
+	if _, err := s.RequestKept(ctx, r.ID, &stranger.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("another manager's: %v, want ErrNotFound", err)
 	}
 
 	if _, err := s.DecideRequest(ctx, r.ID, &manager.ID, manager.ID, domain.RequestApproved, ""); err != nil {

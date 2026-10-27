@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/pushrelay"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/webpush"
 )
@@ -27,6 +28,14 @@ func (w *waiting) Unsubscribe(_ context.Context, _, id uuid.UUID) error {
 	return nil
 }
 
+// relay keeps every wake-up by token.
+type relay struct{ got map[string]pushrelay.Message }
+
+func (r *relay) Send(_ context.Context, m pushrelay.Message) error {
+	r.got[m.Token] = m
+	return nil
+}
+
 // pushService takes every message but those for an ended subscription, keeping each by endpoint.
 type pushService struct {
 	ended string
@@ -42,20 +51,24 @@ func (p *pushService) Send(_ context.Context, sub webpush.Subscription, m webpus
 }
 
 // A request that waits is pushed to each browser of those who decide it, saying who asked and
-// opening where it is decided; a browser whose subscription ended is forgotten; a request decided
-// before the push is sent is pushed to no one.
+// opening where it is decided, and wakes each Apple device by its id, named as a request's; a
+// browser whose subscription ended is forgotten; a request decided before the push is sent is
+// pushed to no one.
 func TestARequestWaitingIsPushedToTheBrowsersOfWhoeverDecidesIt(t *testing.T) {
 	keeper := uuid.NewV7()
 	sub := func(endpoint string) store.KeeperSubscription {
 		return store.KeeperSubscription{Keeper: keeper, ID: uuid.NewV7(), Kind: domain.PushWeb, Endpoint: endpoint, Language: "en"}
 	}
 	ended := sub("https://push.example.com/ended")
+	production := domain.APNsProduction
+	phone := store.KeeperSubscription{Keeper: keeper, ID: uuid.NewV7(), Kind: domain.PushApple, Endpoint: "phone", ApnsEnvironment: &production}
 	st := &waiting{
 		request: store.Request{ID: uuid.NewV7(), ProfileName: "Kids", Title: "Dune", State: domain.RequestPending},
-		subs:    []store.KeeperSubscription{sub("https://push.example.com/admin"), ended},
+		subs:    []store.KeeperSubscription{sub("https://push.example.com/admin"), ended, phone},
 	}
 	service := &pushService{ended: ended.Endpoint, got: map[string]webpush.Message{}}
-	if err := Requested(st, service)(t.Context(), st.request.ID); err != nil {
+	devices := &relay{got: map[string]pushrelay.Message{}}
+	if err := Requested(st, service, devices)(t.Context(), st.request.ID); err != nil {
 		t.Fatal(err)
 	}
 	sent, ok := service.got["https://push.example.com/admin"]
@@ -66,12 +79,17 @@ func TestARequestWaitingIsPushedToTheBrowsersOfWhoeverDecidesIt(t *testing.T) {
 	if want := (notification{Title: "Dune", Body: "Kids asked for it", Lang: "en", Tag: st.request.ID.String(), Navigate: "/settings/requests"}); told.Notification != want || told.WebPush != declarativePush {
 		t.Errorf("pushed %+v, want %+v", told, want)
 	}
+	if woken, want := devices.got["phone"], (pushrelay.Message{
+		Token: "phone", Environment: production, Collapse: st.request.ID.String(), Notification: "request:" + st.request.ID.String(),
+	}); woken != want {
+		t.Errorf("woke the phone with %+v, want %+v", woken, want)
+	}
 	if len(st.gone) != 1 || st.gone[0] != ended.ID {
 		t.Errorf("forgot %v, want the ended subscription", st.gone)
 	}
 
-	st.request.State, service.got = domain.RequestApproved, map[string]webpush.Message{}
-	if err := Requested(st, service)(t.Context(), st.request.ID); err != nil || len(service.got) != 0 {
-		t.Errorf("a request decided since: %v, pushed %d", err, len(service.got))
+	st.request.State, service.got, devices.got = domain.RequestApproved, map[string]webpush.Message{}, map[string]pushrelay.Message{}
+	if err := Requested(st, service, devices)(t.Context(), st.request.ID); err != nil || len(service.got) != 0 || len(devices.got) != 0 {
+		t.Errorf("a request decided since: %v, pushed %d, woke %d", err, len(service.got), len(devices.got))
 	}
 }

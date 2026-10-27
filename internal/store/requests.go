@@ -159,6 +159,15 @@ func (s *Store) RequestsKept(ctx context.Context, by *uuid.UUID, state domain.Re
 		pgx.NamedArgs{"by": by, "state": string(state)}, page)
 }
 
+// RequestKept answers one request of the profiles one administers: of any profile's for an admin,
+// by nil, or of the users a manager keeps. ErrNotFound for none of those.
+func (s *Store) RequestKept(ctx context.Context, id uuid.UUID, by *uuid.UUID) (Request, error) {
+	r, err := readRow[requestRow](ctx, s.pool, `SELECT `+requestColumns+`
+		FROM requests r JOIN profiles p ON p.id = r.profile_id
+		WHERE r.id = $1 AND ($2::uuid IS NULL OR (p.managed_by = $2 AND p.role = 'user'))`, id, by)
+	return r.request(), err
+}
+
 func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs, page Page) ([]Request, Extent, error) {
 	const from = ` FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE `
 	args["offset"], args["limit"] = page.Offset, page.Limit+1
@@ -236,13 +245,13 @@ func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, 
 	return requestOf(ctx, s.pool, id)
 }
 
-// KeeperSubscription is a browser subscribed for one who decides a request.
+// KeeperSubscription is a device subscribed for one who decides a request.
 type KeeperSubscription struct {
 	Keeper uuid.UUID
 	PushSubscription
 }
 
-// RequestPushes answers a request while it waits, and the browsers subscribed for those who decide
+// RequestPushes answers a request while it waits, and the devices subscribed for those who decide
 // it: every admin, and the manager that keeps a user, but never the one who asked. False for a
 // request decided or taken back since.
 func (s *Store) RequestPushes(ctx context.Context, id uuid.UUID) (Request, []KeeperSubscription, bool, error) {
@@ -257,7 +266,7 @@ func (s *Store) RequestPushes(ctx context.Context, id uuid.UUID) (Request, []Kee
 		SELECT k.id AS keeper, s.id, s.kind, s.endpoint, s.p256dh, s.auth, s.apns_environment, s.language
 		FROM profiles a JOIN profiles k ON k.id <> a.id AND (k.role = 'admin' OR a.role = 'user' AND k.id = a.managed_by)
 		JOIN push_subscriptions s ON s.profile_id = k.id
-		WHERE a.id = $1 AND s.kind = 'web' ORDER BY s.id`, r.Profile)
+		WHERE a.id = $1 ORDER BY s.id`, r.Profile)
 	return r, subs, err == nil, err
 }
 

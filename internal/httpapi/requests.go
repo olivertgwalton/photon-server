@@ -16,6 +16,7 @@ type requests interface {
 	AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error)
 	Requests(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Request, store.Extent, error)
 	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, page store.Page) ([]store.Request, store.Extent, error)
+	RequestKept(ctx context.Context, id uuid.UUID, by *uuid.UUID) (store.Request, error)
 	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) (store.Request, error)
 	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error)
 }
@@ -135,6 +136,19 @@ func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(nonNil(each(rs, requestOf)), page.Offset, extent))
 }
 
+// keptRequest answers one request of the profiles an admin or manager keeps, as an Apple device
+// woken for it asks to show it.
+func (a *API) keptRequest(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	kept, err := a.svc.Requests.RequestKept(r.Context(), id, keeper(r))
+	if !a.answered(w, r, err) {
+		writeJSON(w, a.logger, "application/json", http.StatusOK, requestOf(kept))
+	}
+}
+
 func (a *API) approveRequest(w http.ResponseWriter, r *http.Request) {
 	a.decideRequest(w, r, domain.RequestApproved, "")
 }
@@ -180,6 +194,11 @@ func (a *API) requestsRoutes() []route {
 			summary: "Page the requests of the profiles one keeps, newest first: every profile's for an admin",
 			query:   append([]param{{"state", domain.RequestState(""), "Only requests in this state."}}, pageParams...),
 			status:  http.StatusOK, reply: pageJSON[requestJSON]{}, handle: a.keptRequests,
+		},
+		{
+			pattern: "GET /api/v1/admin/requests/{id}", access: manages,
+			summary: "One request of the profiles one keeps, as a device woken for it shows it",
+			status:  http.StatusOK, reply: requestJSON{}, handle: a.keptRequest,
 		},
 		{
 			pattern: "POST /api/v1/admin/requests/{id}/approve", access: manages, summary: "Approve a request while it waits",
