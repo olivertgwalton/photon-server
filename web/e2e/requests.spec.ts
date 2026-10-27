@@ -45,6 +45,11 @@ test("a title the server lacks is asked for from a search, and listed as asked",
 
 test("an admin approves what another profile asked for", async ({ page }) => {
 	await logIn(page, "/settings/requests");
+	// How many wait is drawn beside Requests, and goes once none do.
+	const settings = page.getByRole("navigation", { name: "Settings" });
+	await expect(
+		settings.getByRole("link", { name: "Requests: 1 waiting" }),
+	).toBeVisible();
 	const dune = page
 		.getByRole("main")
 		.getByRole("listitem")
@@ -56,4 +61,7 @@ test("an admin approves what another profile asked for", async ({ page }) => {
 	await expect(
 		page.getByRole("listitem").filter({ hasText: "Dune" }),
 	).toHaveCount(0);
+	await expect(
+		settings.getByRole("link", { name: "Requests", exact: true }),
+	).toBeVisible();
 });
