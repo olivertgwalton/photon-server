@@ -176,6 +176,8 @@ var kept = map[domain.EventKind]string{
 	domain.EventLibraryAdded: "Libraries added", domain.EventLibraryRemoved: "Libraries removed",
 	domain.EventLibraryScanned: "Scans", domain.EventTitlesAdded: "Titles added", domain.EventTaskFailed: "Failed tasks",
 	domain.EventBackupMade: "Backups", domain.EventJobDead: "Dead jobs",
+	domain.EventRequestAdded: "Requests", domain.EventRequestChanged: "Request updates",
+	domain.EventRequestRemoved: "Requests taken back",
 }
 
 // Told is what a webhook asking for a kind of event is told of: "A play starts".
@@ -191,6 +193,9 @@ var told = map[domain.EventKind]string{
 	domain.EventLibraryAdded: "A library is added", domain.EventLibraryRemoved: "A library is removed",
 	domain.EventLibraryScanned: "A library is scanned", domain.EventTitlesAdded: "Titles are added",
 	domain.EventTaskFailed: "A task fails", domain.EventBackupMade: "A backup is made",
+	domain.EventRequestAdded:   "Someone asks for a title",
+	domain.EventRequestChanged: "A request is decided, sent or added",
+	domain.EventRequestRemoved: "A request is taken back",
 }
 
 // Described is a value's name and what it means, in a sentence.

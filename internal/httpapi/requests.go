@@ -16,7 +16,7 @@ type requests interface {
 	AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error)
 	Requests(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Request, store.Extent, error)
 	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, page store.Page) ([]store.Request, store.Extent, error)
-	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error
+	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) (store.Request, error)
 	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error)
 }
 
@@ -87,6 +87,7 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 	if a.answeredAs(w, r, err, "requestable_id is a title a search answered as requestable, found in the last day") {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), asked.Event(domain.EventRequestAdded))
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, requestOf(asked))
 }
 
@@ -108,9 +109,11 @@ func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
+	gone, err := a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if a.answered(w, r, err) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), gone.Event(domain.EventRequestRemoved))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -153,6 +156,7 @@ func (a *API) decideRequest(w http.ResponseWriter, r *http.Request, state domain
 	if a.answered(w, r, err) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), decided.Event(domain.EventRequestChanged))
 	writeJSON(w, a.logger, "application/json", http.StatusOK, requestOf(decided))
 }
 

@@ -88,11 +88,11 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 		t.Errorf("waiting for an admin %+v of %d, %v", waiting, total, err)
 	}
 
-	if err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("taken back by another: %v, want ErrNotFound", err)
 	}
-	if err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil {
-		t.Fatal(err)
+	if gone, err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil || gone.Title != r.Title || gone.Library != r.Library || gone.State != domain.RequestPending {
+		t.Fatalf("taken back %+v, %v; want %s as it waited", gone, err, r.Title)
 	}
 	if _, err := s.AskFor(ctx, other.ID, film.ID, nil); err != nil {
 		t.Errorf("asked for once taken back: %v", err)
@@ -186,7 +186,7 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("decided again: %v, want ErrDecided", err)
 	}
-	if err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
+	if _, err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
 		t.Errorf("taken back once declined: %v, want ErrDecided", err)
 	}
 	again, err := s.AskFor(ctx, child.ID, film.ID, nil)
@@ -240,8 +240,11 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 		t.Errorf("sending %+v to %q, %v, %v", w, lib.RequestSource, ok, err)
 	}
 
-	if err := s.SentRequest(ctx, r.ID, domain.RequestFailed, "no release found"); err != nil {
-		t.Fatal(err)
+	if failed, ok, err := s.SentRequest(ctx, r.ID, domain.RequestFailed, "no release found"); err != nil || !ok || failed.State != domain.RequestFailed || failed.Reason != "no release found" {
+		t.Fatalf("failed where it was sent: %+v, %v, %v", failed, ok, err)
+	}
+	if _, ok, err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil || ok {
+		t.Errorf("a failed request sent: %v, %v; want it left as it is", ok, err)
 	}
 	if _, _, ok, err := s.Sending(ctx, r.ID); err != nil || ok {
 		t.Errorf("a failed request is still being sent: %v, %v", ok, err)
@@ -250,8 +253,8 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 	if err != nil || again.State != domain.RequestApproved || again.Reason != "" {
 		t.Errorf("approved again once failed: %+v, %v", again, err)
 	}
-	if err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil {
-		t.Fatal(err)
+	if _, ok, err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil || !ok {
+		t.Fatalf("sent once approved again: %v, %v", ok, err)
 	}
 	if sent, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("a sent request declined: %+v, %v; want ErrDecided", sent, err)
@@ -291,12 +294,15 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := oneItem(t, s, "title = $1", "Inception")
-	told, err := s.Identified(ctx, item.ID)
+	fulfilled, err := s.Identified(ctx, item.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(told) != 1 || told[0].ProfileID != asker.ID {
+	if told := fulfilled.Told; len(told) != 1 || told[0].ProfileID != asker.ID {
 		t.Errorf("told %+v, want the asker alone", told)
+	}
+	if done := fulfilled.Requests; len(done) != 1 || done[0].ID != r.ID || done[0].State != domain.RequestAvailable || done[0].Item != item.ID {
+		t.Errorf("fulfilled %+v, want the request, available", done)
 	}
 	mine, _, err := totalled(s.Requests(ctx, asker.ID, totalledPage(0, 1)))
 	if err != nil || mine[0].State != domain.RequestAvailable || mine[0].Item != item.ID || mine[0].AvailableAt.IsZero() {
@@ -306,8 +312,8 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if err != nil || inbox.Unread != 1 || len(inbox.Notifications) != 1 {
 		t.Errorf("the asker's inbox %+v, %v; want Inception in it", inbox, err)
 	}
-	if again, err := s.Identified(ctx, item.ID); err != nil || len(again) != 0 {
-		t.Errorf("identified again: told %+v, %v; want no one twice", again, err)
+	if again, err := s.Identified(ctx, item.ID); err != nil || len(again.Told) != 0 || len(again.Requests) != 0 {
+		t.Errorf("identified again: %+v, %v; want no request or one told twice", again, err)
 	}
 }
 
@@ -332,9 +338,9 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
 		t.Fatal(err)
 	}
-	told, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
-	if err != nil || len(told) != 0 {
-		t.Errorf("told %+v, %v; want no one", told, err)
+	fulfilled, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
+	if err != nil || len(fulfilled.Told) != 0 || len(fulfilled.Requests) != 1 {
+		t.Errorf("fulfilled %+v, %v; want the request available, telling no one", fulfilled, err)
 	}
 	if mine, _, err := totalled(s.Requests(ctx, quiet.ID, totalledPage(0, 1))); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
 		t.Errorf("the request %+v, %v; want it available", mine, err)

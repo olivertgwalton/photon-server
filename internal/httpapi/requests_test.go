@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"uuid"
@@ -42,8 +43,8 @@ func (*fakeRequests) RequestsKept(context.Context, *uuid.UUID, domain.RequestSta
 	return nil, store.Extent{}, nil
 }
 
-func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) error {
-	return store.ErrDecided
+func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) (store.Request, error) {
+	return store.Request{}, store.ErrDecided
 }
 
 func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error) {
@@ -53,10 +54,11 @@ func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.U
 
 // A profile asks for a title by the id a search answered it as requestable under; a film asked for
 // by seasons, or a request decided, is refused. A request is decided by an admin over every
-// profile, or by a manager over the users it keeps, and a user decides none.
+// profile, or by a manager over the users it keeps, and a user decides none. Each request asked
+// and decided is told, so whoever decides hears of it; one refused is not.
 func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
-	f := &fakeRequests{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f})
+	f, events := &fakeRequests{}, &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f, Events: events})
 	do := func(method, target, token, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -99,6 +101,14 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	}
 	if rec := do(http.MethodGet, "/api/v1/admin/requests?state=waiting", goodToken, ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("requests in no state: %d, want 400", rec.Code)
+	}
+	var told []string
+	for _, e := range events.raised {
+		d, _ := e.Details.(domain.RequestDetails)
+		told = append(told, string(e.Kind)+" "+string(d.State))
+	}
+	if want := []string{"request.added pending", "request.changed approved", "request.changed declined"}; !slices.Equal(told, want) {
+		t.Errorf("told %q, want %q", told, want)
 	}
 }
 

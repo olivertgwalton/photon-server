@@ -64,6 +64,14 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 	return profile(row), nil
 }
 
+// Keeps reports whether a profile is there and administered by: by every admin, nil, or by the
+// manager that keeps it.
+func (s *Store) Keeps(ctx context.Context, profile uuid.UUID, by *uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM profiles WHERE id = $1 AND `+keptBy+`)`, profile, by).Scan(&ok)
+	return ok, err
+}
+
 // ErrSetUp is setting up a server that has a profile already.
 var ErrSetUp = errors.New("the server is set up; an admin adds profiles")
 

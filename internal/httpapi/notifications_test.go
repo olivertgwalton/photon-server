@@ -130,11 +130,11 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 		t.Fatalf("raised %+v, want notifications.changed to the profile for each", raised)
 	}
 	said := words.In(language.English)
-	told, ok, err := api.toldTo(t.Context(), oliver.ID, said, raised[0])
+	told, ok, err := api.toldTo(t.Context(), oliver, said, raised[0])
 	if want := (inboxChangeJSON{Change: domain.NotificationsCleared, Cleared: []int64{3}, Unread: 1}); err != nil || !ok || !reflect.DeepEqual(told, want) {
 		t.Errorf("one opened, told: %+v %v %v, want %+v", told, ok, err, want)
 	}
-	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, raised[1]); err != nil || !ok || told.(inboxChangeJSON).Through == nil {
+	if told, ok, err := api.toldTo(t.Context(), oliver, said, raised[1]); err != nil || !ok || told.(inboxChangeJSON).Through == nil {
 		t.Errorf("all read, told: %+v %v, want the time up to which", told, err)
 	}
 
@@ -149,7 +149,7 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	events.mu.Lock()
 	cleared := events.raised[len(events.raised)-1]
 	events.mu.Unlock()
-	if told, ok, err := api.toldTo(t.Context(), oliver.ID, said, cleared); err != nil || !ok ||
+	if told, ok, err := api.toldTo(t.Context(), oliver, said, cleared); err != nil || !ok ||
 		told.(inboxChangeJSON).Change != domain.NotificationsCleared || told.(inboxChangeJSON).Through == nil {
 		t.Errorf("cleared, told: %+v %v %v, want the moment it was cleared up to", told, ok, err)
 	}
@@ -158,12 +158,12 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	fresh := domain.Event{Kind: domain.EventNotificationsChanged, Profile: oliver.ID, Details: domain.NotificationsDetails{
 		Change: domain.NotificationsAdded, IDs: []int64{3},
 	}}
-	told, ok, err = api.toldTo(t.Context(), oliver.ID, said, fresh)
+	told, ok, err = api.toldTo(t.Context(), oliver, said, fresh)
 	change, _ := told.(inboxChangeJSON)
 	if err != nil || !ok || len(change.Notifications) != 1 || change.Notifications[0].Message == "" || change.Unread != 2 {
 		t.Errorf("added, told: %+v %v %v, want the show's notification, worded, and 2 unread", told, ok, err)
 	}
-	if _, ok, err := api.toldTo(t.Context(), uuid.NewV7(), said, fresh); err != nil || ok {
+	if _, ok, err := api.toldTo(t.Context(), domain.Profile{ID: uuid.NewV7(), Role: domain.RoleUser}, said, fresh); err != nil || ok {
 		t.Error("another profile was told of the profile's notifications")
 	}
 }

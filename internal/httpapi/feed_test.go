@@ -91,6 +91,14 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mo, err := st.AddProfile(ctx, "Mo", domain.RoleManager, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kit, err := st.AddProfile(ctx, "Kit", domain.RoleUser, "h", &mo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	twelve := 12
 	if err := st.SetAccess(ctx, sam.ID, store.ProfileAccess{MaxAge: &twelve, Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
@@ -101,7 +109,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	defer shutDown()
 	go hub.Run(running)
 	srv := httptest.NewServer(New(log, domain.Info{}, Services{
-		Auth:   tokenAuth{tokens: map[string]domain.Profile{"oliver": oliver, "sam-tv": sam, "sam-phone": sam}},
+		Auth:   tokenAuth{tokens: map[string]domain.Profile{"oliver": oliver, "sam-tv": sam, "sam-phone": sam, "mo": mo}},
 		Events: hub, Audience: st, Watching: st,
 	}))
 	t.Cleanup(srv.Close)
@@ -157,10 +165,11 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 			hub.Raise(ctx, domain.Event{Kind: domain.EventUserDataChanged, Profile: p.ID, Item: mark})
 		}, func(e told) bool { return e.TitleID == mark })
 	}
-	oliverTold, samTold := open("oliver"), open("sam-tv")
+	oliverTold, samTold, moTold := open("oliver"), open("sam-tv"), open("mo")
 	// The node hears Valkey once it has subscribed, which a stream opening does not wait for.
 	settle(samTold, sam)
 	settle(oliverTold, oliver)
+	settle(moTold, mo)
 
 	hub.Changed(ctx, other.ID, store.Changed{domain.TitleAdded: {title["Up"]}})
 	hub.Changed(ctx, films.ID, store.Changed{domain.TitleAdded: {title["Paddington"], title["Heat"]}})
@@ -188,6 +197,9 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 		Details: domain.PlaybackDetails{Playback: domain.NowPlaying{ID: stopped}},
 	})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventTrackerChanged, Profile: sam.ID, Details: domain.TrackerDetails{Tracker: domain.TrackerTrakt}})
+	samAsked, kitAsked := uuid.NewV7(), uuid.NewV7()
+	hub.Raise(ctx, domain.Event{Kind: domain.EventRequestAdded, Profile: sam.ID, Details: domain.RequestDetails{RequestID: samAsked, Title: "Up", State: domain.RequestPending}})
+	hub.Raise(ctx, domain.Event{Kind: domain.EventRequestAdded, Profile: kit.ID, Details: domain.RequestDetails{RequestID: kitAsked, Title: "Up", State: domain.RequestPending}})
 
 	// Oliver sees every library: once both changes reach him, Sam's stream has been handed them too.
 	libraries := map[uuid.UUID]told{}
@@ -203,6 +215,22 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 	if !slices.ContainsFunc(oliverSaw, func(e told) bool { return e.name == string(domain.EventScanProgress) && e.LibraryID == other.ID }) {
 		t.Error("Oliver was not told of Other's scan")
+	}
+	// requested answers the requests a stream was told were asked for.
+	requested := func(saw []told) []string {
+		var out []string
+		for _, e := range saw {
+			if e.name == string(domain.EventRequestAdded) {
+				out = append(out, e.Details["request_id"].(string))
+			}
+		}
+		return out
+	}
+	if got, want := requested(oliverSaw), []string{samAsked.String(), kitAsked.String()}; !slices.Equal(got, want) {
+		t.Errorf("Oliver was told of requests %v, want Sam's and Kit's: an admin decides every one", got)
+	}
+	if got, want := requested(settle(moTold, mo)), []string{kitAsked.String()}; !slices.Equal(got, want) {
+		t.Errorf("Mo was told of requests %v, want Kit's alone: a manager decides those of the users it keeps", got)
 	}
 	if slices.ContainsFunc(oliverSaw, func(e told) bool {
 		return e.name == string(domain.EventUserDataChanged) || e.name == string(domain.EventPlaybackStopped) ||
@@ -249,5 +277,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	}
 	if len(trackers) != 1 || trackers[0].Details["tracker"] != string(domain.TrackerTrakt) {
 		t.Errorf("Sam was told of trackers %+v, want Trakt's link", trackers)
+	}
+	if got, want := requested(samSaw), []string{samAsked.String()}; !slices.Equal(got, want) {
+		t.Errorf("Sam was told of requests %v, want Sam's own alone", got)
 	}
 }
