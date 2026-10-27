@@ -4417,7 +4417,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data */
+        /** Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping, its trackers linking and the requests it asked for or decides, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data */
         get: {
             parameters: {
                 query?: {

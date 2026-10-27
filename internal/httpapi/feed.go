@@ -19,6 +19,7 @@ type audience interface {
 	HasLibrary(ctx context.Context, profile, lib uuid.UUID) (bool, error)
 	Visible(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]uuid.UUID, error)
 	SameTitles(ctx context.Context, profile, title uuid.UUID) ([]uuid.UUID, error)
+	Keeps(ctx context.Context, profile uuid.UUID, by *uuid.UUID) (bool, error)
 }
 
 // feed is what the events socket tells: every client what changes of what its profile sees, and
@@ -59,6 +60,7 @@ func eventsSocket() asSocket {
 	for _, k := range []domain.EventKind{
 		domain.EventLibraryChanged, domain.EventTitleUpdated, domain.EventUserDataChanged, domain.EventScanProgress,
 		domain.EventLibraryScanned, domain.EventPlaybackStopped, domain.EventRestoreStarted, domain.EventTrackerChanged,
+		domain.EventRequestAdded, domain.EventRequestChanged, domain.EventRequestRemoved,
 	} {
 		profile[string(k)] = eventJSON{}
 	}
@@ -73,8 +75,9 @@ func eventsSocket() asSocket {
 // events keeps a WebSocket open that tells what happens on every node, as Plex's, Emby's and
 // Jellyfin's clients each keep one: on the profile feed, what changes of what the profile sees, so
 // a client's pages stay right without asking again, as Jellyfin's LibraryChanged and
-// UserDataChanged; its own playbacks stopping, so a player closes; and what came of a code it was
-// entering on a tracker. An admin who asks is told on the server feed what happens on any node,
+// UserDataChanged; its own playbacks stopping, so a player closes; what came of a code it was
+// entering on a tracker; and the requests it asked for, and those of the profiles it keeps, so
+// whoever decides them hears one is waiting. An admin who asks is told on the server feed what happens on any node,
 // as Plex's activity panel is. One socket carries both, so a browser on HTTP/1.1, which opens few
 // connections to a server, keeps the rest for its pages.
 // Each feed begins with what is going on now: the profile's with a hello naming the scans going
@@ -162,7 +165,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			told, send, err := a.toldTo(ctx, profile, said, e)
+			told, send, err := a.toldTo(ctx, session.Profile, said, e)
 			if err != nil {
 				// The client reconnects and asks again for what it shows.
 				a.logger.WarnContext(ctx, "events socket ended", slog.Any("err", err))
@@ -208,8 +211,9 @@ func (a *API) sendMessage(ctx context.Context, c *websocket.Conn, m socketMessag
 }
 
 // toldTo answers an event as a profile is told it, and whether it is: its own state's changes,
-// and libraries and titles it may see.
-func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e domain.Event) (any, bool, error) {
+// libraries and titles it may see, and the requests of the profiles it keeps.
+func (a *API) toldTo(ctx context.Context, viewer domain.Profile, said words.Words, e domain.Event) (any, bool, error) {
+	profile := viewer.ID
 	switch e.Kind {
 	case domain.EventUserDataChanged:
 		if e.Profile != profile {
@@ -232,6 +236,14 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 		return eventOf(e), true, nil
 	case domain.EventTrackerChanged:
 		return eventOf(e), e.Profile == profile, nil
+	case domain.EventRequestAdded, domain.EventRequestChanged, domain.EventRequestRemoved:
+		// The one who asked sees it in its requests, and whoever decides it in theirs to decide.
+		by, keeps := keeperOf(domain.Session{Profile: viewer})
+		if e.Profile == profile || !keeps {
+			return eventOf(e), e.Profile == profile, nil
+		}
+		kept, err := a.svc.Audience.Keeps(ctx, e.Profile, by)
+		return eventOf(e), kept, err
 	case domain.EventNotificationsChanged:
 		d, _ := e.Details.(domain.NotificationsDetails)
 		if e.Profile != profile {
@@ -279,8 +291,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventJobsProgress, domain.EventWebhookTest, domain.EventMaintenanceChanged,
-		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged,
-		domain.EventRequestAdded, domain.EventRequestChanged, domain.EventRequestRemoved:
+		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged:
 	}
 	return eventJSON{}, false, nil
 }
@@ -289,7 +300,7 @@ func (a *API) feedRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/events", access: signedIn,
-			summary: "Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping and its trackers linking, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data",
+			summary: "Open a WebSocket telling what changes of the libraries, titles and state the profile sees, its playbacks stopping, its trackers linking and the requests it asked for or decides, and an admin who asks what happens on any node; each message is a JSON object of its feed, event and data",
 			query:   []param{{"feed", feedProfile, "profile tells what the profile sees; server tells an admin what happens on any node besides."}},
 			status:  http.StatusSwitchingProtocols, reply: eventsSocket(), handle: a.events,
 		},
