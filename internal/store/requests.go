@@ -99,7 +99,8 @@ func requestOf(ctx context.Context, q db, id uuid.UUID) (Request, error) {
 
 // AskFor asks, for a profile, for a title a library of files' search found for it, of a show the
 // seasons given, every one where none is: ErrNotFound for no such find of a library the profile
-// may search. An admin's request is approved as it is asked, and sent where its library says.
+// may search. An admin's request is approved as it is asked, and sent where its library says;
+// another's waits, and is pushed to whoever decides it.
 func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (Request, error) {
 	seasons = slices.Compact(slices.Sorted(slices.Values(seasons)))
 	args := pgx.NamedArgs{"profile": profile, "id": discovery, "seasons": seasons}
@@ -124,8 +125,11 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 				CASE p.role WHEN 'admin' THEN now() END
 			FROM discoveries d, profiles p WHERE d.id = @id AND p.id = @profile
 			RETURNING id, state`, args).Scan(&id, &state)
-		if err != nil || state != domain.RequestApproved {
+		if err != nil {
 			return err
+		}
+		if state == domain.RequestPending {
+			return enqueue(ctx, tx, domain.JobPushRequest, id)
 		}
 		return send(ctx, tx, id)
 	})
@@ -230,6 +234,31 @@ func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, 
 		return Request{}, ErrDecided
 	}
 	return requestOf(ctx, s.pool, id)
+}
+
+// KeeperSubscription is a browser subscribed for one who decides a request.
+type KeeperSubscription struct {
+	Keeper uuid.UUID
+	PushSubscription
+}
+
+// RequestPushes answers a request while it waits, and the browsers subscribed for those who decide
+// it: every admin, and the manager that keeps a user, but never the one who asked. False for a
+// request decided or taken back since.
+func (s *Store) RequestPushes(ctx context.Context, id uuid.UUID) (Request, []KeeperSubscription, bool, error) {
+	r, err := requestOf(ctx, s.pool, id)
+	if errors.Is(err, ErrNotFound) || err == nil && r.State != domain.RequestPending {
+		return Request{}, nil, false, nil
+	}
+	if err != nil {
+		return Request{}, nil, false, err
+	}
+	subs, err := queryStructs[KeeperSubscription](ctx, s.pool, `
+		SELECT k.id AS keeper, s.id, s.kind, s.endpoint, s.p256dh, s.auth, s.apns_environment, s.language
+		FROM profiles a JOIN profiles k ON k.id <> a.id AND (k.role = 'admin' OR a.role = 'user' AND k.id = a.managed_by)
+		JOIN push_subscriptions s ON s.profile_id = k.id
+		WHERE a.id = $1 AND s.kind = 'web' ORDER BY s.id`, r.Profile)
+	return r, subs, err == nil, err
 }
 
 func decidable(s domain.RequestState) bool {
