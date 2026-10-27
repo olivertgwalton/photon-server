@@ -317,6 +317,7 @@ func (n *node) workers() []*jobs.Worker {
 		domain.JobDeliverWebhook: webhook.Deliver(st),
 		domain.JobPush:           push.Job(st, n.pusher, pushrelay.New(pushrelay.URL, n.server, st)),
 		domain.JobSendRequest:    requests.Send(st, n.providers, n.identity.Locale, hub.Raise, logger),
+		domain.JobPushRequest:    push.Requested(st, n.pusher),
 	}, hub, nil, n.finished)
 	importer := jobs.NewWorker(st, logger, n.id, importSlots, map[domain.JobKind]jobs.Handler{
 		domain.JobImportHistory: n.imports.Run,
