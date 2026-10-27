@@ -59,6 +59,11 @@ func TestEventDetailsAreWrittenAsTheyWere(t *testing.T) {
 			map[string]any{"job_id": 7, "job_kind": JobPreviews, "subject": id, "attempt": 5, "error": "no ffmpeg"},
 		},
 		{EventJobsProgress, BacklogDetails{JobKind: JobPreviews}, map[string]any{"job_kind": JobPreviews, "left": 0, "done": 0}},
+		{
+			EventRequestChanged,
+			RequestDetails{RequestID: id, Title: "Dune", State: RequestDeclined, Reason: "on another service"},
+			map[string]any{"request_id": id, "title": "Dune", "state": RequestDeclined, "reason": "on another service"},
+		},
 	} {
 		was, err := json.Marshal(c.was)
 		if err != nil {

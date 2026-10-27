@@ -48,6 +48,7 @@ func (w Words) Event(e domain.Event, names Names) string {
 	named, _ := e.Details.(domain.NameDetails)
 	task, _ := e.Details.(domain.TaskDetails)
 	job, _ := e.Details.(domain.JobDetails)
+	asked, _ := e.Details.(domain.RequestDetails)
 	switch e.Kind {
 	case domain.EventPlaybackStarted:
 		return by + " started " + played
@@ -129,8 +130,40 @@ func (w Words) Event(e domain.Event, names Names) string {
 		return profile + "'s " + w.Tracker(d.Tracker) + " account changed"
 	case domain.EventNotificationsChanged:
 		return profile + "'s notifications changed"
+	case domain.EventRequestAdded:
+		return profile + " asked for " + asked.Title
+	case domain.EventRequestChanged:
+		return w.requestChanged(profile, asked)
+	case domain.EventRequestRemoved:
+		return profile + " took back their request for " + asked.Title
 	}
 	return string(e.Kind)
+}
+
+// requestChanged says where a profile's request has come to stand.
+func (w Words) requestChanged(profile string, r domain.RequestDetails) string {
+	asked := profile + "'s request for " + r.Title
+	switch r.State {
+	case domain.RequestApproved:
+		return asked + " was approved"
+	case domain.RequestDeclined:
+		return asked + " was declined" + because(r.Reason)
+	case domain.RequestSent:
+		return asked + " was sent"
+	case domain.RequestFailed:
+		return asked + " failed" + because(r.Reason)
+	case domain.RequestAvailable:
+		return r.Title + ", which " + profile + " asked for, was added"
+	case domain.RequestPending:
+	}
+	return asked + " is " + strings.ToLower(w.RequestState(r.State))
+}
+
+func because(reason string) string {
+	if reason == "" {
+		return ""
+	}
+	return ": " + reason
 }
 
 func name(of func(uuid.UUID) string, id uuid.UUID) string {
