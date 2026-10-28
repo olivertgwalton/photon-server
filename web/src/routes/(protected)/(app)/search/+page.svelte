@@ -73,9 +73,7 @@ function scope(library: string) {
 			total={data.results.people.total ?? undefined}
 			href="/search/people{page.url.search}"
 		>
-			{#snippet card(
-				person: (typeof data.results.people.items)[number],
-			)}
+			{#snippet card(person: (typeof data.results.people.items)[number])}
 				<PersonCard {...person} />
 			{/snippet}
 		</Rail>

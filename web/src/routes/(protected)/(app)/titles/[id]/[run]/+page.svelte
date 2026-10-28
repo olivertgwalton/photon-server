@@ -18,9 +18,7 @@ const t = $derived(data.title);
 	</div>
 	{#if data.run === "cast"}
 		<CardGrid items={data.cast}>
-			{#snippet card(
-				credit: (typeof data.cast)[number],
-			)}
+			{#snippet card(credit: (typeof data.cast)[number])}
 				<PersonCard
 					id={credit.person_id}
 					name={credit.name}
@@ -32,9 +30,7 @@ const t = $derived(data.title);
 		</CardGrid>
 	{:else if data.run === "extras"}
 		<CardGrid items={data.extras} shape="still">
-			{#snippet card(
-				item: Extra,
-			)}
+			{#snippet card(item: Extra)}
 				<ExtraCard {item} sizes="20rem" />
 			{/snippet}
 		</CardGrid>

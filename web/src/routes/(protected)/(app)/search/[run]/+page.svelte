@@ -19,9 +19,7 @@ let { data } = $props();
 	</div>
 	{#if data.people}
 		<CardGrid items={data.people}>
-			{#snippet card(
-				person: NonNullable<typeof data.people>[number],
-			)}
+			{#snippet card(person: NonNullable<typeof data.people>[number])}
 				<PersonCard {...person} />
 			{/snippet}
 		</CardGrid>

@@ -34,9 +34,7 @@ async function add(event: SubmitEvent) {
 	{#snippet actions()}
 		<Dialog.Root bind:open={adding}>
 			<Dialog.Trigger>
-				{#snippet child({
-					props,
-				})}
+				{#snippet child({ props })}
 					<Button {...props}>Make a key</Button>
 				{/snippet}
 			</Dialog.Trigger>

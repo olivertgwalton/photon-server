@@ -72,9 +72,7 @@ function chosen(name: ListFilter, value: string | number): boolean {
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
-		{#snippet child({
-			props,
-		})}
+		{#snippet child({ props })}
 			<Button variant="outline" size="sm" {...props}>
 				<ListFilterIcon />
 				Filter

@@ -993,9 +993,7 @@ function watchCast(context: cast.framework.CastContext) {
 
 <svelte:document bind:fullscreenElement />
 
-{#snippet clock(
-	place: string,
-)}
+{#snippet clock(place: string)}
 	<span
 		class={[
 			"text-ink font-mono text-xs whitespace-nowrap tabular-nums sm:text-sm",
@@ -1267,9 +1265,7 @@ function watchCast(context: cast.framework.CastContext) {
 					{/if}
 					<Menu.Root bind:open={menuOpen}>
 						<Menu.Trigger>
-							{#snippet child({
-								props,
-							})}
+							{#snippet child({ props })}
 								<Button
 									{...props}
 									variant="ghost"

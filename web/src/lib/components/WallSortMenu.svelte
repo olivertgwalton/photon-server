@@ -44,9 +44,7 @@ function sortBy(value: string) {
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
-		{#snippet child({
-			props,
-		})}
+		{#snippet child({ props })}
 			<Button variant="outline" size="sm" {...props}>
 				<ArrowDownUpIcon />
 				<span>

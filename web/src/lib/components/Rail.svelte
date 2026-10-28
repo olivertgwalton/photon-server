@@ -130,11 +130,7 @@ const sizes = $derived(
 );
 </script>
 
-{#snippet arrow(
-	direction: 1 | -1,
-	label: string,
-	enabled: boolean,
-)}
+{#snippet arrow(direction: 1 | -1, label: string, enabled: boolean)}
 	<button
 		type="button"
 		onclick={() => page(direction)}

@@ -55,9 +55,7 @@ async function run() {
 	}}
 >
 	<Popover.Trigger>
-		{#snippet child({
-			props,
-		})}
+		{#snippet child({ props })}
 			<IconButton
 				{...props}
 				label="Check access"

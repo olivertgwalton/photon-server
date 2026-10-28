@@ -54,9 +54,7 @@ function choose() {
 		}}
 	>
 		<Dialog.Trigger>
-			{#snippet child({
-				props,
-			})}
+			{#snippet child({ props })}
 				<Button {...props} variant="outline">Browse…</Button>
 			{/snippet}
 		</Dialog.Trigger>

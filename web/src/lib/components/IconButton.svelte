@@ -23,9 +23,7 @@ let {
 
 <Tooltip.Root>
 	<Tooltip.Trigger>
-		{#snippet child({
-			props,
-		})}
+		{#snippet child({ props })}
 			<Button
 				{...mergeProps(rest, props)}
 				variant="ghost"

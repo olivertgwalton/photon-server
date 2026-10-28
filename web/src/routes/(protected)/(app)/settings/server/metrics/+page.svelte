@@ -326,9 +326,7 @@ function ago(seconds: number, now: number) {
 		</p>
 	{:else if kinds.length}
 		<JobsTable counts={cluster.jobs} {kinds} afterLabel="Oldest due">
-			{#snippet after(
-				kind: Schemas["JobKind"],
-			)}
+			{#snippet after(kind: Schemas["JobKind"])}
 				{@const due = cluster.oldest_due_seconds[kind]}
 				{due === undefined ? "" : ago(due, clock.now)}
 			{/snippet}

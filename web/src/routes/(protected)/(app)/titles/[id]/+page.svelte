@@ -341,9 +341,7 @@ async function ask() {
 				<h1 class="max-w-3xl">
 					{#if logo}
 						{#key logo}
-							{#snippet lettering(
-								alt: string,
-							)}
+							{#snippet lettering(alt: string)}
 								<Artwork
 									id={logo}
 									shape="still"
@@ -533,9 +531,7 @@ async function ask() {
 					{/if}
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger>
-							{#snippet child({
-								props,
-							})}
+							{#snippet child({ props })}
 								<Button
 									variant="ghost"
 									class={glass}
@@ -676,9 +672,7 @@ async function ask() {
 
 	{#if credits.length}
 		<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
-			{#snippet card(
-				credit: (typeof credits)[number],
-			)}
+			{#snippet card(credit: (typeof credits)[number])}
 				<PersonCard
 					id={credit.person_id}
 					name={credit.name}
@@ -697,10 +691,7 @@ async function ask() {
 			items={extras.items}
 			href="/titles/{extras.of}/extras"
 		>
-			{#snippet card(
-				item: Extra,
-				sizes: string,
-			)}
+			{#snippet card(item: Extra, sizes: string)}
 				<ExtraCard {item} {sizes} />
 			{/snippet}
 		</Rail>

@@ -84,9 +84,7 @@ let open = $state(false);
 					{#each inbox.notifications as n (n.id)}
 						<li>
 							<Item.Root size="sm">
-								{#snippet child({
-									props,
-								})}
+								{#snippet child({ props })}
 									<a
 										href="/titles/{n.title.id}?notification={n.id}"
 										{...props}
