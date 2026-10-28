@@ -235,16 +235,16 @@ test("a film's page plays the version and tracks chosen", async ({ page }) => {
 
 	const play = page.getByRole("link", { name: /^Play$|^Resume/ });
 	await expect(play).toHaveAttribute("href", "/play/t-film?version=v-4k");
-	await page.getByRole("button", { name: "Audio" }).click();
+	await page.getByRole("combobox", { name: "Audio" }).click();
 	await page.getByRole("option", { name: /Commentary/ }).click();
 	await expect(play).toHaveAttribute(
 		"href",
 		"/play/t-film?version=v-4k&audio=2",
 	);
-	await page.getByRole("button", { name: "Version" }).click();
+	await page.getByRole("combobox", { name: "Version" }).click();
 	await page.getByRole("option", { name: /1080p/ }).click();
 	await expect(play).toHaveAttribute("href", "/play/t-film?version=v-hd");
-	await expect(page.getByRole("button", { name: "Audio" })).toHaveCount(0);
+	await expect(page.getByRole("combobox", { name: "Audio" })).toHaveCount(0);
 
 	const favourite = page.getByRole("button", { name: "Favourite" });
 	await expect(favourite).toHaveAttribute("aria-pressed", "false");
@@ -339,7 +339,7 @@ test("an episode's season row picks another season's episodes", async ({
 	await logIn(page, "/titles/t-ep");
 	const row = page.getByRole("region", { name: /Season 1/ });
 	await expect(row.getByRole("link", { name: /Second/ })).toBeVisible();
-	await row.getByRole("button", { name: "Season 1" }).click();
+	await row.getByRole("combobox", { name: "Season 1" }).click();
 	await page.getByRole("option", { name: "Season 2" }).click();
 	const picked = page.getByRole("region", { name: /Season 2/ });
 	await expect(picked.getByRole("link", { name: /Return/ })).toBeVisible();
@@ -440,7 +440,7 @@ test("going back to another episode leaves the season and dialog picked on this 
 	await expect(page).toHaveURL("/titles/t-ep2");
 	await page
 		.getByRole("region", { name: /Season 1/ })
-		.getByRole("button", { name: "Season 1" })
+		.getByRole("combobox", { name: "Season 1" })
 		.click();
 	await page.getByRole("option", { name: "Season 2" }).click();
 	await expect(page.getByRole("region", { name: /Season 2/ })).toBeVisible();

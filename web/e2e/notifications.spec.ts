@@ -29,15 +29,15 @@ test("a profile chooses what it is told of", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "Notifications" }),
 	).toBeVisible();
-	await page.getByRole("button", { name: "Tell me of" }).click();
+	await page.getByRole("combobox", { name: "Tell me of" }).click();
 	await page
 		.getByRole("option", { name: "Every new film and episode" })
 		.click();
 	await expect(page.getByText("Saved for every device.")).toBeVisible();
 	await page.reload();
-	await expect(page.getByRole("button", { name: "Tell me of" })).toContainText(
-		"Every new film and episode",
-	);
+	await expect(
+		page.getByRole("combobox", { name: "Tell me of" }),
+	).toContainText("Every new film and episode");
 	// A library cleared tells nothing, on every device.
 	await page.getByRole("checkbox", { name: "Films" }).click();
 	await expect(page.getByText("Saved for every device.").first()).toBeVisible();
