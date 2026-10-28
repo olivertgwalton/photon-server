@@ -648,9 +648,11 @@ async function ask() {
 		>
 			{#snippet heading()}
 				{#if data.seasons && data.seasons.length > 1}
+					<span class="sr-only">{picked?.title ?? t.season?.title}</span>
 					<Choice
 						options={data.seasons.map((s) => ({ value: s.id, label: s.title }))}
 						value={picked?.id ?? t.season?.id}
+						aria-label={picked?.title ?? t.season?.title}
 						onchange={pick}
 						class="h-8 w-auto gap-2 rounded-full border-none bg-white/6 pr-2 pl-3 font-semibold hover:bg-white/12"
 					/>

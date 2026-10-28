@@ -202,7 +202,7 @@ test("a library is added from a folder found by browsing the server", async ({
 	);
 	// A shows library ranks its sources for shows, seasons and episodes, under its settings a
 	// new library leaves to their defaults.
-	await page.getByRole("button", { name: "Holds" }).click();
+	await page.getByRole("combobox", { name: "Holds" }).click();
 	await page.getByRole("option", { name: "Shows", exact: true }).click();
 	await page.getByText("More settings").click();
 	for (const items of ["Shows", "Seasons", "Episodes"]) {
@@ -219,7 +219,7 @@ test("a library is added from a folder found by browsing the server", async ({
 			.getByRole("checkbox", { name: "TheTVDB" }),
 	).not.toBeChecked();
 	await expectAccessible(page);
-	await page.getByRole("button", { name: "Holds" }).click();
+	await page.getByRole("combobox", { name: "Holds" }).click();
 	await page
 		.getByRole("option", { name: "Films and shows", exact: true })
 		.click();
@@ -440,7 +440,7 @@ test("a profile is added seeing one library, and what another may see is set", a
 	await expect(
 		page.getByLabel("Every library, including ones added later"),
 	).toBeChecked();
-	await expect(page.getByRole("button", { name: "Certificates" })).toHaveText(
+	await expect(page.getByRole("combobox", { name: "Certificates" })).toHaveText(
 		"Up to 12",
 	);
 	await expectAccessible(page);
@@ -599,7 +599,7 @@ test("a webhook is sent as a chat service takes a message, with no secret to kee
 	await logIn(page, "/settings/server/webhooks");
 	await page.getByRole("button", { name: "Add a webhook" }).click();
 	await page.getByLabel("Address").fill("https://discord.com/api/webhooks/1/t");
-	await page.getByRole("button", { name: "Sent as" }).click();
+	await page.getByRole("combobox", { name: "Sent as" }).click();
 	await page.getByRole("option", { name: "Discord" }).click();
 	await expect(
 		page.getByRole("dialog", { name: "Add a webhook" }),
