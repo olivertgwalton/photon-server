@@ -134,9 +134,7 @@ function current(href: string) {
 			tooltipContent={label}
 			class={menuButton}
 		>
-			{#snippet child({
-				props,
-			})}
+			{#snippet child({ props })}
 				<a
 					{href}
 					{...props}

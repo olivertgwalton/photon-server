@@ -47,9 +47,7 @@ function facts(s: Stream): [string, string | number | undefined][] {
 }
 </script>
 
-{#snippet list(
-	rows: [string, string | number | undefined][],
-)}
+{#snippet list(rows: [string, string | number | undefined][])}
 	<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
 		{#each rows.filter(
 			([, v]) => v !== undefined && v !== "",

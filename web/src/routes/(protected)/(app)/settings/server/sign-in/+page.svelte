@@ -30,9 +30,7 @@ const remove = (slug: string, name: string) =>
 	{#snippet actions()}
 		<Dialog.Root bind:open={adding}>
 			<Dialog.Trigger>
-				{#snippet child({
-					props,
-				})}
+				{#snippet child({ props })}
 					<Button {...props} disabled={!data.publicURL}>Add a provider</Button>
 				{/snippet}
 			</Dialog.Trigger>
@@ -117,9 +115,7 @@ const remove = (slug: string, name: string) =>
 							onOpenChange={(open) => (editing = open ? p.slug : undefined)}
 						>
 							<Dialog.Trigger>
-								{#snippet child({
-									props,
-								})}
+								{#snippet child({ props })}
 									<Button {...props} variant="outline" size="sm">
 										Change <span class="sr-only">{p.name}</span>
 									</Button>

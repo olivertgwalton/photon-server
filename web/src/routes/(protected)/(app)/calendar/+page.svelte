@@ -68,10 +68,7 @@ const absence = (e: Entry, day: string) =>
 
 <svelte:head><title>Calendar · Photon</title></svelte:head>
 
-{#snippet badges(
-	e: Entry,
-	day: string,
-)}
+{#snippet badges(e: Entry, day: string)}
 	{#each e.milestones ?? [] as m (m)}
 		<Badge class={m === "season_finale" ? "bg-ink text-ground" : ""}>
 			{words.milestones[m]}
@@ -82,10 +79,7 @@ const absence = (e: Entry, day: string) =>
 	{/if}
 {/snippet}
 
-{#snippet card(
-	e: Entry,
-	day: string,
-)}
+{#snippet card(e: Entry, day: string)}
 	<a
 		href={href(e)}
 		class={[
@@ -129,9 +123,7 @@ const absence = (e: Entry, day: string) =>
 	</a>
 {/snippet}
 
-{#snippet chip(
-	e: Entry,
-)}
+{#snippet chip(e: Entry)}
 	{@const Icon = e.kind === "movie" ? FilmIcon : TvIcon}
 	<a
 		href={href(e)}
@@ -160,10 +152,7 @@ const absence = (e: Entry, day: string) =>
 	</a>
 {/snippet}
 
-{#snippet more(
-	date: string,
-	entries: Entry[],
-)}
+{#snippet more(date: string, entries: Entry[])}
 	<Dialog.Root>
 		<Dialog.Trigger
 			class="text-ink-3 hover:text-ink hover:bg-raise w-full rounded-md px-1.5 py-1 text-left text-xs font-medium"

@@ -81,9 +81,7 @@ async function choose(mode: Mode) {
 		</div>
 		<Dialog.Footer>
 			<Dialog.Close>
-				{#snippet child({
-					props,
-				})}
+				{#snippet child({ props })}
 					<Button variant="outline" {...props}>Cancel</Button>
 				{/snippet}
 			</Dialog.Close>

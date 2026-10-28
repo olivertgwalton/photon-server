@@ -84,9 +84,7 @@ async function start(event: SubmitEvent) {
 	{#snippet actions()}
 		<Dialog.Root bind:open={starting}>
 			<Dialog.Trigger>
-				{#snippet child({
-					props,
-				})}
+				{#snippet child({ props })}
 					<Button {...props}>Import</Button>
 				{/snippet}
 			</Dialog.Trigger>

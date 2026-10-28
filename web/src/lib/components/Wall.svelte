@@ -138,9 +138,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 
 <svelte:window onscroll={measure} onresize={measure} />
 
-{#snippet item(
-	card: Card,
-)}
+{#snippet item(card: Card)}
 	{#if view === "list"}
 		<TitleRow {card} />
 	{:else}

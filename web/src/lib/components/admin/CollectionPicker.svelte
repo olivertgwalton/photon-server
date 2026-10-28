@@ -91,9 +91,7 @@ async function create(event: SubmitEvent) {
 				{#snippet pending()}
 					<p class="text-ink-3">Loading collections…</p>
 				{/snippet}
-				{#snippet failed(
-					error: unknown,
-				)}
+				{#snippet failed(error: unknown)}
 					<p role="alert" class="text-destructive">
 						{error instanceof Error ? error.message : problemMessage(error)}
 					</p>
