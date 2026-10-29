@@ -408,8 +408,8 @@ func (s *Store) RetryJob(ctx context.Context, id int64) error {
 // asks ThemerrDB for its theme where its library takes those, so a refresh finds one listed since.
 // The requests for it, by the ids it now has, are available, and those who asked are told of it
 // (see fulfil), answering the profiles told.
-func (s *Store) Identified(ctx context.Context, id uuid.UUID) ([]Told, error) {
-	var told []Told
+func (s *Store) Identified(ctx context.Context, id uuid.UUID) (Fulfilled, error) {
+	var told Fulfilled
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE items SET identified_at = now() WHERE id = $1`, id); err != nil {
 			return err
@@ -421,7 +421,10 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) ([]Told, error) {
 		told, err = fulfil(ctx, tx, id)
 		return err
 	})
-	return told, err
+	if err != nil {
+		return Fulfilled{}, err
+	}
+	return told, s.countUnread(ctx, told.Cleared)
 }
 
 // airingRefreshDays is how often a show with an episode announced to air since it was last matched

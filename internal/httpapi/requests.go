@@ -13,11 +13,11 @@ import (
 )
 
 type requests interface {
-	AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error)
+	AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, []store.Told, error)
 	Requests(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Request, store.Extent, error)
 	RequestsKept(ctx context.Context, by *uuid.UUID, state domain.RequestState, page store.Page) ([]store.Request, store.Extent, error)
-	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error
-	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error)
+	WithdrawRequest(ctx context.Context, profile, id uuid.UUID) ([]store.Cleared, error)
+	DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, []store.Cleared, error)
 }
 
 // requestablePages draws a title a profile may ask for as a title's page.
@@ -83,9 +83,14 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "seasons are numbers from 0, a show's specials")
 		return
 	}
-	asked, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.RequestableID, req.Seasons)
+	asked, told, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.RequestableID, req.Seasons)
 	if a.answeredAs(w, r, err, "requestable_id is a title a search answered as requestable, found in the last day") {
 		return
+	}
+	for _, t := range told {
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
+			Change: domain.NotificationsAdded, IDs: t.IDs,
+		}})
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusCreated, requestOf(asked))
 }
@@ -108,10 +113,22 @@ func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if a.answered(w, r, a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
+	cleared, err := a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
+	if a.answered(w, r, err) {
 		return
 	}
+	a.raiseCleared(r.Context(), cleared)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// raiseCleared tells each profile's devices that the notifications of a request that no longer
+// waits are gone from its inbox.
+func (a *API) raiseCleared(ctx context.Context, cleared []store.Cleared) {
+	for _, c := range cleared {
+		a.svc.Events.Raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: c.ProfileID, Details: domain.NotificationsDetails{
+			Change: domain.NotificationsCleared, IDs: c.IDs, Unread: c.Unread,
+		}})
+	}
 }
 
 // keptRequests answers a page of the requests of the profiles an admin or manager keeps, newest
@@ -149,10 +166,11 @@ func (a *API) decideRequest(w http.ResponseWriter, r *http.Request, state domain
 	if !ok {
 		return
 	}
-	decided, err := a.svc.Requests.DecideRequest(r.Context(), id, keeper(r), auth.SessionOf(r.Context()).Profile.ID, state, reason)
+	decided, cleared, err := a.svc.Requests.DecideRequest(r.Context(), id, keeper(r), auth.SessionOf(r.Context()).Profile.ID, state, reason)
 	if a.answered(w, r, err) {
 		return
 	}
+	a.raiseCleared(r.Context(), cleared)
 	writeJSON(w, a.logger, "application/json", http.StatusOK, requestOf(decided))
 }
 

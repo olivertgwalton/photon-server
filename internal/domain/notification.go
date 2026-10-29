@@ -48,15 +48,32 @@ type NotificationsDetails struct {
 	Unread int `json:"unread"`
 }
 
+// NotificationKind is what a notification tells of.
+type NotificationKind string
+
+const (
+	// NotificationTitle is a film, or a show's new episodes.
+	NotificationTitle NotificationKind = "title"
+	// NotificationRequest is a request that waits for the profile to decide it.
+	NotificationRequest NotificationKind = "request"
+)
+
+func NotificationKinds() []NotificationKind {
+	return []NotificationKind{NotificationTitle, NotificationRequest}
+}
+
 // Notification is a film, or a show's new episodes, gathered while it is unread: an episode added
 // to a show whose notification is unread joins it, so a season added at once is one notification.
+// Or it is a request waiting for the profile to decide it, cleared once anyone has.
 type Notification struct {
-	ID int64
+	ID   int64
+	Kind NotificationKind
 	// Title is the film or the show, Latest the film or the show's newest episode of those told.
 	Title  uuid.UUID
 	Latest uuid.UUID
 	// New is how many of its films and episodes the profile may see.
 	New     int
+	Request uuid.UUID
 	AddedAt time.Time
 	ReadAt  *time.Time
 }

@@ -92,11 +92,13 @@ func (s *Store) request(ctx context.Context, q db, id uuid.UUID) (Request, error
 
 // AskFor asks, for a profile, for a title a library of files' search found for it, of a show the
 // seasons given, every one where none is: ErrNotFound for no such find of a library the profile
-// may search. An admin's request is approved as it is asked, and sent where its library says.
-func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (Request, error) {
+// may search. An admin's request is approved as it is asked, and sent where its library says;
+// another's waits, and those who may decide it are told, as it answers.
+func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, seasons []int) (Request, []Told, error) {
 	seasons = slices.Compact(slices.Sorted(slices.Values(seasons)))
 	args := pgx.NamedArgs{"profile": profile, "id": discovery, "seasons": seasons}
 	var id uuid.UUID
+	var told []Told
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var held bool
 		err := tx.QueryRow(ctx, `
@@ -117,20 +119,25 @@ func (s *Store) AskFor(ctx context.Context, profile, discovery uuid.UUID, season
 				CASE p.role WHEN 'admin' THEN now() END
 			FROM discoveries d, profiles p WHERE d.id = @id AND p.id = @profile
 			RETURNING id, state`, args).Scan(&id, &state)
-		if err != nil || state != domain.RequestApproved {
+		if err != nil {
+			return err
+		}
+		if state == domain.RequestPending {
+			told, err = tellDeciders(ctx, tx, id)
 			return err
 		}
 		return send(ctx, tx, id)
 	})
 	switch {
 	case violates(err, uniqueViolation):
-		return Request{}, ErrAskedFor
+		return Request{}, nil, ErrAskedFor
 	case refusedBy(err, "request_seasons"):
-		return Request{}, ErrFilmSeasons
+		return Request{}, nil, ErrFilmSeasons
 	case err != nil:
-		return Request{}, err
+		return Request{}, nil, err
 	}
-	return s.request(ctx, s.pool, id)
+	r, err := s.request(ctx, s.pool, id)
+	return r, told, err
 }
 
 // Requests answers a page of a profile's requests, newest first, and what the page tells of the
@@ -168,31 +175,45 @@ func (s *Store) requests(ctx context.Context, where string, args pgx.NamedArgs, 
 	return out, Extent{More: more, Total: total}, nil
 }
 
-// WithdrawRequest takes back a profile's request while it waits: ErrDecided once it is decided,
-// ErrNotFound for none of the profile's.
-func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) error {
-	var state domain.RequestState
-	err := s.pool.QueryRow(ctx, `
-		WITH gone AS (DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state)
-		SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), '')`,
-		id, profile).Scan(&state)
-	switch {
-	case err != nil:
-		return err
-	case state == "":
-		return ErrNotFound
-	case state != domain.RequestPending:
-		return ErrDecided
+// WithdrawRequest takes back a profile's request while it waits, clearing what told of it, as it
+// answers: ErrDecided once it is decided, ErrNotFound for none of the profile's.
+func (s *Store) WithdrawRequest(ctx context.Context, profile, id uuid.UUID) ([]Cleared, error) {
+	var cleared []Cleared
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		cleared, err = clearAsked(ctx, tx, `r.id = @id AND r.profile_id = @profile AND r.state = 'pending'`,
+			pgx.NamedArgs{"id": id, "profile": profile})
+		if err != nil {
+			return err
+		}
+		var state domain.RequestState
+		err = tx.QueryRow(ctx, `
+			WITH gone AS (DELETE FROM requests WHERE id = $1 AND profile_id = $2 AND state = 'pending' RETURNING state)
+			SELECT coalesce((SELECT state FROM gone), (SELECT state FROM requests WHERE id = $1 AND profile_id = $2), '')`,
+			id, profile).Scan(&state)
+		switch {
+		case err != nil:
+			return err
+		case state == "":
+			return ErrNotFound
+		case state != domain.RequestPending:
+			return ErrDecided
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return cleared, s.countUnread(ctx, cleared)
 }
 
 // DecideRequest approves or declines a request while it waits, or once it failed where it was sent,
 // as decider, for the reason given where it is declined: of any profile's for an admin, by nil, or
-// of the users a manager keeps. One approved is sent where its library says. ErrNotFound for none
-// of those, ErrDecided once it is decided otherwise.
-func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (Request, error) {
+// of the users a manager keeps. One approved is sent where its library says. What told of it is
+// cleared, as it answers. ErrNotFound for none of those, ErrDecided once it is decided otherwise.
+func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (Request, []Cleared, error) {
 	var was domain.RequestState
+	var cleared []Cleared
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			WITH kept AS (
@@ -204,20 +225,27 @@ func (s *Store) DecideRequest(ctx context.Context, id uuid.UUID, by *uuid.UUID, 
 			)
 			SELECT coalesce((SELECT state FROM decided), (SELECT state FROM kept), '')`,
 			id, by, decider, state, reason).Scan(&was)
-		if err != nil || !decidable(was) || state != domain.RequestApproved {
+		if err != nil || !decidable(was) {
+			return err
+		}
+		if cleared, err = clearAsked(ctx, tx, `r.id = @id`, pgx.NamedArgs{"id": id}); err != nil || state != domain.RequestApproved {
 			return err
 		}
 		return send(ctx, tx, id)
 	})
 	switch {
 	case err != nil:
-		return Request{}, err
+		return Request{}, nil, err
 	case was == "":
-		return Request{}, ErrNotFound
+		return Request{}, nil, ErrNotFound
 	case !decidable(was):
-		return Request{}, ErrDecided
+		return Request{}, nil, ErrDecided
 	}
-	return s.request(ctx, s.pool, id)
+	if err := s.countUnread(ctx, cleared); err != nil {
+		return Request{}, nil, err
+	}
+	r, err := s.request(ctx, s.pool, id)
+	return r, cleared, err
 }
 
 func decidable(s domain.RequestState) bool {

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"uuid"
@@ -17,21 +18,22 @@ import (
 var inception = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000a1")
 
 // fakeRequests has Inception found for asking, already asked for once, and keeps who decided what,
-// over whose profiles.
+// over whose profiles. Asking tells Oliver and Sam, who decide it, and deciding clears theirs.
 type fakeRequests struct {
 	by      *uuid.UUID
 	decider uuid.UUID
 	reason  string
 }
 
-func (*fakeRequests) AskFor(_ context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, error) {
+func (*fakeRequests) AskFor(_ context.Context, profile, discovery uuid.UUID, seasons []int) (store.Request, []store.Told, error) {
 	if discovery != inception {
-		return store.Request{}, store.ErrNotFound
+		return store.Request{}, nil, store.ErrNotFound
 	}
 	if len(seasons) > 0 {
-		return store.Request{}, store.ErrFilmSeasons
+		return store.Request{}, nil, store.ErrFilmSeasons
 	}
-	return store.Request{ID: uuid.NewV7(), Profile: profile, Kind: domain.ItemMovie, Title: "Inception", Provider: domain.ProviderTMDB, Value: "27205", State: domain.RequestPending}, nil
+	told := []store.Told{{ProfileID: oliver.ID, IDs: []int64{7}}, {ProfileID: sam.ID, IDs: []int64{8}}}
+	return store.Request{ID: uuid.NewV7(), Profile: profile, Kind: domain.ItemMovie, Title: "Inception", Provider: domain.ProviderTMDB, Value: "27205", State: domain.RequestPending}, told, nil
 }
 
 func (*fakeRequests) Requests(context.Context, uuid.UUID, store.Page) ([]store.Request, store.Extent, error) {
@@ -42,21 +44,31 @@ func (*fakeRequests) RequestsKept(context.Context, *uuid.UUID, domain.RequestSta
 	return nil, store.Extent{}, nil
 }
 
-func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) error {
-	return store.ErrDecided
+func (*fakeRequests) WithdrawRequest(context.Context, uuid.UUID, uuid.UUID) ([]store.Cleared, error) {
+	return nil, store.ErrDecided
 }
 
-func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, error) {
+func (f *fakeRequests) DecideRequest(_ context.Context, id uuid.UUID, by *uuid.UUID, decider uuid.UUID, state domain.RequestState, reason string) (store.Request, []store.Cleared, error) {
 	f.by, f.decider, f.reason = by, decider, reason
-	return store.Request{ID: id, State: state, Reason: reason, DecidedBy: decider}, nil
+	cleared := []store.Cleared{{ProfileID: oliver.ID, IDs: []int64{7}, Unread: 2}, {ProfileID: sam.ID, IDs: []int64{8}}}
+	return store.Request{ID: id, State: state, Reason: reason, DecidedBy: decider}, cleared, nil
 }
 
 // A profile asks for a title by the id a search answered it as requestable under; a film asked for
 // by seasons, or a request decided, is refused. A request is decided by an admin over every
-// profile, or by a manager over the users it keeps, and a user decides none.
+// profile, or by a manager over the users it keeps, and a user decides none. Those who may decide
+// one are told it waits, each on its own devices, and that it no longer does once decided.
 func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	f := &fakeRequests{}
-	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f})
+	events := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: fakeAuth{}, Requests: f, Events: events})
+	raised := func() []domain.Event {
+		events.mu.Lock()
+		defer events.mu.Unlock()
+		out := events.raised
+		events.raised = nil
+		return out
+	}
 	do := func(method, target, token, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -71,6 +83,13 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &asked); rec.Code != http.StatusCreated || err != nil ||
 		asked.Title != "Inception" || asked.IDs[domain.ProviderTMDB] != "27205" || asked.State != domain.RequestPending {
 		t.Errorf("asked: %d %s", rec.Code, rec.Body)
+	}
+	want := []domain.Event{
+		{Kind: domain.EventNotificationsChanged, Profile: oliver.ID, Details: domain.NotificationsDetails{Change: domain.NotificationsAdded, IDs: []int64{7}}},
+		{Kind: domain.EventNotificationsChanged, Profile: sam.ID, Details: domain.NotificationsDetails{Change: domain.NotificationsAdded, IDs: []int64{8}}},
+	}
+	if got := raised(); !reflect.DeepEqual(got, want) {
+		t.Errorf("asked, raised %+v; want each who decides it told of its notification", got)
 	}
 	for body, want := range map[string]int{
 		`{"requestable_id":"` + uuid.NewV7().String() + `"}`:             http.StatusNotFound,
@@ -92,6 +111,13 @@ func TestARequestIsAskedAndDecidedByWhoMay(t *testing.T) {
 	}
 	if rec := do(http.MethodPost, "/api/v1/admin/requests/"+id+"/approve", goodToken, ""); rec.Code != http.StatusOK || f.by != nil || f.decider != oliver.ID {
 		t.Errorf("approved by an admin: %d, over %v as %v; want every profile's, as Oliver", rec.Code, f.by, f.decider)
+	}
+	want = []domain.Event{
+		{Kind: domain.EventNotificationsChanged, Profile: oliver.ID, Details: domain.NotificationsDetails{Change: domain.NotificationsCleared, IDs: []int64{7}, Unread: 2}},
+		{Kind: domain.EventNotificationsChanged, Profile: sam.ID, Details: domain.NotificationsDetails{Change: domain.NotificationsCleared, IDs: []int64{8}}},
+	}
+	if got := raised(); !reflect.DeepEqual(got, want) {
+		t.Errorf("approved, raised %+v; want each who was told it waits told it is cleared", got)
 	}
 	rec = do(http.MethodPost, "/api/v1/admin/requests/"+id+"/decline", managerToken, `{"reason":"Not this week"}`)
 	if rec.Code != http.StatusOK || f.by == nil || *f.by != sam.ID || f.decider != sam.ID || f.reason != "Not this week" {

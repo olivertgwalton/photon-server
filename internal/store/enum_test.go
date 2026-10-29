@@ -48,6 +48,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"episode_spoilers":         names(domain.SpoilerModes()),
 		"notify":                   names(domain.Notifies()),
 		"push_kind":                names(domain.PushKinds()),
+		"notification_kind":        names(domain.NotificationKinds()),
 		"apns_environment":         names(domain.APNsEnvironments()),
 		"artwork_kind":             names(domain.ArtworkKinds()),
 		"item_kind":                names(domain.ItemKinds()),
