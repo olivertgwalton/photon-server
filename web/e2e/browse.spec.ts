@@ -970,6 +970,39 @@ test("favourites, history and downloads list the reader's own", async ({
 	await expectAccessible(page);
 });
 
+test("a favourite episode is a poster, as the apps draw it", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/profile/rows/favourites*", async (route) => {
+		const response = await route.fetch();
+		const row = await response.json();
+		const episode = {
+			id: "t-ep",
+			kind: "episode",
+			title: "Pilot",
+			added_at: "2024-03-12T00:00:00Z",
+			show: { id: "t-show", title: "Small Show" },
+			season_number: 1,
+			episode_number: 1,
+			thumb: "still",
+			season_poster: "season-poster",
+		};
+		await route.fulfill({
+			response,
+			json: { ...row, items: [...(row.items ?? []), episode] },
+		});
+	});
+	await logIn(page, "/favourites");
+	const episodes = page.getByRole("region", { name: "Episodes" });
+	const pilot = episodes.getByRole("link", { name: /Pilot/ });
+	await expect(pilot).toContainText("S1, E1 · Small Show");
+	await expect(pilot.locator(".aspect-2\\/3")).toHaveCount(1);
+	await expect(pilot.locator("img")).toHaveAttribute(
+		"src",
+		/artwork\/season-poster/,
+	);
+});
+
 test("a version in two files is downloaded a file at a time", async ({
 	page,
 }) => {
