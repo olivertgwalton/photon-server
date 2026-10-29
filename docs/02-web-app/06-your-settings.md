@@ -89,10 +89,13 @@ are one entry each here, but show once for each library on Home.
 
 ## Notifications
 
-The bell at the top of every page lists new titles, newest first. A dot marks unread ones, and the
-bell shows how many. A show's new episodes are gathered into one notification.
+The bell at the top of every page lists new titles, and, for an admin or manager, requests waiting
+to be decided, newest first. A dot marks unread ones, and the bell shows how many. A show's new
+episodes are gathered into one notification.
 
-- Choose a notification to open the title.
+- Choose a title's notification to open the title.
+- **Approve** or **Decline** a request from its notification. It leaves the bell once anyone has
+  decided it.
 - **Mark all read** and **Clear all** act on everything in the list.
 
 What you read or clear on one device is cleared on the others too.

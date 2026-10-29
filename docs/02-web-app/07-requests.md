@@ -33,8 +33,12 @@ When a request is added you get a notification, as for any new title, unless you
 
 ## Decide what people ask for
 
-An admin decides any profile's requests, and a manager those of the profiles it looks after. Open
-Settings › **Requests**. It shows those waiting first; **Show** picks another state.
+An admin decides any profile's requests, and a manager those of the profiles it looks after. Each
+is told when a request waits, in the bell and on their browsers and devices, and can approve or
+decline it from the notification. See [notifications and push](../06-integrations/06-notifications.md).
+
+Open Settings › **Requests** to see them all. It shows those waiting first; **Show** picks another
+state.
 
 - **Approve** sends the request where its library's requests go, or leaves it for you to add the
   title yourself.
