@@ -1,11 +1,40 @@
+<script lang="ts" module>
+// The title the reader last rested on or went to from Home, which the curated
+// showcase wears, kept while they are away from Home. By id, so it is drawn as
+// Home last answered it; one no longer on Home leaves the showcase its pool.
+const resting = $state<{ id?: string }>({});
+</script>
+
 <script lang="ts">
+import { SvelteMap } from "svelte/reactivity";
 import { refusal } from "#lib/api/client.js";
+import type { components } from "#lib/api/schema.js";
 import Rail from "#lib/components/Rail.svelte";
+import Showcase from "#lib/components/Showcase.svelte";
 import { homeRows } from "#lib/rows.js";
+import { readShowcase, showcasePool } from "#lib/showcase.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
 let { data } = $props();
 const words = vocabulary();
+
+const showcase = readShowcase();
+const pool = $derived(
+	showcase.visibility === "shown"
+		? showcasePool(data.rails, showcase.row)
+		: undefined,
+);
+// Every title on Home as its row answered, for the one the reader rested on.
+const known = new SvelteMap<string, components["schemas"]["Card"]>();
+$effect(() => {
+	for (const r of data.rails)
+		r.cards.then(
+			(p) => {
+				for (const c of p.items) known.set(c.id, c);
+			},
+			() => {},
+		);
+});
 
 // What the page says in place of its rows once every row has answered: why
 // none could be read, or that none has anything.
@@ -36,6 +65,21 @@ function title(r: (typeof data.rails)[number]) {
 <!-- Each row is drawn as it comes, and kept while a change the server told of
 	is asked for again; a row that could not be read is left out. -->
 <div class="grid gap-8">
+	{#if pool}
+		<svelte:boundary>
+			{@const { cards, turn } = await pool}
+			{@const rested =
+				turn === "rests" && resting.id ? known.get(resting.id) : undefined}
+			{#if cards.length}
+				<!-- Curated, the showcase wears the title the reader rests on. -->
+				<Showcase cards={turn === "slides" ? cards : [rested ?? cards[0]]} />
+			{/if}
+			{#snippet pending()}
+				<!-- Its room is kept, so the rows drawn under it do not move. -->
+				<div class="-mx-3 -mt-6 min-h-[max(30rem,62svh)] sm:-mx-6"></div>
+			{/snippet}
+		</svelte:boundary>
+	{/if}
 	{#each data.rails as r (r.key)}
 		<svelte:boundary>
 			{@const page = await r.cards.catch(() => unread)}
@@ -46,6 +90,9 @@ function title(r: (typeof data.rails)[number]) {
 					shape={homeRows[r.kind].shape}
 					href={r.href}
 					pill="always"
+					onrest={(card) => {
+						resting.id = card.id;
+					}}
 				/>
 			{/if}
 			{#snippet pending()}

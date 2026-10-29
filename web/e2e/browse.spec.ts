@@ -29,6 +29,31 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(20);
 });
 
+test("home's showcase wears what the reader opens", async ({ page }) => {
+	await logIn(page);
+	const showcase = page.getByRole("region", { name: "Showcase" });
+	// Curated, it is the first library row's first title, never the reader's.
+	await expect(
+		showcase.getByRole("heading", { name: "Quiet Hours" }),
+	).toBeVisible();
+	await expect(
+		showcase.getByRole("link", { name: /^(Play|Resume) Quiet Hours$/ }),
+	).toBeVisible();
+	await expectAccessible(page);
+
+	// A title opened from a row is the one it wears on coming back.
+	await page
+		.getByRole("region", { name: "Continue Watching" })
+		.getByRole("link", { name: /Pilot/ })
+		.click();
+	await expect(page).toHaveURL("/titles/t-ep");
+	await page.goBack();
+	await expect(
+		showcase.getByRole("heading", { name: "Small Show" }),
+	).toBeVisible();
+	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {
