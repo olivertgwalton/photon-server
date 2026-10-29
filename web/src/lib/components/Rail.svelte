@@ -28,6 +28,7 @@ let {
 	current,
 	heading,
 	pill = "past_rail",
+	resume = "hidden",
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -41,6 +42,7 @@ let {
 	// What the row's name is drawn as, where it is more than its words.
 	heading?: Snippet;
 	pill?: "past_rail" | "always";
+	resume?: "shown" | "hidden";
 } = $props();
 
 const shown = $derived(current ? cards : cards.slice(0, railLimit));
@@ -203,6 +205,7 @@ const sizes = $derived(
 						{sizes}
 						caption={caption?.(i)}
 						current={c.id === current}
+						{resume}
 					/>
 				</li>
 			{/each}

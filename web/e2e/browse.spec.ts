@@ -29,6 +29,37 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(20);
 });
 
+test("only Continue Watching's cards say how far the reader is", async ({
+	page,
+}) => {
+	await logIn(page);
+	const watching = page.getByRole("region", { name: "Continue Watching" });
+	await expect(
+		watching.getByRole("progressbar", { name: "Watched" }).first(),
+	).toBeVisible();
+	// Quiet Hours is part way, and says so nowhere else.
+	const added = page.getByRole("region", { name: "Recently Added in Films" });
+	await expect(added.getByRole("link", { name: /Quiet Hours/ })).toBeVisible();
+	await expect(added.getByRole("progressbar")).toHaveCount(0);
+	await page.goto("/search?q=Quiet");
+	await expect(
+		page
+			.getByRole("main")
+			.getByRole("link", { name: /Quiet Hours/ })
+			.first(),
+	).toBeVisible();
+	await expect(page.getByRole("progressbar")).toHaveCount(0);
+
+	// Its own page draws posters, an episode by its place and show, and no
+	// progress, as the apps' do.
+	await page.goto("/home/continue_watching");
+	const pilot = page.getByRole("link", { name: /Pilot/ });
+	await expect(pilot).toContainText("S1, E1 · Small Show");
+	await expect(pilot.locator(".aspect-2\\/3")).toHaveCount(1);
+	await expect(page.getByRole("progressbar")).toHaveCount(0);
+	await expectAccessible(page);
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {

@@ -46,6 +46,7 @@ function title(r: (typeof data.rails)[number]) {
 					shape={homeRows[r.kind].shape}
 					href={r.href}
 					pill="always"
+					resume={r.kind === "continue_watching" ? "shown" : "hidden"}
 				/>
 			{/if}
 			{#snippet pending()}
