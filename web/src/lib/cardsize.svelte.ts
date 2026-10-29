@@ -1,6 +1,6 @@
 import { MediaQuery } from "svelte/reactivity";
 import type { Shape } from "./artwork.js";
-import { type CardSize, cardSizes, minCardWidth } from "./grid.js";
+import { type CardSize, cardSizes, minCardWidth, railScale } from "./grid.js";
 
 // The size chosen, kept in this browser as the apps keep it on each device.
 const key = "card-size";
@@ -29,4 +29,9 @@ export function chooseCardSize(size: CardSize) {
 // The narrowest a wall draws a card of this shape now.
 export function cardMin(shape: Shape): number {
 	return minCardWidth(shape, chosen.size, phone.current);
+}
+
+// How far a row draws its cards past their size at Standard.
+export function cardRailScale(): number {
+	return railScale[chosen.size];
 }

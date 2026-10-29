@@ -262,8 +262,8 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 				class="w-full sm:w-72"
 			/>
 			<Field.Description>
-				How large a library's, a search's or a list's cards are drawn, in this
-				browser. On a phone, Standard fits three posters across.
+				How large cards are drawn in this browser, on Home's rows and every page
+				of titles. On a phone, Standard fits three posters across.
 			</Field.Description>
 		</Field.Field>
 		<Field.Separator />

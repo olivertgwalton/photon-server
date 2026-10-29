@@ -266,6 +266,30 @@ test("home's showcase says what the apps' does of an episode", async ({
 	await expectAccessible(page);
 });
 
+test("home's rows draw their cards at the card size chosen", async ({
+	page,
+}) => {
+	await logIn(page);
+	const card = page
+		.getByRole("region", { name: "Recently Added in Films" })
+		.getByRole("listitem")
+		.first();
+	const width = async () => (await card.boundingBox())?.width ?? 0;
+	await expect(card).toBeVisible();
+	const standard = await width();
+	for (const [size, scale] of [
+		["Large", 1.2],
+		["Compact", 0.87],
+	] as const) {
+		await page.goto("/settings/home");
+		await page.getByRole("combobox", { name: "Card size" }).click();
+		await page.getByRole("option", { name: size }).click();
+		await page.goto("/");
+		await expect(card).toBeVisible();
+		expect((await width()) / standard).toBeCloseTo(scale, 2);
+	}
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {

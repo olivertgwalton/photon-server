@@ -18,6 +18,15 @@ const scale: Record<Shape, Record<CardSize, number>> = {
 };
 export const columnGap = 12;
 
+// How far each size takes a row's cards, which are counted in thirds of a
+// card more or less rather than whole columns: Large is a step smaller than a
+// wall's, as the apps', so a wide row of posters goes from six to five.
+export const railScale: Record<CardSize, number> = {
+	compact: 0.87,
+	standard: 1,
+	large: 1.2,
+};
+
 export function minCardWidth(
 	shape: Shape,
 	size: CardSize,
