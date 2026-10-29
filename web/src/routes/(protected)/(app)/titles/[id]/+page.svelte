@@ -299,13 +299,14 @@ async function ask() {
 					class="from-ground via-(--accent)/35 absolute inset-0 bg-linear-to-t to-transparent"
 				></div>
 				<div
-					class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent"
+					class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent max-sm:hidden"
 				></div>
 			</div>
 		{/if}
 		<div
 			class={[
-				"relative grid gap-5 px-3 sm:px-6",
+				// Centred on a phone, as the apps' hero is at a compact width.
+				"relative grid gap-5 px-3 max-sm:justify-items-center max-sm:text-center sm:px-6",
 				backdrop ? "pt-[28svh]" : "pt-6",
 			]}
 		>
@@ -318,7 +319,7 @@ async function ask() {
 					{t.show.title}
 				</a>
 			{/if}
-			<div class="flex items-end gap-6">
+			<div class="flex items-end gap-6 max-sm:justify-center">
 				{#if poster && !backdrop}
 					<Artwork
 						id={poster}
@@ -336,7 +337,7 @@ async function ask() {
 								<Lettering
 									id={logo}
 									{alt}
-									class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)]"
+									class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)] max-sm:[--lettering-align:center]"
 								/>
 							{/snippet}
 							{#if t.show}
@@ -353,7 +354,9 @@ async function ask() {
 				</h1>
 			</div>
 			{#if facts.length || endsAt}
-				<p class="text-ink-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+				<p
+					class="text-ink-2 flex flex-wrap gap-x-3 gap-y-1 text-sm max-sm:justify-center"
+				>
 					{#each facts as fact (fact)}
 						<span>{fact}</span>
 					{/each}
@@ -366,7 +369,10 @@ async function ask() {
 				<p class="text-ink-2 text-sm">{t.genres.join(", ")}</p>
 			{/if}
 			{#if ratings?.length}
-				<ul class="flex flex-wrap gap-2" aria-label="Ratings">
+				<ul
+					class="flex flex-wrap gap-2 max-sm:justify-center"
+					aria-label="Ratings"
+				>
 					{#each ratings as rating (rating.site)}
 						<li
 							class="flex rounded-full bg-white/8 px-3 py-1.25 text-sm backdrop-blur-xl"
@@ -393,7 +399,7 @@ async function ask() {
 			{#if data.asking}
 				<!-- A title the server lacks: asked for in Play's place, and nothing
 					else of a title the server holds. -->
-				<div class="grid justify-items-start gap-2">
+				<div class="grid justify-items-start gap-2 max-sm:justify-items-center">
 					<Button
 						size="lg"
 						class="rounded-full px-5"
@@ -413,7 +419,7 @@ async function ask() {
 					</p>
 				</div>
 			{:else}
-				<div class="flex flex-wrap items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2 max-sm:justify-center">
 					{#if playable && chosen}
 						<Button
 							href={playHref(t.id, choice)}
