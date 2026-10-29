@@ -162,15 +162,18 @@ func insertItem(ctx context.Context, tx db, row *model.Item) error {
 }
 
 func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Film, changed Changed) error {
-	itemID, err := filmItem(ctx, tx, lib, f, changed)
+	itemID, found, err := filmItem(ctx, tx, lib, f, changed)
 	if err != nil {
 		return err
 	}
-	if err := saveFolderArtwork(ctx, tx, itemID, f.Folder, f.Artwork); err != nil {
-		return err
-	}
-	if err := saveFolderThemes(ctx, tx, itemID, f.Folder, f.Themes); err != nil {
-		return err
+	// The film this one was merged into keeps its own name, description and pictures.
+	if found != foundByMerge {
+		if err := saveFolderArtwork(ctx, tx, itemID, f.Folder, f.Artwork); err != nil {
+			return err
+		}
+		if err := saveFolderThemes(ctx, tx, itemID, f.Folder, f.Themes); err != nil {
+			return err
+		}
 	}
 	for _, c := range f.Versions {
 		if err := saveVersion(ctx, tx, lib, settings, itemID, c); err != nil {
@@ -188,59 +191,80 @@ func saveFilm(ctx context.Context, tx db, lib uuid.UUID, settings analysis, f Fi
 
 // filmItem is the title a film's versions belong to: the title of a version already known, else a title
 // of the same name in the same folder, else a new one.
-func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed) (uuid.UUID, error) {
-	id, known, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Versions)
+func filmItem(ctx context.Context, tx db, lib uuid.UUID, f Film, changed Changed) (uuid.UUID, foundBy, error) {
+	id, found, err := knownItem(ctx, tx, lib, domain.ItemMovie, f.Versions)
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, foundNone, err
 	}
-	if !known {
+	switch found {
+	case foundByMerge:
+		changed.add(domain.TitleUpdated, id)
+		return id, found, nil
+	case foundByScan:
+	case foundNone:
 		err := tx.QueryRow(ctx, `SELECT id FROM items WHERE library_id = $1 AND folder = $2 AND scan_title = $3 LIMIT 1`,
 			lib, f.Folder, f.Title).Scan(&id)
 		switch {
 		case err == nil:
 		case !errors.Is(err, pgx.ErrNoRows):
-			return uuid.UUID{}, err
+			return uuid.UUID{}, foundNone, err
 		default:
 			item := model.Item{
 				LibraryID: &lib, Kind: domain.ItemMovie,
 				ScanTitle: f.Title, Title: f.Title, SortTitle: sortTitle(f.Title), Folder: f.Folder,
 			}
 			if err := insertItem(ctx, tx, &item); err != nil {
-				return uuid.UUID{}, err
+				return uuid.UUID{}, foundNone, err
 			}
 			if err := enqueue(ctx, tx, domain.JobIdentify, item.ID); err != nil {
-				return uuid.UUID{}, err
+				return uuid.UUID{}, foundNone, err
 			}
 			changed.add(domain.TitleAdded, item.ID)
-			return item.ID, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
+			return item.ID, foundNone, describe(ctx, tx, item.ID, f.Title, f.Year, f.IDs, f.NFO)
 		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE items SET scan_title = $2, folder = $3 WHERE id = $1`, id, f.Title, f.Folder); err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, foundNone, err
 	}
 	changed.add(domain.TitleUpdated, id)
-	return id, describe(ctx, tx, id, f.Title, f.Year, f.IDs, f.NFO)
+	return id, found, describe(ctx, tx, id, f.Title, f.Year, f.IDs, f.NFO)
 }
+
+// foundBy is how a scan found the title a film's versions belong to.
+type foundBy string
+
+const (
+	foundNone    foundBy = "none"
+	foundByScan  foundBy = "scan"
+	foundByMerge foundBy = "merge"
+)
 
 // knownItem is the title of kind holding the first of versions the catalogue already has. A version
 // held by a title of another kind does not count: a film's version first met as an extra is
 // reclaimed by the film, and the emptied extra goes at the end of the scan. Nor does one an admin
-// split off, whose title is its alone.
-func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, versions []Version) (uuid.UUID, bool, error) {
+// split off, whose title is its alone. One an admin merged into a film counts only where no other
+// version finds a title.
+func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, versions []Version) (uuid.UUID, foundBy, error) {
+	holder, by := uuid.UUID{}, foundNone
 	for _, c := range versions {
 		var id uuid.UUID
+		var merged bool
 		err := tx.QueryRow(ctx, `
-			SELECT v.item_id FROM versions v JOIN items i ON i.id = v.item_id
-			WHERE v.library_id = $1 AND v.fingerprint = $2 AND i.kind = $3 AND v.split_at IS NULL LIMIT 1`,
-			lib, c.ContentKey, kind).Scan(&id)
-		if err == nil {
-			return id, true, nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return uuid.UUID{}, false, err
+			SELECT v.item_id, v.merged_at IS NOT NULL FROM versions v JOIN items i ON i.id = v.item_id
+			WHERE v.library_id = $1 AND v.fingerprint = $2 AND i.kind = $3 AND v.split_at IS NULL
+			ORDER BY v.merged_at IS NOT NULL LIMIT 1`,
+			lib, c.ContentKey, kind).Scan(&id, &merged)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return uuid.UUID{}, foundNone, err
+		case !merged:
+			return id, foundByScan, nil
+		case by == foundNone:
+			holder, by = id, foundByMerge
 		}
 	}
-	return uuid.UUID{}, false, nil
+	return holder, by, nil
 }
 
 // FinishScan settles a library after every folder of a scan has been seen, scopes being the
