@@ -17,9 +17,10 @@ let {
 } = $props();
 
 const id = $props.id();
-let reason = $state("");
-$effect.pre(() => {
-	if (request) reason = "";
+// Each request starts with nothing said of it.
+let reason = $derived.by(() => {
+	request;
+	return "";
 });
 </script>
 
