@@ -1,4 +1,5 @@
 <script lang="ts">
+import { prefersReducedMotion } from "svelte/motion";
 import type { components } from "#lib/api/schema.js";
 import ShowcaseSlide from "#lib/components/ShowcaseSlide.svelte";
 import type { CarouselAPI } from "#lib/components/ui/carousel/context.js";
@@ -17,9 +18,6 @@ let api = $state<CarouselAPI>();
 let selected = $state(0);
 let held = $state(false);
 let over = $state(false);
-const still =
-	typeof matchMedia === "function" &&
-	matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 $effect(() => {
 	if (!api) return;
@@ -35,7 +33,8 @@ $effect(() => {
 
 $effect(() => {
 	selected;
-	if (!api || held || over || still || cards.length < 2) return;
+	if (!api || held || over || prefersReducedMotion.current || cards.length < 2)
+		return;
 	const turn = setTimeout(() => api?.scrollNext(), turnMs);
 	return () => clearTimeout(turn);
 });
@@ -76,16 +75,16 @@ $effect(() => {
 				class="absolute right-3 bottom-6 hidden gap-2 pointer-fine:flex sm:right-6"
 			>
 				<Carousel.Previous
-					variant="ghost"
-					class="static rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14"
+					variant="glass"
+					class="static"
 					onclick={() => {
 						held = true;
 						api?.scrollPrev();
 					}}
 				/>
 				<Carousel.Next
-					variant="ghost"
-					class="static rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14"
+					variant="glass"
+					class="static"
 					onclick={() => {
 						held = true;
 						api?.scrollNext();
