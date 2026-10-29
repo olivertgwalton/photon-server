@@ -39,7 +39,9 @@ test("home's showcase wears what the reader opens, or slides through a row they 
 		showcase.getByRole("heading", { name: "Quiet Hours" }),
 	).toBeVisible();
 	await expect(
-		showcase.getByRole("link", { name: /^(Play|Resume) Quiet Hours$/ }),
+		showcase.getByRole("link", {
+			name: /^(Play|Resume from [0-9:]+) Quiet Hours$/,
+		}),
 	).toBeVisible();
 	await expectAccessible(page);
 
@@ -76,6 +78,88 @@ test("home's showcase wears what the reader opens, or slides through a row they 
 		page.getByRole("region", { name: "Continue Watching" }),
 	).toBeVisible();
 	await expect(showcase).toHaveCount(0);
+});
+
+test("home's showcase says what the apps' does of an episode", async ({
+	page,
+}) => {
+	// The first library row led by an episode that has everything the
+	// showcase draws, whose show lends it what it lacks.
+	await page.route(
+		"**/api/v1/libraries/l-films/rows/recently_added_films*",
+		async (route) => {
+			const response = await route.fetch();
+			const page = await response.json();
+			const episode = {
+				id: "t-ep",
+				kind: "episode",
+				title: "Pilot",
+				added_at: "2024-03-12T00:00:00Z",
+				show: { id: "t-show", title: "Small Show" },
+				season_number: 1,
+				episode_number: 1,
+				release_date: "2024-03-12",
+				certificate: "TV-14",
+				overview: "A night shift at a radio station.",
+				duration_ms: 1_800_000,
+				state: { position_ms: 600_000 },
+				ratings: [{ site: "imdb", score: 81 }],
+				logo: "logo-svg",
+			};
+			await route.fulfill({
+				response,
+				json: { ...page, items: [episode, ...page.items] },
+			});
+		},
+	);
+	await page.route("**/api/v1/titles/t-show", async (route) => {
+		const response = await route.fetch();
+		const show = await response.json();
+		await route.fulfill({
+			response,
+			json: {
+				...show,
+				genres: ["Drama", "Mystery"],
+				ratings: [
+					{ site: "imdb", score: 70 },
+					{ site: "rotten_tomatoes", score: 91 },
+				],
+			},
+		});
+	});
+	// A lettering kept as SVG, sized by its viewBox alone.
+	await page.route("**/api/v1/artwork/logo-svg*", (route) =>
+		route.fulfill({
+			contentType: "image/svg+xml",
+			body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><rect width="400" height="100" fill="#fff"/></svg>',
+		}),
+	);
+	await logIn(page);
+	const showcase = page.getByRole("region", { name: "Showcase" });
+	const logo = showcase.getByRole("img", { name: "Small Show" });
+	await expect(logo).toBeVisible();
+	// It fills the lettering's box, not the 300 by 150 a bare SVG is drawn at.
+	await expect
+		.poll(() => logo.evaluate((img) => img.getBoundingClientRect().height))
+		.toBe(112);
+	await expect(
+		showcase.getByText("S1, E1 · Mar 12, 2024 · Drama · Mystery"),
+	).toBeVisible();
+	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+	await expect(
+		showcase.getByText("A night shift at a radio station."),
+	).toBeVisible();
+	const facts = showcase.getByRole("list", { name: "Facts" });
+	await expect(facts).toContainText("20m left");
+	await expect(facts).toContainText("TV-14");
+	// Its own IMDb score, and the show's Rotten Tomatoes where it has none.
+	await expect(facts).toContainText("8.1");
+	await expect(facts).toContainText("91%");
+	await expect(facts).not.toContainText("7.0");
+	await expect(
+		showcase.getByRole("link", { name: "Resume from 10:00 Small Show: Pilot" }),
+	).toHaveAttribute("href", "/play/t-ep");
+	await expectAccessible(page);
 });
 
 test("a rail shows twenty, and its heading leads to all of them", async ({

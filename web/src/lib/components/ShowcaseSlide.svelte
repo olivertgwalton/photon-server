@@ -1,3 +1,27 @@
+<script lang="ts" module>
+import { client } from "#lib/api/client.js";
+
+type Rating = components["schemas"]["RatingRef"];
+type Lent = { genres: string[]; ratings: Rating[] };
+
+// What a show lends its episodes, asked for once a show however often its
+// episodes are rested on.
+const shows = new Map<string, Promise<Lent>>();
+function lentBy(id: string): Promise<Lent> {
+	let lent = shows.get(id);
+	if (!lent) {
+		lent = client()
+			.GET("/api/v1/titles/{id}", { params: { path: { id } } })
+			.then(({ data }) => ({
+				genres: data?.genres ?? [],
+				ratings: data?.ratings ?? [],
+			}));
+		shows.set(id, lent);
+	}
+	return lent;
+}
+</script>
+
 <script lang="ts">
 import InfoIcon from "@lucide/svelte/icons/info";
 import PlayIcon from "@lucide/svelte/icons/play";
@@ -8,7 +32,13 @@ import Prose from "#lib/components/Prose.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
-import { episodeLabel, playHref, runtime, titleWithShow } from "#lib/format.js";
+import {
+	episodeLabel,
+	playHref,
+	runtime,
+	timecode,
+	titleWithShow,
+} from "#lib/format.js";
 
 // One title of Home's showcase, as the apps' column draws it over its
 // backdrop: the lettering, what the title is (an episode by its place, then
@@ -17,22 +47,65 @@ import { episodeLabel, playHref, runtime, titleWithShow } from "#lib/format.js";
 let { card }: { card: components["schemas"]["Card"] } = $props();
 
 const playable = $derived(card.kind === "movie" || card.kind === "episode");
-const position = $derived(card.state?.position_ms ?? 0);
-// What is left where the reader is part way through, else how long it runs.
-const time = $derived.by(() => {
-	if (!card.duration_ms) return undefined;
-	const left = card.duration_ms - position;
-	return position && left > 0
-		? `${runtime(left)} left`
-		: runtime(card.duration_ms);
+// Where the reader is part way through, as the apps judge it: a few seconds
+// in is a false start, and the last minute is the credits.
+const position = $derived.by(() => {
+	const at = card.state?.position_ms ?? 0;
+	const length = card.duration_ms ?? 0;
+	return at > falseStartMs && at < length - creditsMs ? at : 0;
 });
+// What is left where the reader is part way through, else how long it runs.
+const time = $derived(
+	card.duration_ms &&
+		(position
+			? `${runtime(card.duration_ms - position)} left`
+			: runtime(card.duration_ms)),
+);
 const place = $derived(
 	card.kind === "episode"
 		? episodeLabel(card.season_number, card.episode_number, card.episode_end)
 		: undefined,
 );
+// An episode short of genres wears its show's, and every site that did not
+// score it lends its show's score.
+let lent = $state<Lent>();
+$effect(() => {
+	const show = card.kind === "episode" ? card.show?.id : undefined;
+	lent = undefined;
+	if (!show) return;
+	let current = true;
+	lentBy(show).then(
+		(l) => {
+			if (current) lent = l;
+		},
+		() => {},
+	);
+	return () => {
+		current = false;
+	};
+});
+const genres = $derived(
+	card.genres?.length ? card.genres : (lent?.genres ?? []),
+);
+const ratings = $derived([
+	...(card.ratings ?? []),
+	...(lent?.ratings ?? []).filter(
+		(r) => !card.ratings?.some((o) => o.site === r.site),
+	),
+]);
+// When it came out: an episode by the day it aired, anything else its year.
+const released = $derived(
+	place && card.release_date
+		? new Date(card.release_date).toLocaleDateString(undefined, {
+				day: "numeric",
+				month: "short",
+				year: "numeric",
+				timeZone: "UTC",
+			})
+		: card.year,
+);
 const source = $derived(
-	[card.year, ...(card.genres ?? []).slice(0, 3)].filter(Boolean).join(" · "),
+	[released, ...genres.slice(0, 3)].filter(Boolean).join(" · "),
 );
 // An episode's lettering is its show's, and names it by its show.
 const named = $derived(card.show?.title ?? card.title);
@@ -43,6 +116,9 @@ const accent = $derived(
 );
 const logo = $derived(card.logo);
 const darkLogo = $derived(logo ? isDark(card.blurhashes?.[logo]) : false);
+
+const falseStartMs = 30_000;
+const creditsMs = 60_000;
 
 // Beside Play, a pane of glass over the backdrop, as on a title's page.
 const glass =
@@ -88,7 +164,7 @@ const glass =
 						loading="eager"
 						sizes="26rem"
 						alt={named}
-						class="max-h-20 w-auto max-w-[min(17.5rem,80vw)] object-contain transition-opacity duration-500 data-loading:opacity-0 sm:max-h-28 sm:max-w-104 sm:object-left {darkLogo
+						class="h-20 w-[min(17.5rem,80vw)] object-contain transition-opacity duration-500 data-loading:opacity-0 sm:h-28 sm:w-104 sm:object-left {darkLogo
 							? "lettering-glow"
 							: ""}"
 					/>
@@ -114,7 +190,7 @@ const glass =
 					class="text-ink-2 rounded-xl bg-white/8 px-4 py-3 text-left backdrop-blur-xl"
 				/>
 			{/if}
-			{#if time || card.certificate || card.ratings?.length}
+			{#if time || card.certificate || ratings.length}
 				<ul
 					class="text-ink-2 flex flex-wrap items-center justify-center gap-2 text-sm sm:justify-start"
 					aria-label="Facts"
@@ -125,7 +201,7 @@ const glass =
 					{#if card.certificate}
 						<li><Badge variant="outline">{card.certificate}</Badge></li>
 					{/if}
-					{#each card.ratings ?? [] as rating (rating.site)}
+					{#each ratings as rating (rating.site)}
 						<li
 							class="flex rounded-full bg-white/8 px-3 py-1.25 backdrop-blur-xl"
 						>
@@ -138,7 +214,7 @@ const glass =
 				{#if playable}
 					<Button href={playHref(card.id)} size="lg" class="rounded-full px-5">
 						<PlayIcon class="fill-current" />
-						{position ? "Resume" : "Play"}
+						{position ? `Resume from ${timecode(position)}` : "Play"}
 						<span class="sr-only">{titleWithShow(card)}</span>
 					</Button>
 				{/if}
