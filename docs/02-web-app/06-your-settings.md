@@ -43,6 +43,7 @@ wins for that title. Changes are saved as you make them.
 | Remember the sound chosen | Default: on. A title plays again with the soundtrack you last picked for it. |
 | Remember the subtitles chosen | Default: on. A title plays again with the subtitles you last picked for it, or none. |
 | Play the next episode | Default: on. The next episode plays after a ten-second countdown. Off, it waits for you. |
+| Inactivity Check | Default: off. On, after three episodes in a row with nothing pressed, the player pauses to ask if you're still watching. |
 | Intros and recaps | Default: **Show a button to skip**. Or **Skip by itself**, or **Don't offer to skip**. |
 | Credits and previews | The same three choices. |
 | Play theme music | Default: off. On, a show's or film's theme tune plays quietly once on its page. |
