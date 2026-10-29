@@ -26,8 +26,9 @@ function lentBy(id: string): Promise<Lent> {
 import InfoIcon from "@lucide/svelte/icons/info";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { components } from "#lib/api/schema.js";
-import { blurStyle, isDark, tintColour } from "#lib/blurhash.js";
+import { blurStyle, tintColour } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
+import Lettering from "#lib/components/Lettering.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
@@ -111,7 +112,6 @@ const accent = $derived(
 	(backdrop && tintColour(card.blurhashes?.[backdrop])) ?? "transparent",
 );
 const logo = $derived(card.logo);
-const darkLogo = $derived(logo ? isDark(card.blurhashes?.[logo]) : false);
 
 // How another title's words come in.
 const appear =
@@ -156,15 +156,10 @@ const creditsMs = 60_000;
 		>
 			<h2 class={appear}>
 				{#if logo}
-					<Artwork
+					<Lettering
 						id={logo}
-						shape="still"
-						loading="eager"
-						sizes="26rem"
 						alt={named}
-						class="h-20 w-[min(17.5rem,80vw)] object-contain transition-opacity duration-500 data-loading:opacity-0 sm:h-28 sm:w-104 sm:object-left {darkLogo
-							? "lettering-glow"
-							: ""}"
+						class="[--lettering-align:center] [--lettering-h:5rem] [--lettering-w:min(17.5rem,80vw)] sm:[--lettering-align:left] sm:[--lettering-h:7rem] sm:[--lettering-w:26rem]"
 					/>
 				{:else}
 					<span class="title block text-3xl md:text-5xl">{named}</span>

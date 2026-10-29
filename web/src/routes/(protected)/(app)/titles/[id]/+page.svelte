@@ -22,12 +22,13 @@ import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
-import { blurStyle, isDark, tintColour } from "#lib/blurhash.js";
+import { blurStyle, tintColour } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
+import Lettering from "#lib/components/Lettering.svelte";
 import MediaInfo from "#lib/components/MediaInfo.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import PlayChoices from "#lib/components/PlayChoices.svelte";
@@ -251,7 +252,6 @@ const accent = $derived(
 	(backdrop && tintColour(t.blurhashes?.[backdrop])) ?? "transparent",
 );
 const logo = $derived(art("logo"));
-const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
 const poster = $derived(art("poster"));
 
 // A title the server lacks, asked for from here; asked, it says so until the
@@ -333,15 +333,10 @@ async function ask() {
 					{#if logo}
 						{#key logo}
 							{#snippet lettering(alt: string)}
-								<Artwork
+								<Lettering
 									id={logo}
-									shape="still"
-									loading="eager"
-									sizes="24rem"
 									{alt}
-									class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0 {darkLogo
-										? "lettering-glow"
-										: ""}"
+									class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)]"
 								/>
 							{/snippet}
 							{#if t.show}

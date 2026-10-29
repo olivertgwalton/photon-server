@@ -158,21 +158,28 @@ test("home's showcase says what the apps' does of an episode", async ({
 			},
 		});
 	});
-	// A lettering kept as SVG, sized by its viewBox alone.
+	// A lettering kept as SVG on fanart.tv's clear 800 by 310 canvas, its ink
+	// in the middle half.
 	await page.route("**/api/v1/artwork/logo-svg*", (route) =>
 		route.fulfill({
 			contentType: "image/svg+xml",
-			body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><rect width="400" height="100" fill="#fff"/></svg>',
+			body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="310" viewBox="0 0 800 310"><rect x="200" y="60" width="400" height="190" fill="#fc0"/></svg>',
 		}),
 	);
 	await logIn(page);
 	const showcase = page.getByRole("region", { name: "Showcase" });
 	const logo = showcase.getByRole("img", { name: "Small Show" });
 	await expect(logo).toBeVisible();
-	// It fills the lettering's box, not the 300 by 150 a bare SVG is drawn at.
-	await expect
-		.poll(() => logo.evaluate((img) => img.getBoundingClientRect().height))
-		.toBe(112);
+	// The ink alone is drawn, so it lines up with the words under it.
+	const place = showcase.getByText("S1, E1 · Mar 12, 2024 · Drama · Mystery");
+	const [ink, words] = await Promise.all([
+		logo.boundingBox(),
+		place.boundingBox(),
+	]);
+	expect(Math.abs((ink?.x ?? 0) - (words?.x ?? 0))).toBeLessThan(1);
+	// Read from a 128-pixel sample, as the apps read it: within a pixel of it.
+	const aspect = (ink?.width ?? 0) / (ink?.height ?? 1);
+	expect(Math.abs(aspect / (400 / 190) - 1)).toBeLessThan(0.06);
 	await expect(
 		showcase.getByText("S1, E1 · Mar 12, 2024 · Drama · Mystery"),
 	).toBeVisible();
