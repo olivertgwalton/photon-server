@@ -346,11 +346,12 @@ func (s *Store) ClearNotifications(ctx context.Context, profile uuid.UUID, throu
 	return s.unread(ctx, profile)
 }
 
-// PushSubscription is a browser subscribed for a profile, and the language its messages are in.
+// PushSubscription is a browser or a device subscribed for a profile, and the language its messages
+// are in.
 type PushSubscription struct {
 	ID   uuid.UUID
 	Kind domain.PushKind
-	// Endpoint is a browser's push service address, or an Apple device's token.
+	// Endpoint is a browser's push service address, or an Apple or Android device's token.
 	Endpoint string
 	// P256DH and Auth are a browser's keys; ApnsEnvironment an Apple device's push service.
 	P256DH          []byte

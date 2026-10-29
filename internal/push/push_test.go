@@ -138,7 +138,13 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	p := &phones{answer: map[string]error{"old-phone": pushrelay.ErrGone}, got: map[string][]pushrelay.Message{}}
+	for _, token := range []string{"pixel", "old-pixel"} {
+		sub := store.PushSubscription{Kind: domain.PushAndroid, Endpoint: token, Language: "en"}
+		if _, _, err := st.Subscribe(ctx, fan, sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := &phones{answer: map[string]error{"old-phone": pushrelay.ErrGone, "old-pixel": pushrelay.ErrGone}, got: map[string][]pushrelay.Message{}}
 	scan(2, 3)
 
 	push := Job(st, b, p)
@@ -157,12 +163,16 @@ func TestAProfilesNotificationsArePushedToItsBrowsers(t *testing.T) {
 	// A phone is woken by the notification's id, which it asks the server to word, and told of the
 	// show once.
 	woken := p.got["phone"]
-	if len(woken) != 1 || woken[0].Collapse != show.String() || woken[0].Notification == "" || woken[0].Environment != production {
+	if len(woken) != 1 || woken[0].Platform != domain.PushApple || woken[0].Collapse != show.String() || woken[0].Notification == "" || woken[0].Environment != production {
 		t.Errorf("the phone was sent %+v, want one wake-up of the show's notification", woken)
 	}
+	// An Android phone is woken alike, through FCM.
+	if pixel := p.got["pixel"]; len(pixel) != 1 || pixel[0].Platform != domain.PushAndroid || pixel[0].Notification != woken[0].Notification || pixel[0].Environment != "" {
+		t.Errorf("the Android phone was sent %+v, want one wake-up of the show's notification through FCM", pixel)
+	}
 	subs, err := st.PushSubscriptions(ctx, fan)
-	if err != nil || len(subs) != 2 || subs[0].Endpoint != "https://push.example/laptop" || subs[1].Endpoint != "phone" {
-		t.Errorf("subscriptions after two ended: %+v %v, want the laptop's and the phone's", subs, err)
+	if err != nil || len(subs) != 3 || subs[0].Endpoint != "https://push.example/laptop" || subs[1].Endpoint != "phone" || subs[2].Endpoint != "pixel" {
+		t.Errorf("subscriptions after three ended: %+v %v, want the laptop's and the phones'", subs, err)
 	}
 
 	// Pushed once, nothing is pushed again; a failing browser leaves its pushes to be tried again.

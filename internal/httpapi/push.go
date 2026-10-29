@@ -31,7 +31,7 @@ type pushSubscriptionJSON struct {
 	ID   uuid.UUID       `json:"id"`
 	Kind domain.PushKind `json:"kind"`
 	// Endpoint is the address a browser's push service gave it, and Token an Apple device's APNs
-	// token: either tells one device from another.
+	// token or an Android device's FCM registration token: either tells one device from another.
 	Endpoint uri    `json:"endpoint,omitzero"`
 	Token    string `json:"token,omitzero"`
 }
@@ -42,8 +42,8 @@ type pushKeyJSON struct {
 	Key string `json:"key"`
 }
 
-// subscribeJSON is a browser's PushSubscription as its toJSON() gives it, or an Apple device's
-// token and the push service that issued it.
+// subscribeJSON is a browser's PushSubscription as its toJSON() gives it, an Apple device's token
+// and the push service that issued it, or an Android device's FCM registration token.
 type subscribeJSON struct {
 	// Kind is web where it is left out, so a browser sends its subscription as it is.
 	Kind     domain.PushKind `json:"kind,omitzero"`
@@ -53,7 +53,8 @@ type subscribeJSON struct {
 		P256DH string `json:"p256dh"`
 		Auth   string `json:"auth"`
 	} `json:"keys,omitzero"`
-	// Token is an Apple device's APNs token, hex, and Environment the push service that issued it.
+	// Token is an Apple device's APNs token, hex, and Environment the push service that issued it;
+	// or an Android device's FCM registration token.
 	Token       string                 `json:"token,omitzero"`
 	Environment domain.APNsEnvironment `json:"environment,omitzero"`
 }
@@ -65,7 +66,7 @@ func subscriptionOf(s store.PushSubscription) pushSubscriptionJSON {
 	switch s.Kind {
 	case domain.PushWeb:
 		out.Endpoint = uri(s.Endpoint)
-	case domain.PushApple:
+	case domain.PushApple, domain.PushAndroid:
 		out.Token = s.Endpoint
 	}
 	return out
@@ -91,8 +92,8 @@ func (a *API) pushSubscriptions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
 }
 
-// subscribe has a browser or an Apple device pushed the profile's notifications, worded in the
-// languages it reads.
+// subscribe has a browser or an Apple or Android device pushed the profile's notifications, worded
+// in the languages it reads.
 func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 	var req subscribeJSON
 	if !a.decode(w, r, &req) {
@@ -105,6 +106,8 @@ func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 		refused = webSubscription(req, &sub)
 	case domain.PushApple:
 		refused = appleSubscription(req, &sub)
+	case domain.PushAndroid:
+		refused = androidSubscription(req, &sub)
 	}
 	if refused != "" {
 		writeProblem(w, a.logger, codeInvalidBody, refused)
@@ -158,6 +161,20 @@ func appleSubscription(req subscribeJSON, sub *store.PushSubscription) string {
 	return ""
 }
 
+// fcmToken is the longest FCM registration token kept: Firebase gives no bound, and its tokens are
+// a few hundred characters.
+const fcmToken = 4096
+
+// androidSubscription fills an Android device's subscription, answering what is wrong with it if
+// anything.
+func androidSubscription(req subscribeJSON, sub *store.PushSubscription) string {
+	if req.Token == "" || len(req.Token) > fcmToken || strings.ContainsFunc(req.Token, func(r rune) bool { return r <= ' ' || r > '~' }) {
+		return "token is the device's FCM registration token"
+	}
+	sub.Endpoint = req.Token
+	return ""
+}
+
 // unsubscribe stops a device being pushed the profile's notifications.
 func (a *API) unsubscribe(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
@@ -179,17 +196,17 @@ func (a *API) pushRoutes() []route {
 		},
 		{
 			pattern: "GET /api/v1/profile/push-subscriptions", access: signedIn,
-			summary: "List the browsers and Apple devices pushed the profile's notifications",
+			summary: "List the browsers and the Apple and Android devices pushed the profile's notifications",
 			status:  http.StatusOK, reply: listJSON[pushSubscriptionJSON]{}, handle: a.pushSubscriptions,
 		},
 		{
 			pattern: "POST /api/v1/profile/push-subscriptions", access: signedIn,
-			summary: "Push the profile's notifications to a browser, by the subscription it made with the server's key, or to an Apple device by its APNs token; one subscribed already is the profile's from now",
+			summary: "Push the profile's notifications to a browser, by the subscription it made with the server's key, to an Apple device by its APNs token, or to an Android device by its FCM registration token; one subscribed already is the profile's from now",
 			body:    subscribeJSON{}, status: http.StatusCreated, reply: pushSubscriptionJSON{}, again: http.StatusOK, handle: a.subscribe,
 		},
 		{
 			pattern: "DELETE /api/v1/profile/push-subscriptions/{id}", access: signedIn,
-			summary: "Stop pushing the profile's notifications to a browser or an Apple device",
+			summary: "Stop pushing the profile's notifications to a browser or a device",
 			status:  http.StatusNoContent, handle: a.unsubscribe,
 		},
 	}

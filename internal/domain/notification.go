@@ -86,9 +86,11 @@ const (
 	PushWeb PushKind = "web"
 	// PushApple is an Apple device, through photon's push relay to APNs.
 	PushApple PushKind = "apple"
+	// PushAndroid is an Android device, through photon's push relay to Firebase Cloud Messaging.
+	PushAndroid PushKind = "android"
 )
 
-func PushKinds() []PushKind { return []PushKind{PushWeb, PushApple} }
+func PushKinds() []PushKind { return []PushKind{PushWeb, PushApple, PushAndroid} }
 
 // APNsEnvironment is which of Apple's push services issued a device's token: a build from Xcode
 // is development's, one from the App Store or TestFlight production's.

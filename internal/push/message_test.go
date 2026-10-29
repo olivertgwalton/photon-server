@@ -34,21 +34,27 @@ func TestABrowserShowsEachKindOfNotification(t *testing.T) {
 	}
 }
 
-// A device is woken by a notification's id, keeping one of each title, or of each request, while
-// it is away.
+// A device is woken through its platform's push service by a notification's id, keeping one of
+// each title, or of each request, while it is away: an iPhone through APNs in the environment that
+// issued its token, an Android phone through FCM.
 func TestADeviceIsWokenForEachKindOfNotification(t *testing.T) {
 	production := domain.APNsProduction
-	phone := store.PushSubscription{Kind: domain.PushApple, Endpoint: "a1b2", ApnsEnvironment: &production}
+	iphone := store.PushSubscription{Kind: domain.PushApple, Endpoint: "a1b2", ApnsEnvironment: &production}
+	pixel := store.PushSubscription{Kind: domain.PushAndroid, Endpoint: "fcm:token"}
 	show := uuid.NewV7()
+	asked, added := store.Push{ID: 13, Kind: domain.NotificationRequest}, store.Push{ID: 12, Kind: domain.NotificationTitle, Title: show}
 	for _, c := range []struct {
+		sub  store.PushSubscription
 		push store.Push
 		want pushrelay.Message
 	}{
-		{store.Push{ID: 13, Kind: domain.NotificationRequest}, pushrelay.Message{Token: "a1b2", Environment: production, Collapse: "13", Notification: "13"}},
-		{store.Push{ID: 12, Kind: domain.NotificationTitle, Title: show}, pushrelay.Message{Token: "a1b2", Environment: production, Collapse: show.String(), Notification: "12"}},
+		{iphone, asked, pushrelay.Message{Platform: domain.PushApple, Token: "a1b2", Environment: production, Collapse: "13", Notification: "13"}},
+		{iphone, added, pushrelay.Message{Platform: domain.PushApple, Token: "a1b2", Environment: production, Collapse: show.String(), Notification: "12"}},
+		{pixel, asked, pushrelay.Message{Platform: domain.PushAndroid, Token: "fcm:token", Collapse: "13", Notification: "13"}},
+		{pixel, added, pushrelay.Message{Platform: domain.PushAndroid, Token: "fcm:token", Collapse: show.String(), Notification: "12"}},
 	} {
-		if got := relayMessage(phone, c.push); got != c.want {
-			t.Errorf("%s: %+v, want %+v", c.push.Kind, got, c.want)
+		if got := relayMessage(c.sub, c.push); got != c.want {
+			t.Errorf("%s to %s: %+v, want %+v", c.push.Kind, c.sub.Kind, got, c.want)
 		}
 	}
 }

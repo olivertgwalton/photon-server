@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync"
 	"testing"
 	"uuid"
@@ -28,6 +29,7 @@ type relay struct {
 	mu         sync.Mutex
 	registered []uuid.UUID
 	sent       []Message
+	bodies     []map[string]any
 	status     map[string]int
 }
 
@@ -50,11 +52,21 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		var m Message
-		if err := json.NewDecoder(req.Body).Decode(&m); err != nil {
+		var body map[string]any
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		b, err := json.Marshal(body)
+		var m Message
+		if err == nil {
+			err = json.Unmarshal(b, &m)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		r.bodies = append(r.bodies, body)
 		if status := r.status[m.Token]; status != 0 {
 			w.WriteHeader(status)
 			return
@@ -74,7 +86,7 @@ func TestAServerIsKnownToTheRelayByTheCredentialItKeeps(t *testing.T) {
 	defer svc.Close()
 	server, k := uuid.NewV7(), &kept{}
 	r := New(svc.URL, server, k)
-	m := Message{Token: "a1", Environment: domain.APNsProduction, Collapse: "show", Notification: "7"}
+	m := Message{Platform: domain.PushApple, Token: "a1", Environment: domain.APNsProduction, Collapse: "show", Notification: "7"}
 
 	if err := r.Send(t.Context(), m); err != nil {
 		t.Fatal(err)
@@ -95,5 +107,29 @@ func TestAServerIsKnownToTheRelayByTheCredentialItKeeps(t *testing.T) {
 	}
 	if err := r.Send(t.Context(), Message{Token: "broken"}); err == nil || errors.Is(err, ErrGone) {
 		t.Errorf("a relay that failed: %v, want an error to try again on", err)
+	}
+}
+
+// The relay is told which platform's push service a device is woken through: an Apple device with
+// the APNs environment that issued its token, an Android device with none.
+func TestADeviceIsWokenThroughItsPlatform(t *testing.T) {
+	rx := &relay{}
+	svc := httptest.NewServer(rx)
+	defer svc.Close()
+	r := New(svc.URL, uuid.NewV7(), &kept{})
+	for _, m := range []Message{
+		{Platform: domain.PushApple, Token: "a1", Environment: domain.APNsDevelopment, Collapse: "13", Notification: "13"},
+		{Platform: domain.PushAndroid, Token: "fcm:token", Collapse: "13", Notification: "13"},
+	} {
+		if err := r.Send(t.Context(), m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []map[string]any{
+		{"platform": "apple", "token": "a1", "environment": "development", "collapse": "13", "notification": "13"},
+		{"platform": "android", "token": "fcm:token", "collapse": "13", "notification": "13"},
+	}
+	if !reflect.DeepEqual(rx.bodies, want) {
+		t.Errorf("sent %v, want %v", rx.bodies, want)
 	}
 }

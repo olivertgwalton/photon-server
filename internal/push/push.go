@@ -25,8 +25,8 @@ type web interface {
 	Send(ctx context.Context, sub webpush.Subscription, m webpush.Message) error
 }
 
-// apple wakes an Apple device, through photon's push relay.
-type apple interface {
+// relay wakes an Apple or Android device, through photon's push relay.
+type relay interface {
 	Send(ctx context.Context, m pushrelay.Message) error
 }
 
@@ -59,10 +59,10 @@ type notification struct {
 const requestsPage = "/settings/requests"
 
 // Job is the job that pushes a profile's notifications not yet pushed to each device subscribed for
-// it: a browser in its language, an Apple device by the notification's id, which it asks the server
-// to word. A device that ended its subscription is forgotten; one that fails has every device sent
+// it: a browser in its language, an Apple or Android device by the notification's id, which it asks
+// the server to word. A device that ended its subscription is forgotten; one that fails has every device sent
 // again later, where each replaces what it shows of the same title or request.
-func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
+func Job(st *store.Store, browsers web, devices relay) jobs.Handler {
 	return func(ctx context.Context, profile uuid.UUID) error {
 		pushes, err := st.Pushes(ctx, profile)
 		if err != nil || len(pushes) == 0 {
@@ -98,7 +98,7 @@ func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 			switch sub.Kind {
 			case domain.PushWeb:
 				err = sendWeb(ctx, browsers, sub, shown, byID)
-			case domain.PushApple:
+			case domain.PushApple, domain.PushAndroid:
 				err = sendRelay(ctx, devices, sub, shown)
 			}
 			if errors.Is(err, webpush.ErrGone) || errors.Is(err, pushrelay.ErrGone) {
@@ -161,7 +161,7 @@ func webNotification(said words.Words, lang string, p store.Push, cards map[uuid
 
 // sendRelay wakes a device through photon's push relay for each notification to be shown; the
 // device asks the server for each by its id, and shows what it is told.
-func sendRelay(ctx context.Context, devices apple, sub store.PushSubscription, pushes []store.Push) error {
+func sendRelay(ctx context.Context, devices relay, sub store.PushSubscription, pushes []store.Push) error {
 	for _, p := range pushes {
 		if err := devices.Send(ctx, relayMessage(sub, p)); err != nil {
 			return err
@@ -170,10 +170,10 @@ func sendRelay(ctx context.Context, devices apple, sub store.PushSubscription, p
 	return nil
 }
 
-// relayMessage wakes one device for one notification: the device keeps one of a title, or of a
-// request, while it is away.
+// relayMessage wakes one device for one notification, through the push service of its platform: the
+// device keeps one of a title, or of a request, while it is away.
 func relayMessage(sub store.PushSubscription, p store.Push) pushrelay.Message {
-	m := pushrelay.Message{Token: sub.Endpoint, Collapse: p.Title.String(), Notification: strconv.FormatInt(p.ID, 10)}
+	m := pushrelay.Message{Platform: sub.Kind, Token: sub.Endpoint, Collapse: p.Title.String(), Notification: strconv.FormatInt(p.ID, 10)}
 	switch p.Kind {
 	case domain.NotificationRequest:
 		m.Collapse = m.Notification
