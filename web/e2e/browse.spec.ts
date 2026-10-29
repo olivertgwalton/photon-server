@@ -290,6 +290,34 @@ test("home's rows draw their cards at the card size chosen", async ({
 	}
 });
 
+test("a title's page is centred on a phone, as the apps' is", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-film");
+	const name = page.getByRole("heading", { level: 1, name: "Quiet Hours" });
+	// The row of Play and what sits beside it.
+	const actions = page
+		.getByRole("link", { name: /^(Play|Resume)/ })
+		.locator("..");
+	const middle = async () => {
+		const main = await page.getByRole("main").boundingBox();
+		return (main?.x ?? 0) + (main?.width ?? 0) / 2;
+	};
+	const centre = async (el: typeof name) => {
+		const box = await el.boundingBox();
+		return (box?.x ?? 0) + (box?.width ?? 0) / 2;
+	};
+	// Wider, it keeps to the leading edge.
+	await expect(name).toBeVisible();
+	expect(Math.abs((await centre(name)) - (await middle()))).toBeGreaterThan(50);
+	// An iPhone 16 Pro Max.
+	await page.setViewportSize({ width: 440, height: 956 });
+	await expect
+		.poll(async () => Math.abs((await centre(name)) - (await middle())))
+		.toBeLessThan(2);
+	expect(Math.abs((await centre(actions)) - (await middle()))).toBeLessThan(2);
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {
@@ -964,6 +992,39 @@ test("favourites, history and downloads list the reader's own", async ({
 		page.getByRole("link", { name: "Save Quiet Hours, part 2 of 2" }).first(),
 	).toBeVisible();
 	await expectAccessible(page);
+});
+
+test("a favourite episode is a poster, as the apps draw it", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/profile/rows/favourites*", async (route) => {
+		const response = await route.fetch();
+		const row = await response.json();
+		const episode = {
+			id: "t-ep",
+			kind: "episode",
+			title: "Pilot",
+			added_at: "2024-03-12T00:00:00Z",
+			show: { id: "t-show", title: "Small Show" },
+			season_number: 1,
+			episode_number: 1,
+			thumb: "still",
+			season_poster: "season-poster",
+		};
+		await route.fulfill({
+			response,
+			json: { ...row, items: [...(row.items ?? []), episode] },
+		});
+	});
+	await logIn(page, "/favourites");
+	const episodes = page.getByRole("region", { name: "Episodes" });
+	const pilot = episodes.getByRole("link", { name: /Pilot/ });
+	await expect(pilot).toContainText("S1, E1 · Small Show");
+	await expect(pilot.locator(".aspect-2\\/3")).toHaveCount(1);
+	await expect(pilot.locator("img")).toHaveAttribute(
+		"src",
+		/artwork\/season-poster/,
+	);
 });
 
 test("a version in two files is downloaded a file at a time", async ({
