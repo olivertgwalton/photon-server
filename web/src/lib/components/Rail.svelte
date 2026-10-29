@@ -29,6 +29,7 @@ let {
 	current,
 	heading,
 	pill = "past_rail",
+	resume = "hidden",
 	onrest,
 }: {
 	title: string;
@@ -43,6 +44,7 @@ let {
 	// What the row's name is drawn as, where it is more than its words.
 	heading?: Snippet;
 	pill?: "past_rail" | "always";
+	resume?: "shown" | "hidden";
 	onrest?: (card: CardLike) => void;
 } = $props();
 
@@ -233,6 +235,7 @@ const sizes = $derived(
 						{sizes}
 						caption={caption?.(i)}
 						current={c.id === current}
+						{resume}
 					/>
 				</li>
 			{/each}

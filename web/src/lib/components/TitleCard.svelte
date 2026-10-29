@@ -12,6 +12,7 @@ import PlayIcon from "@lucide/svelte/icons/play";
 import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
+import { Progress } from "#lib/components/ui/progress/index.js";
 import { showLine } from "#lib/format.js";
 import { hidesSpoiler } from "#lib/spoilers.js";
 import TitleMenuButton from "./TitleMenuButton.svelte";
@@ -27,6 +28,7 @@ let {
 	caption: given,
 	current = false,
 	menu = "title",
+	resume = "hidden",
 }: {
 	card: CardLike;
 	shape?: Shape;
@@ -35,6 +37,9 @@ let {
 	// The page's own title, outlined among the rest of its set.
 	current?: boolean;
 	menu?: "title" | "none";
+	// How far the reader is through it, which only Continue Watching's cards
+	// and an episode's season row show, as the apps' cards do.
+	resume?: "shown" | "hidden";
 } = $props();
 
 // An episode drawn as a poster wears its season's art, as Infuse draws one
@@ -54,7 +59,7 @@ const caption = $derived.by(() => {
 });
 
 const progress = $derived(
-	card.state?.position_ms && card.duration_ms
+	resume === "shown" && card.state?.position_ms && card.duration_ms
 		? Math.min(card.state.position_ms / card.duration_ms, 1)
 		: 0,
 );
@@ -109,22 +114,22 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 					{card.title}
 				</p>
 				{#if progress > 0 || caption}
-					<p class="text-ink-2 flex items-center gap-1.5 text-xs">
+					<div class="text-ink-2 flex items-center gap-1.5 text-xs">
 						{#if progress > 0}
 							<PlayIcon
 								class="size-2.5 shrink-0 fill-current"
 								aria-hidden="true"
 							/>
-							<!-- Never empty: a play just begun still shows it has. -->
-							<span class="h-1.25 w-7 shrink-0 rounded-full bg-white/35">
-								<span
-									class="bg-ink block h-full rounded-full"
-									style="width: calc(5px + 23px * {progress})"
-								></span>
-							</span>
+							<!-- Never empty: its first five pixels are a border, so a play
+								just begun still shows it has. -->
+							<Progress
+								value={Math.round(progress * 100)}
+								aria-label="Watched"
+								class="border-ink h-1.25 w-7 shrink-0 border-l-[5px] bg-white/35 [&>[data-slot=progress-indicator]]:bg-ink"
+							/>
 						{/if}
 						<span class="truncate">{caption}</span>
-					</p>
+					</div>
 				{/if}
 			</div>
 		</div>

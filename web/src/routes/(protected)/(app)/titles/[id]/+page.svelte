@@ -613,6 +613,7 @@ async function ask() {
 		<Rail
 			title={picked?.title ?? t.season.title}
 			cards={episodes}
+			resume="shown"
 			shape="still"
 			current={t.id}
 			caption={(i: number) =>

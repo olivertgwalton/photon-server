@@ -8,7 +8,8 @@ import { wallPageSize } from "#lib/wall.js";
 
 type Kind = components["schemas"]["HomeRowKind"];
 
-// The whole of one home row, a page at a time.
+// The whole of one home row, a page at a time, on posters as the apps draw it:
+// even Continue Watching, whose rail is of stills.
 let { kind, page }: { kind: Kind; page: components["schemas"]["CardPage"] } =
 	$props();
 
@@ -34,7 +35,7 @@ async function fetchPage(offset: number) {
 			first={page.items}
 			pageSize={wallPageSize}
 			{fetchPage}
-			view={row.shape}
+			view="poster"
 			label={title}
 		/>
 	{:else}
