@@ -41,23 +41,25 @@ type titlePageJSON struct {
 	Fetching bool `json:"fetching,omitzero"`
 	// Requestable is a title no library holds that a search found for the profile to ask for,
 	// drawn as its provider describes it: it has no versions, seasons or state, and plays nothing.
-	Requestable   bool                       `json:"requestable,omitzero"`
-	LibraryID     *uuid.UUID                 `json:"library_id,omitzero"`
-	Kind          domain.ItemKind            `json:"kind"`
-	Title         string                     `json:"title"`
-	OriginalTitle string                     `json:"original_title,omitzero"`
-	Overview      string                     `json:"overview,omitzero"`
-	Tagline       string                     `json:"tagline,omitzero"`
-	Certificate   string                     `json:"certificate,omitzero"`
-	Year          int                        `json:"year,omitzero"`
-	ReleaseDate   domain.Date                `json:"release_date,omitzero"`
-	Genres        []string                   `json:"genres,omitzero"`
-	Studios       []string                   `json:"studios,omitzero"`
-	IDs           map[domain.Provider]string `json:"ids,omitzero"`
-	Ratings       []ratingRefJSON            `json:"ratings,omitzero"`
-	Collections   []collectionCardJSON       `json:"collections,omitzero"`
-	Credits       []creditRefJSON            `json:"credits,omitzero"`
-	Origin        domain.CollectionOrigin    `json:"origin,omitzero"`
+	Requestable   bool            `json:"requestable,omitzero"`
+	LibraryID     *uuid.UUID      `json:"library_id,omitzero"`
+	Kind          domain.ItemKind `json:"kind"`
+	Title         string          `json:"title"`
+	OriginalTitle string          `json:"original_title,omitzero"`
+	Overview      string          `json:"overview,omitzero"`
+	Tagline       string          `json:"tagline,omitzero"`
+	Certificate   string          `json:"certificate,omitzero"`
+	Year          int             `json:"year,omitzero"`
+	ReleaseDate   domain.Date     `json:"release_date,omitzero"`
+	Genres        []string        `json:"genres,omitzero"`
+	Studios       []string        `json:"studios,omitzero"`
+	// LockedFields are the fields an admin edited or locked, which no source changes.
+	LockedFields []domain.Field             `json:"locked_fields,omitzero"`
+	IDs          map[domain.Provider]string `json:"ids,omitzero"`
+	Ratings      []ratingRefJSON            `json:"ratings,omitzero"`
+	Collections  []collectionCardJSON       `json:"collections,omitzero"`
+	Credits      []creditRefJSON            `json:"credits,omitzero"`
+	Origin       domain.CollectionOrigin    `json:"origin,omitzero"`
 	// Rule is what finds a smart collection's titles, List the list a list collection holds.
 	Rule *smartRuleJSON `json:"rule,omitzero"`
 	List *listRefJSON   `json:"list,omitzero"`
@@ -297,7 +299,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 	return titlePageJSON{
 		ID: p.ID, LibraryID: p.Library, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
 		Tagline: p.Tagline, Certificate: domain.Bare(p.Certificate), QualifiedCertificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
-		Genres: p.Genres, Studios: p.Studios, IDs: p.IDs,
+		Genres: p.Genres, Studios: p.Studios, LockedFields: p.LockedFields, IDs: p.IDs,
 		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
 		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
 		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),

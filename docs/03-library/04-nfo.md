@@ -92,7 +92,7 @@ locked field is never filled in by any source ranked below the NFO, even if the 
 empty.
 
 > **Note:** A source ranked above the NFO is not held back by its locks. To protect a field from
-> every source, hold it on the title itself: see
+> every source, lock it on the title itself: see
 > [edit its details](05-fix-a-match.md#edit-its-details).
 
 ## Good to know

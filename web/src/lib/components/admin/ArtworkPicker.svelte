@@ -1,4 +1,5 @@
 <script lang="ts">
+import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import { act } from "#lib/act.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
@@ -14,7 +15,7 @@ type Kind = Schemas["ArtworkKind"];
 
 // Choosing a title's pictures from what its providers have, or uploading the
 // admin's own, as Jellyfin's Edit Images and Plex's poster chooser do. A
-// choice holds through every refresh until it is given back.
+// choice holds through every refresh until it is reset.
 let { title }: { title: Schemas["TitlePage"] } = $props();
 
 const kinds: { kind: Kind; label: string; shape: string; width: number }[] = [
@@ -65,12 +66,12 @@ async function upload() {
 	input.value = "";
 }
 
-const giveBack = () =>
+const reset = () =>
 	act(
 		api.DELETE("/api/v1/admin/titles/{id}/artwork/{artwork}", {
 			params: { path: { id: title.id, artwork: kind } },
 		}),
-		"Given back to the sources.",
+		`Reset to the sources' ${current.label.toLowerCase()}.`,
 	);
 </script>
 
@@ -134,6 +135,18 @@ const giveBack = () =>
 						</li>
 					{/each}
 				</ul>
+				<!-- Only a picture the admin chose or sent has anything to reset. -->
+				{#if data.items.some((c) => c.chosen)}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="justify-self-start"
+						onclick={reset}
+					>
+						<RotateCcwIcon class="size-4" />
+						Reset to the sources' {current.label.toLowerCase()}
+					</Button>
+				{/if}
 			{:else}
 				<p class="text-ink-3 text-sm">
 					The providers have no {current.label.toLowerCase()} for this title.
@@ -156,9 +169,6 @@ const giveBack = () =>
 				aria-label="{current.label} to upload"
 				onchange={upload}
 			>
-			<Button variant="outline" onclick={giveBack}>
-				Give the {current.label.toLowerCase()} back to the sources
-			</Button>
 		</div>
 	</Tabs.Content>
 </Tabs.Root>

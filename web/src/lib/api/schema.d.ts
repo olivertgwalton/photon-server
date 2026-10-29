@@ -10207,6 +10207,7 @@ export interface components {
             library_id?: string | null;
             library_ids?: string[];
             list?: components["schemas"]["ListRef"] | null;
+            locked_fields?: components["schemas"]["Field"][];
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;

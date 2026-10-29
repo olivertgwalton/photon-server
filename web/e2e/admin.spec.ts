@@ -918,11 +918,34 @@ test("a title is edited, matched, given a poster and marked", async ({
 	).toBeVisible();
 	await expectAccessible(page);
 
+	// A field written in locks as it is saved, as one locked by hand does.
 	await page
 		.getByRole("textbox", { name: "Tagline" })
 		.fill("Keep the light on.");
+	await expect(
+		page.getByRole("button", { name: "Unlock Tagline", pressed: true }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Lock Year" }).click();
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(page.getByText("Saved.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Unlock Year", pressed: true }),
+	).toBeVisible();
+	// Unlocked, a field is the sources' again.
+	await page.getByRole("button", { name: "Unlock Tagline" }).click();
+	await expect(page.getByText("Tagline unlocked.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Lock Tagline", pressed: false }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Unlock all" }).click();
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "Unlock all" })
+		.click();
+	await expect(page.getByText("Unlocked.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Lock Year", pressed: false }),
+	).toBeVisible();
 	await page.getByRole("textbox", { name: "Overview" }).fill("");
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(page.getByText("A field can't be emptied.")).toBeVisible();
@@ -950,6 +973,13 @@ test("a title is edited, matched, given a poster and marked", async ({
 	await expect(
 		page.getByRole("button", { name: /upload · 1×1 · chosen/ }),
 	).toBeVisible();
+	await page
+		.getByRole("button", { name: "Reset to the sources' poster" })
+		.click();
+	await expect(page.getByText("Reset to the sources' poster.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Reset to the sources' poster" }),
+	).toBeHidden();
 
 	await page.getByRole("button", { name: "Add a stretch" }).click();
 	await page.getByLabel("Starts").last().fill("0:30");

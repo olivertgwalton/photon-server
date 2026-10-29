@@ -69,13 +69,17 @@ Separate genres and studios with commas. Seasons, episodes and extras can be edi
 
 ![The Details tab of the edit dialog for a film](../images/library-edit-details.webp)
 
-- **What you type wins** over every provider, and stays through every refresh.
-- **Hold** beside a field keeps its current value without you retyping it. No provider will change
-  it.
-- **Give back** hands a field back to the providers. **Give every field back** does it for all of
-  them.
+Each field has a padlock beside its name, as in Plex.
 
-To blank out a field, give it back rather than emptying it. An empty **Sort title** sorts by the
+- **What you type locks the field** when you save, so it wins over every provider and stays
+  through every refresh. A locked field shows **Locked**.
+- **Lock** a field you haven't changed, by its open padlock, to keep its current value: no provider
+  will change it.
+- **Unlock** a field, by its **Locked** label, to hand it back to the providers: the next scan
+  fills it with what they say. **Unlock all**, shown while any field is locked, does it for every
+  field.
+
+To blank out a field, unlock it rather than emptying it. An empty **Sort title** sorts by the
 title.
 
 An episode has three more fields: **Airs before season**, **Airs before episode** and **Airs after
@@ -93,8 +97,9 @@ no file in the library. It is listed first, as **upload**, and is used as a chos
 Uploading another replaces it.
 
 A picture you chose or uploaded is used ahead of every source, and stays through every refresh and
-an unmatch. To undo it, choose **Give the poster back to the sources** (or the backdrop, and so
-on). The server clears an uploaded picture from its artwork once it is given back or replaced.
+an unmatch. To undo it, choose **Reset to the sources' poster** (or backdrop, and so on), shown
+under the pictures while one is yours. The server clears an uploaded picture from its artwork once
+it is reset or replaced.
 
 You can also put a picture beside the title's file, named as
 [pictures beside a title](01-name-your-files.md#pictures-beside-a-title) describes. The server

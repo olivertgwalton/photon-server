@@ -30,8 +30,11 @@ type TitlePage struct {
 	ReleaseDate   domain.Date
 	Genres        []string
 	Studios       []string
-	IDs           map[domain.Provider]string
-	Ratings       []domain.Rating
+	// LockedFields are those an admin edited or locked, which no source changes, as Plex's locked
+	// fields are.
+	LockedFields []domain.Field
+	IDs          map[domain.Provider]string
+	Ratings      []domain.Rating
 	// Collections are the box sets it is in.
 	Collections []CollectionCard
 	// Credits are its cast and crew, as the highest-ranked source gives them.
@@ -209,6 +212,11 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	})
 	g.Go(func() (err error) {
 		credits, err = s.credits(gctx, item.ID)
+		return err
+	})
+	g.Go(func() (err error) {
+		p.LockedFields, err = queryColumn[domain.Field](gctx, s.pool, `
+			SELECT field FROM item_fields WHERE item_id = $1 AND source = 'user' ORDER BY field`, item.ID)
 		return err
 	})
 	g.Go(func() error { return s.locale(gctx, item, &p) })

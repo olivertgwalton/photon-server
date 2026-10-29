@@ -1,7 +1,10 @@
 import { client, need } from "#lib/api/client.js";
+import { keys } from "#lib/changes.js";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ fetch, params }) => {
+export const load: PageLoad = async ({ fetch, params, depends }) => {
+	// A field unlocked takes its sources' at the next scan, and shows as it does.
+	depends(keys.title(params.id));
 	const api = client(fetch);
 	const [title, providers, locales] = await Promise.all([
 		need(

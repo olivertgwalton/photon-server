@@ -47,8 +47,8 @@ function list(text: string) {
 }
 
 // An edit form as the change to send: each field that differs from what the
-// title says, and the fields held as they are. A field cannot be emptied, only
-// given back to its sources, so emptying one is refused.
+// title says, and the fields locked as they are. A field cannot be emptied, only
+// unlocked to take its sources' again, so emptying one is refused.
 export function editOf(
 	form: FormData,
 	t: Schemas["TitlePage"],
@@ -59,7 +59,7 @@ export function editOf(
 		const value = text(form, field);
 		if (value === now[field]) continue;
 		if (!value) {
-			return "A field can't be emptied. Give it back to its sources instead.";
+			return "A field can't be emptied. Unlock it to take the sources' again instead.";
 		}
 		switch (field) {
 			case "year":
