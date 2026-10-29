@@ -29,6 +29,41 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(20);
 });
 
+test("a phone's wall is as many posters across as the apps' at each card size", async ({
+	page,
+}) => {
+	// An iPhone 16 Pro Max.
+	await page.setViewportSize({ width: 440, height: 956 });
+	await logIn(page);
+	const across = async () => {
+		await page.goto("/libraries/l-films");
+		const cards = page.getByRole("main").getByRole("listitem");
+		await expect(cards.first()).toBeVisible();
+		return page.evaluate(() => {
+			const tops = [
+				...document.querySelectorAll(
+					"main li:has(> div > a[href^='/titles/'])",
+				),
+			]
+				.map((li) => li.getBoundingClientRect())
+				.filter((r) => r.width > 0)
+				.map((r) => Math.round(r.top));
+			return tops.filter((top) => top === tops[0]).length;
+		});
+	};
+	expect(await across()).toBe(3);
+	for (const [size, count] of [
+		["Compact", 4],
+		["Large", 2],
+	] as const) {
+		await page.goto("/settings/home");
+		await page.getByRole("combobox", { name: "Card size" }).click();
+		await page.getByRole("option", { name: size }).click();
+		await expect(page.getByText("Saved for this browser.")).toBeVisible();
+		expect(await across()).toBe(count);
+	}
+});
+
 test("only Continue Watching's cards say how far the reader is", async ({
 	page,
 }) => {

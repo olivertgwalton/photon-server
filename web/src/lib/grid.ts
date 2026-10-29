@@ -1,18 +1,38 @@
 import type { Shape } from "./artwork.js";
 
-// The narrowest a card is drawn, and the space between two. A wall fits as
-// many columns as these allow, as `auto-fill` does, so the page drawn by the
-// server and the wall drawn by the browser line up.
-const minWidth: Record<Shape, number> = { poster: 150, still: 260 };
+// How large a wall draws its cards, as the apps' Card Size has it.
+export type CardSize = "compact" | "standard" | "large";
+export const cardSizes: CardSize[] = ["compact", "standard", "large"];
+
+// The narrowest a card is drawn at Standard, on a phone and on anything wider,
+// and how far each size takes it: the apps' own widths, so a wall is as many
+// across as theirs. Compact takes a poster further than a still, adding a
+// column on every phone.
+const standard: Record<Shape, { phone: number; wider: number }> = {
+	poster: { phone: 108, wider: 132 },
+	still: { phone: 165, wider: 320 },
+};
+const scale: Record<Shape, Record<CardSize, number>> = {
+	poster: { compact: 0.72, standard: 1, large: 1.3 },
+	still: { compact: 0.87, standard: 1, large: 1.3 },
+};
 export const columnGap = 12;
 
-export function gridColumns(shape: Shape): string {
-	return `repeat(auto-fill, minmax(${minWidth[shape]}px, 1fr))`;
+export function minCardWidth(
+	shape: Shape,
+	size: CardSize,
+	phone: boolean,
+): number {
+	const width = standard[shape][phone ? "phone" : "wider"];
+	return Math.round(width * scale[shape][size]);
 }
 
-export function columnsFor(width: number, shape: Shape): number {
-	return Math.max(
-		1,
-		Math.floor((width + columnGap) / (minWidth[shape] + columnGap)),
-	);
+// A wall fits as many columns as the width allows, as `auto-fill` does, so the
+// rows the browser lays out and the rows the wall reckons with line up.
+export function gridColumns(min: number): string {
+	return `repeat(auto-fill, minmax(${min}px, 1fr))`;
+}
+
+export function columnsFor(width: number, min: number): number {
+	return Math.max(1, Math.floor((width + columnGap) / (min + columnGap)));
 }

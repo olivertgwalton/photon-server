@@ -2,6 +2,7 @@
 import type { Attachment } from "svelte/attachments";
 import { innerHeight } from "svelte/reactivity/window";
 import type { components } from "#lib/api/schema.js";
+import { cardMin } from "#lib/cardsize.svelte.js";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
 import { onResize } from "#lib/size.js";
 import type { ViewStyle } from "#lib/wall.js";
@@ -70,7 +71,9 @@ const resized = onResize((_, box) => {
 });
 
 const shape = $derived(view === "still" ? "still" : "poster");
-const columns = $derived(view === "list" ? 1 : columnsFor(width, shape));
+const columns = $derived(
+	view === "list" ? 1 : columnsFor(width, cardMin(shape)),
+);
 const cardWidth = $derived((width - columnGap * (columns - 1)) / columns);
 const rowHeight = $derived(
 	view === "list"
@@ -155,7 +158,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 		? `height: ${Math.max(0, rows * rowHeight - (view === "list" ? 0 : rowGap))}px`
 		: view === "list"
 			? ""
-			: `grid-template-columns: ${gridColumns(shape)}`}
+			: `grid-template-columns: ${gridColumns(cardMin(shape))}`}
 >
 	{#if width}
 		{#each shown as index (index)}
