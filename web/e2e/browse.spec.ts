@@ -40,7 +40,11 @@ test("a phone's wall is as many posters across as the apps' at each card size", 
 		const cards = page.getByRole("main").getByRole("listitem");
 		await expect(cards.first()).toBeVisible();
 		return page.evaluate(() => {
-			const tops = [...document.querySelectorAll("main li")]
+			const tops = [
+				...document.querySelectorAll(
+					"main li:has(> div > a[href^='/titles/'])",
+				),
+			]
 				.map((li) => li.getBoundingClientRect())
 				.filter((r) => r.width > 0)
 				.map((r) => Math.round(r.top));
