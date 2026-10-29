@@ -41,6 +41,9 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	if err != nil || page.Title != "Heat (Director's Cut)" || page.Overview != "A heist." {
 		t.Fatalf("after matching again: %q %q, %v", page.Title, page.Overview, err)
 	}
+	if want := []domain.Field{domain.FieldTagline, domain.FieldTitle}; !slices.Equal(page.LockedFields, want) {
+		t.Errorf("locked after an edit and a lock: %v, want %v", page.LockedFields, want)
+	}
 	if err := s.ResetEdits(ctx, id, []domain.Field{domain.FieldTitle}); err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +61,9 @@ func TestAnEditStandsUntilItIsReset(t *testing.T) {
 	}
 	if page.Title != "Heat" || page.Tagline != "A Los Angeles crime saga" {
 		t.Errorf("after resetting the title alone: %q, tagline %q; want TMDB's title and the tagline kept as it was locked", page.Title, page.Tagline)
+	}
+	if want := []domain.Field{domain.FieldTagline}; !slices.Equal(page.LockedFields, want) {
+		t.Errorf("locked after resetting the title: %v, want %v", page.LockedFields, want)
 	}
 	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'scan_library'`); n != 1 {
 		t.Errorf("%d library scans queued after a reset, want 1", n)
