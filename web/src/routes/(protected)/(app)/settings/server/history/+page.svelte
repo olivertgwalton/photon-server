@@ -4,6 +4,7 @@ import { byName, when } from "#lib/admin/words.js";
 import Choice from "#lib/components/Choice.svelte";
 import CursorPager from "#lib/components/CursorPager.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
+import { Button } from "#lib/components/ui/button/index.js";
 import { Label } from "#lib/components/ui/label/index.js";
 import * as Table from "#lib/components/ui/table/index.js";
 import { fullTitle } from "#lib/format.js";
@@ -17,6 +18,13 @@ const everyone = $derived([
 	{ value: "all", label: "Everyone" },
 	...data.profiles.map((p) => ({ value: p.id, label: p.name })),
 ]);
+
+// The file of whoever is chosen, as the table shows them.
+const file = $derived(
+	data.profile
+		? `/api/v1/admin/history/file?profile=${encodeURIComponent(data.profile)}`
+		: "/api/v1/admin/history/file",
+);
 
 function reached(position: number, duration?: number) {
 	return duration
@@ -42,6 +50,9 @@ function reached(position: number, duration?: number) {
 				class="w-48"
 			/>
 		</div>
+		<Button href={file} download variant="outline" class="self-end"
+			>Download history</Button
+		>
 	{/snippet}
 </PageHeader>
 
