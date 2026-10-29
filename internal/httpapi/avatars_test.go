@@ -93,10 +93,11 @@ func TestAProfileIsGivenAPicture(t *testing.T) {
 	}
 
 	for name, body := range map[string][]byte{
-		"text":                []byte("hello, this is not a picture at all"),
-		"an SVG":              []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`),
-		"a PNG said too wide": claiming(20_000, 20_000),
-		"a PNG cut short":     pngOf(8, 8)[:20],
+		"text":                       []byte("hello, this is not a picture at all"),
+		"an SVG":                     []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`),
+		"a PNG said too wide":        claiming(20_000, 20_000),
+		"a PNG cut short":            pngOf(8, 8)[:20],
+		"a PNG cut after its header": func() []byte { b := pngOf(64, 64); return b[:len(b)-16] }(),
 	} {
 		if rec := do(memberToken, http.MethodPost, "/api/v1/profile/avatar", body); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "not a picture") {
 			t.Errorf("%s: %d %s, want 400", name, rec.Code, rec.Body)

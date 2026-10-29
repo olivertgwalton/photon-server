@@ -359,28 +359,50 @@ var ErrNotPicture = errors.New("not a picture")
 // raster formats decoded here, never SVG, which could carry script.
 var kept = map[string]string{"image/jpeg": "jpeg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
 
-// Keep keeps a picture given to the server, as an avatar is, under id: at most maxPicture bytes,
-// of a format its own bytes say it is, of at most maxPixels.
-func (c *Cache) Keep(ctx context.Context, id uuid.UUID, r io.Reader) error {
+// KeptPicture is a picture Keep kept: its size, and its BlurHash.
+type KeptPicture struct {
+	Width    int
+	Height   int
+	Blurhash string
+}
+
+// Keep keeps a picture given to the server, as an avatar or an uploaded poster is, under id: at
+// most maxPicture bytes, of a format its own bytes say it is, of at most maxPixels, that decodes
+// whole, taking a place among the pictures being resized.
+func (c *Cache) Keep(ctx context.Context, id uuid.UUID, r io.Reader) (KeptPicture, error) {
 	data, err := io.ReadAll(io.LimitReader(r, maxPicture+1))
 	if err != nil {
-		return err
+		return KeptPicture{}, err
 	}
 	if len(data) > maxPicture {
-		return fmt.Errorf("%w: over %d MiB", ErrNotPicture, maxPicture>>20)
+		return KeptPicture{}, fmt.Errorf("%w: over %d MiB", ErrNotPicture, maxPicture>>20)
 	}
 	format, ok := kept[http.DetectContentType(data)]
 	if !ok {
-		return fmt.Errorf("%w: a JPEG, PNG, GIF or WebP is kept", ErrNotPicture)
+		return KeptPicture{}, fmt.Errorf("%w: a JPEG, PNG, GIF or WebP is kept", ErrNotPicture)
 	}
+	unreadable := fmt.Errorf("%w: it does not read as the %s it says it is", ErrNotPicture, strings.ToUpper(format))
 	cfg, decoded, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || decoded != format {
-		return fmt.Errorf("%w: it does not read as the %s it says it is", ErrNotPicture, strings.ToUpper(format))
+		return KeptPicture{}, unreadable
 	}
 	if cfg.Width*cfg.Height > maxPixels {
-		return fmt.Errorf("%w: %d×%d is over %d megapixels", ErrNotPicture, cfg.Width, cfg.Height, maxPixels/1_000_000)
+		return KeptPicture{}, fmt.Errorf("%w: %d×%d is over %d megapixels", ErrNotPicture, cfg.Width, cfg.Height, maxPixels/1_000_000)
 	}
-	return c.blobs.Put(ctx, id.String(), bytes.NewReader(data))
+	select {
+	case c.resizing <- struct{}{}:
+		defer func() { <-c.resizing }()
+	case <-ctx.Done():
+		return KeptPicture{}, ctx.Err()
+	}
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return KeptPicture{}, unreadable
+	}
+	if err := c.blobs.Put(ctx, id.String(), bytes.NewReader(data)); err != nil {
+		return KeptPicture{}, err
+	}
+	return KeptPicture{Width: cfg.Width, Height: cfg.Height, Blurhash: blurhashOf(src)}, nil
 }
 
 // KeepSound keeps a theme tune the server fetched under id, as it is.

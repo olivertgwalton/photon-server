@@ -51,7 +51,7 @@ func (a *API) setAvatar(w http.ResponseWriter, r *http.Request, profile uuid.UUI
 	rc := http.NewResponseController(w)
 	readWithin(rc, a.logger, time.Now().Add(avatarWithin))
 	picture := uuid.NewV7()
-	err := a.svc.Artwork.Keep(r.Context(), picture, r.Body)
+	_, err := a.svc.Artwork.Keep(r.Context(), picture, r.Body)
 	readWithin(rc, a.logger, time.Time{})
 	if errors.Is(err, artwork.ErrNotPicture) {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())

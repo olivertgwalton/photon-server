@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -17,7 +18,7 @@ type pictures interface {
 
 type pictureCache interface {
 	Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error)
-	Keep(ctx context.Context, id uuid.UUID, r io.Reader) error
+	Keep(ctx context.Context, id uuid.UUID, r io.Reader) (artwork.KeptPicture, error)
 	Kept(ctx context.Context, id uuid.UUID) (blob.Object, error)
 }
 
