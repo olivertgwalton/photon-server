@@ -262,7 +262,7 @@ func TestPush(t *testing.T) {
 	if len(pushes) != 1 || len(pushes[0].Items) != 2 || pushes[0].New != 3 {
 		t.Fatalf("pushes = %+v, want one notification of 3 new, episodes 3 and 4 not yet pushed", pushes)
 	}
-	if err := s.Pushed(ctx, fan.ID, pushes[0].Items); err != nil {
+	if err := s.Pushed(ctx, fan.ID, pushes); err != nil {
 		t.Fatal(err)
 	}
 	if p, err := s.Pushes(ctx, fan.ID); err != nil || len(p) != 0 {

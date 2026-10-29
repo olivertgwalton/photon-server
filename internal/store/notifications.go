@@ -116,7 +116,7 @@ type Fulfilled struct {
 
 func fulfil(ctx context.Context, tx db, item uuid.UUID) (Fulfilled, error) {
 	args := pgx.NamedArgs{"item": item}
-	told, err := tell(ctx, tx, fulfilled, args)
+	told, err := tell(ctx, tx, fulfilled, args, pushSettle)
 	if err != nil {
 		return Fulfilled{}, err
 	}
@@ -138,19 +138,26 @@ type Cleared struct {
 	Unread    int
 }
 
-// tellDeciders tells each who may decide a request that waits of it: every admin, and the manager
-// that keeps the user who asked, but never the one who asked, nor one whose notify is none. It
-// answers the profiles told.
-func tellDeciders(ctx context.Context, tx db, request uuid.UUID) ([]Told, error) {
-	return queryStructs[Told](ctx, tx, `
-		INSERT INTO notifications (profile_id, kind, request_id)
-		SELECT k.id, 'request', r.id
+// deciders tells each who may decide a request that waits of it: every admin, and the manager that
+// keeps the user who asked, but never the one who asked, nor one whose notify is none. It answers
+// the profiles told and whether to push to them.
+const deciders = `
+	WITH told AS (
+		INSERT INTO notifications (profile_id, kind, request_id, pushed)
+		SELECT k.id, 'request', r.id, NOT EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.profile_id = k.id)
 		FROM requests r JOIN profiles a ON a.id = r.profile_id
 		JOIN profiles k ON k.id <> a.id
 			AND (k.role = 'admin' OR k.role = 'manager' AND a.role = 'user' AND k.id = a.managed_by)
 		LEFT JOIN profile_preferences pp ON pp.profile_id = k.id
-		WHERE r.id = $1 AND r.state = 'pending' AND coalesce(pp.notify, 'marked') <> 'none'
-		RETURNING profile_id, ARRAY[id] AS ids`, request)
+		WHERE r.id = @request AND r.state = 'pending' AND coalesce(pp.notify, 'marked') <> 'none'
+		RETURNING profile_id, id, pushed
+	)
+	SELECT profile_id, ARRAY[id] AS ids, NOT pushed AS push FROM told`
+
+// tellDeciders tells those who may decide a request that waits of it, and pushes it to them at
+// once: a request is one thing, asked now, with nothing to wait for.
+func tellDeciders(ctx context.Context, tx db, request uuid.UUID) ([]Told, error) {
+	return tell(ctx, tx, deciders, pgx.NamedArgs{"request": request}, 0)
 }
 
 // clearAsked clears, read, every profile's notifications of the requests where says, which no
@@ -192,15 +199,15 @@ func (s *Store) Notify(ctx context.Context, library uuid.UUID, since time.Time) 
 	var out []Told
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		out, err = tell(ctx, tx, notify, pgx.NamedArgs{"library": library, "since": since})
+		out, err = tell(ctx, tx, notify, pgx.NamedArgs{"library": library, "since": since}, pushSettle)
 		return err
 	})
 	return out, err
 }
 
-// tell runs a statement that tells profiles of titles, answering those told, and queues a push to
-// those with browsers subscribed.
-func tell(ctx context.Context, tx db, statement string, args pgx.NamedArgs) ([]Told, error) {
+// tell runs a statement that tells profiles of titles or requests, answering those told, and queues
+// a push, once settle has passed with no more, to those with devices subscribed.
+func tell(ctx context.Context, tx db, statement string, args pgx.NamedArgs, settle time.Duration) ([]Told, error) {
 	type row struct {
 		Told
 		Push bool
@@ -213,7 +220,7 @@ func tell(ctx context.Context, tx db, statement string, args pgx.NamedArgs) ([]T
 	for i, r := range rows {
 		out[i] = r.Told
 		if r.Push {
-			if err := enqueueAfter(ctx, tx, domain.JobPush, r.ProfileID, pushSettle); err != nil {
+			if err := enqueueAfter(ctx, tx, domain.JobPush, r.ProfileID, settle); err != nil {
 				return nil, err
 			}
 		}
@@ -408,13 +415,16 @@ func (s *Store) Unsubscribe(ctx context.Context, profile, id uuid.UUID) error {
 	return err
 }
 
-// Push is a notification with films or episodes not yet pushed, which Items are.
+// Push is a notification not yet pushed: a title's, with the films or episodes not yet pushed, which
+// Items are, or a request's, which Asked is.
 type Push struct {
 	domain.Notification
 	Items []uuid.UUID
+	Asked Request
 }
 
-// Pushes answers a profile's notifications with films or episodes not yet pushed, newest first.
+// Pushes answers a profile's notifications not yet pushed, newest first: those of titles with films
+// or episodes not yet pushed, then those of requests.
 func (s *Store) Pushes(ctx context.Context, profile uuid.UUID) ([]Push, error) {
 	type row struct {
 		ID      int64
@@ -436,20 +446,55 @@ func (s *Store) Pushes(ctx context.Context, profile uuid.UUID) ([]Push, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Push, len(rows))
-	for i, r := range rows {
-		out[i] = Push{ID: r.ID, Kind: domain.NotificationTitle, Title: r.TitleID, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt, Items: r.Items}
+	type asked struct {
+		NotificationID int64
+		NotifiedAt     time.Time
+		ReadAt         *time.Time
+		requestRow
+	}
+	requests, err := queryStructs[asked](ctx, s.pool, `
+		SELECT n.id AS notification_id, n.added_at AS notified_at, n.read_at, `+requestColumns+`
+		FROM notifications n JOIN requests r ON r.id = n.request_id JOIN profiles p ON p.id = r.profile_id
+		WHERE n.profile_id = $1 AND NOT n.pushed
+		ORDER BY n.added_at DESC, n.id DESC`, profile)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Push, 0, len(rows)+len(requests))
+	for _, r := range rows {
+		p := Push{ID: r.ID, Kind: domain.NotificationTitle, Title: r.TitleID, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt, Items: r.Items}
 		if r.Latest != nil {
-			out[i].Latest = *r.Latest
+			p.Latest = *r.Latest
 		}
+		out = append(out, p)
+	}
+	for _, r := range requests {
+		a := r.request()
+		out = append(out, Push{
+			ID: r.NotificationID, Kind: domain.NotificationRequest, Request: a.ID, AddedAt: r.NotifiedAt, ReadAt: r.ReadAt, Asked: a,
+		})
 	}
 	return out, nil
 }
 
-// Pushed marks a profile's films and episodes pushed.
-func (s *Store) Pushed(ctx context.Context, profile uuid.UUID, items []uuid.UUID) error {
+// Pushed marks a profile's notifications pushed: a title's films and episodes, and a request's.
+func (s *Store) Pushed(ctx context.Context, profile uuid.UUID, pushes []Push) error {
+	var items []uuid.UUID
+	var asked []int64
+	for _, p := range pushes {
+		switch p.Kind {
+		case domain.NotificationTitle:
+			items = append(items, p.Items...)
+		case domain.NotificationRequest:
+			asked = append(asked, p.ID)
+		}
+	}
 	_, err := s.pool.Exec(ctx, `
 		UPDATE notification_items SET pushed = true WHERE profile_id = $1 AND item_id = ANY($2) AND NOT pushed`,
 		profile, items)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE notifications SET pushed = true WHERE profile_id = $1 AND id = ANY($2)`, profile, asked)
 	return err
 }

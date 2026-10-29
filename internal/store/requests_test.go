@@ -425,3 +425,39 @@ func TestARequestWaitingIsToldToWhoeverDecidesIt(t *testing.T) {
 		t.Errorf("an admin's own request told %+v, %v; want no one", told, err)
 	}
 }
+
+// A request that waits is pushed at once to each told of it with a device subscribed, not once the
+// minute a scan's titles wait has passed, and pushed once.
+func TestARequestWaitingIsPushedAtOnce(t *testing.T) {
+	s, _, film, _ := askable(t)
+	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
+	unsubscribed := addProfile(t, s, "Other admin", domain.RoleAdmin, nil)
+	user := addProfile(t, s, "Sam", domain.RoleUser, nil)
+	browser := PushSubscription{Kind: domain.PushWeb, Endpoint: "https://push.example.com/admin", P256DH: []byte{4}, Auth: []byte{1}, Language: "en"}
+	if _, _, err := s.Subscribe(ctx, admin.ID, browser); err != nil {
+		t.Fatal(err)
+	}
+
+	r, _, err := s.AskFor(ctx, user.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	due := `SELECT count(*) FROM jobs WHERE kind = 'push' AND subject = $1 AND run_after <= now()`
+	if n := countRows(t, s, due, admin.ID); n != 1 {
+		t.Errorf("%d pushes due now for the subscribed admin, want one", n)
+	}
+	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'push' AND subject = $1`, unsubscribed.ID); n != 0 {
+		t.Errorf("%d pushes queued for an admin with nothing subscribed, want none", n)
+	}
+	pushes, err := s.Pushes(ctx, admin.ID)
+	if err != nil || len(pushes) != 1 || pushes[0].Kind != domain.NotificationRequest || pushes[0].Asked.ID != r.ID || pushes[0].Asked.ProfileName != "Sam" {
+		t.Fatalf("pushes %+v, %v; want Sam's request", pushes, err)
+	}
+	if err := s.Pushed(ctx, admin.ID, pushes); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := s.Pushes(ctx, admin.ID); err != nil || len(again) != 0 {
+		t.Errorf("pushes once pushed %+v, %v; want none", again, err)
+	}
+}

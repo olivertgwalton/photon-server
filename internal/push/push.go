@@ -55,10 +55,13 @@ type notification struct {
 	Navigate string `json:"navigate"`
 }
 
+// requestsPage is the page a request's notification opens, where those waiting are decided.
+const requestsPage = "/settings/requests"
+
 // Job is the job that pushes a profile's notifications not yet pushed to each device subscribed for
 // it: a browser in its language, an Apple device by the notification's id, which it asks the server
 // to word. A device that ended its subscription is forgotten; one that fails has every device sent
-// again later, where each replaces what it shows of the same title.
+// again later, where each replaces what it shows of the same title or request.
 func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 	return func(ctx context.Context, profile uuid.UUID) error {
 		pushes, err := st.Pushes(ctx, profile)
@@ -69,10 +72,11 @@ func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 		if err != nil {
 			return err
 		}
-		var ids, items []uuid.UUID
+		var ids []uuid.UUID
 		for _, p := range pushes {
-			ids = append(ids, p.Title, p.Latest)
-			items = append(items, p.Items...)
+			if p.Kind == domain.NotificationTitle {
+				ids = append(ids, p.Title, p.Latest)
+			}
 		}
 		cards, err := st.Cards(ctx, profile, ids)
 		if err != nil {
@@ -82,14 +86,20 @@ func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 		for _, c := range cards {
 			byID[c.ID] = c
 		}
+		var shown []store.Push
+		for _, p := range pushes {
+			if p.ReadAt == nil && (p.Kind == domain.NotificationRequest || hasCards(p, byID)) {
+				shown = append(shown, p)
+			}
+		}
 		var failed []error
 		for _, sub := range subs {
 			var err error
 			switch sub.Kind {
 			case domain.PushWeb:
-				err = sendWeb(ctx, browsers, sub, pushes, byID)
+				err = sendWeb(ctx, browsers, sub, shown, byID)
 			case domain.PushApple:
-				err = sendApple(ctx, devices, sub, pushes, byID)
+				err = sendRelay(ctx, devices, sub, shown)
 			}
 			if errors.Is(err, webpush.ErrGone) || errors.Is(err, pushrelay.ErrGone) {
 				// Unsubscribed on another device meanwhile is as good.
@@ -102,54 +112,75 @@ func Job(st *store.Store, browsers web, devices apple) jobs.Handler {
 		if err := errors.Join(failed...); err != nil {
 			return err
 		}
-		return st.Pushed(ctx, profile, items)
+		return st.Pushed(ctx, profile, pushes)
 	}
 }
 
-// sendWeb sends a browser the notifications unread that its profile still may see.
+// hasCards is whether a title's notification is of a title its profile still may see.
+func hasCards(p store.Push, cards map[uuid.UUID]store.Card) bool {
+	_, ok := cards[p.Title]
+	_, seen := cards[p.Latest]
+	return ok && seen
+}
+
+// sendWeb sends a browser the notifications to be shown.
 func sendWeb(ctx context.Context, browsers web, sub store.PushSubscription, pushes []store.Push, cards map[uuid.UUID]store.Card) error {
 	said := words.In(language.Make(sub.Language))
 	to := webpush.Subscription{Endpoint: sub.Endpoint, P256DH: sub.P256DH, Auth: sub.Auth}
 	for _, p := range pushes {
-		title, ok := cards[p.Title]
-		latest, seen := cards[p.Latest]
-		if p.ReadAt != nil || !ok || !seen {
-			continue
-		}
-		payload, err := json.Marshal(message{WebPush: declarativePush, Notification: notification{
-			Title: title.Title, Body: said.Notification(p.New, latest), Lang: sub.Language,
-			Tag: p.Title.String(), Navigate: "/titles/" + p.Title.String() + "?notification=" + strconv.FormatInt(p.ID, 10),
-		}})
+		n, topic := webNotification(said, sub.Language, p, cards)
+		payload, err := json.Marshal(message{WebPush: declarativePush, Notification: n})
 		if err != nil {
 			return err
 		}
-		m := webpush.Message{Payload: payload, Topic: base64.RawURLEncoding.EncodeToString(p.Title[:]), TTL: pushTTL}
-		if err := browsers.Send(ctx, to, m); err != nil {
+		if err := browsers.Send(ctx, to, webpush.Message{Payload: payload, Topic: topic, TTL: pushTTL}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// sendApple wakes an Apple device for each notification unread that its profile still may see; the
-// device asks the server for each by its id, and shows what it is told.
-func sendApple(ctx context.Context, devices apple, sub store.PushSubscription, pushes []store.Push, cards map[uuid.UUID]store.Card) error {
-	if sub.ApnsEnvironment == nil {
-		return nil
+// webNotification is what a browser shows of a notification, worded in its language, and the topic
+// a push service keeps one of for a browser that is away: a title's opens the title, a request's
+// the requests waiting.
+func webNotification(said words.Words, lang string, p store.Push, cards map[uuid.UUID]store.Card) (notification, string) {
+	id := strconv.FormatInt(p.ID, 10)
+	switch p.Kind {
+	case domain.NotificationRequest:
+		return notification{
+			Title: said.RequestTitle(p.Asked), Body: said.AskedFor(p.Asked.ProfileName), Lang: lang,
+			Tag: id, Navigate: requestsPage,
+		}, id
+	case domain.NotificationTitle:
 	}
+	return notification{
+		Title: cards[p.Title].Title, Body: said.Notification(p.New, cards[p.Latest]), Lang: lang,
+		Tag: p.Title.String(), Navigate: "/titles/" + p.Title.String() + "?notification=" + id,
+	}, base64.RawURLEncoding.EncodeToString(p.Title[:])
+}
+
+// sendRelay wakes a device through photon's push relay for each notification to be shown; the
+// device asks the server for each by its id, and shows what it is told.
+func sendRelay(ctx context.Context, devices apple, sub store.PushSubscription, pushes []store.Push) error {
 	for _, p := range pushes {
-		_, ok := cards[p.Title]
-		_, seen := cards[p.Latest]
-		if p.ReadAt != nil || !ok || !seen {
-			continue
-		}
-		m := pushrelay.Message{
-			Token: sub.Endpoint, Environment: *sub.ApnsEnvironment, Collapse: p.Title.String(),
-			Notification: strconv.FormatInt(p.ID, 10),
-		}
-		if err := devices.Send(ctx, m); err != nil {
+		if err := devices.Send(ctx, relayMessage(sub, p)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// relayMessage wakes one device for one notification: the device keeps one of a title, or of a
+// request, while it is away.
+func relayMessage(sub store.PushSubscription, p store.Push) pushrelay.Message {
+	m := pushrelay.Message{Token: sub.Endpoint, Collapse: p.Title.String(), Notification: strconv.FormatInt(p.ID, 10)}
+	switch p.Kind {
+	case domain.NotificationRequest:
+		m.Collapse = m.Notification
+	case domain.NotificationTitle:
+	}
+	if sub.ApnsEnvironment != nil {
+		m.Environment = *sub.ApnsEnvironment
+	}
+	return m
 }
