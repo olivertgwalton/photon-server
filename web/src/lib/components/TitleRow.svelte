@@ -1,11 +1,10 @@
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
-import HeartIcon from "@lucide/svelte/icons/heart";
 import type { Snippet } from "svelte";
 import type { components } from "#lib/api/schema.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
-import { episodeLine, runtime } from "#lib/format.js";
+import { runtime, showLine } from "#lib/format.js";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
 type Card = components["schemas"]["Card"];
@@ -16,15 +15,12 @@ let { card, detail, end }: { card: Card; detail?: string; end?: Snippet } =
 	$props();
 
 const picture = $derived(card.poster ?? card.thumb);
-const name = $derived(card.show?.title ?? card.title);
 const line = $derived(
 	detail ??
 		[
-			card.kind === "episode"
-				? episodeLine(card)
-				: card.kind === "season"
-					? card.title
-					: card.year,
+			card.kind === "episode" || card.kind === "season"
+				? showLine(card)
+				: card.year,
 			card.duration_ms && runtime(card.duration_ms),
 		]
 			.filter(Boolean)
@@ -52,7 +48,7 @@ const line = $derived(
 		</span>
 		<span class="min-w-0">
 			<span class="text-ink block truncate font-semibold group-hover:underline">
-				{name}
+				{card.title}
 			</span>
 			<span class="text-ink-3 block truncate text-sm">{line}</span>
 		</span>
@@ -60,13 +56,6 @@ const line = $derived(
 	{#if card.state?.watched_at}
 		<CheckIcon class="text-ink-3 size-4 shrink-0" aria-hidden="true" />
 		<span class="sr-only">Watched</span>
-	{/if}
-	{#if card.state?.favourite_at}
-		<HeartIcon
-			class="text-ink-3 size-4 shrink-0 fill-current"
-			aria-hidden="true"
-		/>
-		<span class="sr-only">Favourite</span>
 	{/if}
 	{#if end}
 		{@render end()}

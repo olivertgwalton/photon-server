@@ -69,15 +69,19 @@ export function titleWithShow(t: {
 	return t.show ? `${t.show.title}: ${t.title}` : t.title;
 }
 
-// "S1, E2 · Second": an episode by where it is in its show, and its name.
-export function episodeLine(t: {
-	title: string;
+// "S1, E2 · Small Show": what a card says under an episode's own name, as the
+// apps' cards do: where it is in its show, and the show. A season's is its show.
+export function showLine(t: {
+	kind: Schemas["ItemKind"];
+	show?: { title: string } | null;
 	season_number?: number | null;
 	episode_number?: number | null;
 	episode_end?: number | null;
 }): string {
-	const at = episodeLabel(t.season_number, t.episode_number, t.episode_end);
-	return [at, t.title].filter(Boolean).join(" · ");
+	const at =
+		t.kind === "episode" &&
+		episodeLabel(t.season_number, t.episode_number, t.episode_end);
+	return [at, t.show?.title].filter(Boolean).join(" · ");
 }
 
 // "Small Show S1, E2 · Second": an episode as one line, by its show and place

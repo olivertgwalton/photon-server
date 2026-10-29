@@ -8,12 +8,11 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
-import HeartIcon from "@lucide/svelte/icons/heart";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
-import { episodeLine } from "#lib/format.js";
+import { showLine } from "#lib/format.js";
 import { hidesSpoiler } from "#lib/spoilers.js";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
@@ -46,13 +45,12 @@ const picture = $derived(
 		: (card.thumb ?? card.backdrop),
 );
 
-// An episode or a season is named by its show, with where it is in it beneath.
-const name = $derived(card.show?.title ?? card.title);
+// An episode or a season goes by its own name, with where it is in its show
+// and the show beneath, as the apps' cards have it.
 const caption = $derived.by(() => {
 	if (given !== undefined) return given;
-	if (card.kind === "season") return card.title;
-	if (card.kind !== "episode") return card.year ? String(card.year) : "";
-	return episodeLine(card);
+	if (card.kind === "season" || card.kind === "episode") return showLine(card);
+	return card.year ? String(card.year) : "";
 });
 
 const progress = $derived(
@@ -103,18 +101,12 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 						<span class="sr-only">unwatched</span>
 					</span>
 				{/if}
-				{#if card.state?.favourite_at}
-					<span class="glass-disc" title="Favourite">
-						<HeartIcon class="size-3.5 fill-current" aria-hidden="true" />
-						<span class="sr-only">Favourite</span>
-					</span>
-				{/if}
 			</div>
 			<div class="card-shade grid gap-0.5">
 				<p
 					class="text-ink line-clamp-2 text-[0.8125rem] leading-tight font-semibold"
 				>
-					{name}
+					{card.title}
 				</p>
 				{#if progress > 0 || caption}
 					<p class="text-ink-2 flex items-center gap-1.5 text-xs">
