@@ -39,6 +39,7 @@ import {
 	probe,
 } from "#lib/player/profile.js";
 import { ProgressReporter, type Report } from "#lib/player/progress.js";
+import { type Advance, isDue, runAfter } from "#lib/player/stillwatching.js";
 import {
 	beside,
 	choices,
@@ -55,6 +56,7 @@ import { goto } from "$app/navigation";
 import EpisodeList from "./EpisodeList.svelte";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
+import StillWatching from "./StillWatching.svelte";
 import UpNext from "./UpNext.svelte";
 
 type Schemas = components["schemas"];
@@ -70,6 +72,7 @@ let {
 	audio: askedAudio,
 	subtitle: askedSubtitle,
 	queued: at,
+	run = 1,
 }: {
 	title: Schemas["TitlePage"];
 	prefs: Preferences;
@@ -79,6 +82,9 @@ let {
 	subtitle?: number | "off";
 	// Where the title is in the queue it was opened from.
 	queued?: number;
+	// The episodes played one after another with nothing pressed, this one and
+	// the one the reader started among them.
+	run?: number;
 } = $props();
 const words = vocabulary();
 
@@ -198,6 +204,9 @@ let episodesOpen = $state(false);
 let frames = $state.raw<VideoPlaybackQuality>();
 let next = $state.raw<Schemas["Card"]>();
 let upNextHidden = $state(false);
+let episodes = $state(untrack(() => run));
+// Whether the player has stopped to ask if anybody is still there.
+let asking = $state(false);
 let restTimer: ReturnType<typeof setTimeout> | undefined;
 // When a broken stream was last opened again. One that breaks again within
 // mendWithin of that is not mended by opening it once more.
@@ -686,12 +695,38 @@ function togglePip() {
 	else void video?.requestPictureInPicture();
 }
 
-function playNext() {
+function playNext(by: Advance) {
 	if (!next) return;
 	void goto(`/play/${next.id}`, {
 		replace: true,
-		state: at === undefined ? {} : { queued: at + 1 },
+		state: {
+			...(at === undefined ? {} : { queued: at + 1 }),
+			run: runAfter(episodes, by),
+		},
 	});
+}
+
+// Anything the reader presses says somebody is there.
+function present() {
+	episodes = 1;
+}
+
+$effect(() => {
+	if (
+		asking ||
+		prefs.still_watching !== "ask" ||
+		title.kind !== "episode" ||
+		!isDue(episodes, position)
+	)
+		return;
+	asking = true;
+	if (!untrack(() => halted)) toggle();
+});
+
+function keepWatching() {
+	present();
+	asking = false;
+	if (halted) toggle();
 }
 
 // Whether there is a title before this one to go back to: the queue's, or
@@ -722,8 +757,8 @@ async function playPrevious() {
 	});
 }
 
-function skip(m: Schemas["MarkerRef"]) {
-	if (next && m.end_ms / 1000 >= duration - 1) playNext();
+function skip(m: Schemas["MarkerRef"], by: Advance) {
+	if (next && m.end_ms / 1000 >= duration - 1) playNext(by);
 	else seek(m.end_ms / 1000);
 }
 
@@ -732,7 +767,7 @@ function passed() {
 	if (!marker || skipping(marker.kind, prefs) !== "skip") return;
 	if (skippedAt.has(marker.start_ms)) return;
 	skippedAt.add(marker.start_ms);
-	skip(marker);
+	skip(marker, "itself");
 }
 
 function ended() {
@@ -740,7 +775,8 @@ function ended() {
 	if (!casting && part < parts.length - 1) {
 		load(part + 1, parts[part + 1].offset_ms / 1000);
 		void video?.play();
-	} else if (next && !upNextHidden && prefs.next_episode === "play") playNext();
+	} else if (next && !upNextHidden && prefs.next_episode === "play")
+		playNext("itself");
 }
 
 function wake() {
@@ -758,6 +794,7 @@ function keydown(event: KeyboardEvent) {
 		event.metaKey ||
 		event.ctrlKey ||
 		event.altKey ||
+		asking ||
 		infoOpen ||
 		menuOpen ||
 		episodesOpen
@@ -781,12 +818,13 @@ function keydown(event: KeyboardEvent) {
 	else if (key === "m") muted = !muted;
 	else if (key === "f") toggleFullscreen();
 	else if (key === "c") toggleSubtitles();
-	else if (key === "N" && next) playNext();
+	else if (key === "N" && next) playNext("reader");
 	else if (key === "P" && hasPrevious) void playPrevious();
 	else if (/^[0-9]$/.test(key) && duration) seek((duration * Number(key)) / 10);
 	else handled = false;
 	if (handled) {
 		event.preventDefault();
+		present();
 		wake();
 	}
 }
@@ -810,12 +848,19 @@ $effect(() => {
 		["seekbackward", (d) => seek(position - (d.seekOffset ?? step))],
 		["seekforward", (d) => seek(position + (d.seekOffset ?? step))],
 		["seekto", (d) => seek(d.seekTime ?? position)],
-		["nexttrack", next ? playNext : null],
+		["nexttrack", next ? () => playNext("reader") : null],
 		["previoustrack", hasPrevious ? () => void playPrevious() : null],
 	];
 	for (const [action, handler] of handlers) {
 		try {
-			navigator.mediaSession.setActionHandler(action, handler);
+			navigator.mediaSession.setActionHandler(
+				action,
+				handler &&
+					((d) => {
+						present();
+						handler(d);
+					}),
+			);
 		} catch {
 			// An action this browser has not heard of.
 		}
@@ -1015,7 +1060,10 @@ function watchCast(context: cast.framework.CastContext) {
 	]}
 	aria-label="Player"
 	onpointermove={wake}
-	onpointerdown={wake}
+	onpointerdown={() => {
+		present();
+		wake();
+	}}
 	onfocusin={wake}
 >
 	<!-- svelte-ignore a11y_media_has_caption -->
@@ -1140,7 +1188,7 @@ function watchCast(context: cast.framework.CastContext) {
 					<Button
 						variant="outline"
 						class="bg-black/60"
-						onclick={() => skip(marker)}
+						onclick={() => skip(marker, "reader")}
 					>
 						{skips[marker.kind]}
 					</Button>
@@ -1204,7 +1252,7 @@ function watchCast(context: cast.framework.CastContext) {
 						size="icon"
 						class="hidden sm:inline-flex"
 						aria-label="Next: {next.title}"
-						onclick={playNext}
+						onclick={() => playNext("reader")}
 					>
 						<NextIcon class="size-5" />
 					</Button>
@@ -1493,6 +1541,13 @@ function watchCast(context: cast.framework.CastContext) {
 			{version}
 			quality={frames}
 			portal={root}
+		/>
+	{/if}
+	{#if asking}
+		<StillWatching
+			{title}
+			onkeep={keepWatching}
+			onleave={() => void goto(`/titles/${title.id}`)}
 		/>
 	{/if}
 </section>

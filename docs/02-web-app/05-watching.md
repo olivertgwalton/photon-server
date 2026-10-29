@@ -125,6 +125,16 @@ Near the end of an episode, **Up next** shows the next one, or the next title in
 If **Play the next episode** is on in your [playback settings](06-your-settings.md#playback), it
 plays by itself after counting down ten seconds. If it is off, it waits for you.
 
+## Are you still watching?
+
+If **Inactivity Check** is on in your [playback settings](06-your-settings.md#playback), the player
+checks that somebody is still there. After three episodes in a row with nothing pressed, counting
+the one you started, it pauses a couple of minutes into the third and asks **Are you still
+watching?** **Continue Watching** plays on; **Back to Browse**, or Esc, leaves the player.
+
+Pressing anything in the player, a key, a click or your keyboard's media keys, starts the count
+again, as does choosing an episode yourself.
+
 ## Cast to a Chromecast
 
 In Chrome, and browsers based on it, **Cast** appears when a Chromecast is on your network.

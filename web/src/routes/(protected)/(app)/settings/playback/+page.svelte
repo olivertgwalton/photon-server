@@ -233,6 +233,21 @@ const skipActions: { value: Schemas["SegmentAction"]; label: string }[] = [
 					</Field.Description>
 				</Field.Content>
 			</Field.Field>
+			<Field.Field orientation="horizontal">
+				<Switch
+					id="still-watching"
+					checked={prefs.still_watching === "ask"}
+					onCheckedChange={(v) => set({ still_watching: v ? "ask" : "never" })}
+				/>
+				<Field.Content>
+					<Field.Label for="still-watching">Inactivity Check</Field.Label>
+					<Field.Description>
+						After three episodes in a row with nothing pressed, the player
+						pauses a couple of minutes into the third to ask if you're still
+						watching.
+					</Field.Description>
+				</Field.Content>
+			</Field.Field>
 			<Field.Field>
 				<Field.Label for="skip-intro">Intros and recaps</Field.Label>
 				<Choice

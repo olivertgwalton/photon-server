@@ -16,6 +16,7 @@ export const settings: Record<string, [string, string, string][]> = {
 		["remember-audio", "Remember the sound chosen", "audio track"],
 		["remember-subtitles", "Remember the subtitles chosen", "captions"],
 		["autoplay", "Play the next episode", "autoplay binge"],
+		["still-watching", "Inactivity Check", "still watching asleep pause binge"],
 		["skip-intro", "Intros and recaps", "skip"],
 		["skip-credits", "Credits and previews", "skip outro"],
 		["theme-music", "Play theme music", "tune song"],

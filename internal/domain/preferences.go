@@ -110,6 +110,19 @@ func SpoilerModes() []SpoilerMode {
 	return []SpoilerMode{SpoilersShow, SpoilersHide}
 }
 
+// StillWatching is whether a player stops a run of episodes nobody has touched to ask if anybody is
+// still there, as Netflix does: after three in a row, a couple of minutes into the third.
+type StillWatching string
+
+const (
+	StillWatchingAsk   StillWatching = "ask"
+	StillWatchingNever StillWatching = "never"
+)
+
+func StillWatchings() []StillWatching {
+	return []StillWatching{StillWatchingAsk, StillWatchingNever}
+}
+
 // Preferences are how a profile plays, on every device, as Jellyfin's UserConfiguration. The server
 // chooses the sound and subtitles by them; the rest are a player's to follow.
 type Preferences struct {
@@ -123,6 +136,7 @@ type Preferences struct {
 	// MaxBitrateKbps is the most a player asks the server to send; 0 is the file as it is.
 	MaxBitrateKbps int
 	NextEpisode    NextEpisode
+	StillWatching  StillWatching
 	// IntroAction is for intros and recaps, CreditsAction for credits and previews.
 	IntroAction   SegmentAction
 	CreditsAction SegmentAction
@@ -143,7 +157,7 @@ func DefaultPreferences() Preferences {
 	return Preferences{
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
-		NextEpisode: NextEpisodePlay, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
+		NextEpisode: NextEpisodePlay, StillWatching: StillWatchingNever, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
 		ThemeMusic: ThemeMusicOff, CardArt: CardStill, Spoilers: SpoilersShow, Notify: NotifyMarked, Home: ArrangeHome(nil),
 	}
 }

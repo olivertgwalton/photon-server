@@ -25,16 +25,18 @@ type preferences interface {
 // them; the rest are each player's to follow.
 type preferencesJSON struct {
 	// AudioLanguage and SubtitleLanguage are BCP 47 tags; empty is any.
-	AudioLanguage     domain.LanguageTag   `json:"audio_language"`
-	AudioTrack        domain.AudioTrack    `json:"audio_track"`
-	SubtitleLanguage  domain.LanguageTag   `json:"subtitle_language"`
-	SubtitleMode      domain.SubtitleMode  `json:"subtitle_mode"`
-	RememberAudio     domain.TrackMemory   `json:"remember_audio"`
-	RememberSubtitles domain.TrackMemory   `json:"remember_subtitles"`
-	MaxBitrateKbps    int                  `json:"max_bitrate_kbps"`
-	NextEpisode       domain.NextEpisode   `json:"next_episode"`
-	IntroAction       domain.SegmentAction `json:"intro_action"`
-	CreditsAction     domain.SegmentAction `json:"credits_action"`
+	AudioLanguage     domain.LanguageTag  `json:"audio_language"`
+	AudioTrack        domain.AudioTrack   `json:"audio_track"`
+	SubtitleLanguage  domain.LanguageTag  `json:"subtitle_language"`
+	SubtitleMode      domain.SubtitleMode `json:"subtitle_mode"`
+	RememberAudio     domain.TrackMemory  `json:"remember_audio"`
+	RememberSubtitles domain.TrackMemory  `json:"remember_subtitles"`
+	MaxBitrateKbps    int                 `json:"max_bitrate_kbps"`
+	NextEpisode       domain.NextEpisode  `json:"next_episode"`
+	// StillWatching is whether a player asks if anybody is there after three episodes untouched.
+	StillWatching domain.StillWatching `json:"still_watching"`
+	IntroAction   domain.SegmentAction `json:"intro_action"`
+	CreditsAction domain.SegmentAction `json:"credits_action"`
 	// ThemeMusic is whether a title's page plays its theme tune.
 	ThemeMusic domain.ThemeMusic `json:"theme_music"`
 	// CardArt is what Continue Watching and Next Up draw a card by.
@@ -62,6 +64,7 @@ type preferencesChangeJSON struct {
 	RememberSubtitles domain.TrackMemory   `json:"remember_subtitles,omitzero"`
 	MaxBitrateKbps    *int                 `json:"max_bitrate_kbps,omitzero"`
 	NextEpisode       domain.NextEpisode   `json:"next_episode,omitzero"`
+	StillWatching     domain.StillWatching `json:"still_watching,omitzero"`
 	IntroAction       domain.SegmentAction `json:"intro_action,omitzero"`
 	CreditsAction     domain.SegmentAction `json:"credits_action,omitzero"`
 	ThemeMusic        domain.ThemeMusic    `json:"theme_music,omitzero"`
@@ -92,7 +95,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		AudioLanguage: domain.TagOf(p.AudioLanguage), AudioTrack: p.AudioTrack,
 		SubtitleLanguage: domain.TagOf(p.SubtitleLanguage), SubtitleMode: p.SubtitleMode,
 		RememberAudio: p.RememberAudio, RememberSubtitles: p.RememberSubtitles,
-		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode,
+		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode, StillWatching: p.StillWatching,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,
 		CardArt: p.CardArt, EpisodeSpoilers: p.Spoilers, Notify: p.Notify,
 		QuietLibraries: nonNil(p.QuietLibraries),
@@ -149,6 +152,7 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	p.RememberAudio = cmp.Or(req.RememberAudio, p.RememberAudio)
 	p.RememberSubtitles = cmp.Or(req.RememberSubtitles, p.RememberSubtitles)
 	p.NextEpisode = cmp.Or(req.NextEpisode, p.NextEpisode)
+	p.StillWatching = cmp.Or(req.StillWatching, p.StillWatching)
 	p.IntroAction, p.CreditsAction = cmp.Or(req.IntroAction, p.IntroAction), cmp.Or(req.CreditsAction, p.CreditsAction)
 	p.ThemeMusic = cmp.Or(req.ThemeMusic, p.ThemeMusic)
 	p.CardArt = cmp.Or(req.CardArt, p.CardArt)

@@ -26,5 +26,6 @@ const number = (name: string) => {
 			? "off"
 			: number("subtitle")}
 		queued={page.state.queued}
+		run={page.state.run}
 	/>
 {/key}

@@ -9441,6 +9441,7 @@ export interface components {
             remember_subtitles: components["schemas"]["TrackMemory"];
             /** Format: date-time */
             saved_at?: string | null;
+            still_watching: components["schemas"]["StillWatching"];
             subtitle_language: string;
             subtitle_mode: components["schemas"]["SubtitleMode"];
             theme_music: components["schemas"]["ThemeMusic"];
@@ -9459,6 +9460,7 @@ export interface components {
             quiet_libraries?: string[] | null;
             remember_audio?: components["schemas"]["TrackMemory"];
             remember_subtitles?: components["schemas"]["TrackMemory"];
+            still_watching?: components["schemas"]["StillWatching"];
             subtitle_language?: string | null;
             subtitle_mode?: components["schemas"]["SubtitleMode"];
             theme_music?: components["schemas"]["ThemeMusic"];
@@ -9865,6 +9867,8 @@ export interface components {
             watched_ms: number;
             zone: string;
         };
+        /** @enum {string} */
+        StillWatching: "ask" | "never";
         Storage: {
             bucket?: components["schemas"]["Bucket"];
             kind: components["schemas"]["StorageKind"];

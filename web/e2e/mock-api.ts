@@ -1289,6 +1289,7 @@ const defaults: Schemas["Preferences"] = {
 	remember_subtitles: "remember",
 	max_bitrate_kbps: 0,
 	next_episode: "play",
+	still_watching: "never",
 	intro_action: "ask",
 	credits_action: "ask",
 	theme_music: "off",

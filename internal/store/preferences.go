@@ -20,11 +20,11 @@ func (s *Store) Preferences(ctx context.Context, profile uuid.UUID) (domain.Pref
 	var audio, subtitles string
 	err := s.pool.QueryRow(ctx, `
 		SELECT audio_language, audio_track, subtitle_language, subtitle_mode, remember_audio, remember_subtitles,
-			max_bitrate_kbps, next_episode, intro_action, credits_action, theme_music, card_art, episode_spoilers,
-			notify, saved_at
+			max_bitrate_kbps, next_episode, still_watching, intro_action, credits_action, theme_music, card_art,
+			episode_spoilers, notify, saved_at
 		FROM profile_preferences WHERE profile_id = $1`, profile).Scan(
 		&audio, &out.AudioTrack, &subtitles, &out.SubtitleMode, &out.RememberAudio, &out.RememberSubtitles,
-		&out.MaxBitrateKbps, &out.NextEpisode, &out.IntroAction, &out.CreditsAction, &out.ThemeMusic, &out.CardArt,
+		&out.MaxBitrateKbps, &out.NextEpisode, &out.StillWatching, &out.IntroAction, &out.CreditsAction, &out.ThemeMusic, &out.CardArt,
 		&out.Spoilers, &out.Notify, &out.SavedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.DefaultPreferences(), nil
@@ -60,20 +60,20 @@ func (s *Store) SetPreferences(ctx context.Context, profile uuid.UUID, p domain.
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO profile_preferences (profile_id, audio_language, audio_track, subtitle_language, subtitle_mode,
-				remember_audio, remember_subtitles, max_bitrate_kbps, next_episode, intro_action, credits_action,
-				theme_music, card_art, episode_spoilers, notify, saved_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
+				remember_audio, remember_subtitles, max_bitrate_kbps, next_episode, still_watching, intro_action,
+				credits_action, theme_music, card_art, episode_spoilers, notify, saved_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, now())
 			ON CONFLICT (profile_id) DO UPDATE SET
 				audio_language = excluded.audio_language, audio_track = excluded.audio_track,
 				subtitle_language = excluded.subtitle_language, subtitle_mode = excluded.subtitle_mode,
 				remember_audio = excluded.remember_audio, remember_subtitles = excluded.remember_subtitles,
 				max_bitrate_kbps = excluded.max_bitrate_kbps, next_episode = excluded.next_episode,
-				intro_action = excluded.intro_action, credits_action = excluded.credits_action,
+				still_watching = excluded.still_watching, intro_action = excluded.intro_action, credits_action = excluded.credits_action,
 				theme_music = excluded.theme_music, card_art = excluded.card_art,
 				episode_spoilers = excluded.episode_spoilers, notify = excluded.notify, saved_at = excluded.saved_at`,
 			profile, languageText(p.AudioLanguage), p.AudioTrack, languageText(p.SubtitleLanguage), p.SubtitleMode,
-			p.RememberAudio, p.RememberSubtitles, p.MaxBitrateKbps, p.NextEpisode, p.IntroAction, p.CreditsAction,
-			p.ThemeMusic, p.CardArt, p.Spoilers, p.Notify)
+			p.RememberAudio, p.RememberSubtitles, p.MaxBitrateKbps, p.NextEpisode, p.StillWatching, p.IntroAction,
+			p.CreditsAction, p.ThemeMusic, p.CardArt, p.Spoilers, p.Notify)
 		if err != nil {
 			return err
 		}
