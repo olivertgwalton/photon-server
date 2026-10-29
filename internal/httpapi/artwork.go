@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 	"net/http"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/artwork"
@@ -52,6 +54,32 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 		"Content-Security-Policy": {"default-src 'none'; style-src 'unsafe-inline'; sandbox"},
 		"X-Content-Type-Options":  {"nosniff"},
 	})
+}
+
+// keepWithin is how long a client has to send a picture, the largest kept taking a minute at
+// 4 Mbit/s.
+const keepWithin = time.Minute
+
+// pictureTypes are what a picture may be sent as; its bytes, not the header, say which it is.
+var pictureTypes = asFile{"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+// keepPicture keeps the picture in the body under a new id, so a client that keeps pictures for
+// good is shown the new one, or writes why it is not kept.
+func (a *API) keepPicture(w http.ResponseWriter, r *http.Request) (uuid.UUID, artwork.KeptPicture, bool) {
+	rc := http.NewResponseController(w)
+	readWithin(rc, a.logger, time.Now().Add(keepWithin))
+	id := uuid.NewV7()
+	kept, err := a.svc.Artwork.Keep(r.Context(), id, r.Body)
+	readWithin(rc, a.logger, time.Time{})
+	if errors.Is(err, artwork.ErrNotPicture) {
+		writeProblem(w, a.logger, codeInvalidBody, err.Error())
+		return uuid.UUID{}, artwork.KeptPicture{}, false
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return uuid.UUID{}, artwork.KeptPicture{}, false
+	}
+	return id, kept, true
 }
 
 func (a *API) artworkRoutes() []route {
