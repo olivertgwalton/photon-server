@@ -424,3 +424,55 @@ func (s *Store) History(ctx context.Context, profile uuid.UUID, before Before, l
 	}
 	return out, more, nil
 }
+
+// PlayRecord is a play as a file of the history keeps it: the title by its names, numbers and
+// ids, which another service finds it by, rather than by its card. An episode's ids are its show's,
+// the season and episode numbers saying which of it.
+type PlayRecord struct {
+	ID            uuid.UUID
+	ProfileName   string
+	Kind          domain.ItemKind
+	Title         string
+	Year          *int
+	ShowTitle     string
+	SeasonNumber  *int
+	EpisodeNumber *int
+	Method        domain.PlayMethod
+	StartedAt     time.Time
+	StoppedAt     time.Time
+	PositionMS    int64
+	// TMDB, TVDB and IMDb are empty where the title is not known by that provider.
+	TMDB string
+	TVDB string
+	IMDb string
+}
+
+// PlayRecords answers up to limit plays from before as History does, and whether there are more,
+// each by what a file of the history says of it.
+func (s *Store) PlayRecords(ctx context.Context, profile uuid.UUID, before Before, limit int) ([]PlayRecord, bool, error) {
+	const columns = `
+		SELECT p.id, pr.name AS profile_name, i.kind, i.title, i.year, coalesce(show.title, '') AS show_title,
+			i.season_number, i.episode_number, p.method, p.started_at, p.stopped_at, p.position_ms,
+			coalesce(ids.tmdb, '') AS tmdb, coalesce(ids.tvdb, '') AS tvdb, coalesce(ids.imdb, '') AS imdb
+		FROM plays p
+		JOIN profiles pr ON pr.id = p.profile_id
+		JOIN items i ON i.id = p.item_id
+		LEFT JOIN items season ON i.kind = 'episode' AND season.id = i.parent_id
+		LEFT JOIN items show ON show.id = season.parent_id
+		CROSS JOIN LATERAL (
+			SELECT max(value) FILTER (WHERE provider = 'tmdb') AS tmdb,
+				max(value) FILTER (WHERE provider = 'tvdb') AS tvdb,
+				max(value) FILTER (WHERE provider = 'imdb') AS imdb
+			FROM external_ids WHERE item_id = coalesce(show.id, i.id)) ids`
+	const page = ` (p.stopped_at, p.id) < (@at, @id) ORDER BY p.stopped_at DESC, p.id DESC LIMIT @limit`
+	sql := columns + ` WHERE` + page
+	if profile != (uuid.UUID{}) {
+		sql = columns + ` WHERE p.profile_id = @profile AND` + page
+	}
+	rows, err := queryStructs[PlayRecord](ctx, s.pool, sql, pgx.NamedArgs{"profile": profile, "at": before.At, "id": before.ID, "limit": limit + 1})
+	if err != nil {
+		return nil, false, err
+	}
+	rows, more := pageOf(rows, limit)
+	return rows, more, nil
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
 import CursorPager from "#lib/components/CursorPager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
+import { Button } from "#lib/components/ui/button/index.js";
 import { timecode } from "#lib/format.js";
 import { vocabulary } from "#lib/vocabulary.js";
 
@@ -21,7 +22,13 @@ const days = $derived(
 <svelte:head><title>History · Photon</title></svelte:head>
 
 <div class="grid max-w-4xl gap-8">
-	<h1 class="title">History</h1>
+	<header class="flex flex-wrap items-end justify-between gap-4">
+		<h1 class="title">History</h1>
+		<!-- The session's cookie goes with a plain link, as a backup's download does. -->
+		<Button href="/api/v1/history/file" download variant="outline" size="sm"
+			>Download history</Button
+		>
+	</header>
 	{#each days as [name, plays] (name)}
 		<section aria-labelledby="day-{name}">
 			<h2 id="day-{name}" class="label mb-2">{name}</h2>

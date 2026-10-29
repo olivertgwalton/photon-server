@@ -62,3 +62,64 @@ func TestEachPlayIsKeptInTheHistory(t *testing.T) {
 		t.Errorf("everyone's second = %+v, more %v, %v; want the kid's first play, as before the new one", second, more, err)
 	}
 }
+
+func TestAPlayRecordNamesItsTitleByWhatAnotherServiceFindsItBy(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := s.AddLibrary(ctx, "Shows", domain.LibraryShows, "/srv/shows", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := func(key string) []Version {
+		return []Version{{ContentKey: []byte(key), Parts: []Part{{RelPath: key + ".mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}}
+	}
+	heat := Film{Title: "Heat", Year: 1995, Folder: "Heat", IDs: map[domain.Provider]string{domain.ProviderTMDB: "949", domain.ProviderIMDb: "tt0113277"}, Versions: part("heat")}
+	if _, err := s.SaveFolder(ctx, films.ID, "Heat", []byte("v1"), []Film{heat}, nil); err != nil {
+		t.Fatal(err)
+	}
+	pilot := Episode{Season: 1, Episodes: []int{1}, Title: "The Target", Folder: "Wire/Season 1", ByNumber: true, Versions: part("wire")}
+	wire := Show{Title: "The Wire", Folder: "Wire", IDs: map[domain.Provider]string{domain.ProviderTMDB: "1438", domain.ProviderTVDB: "79126"}}
+	if _, err := s.SaveShowFolder(ctx, shows.ID, "Wire/Season 1", []byte("v1"), wire, []Episode{pilot}, nil); err != nil {
+		t.Fatal(err)
+	}
+	oliver, err := s.AddProfile(ctx, "Oliver", domain.RoleAdmin, "h", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for n, play := range []struct {
+		who  uuid.UUID
+		kind string
+	}{{oliver.ID, "movie"}, {oliver.ID, "episode"}, {kid.ID, "movie"}} {
+		item := oneItem(t, s, "kind = '"+play.kind+"'")
+		p := domain.Playback{ID: uuid.NewV7(), Profile: play.who, Item: item.ID, Method: domain.PlayDirect, Started: start.Add(time.Duration(n) * time.Minute)}
+		if err := s.RecordPlay(ctx, p, p.Started.Add(time.Minute), time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mine, more, err := s.PlayRecords(ctx, oliver.ID, Newest, 10)
+	if err != nil || more || len(mine) != 2 {
+		t.Fatalf("Oliver's = %+v, more %v, %v; want his two and no more", mine, more, err)
+	}
+	ep, film := mine[0], mine[1]
+	if ep.Kind != domain.ItemEpisode || ep.Title != "The Target" || ep.ShowTitle != "The Wire" ||
+		ep.SeasonNumber == nil || *ep.SeasonNumber != 1 || ep.EpisodeNumber == nil || *ep.EpisodeNumber != 1 ||
+		ep.TMDB != "1438" || ep.TVDB != "79126" || ep.IMDb != "" || ep.ProfileName != "Oliver" {
+		t.Errorf("episode = %+v, want The Target of The Wire, 1x1, by the show's ids", ep)
+	}
+	if film.Kind != domain.ItemMovie || film.Title != "Heat" || film.Year == nil || *film.Year != 1995 || film.ShowTitle != "" ||
+		film.TMDB != "949" || film.IMDb != "tt0113277" || film.TVDB != "" {
+		t.Errorf("film = %+v, want Heat (1995) by its own ids", film)
+	}
+	if all, _, err := s.PlayRecords(ctx, uuid.UUID{}, Newest, 10); err != nil || len(all) != 3 || all[0].ProfileName != "Kid" {
+		t.Errorf("everyone's = %+v, %v; want all three, the kid's latest first", all, err)
+	}
+}
