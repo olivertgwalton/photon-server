@@ -56,6 +56,8 @@ const supported =
 	"PushManager" in window;
 
 let browser = $state<PushSubscription | null>(null);
+// The browser's own answer, which it does not say when it changes.
+let permission = $state(supported ? Notification.permission : "default");
 let busy = $state(false);
 
 $effect(() => {
@@ -67,14 +69,15 @@ $effect(() => {
 
 const pushState: PushState = $derived.by(() => {
 	if (!supported) return "unsupported";
-	if (Notification.permission === "denied") return "denied";
+	if (permission === "denied") return "denied";
 	return browser && subscriptions.some((s) => s.endpoint === browser?.endpoint)
 		? "on"
 		: "off";
 });
 
 async function subscribe() {
-	if ((await Notification.requestPermission()) !== "granted") {
+	permission = await Notification.requestPermission();
+	if (permission !== "granted") {
 		toast.error("Notifications are blocked for this site in your browser.");
 		return;
 	}
