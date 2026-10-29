@@ -181,7 +181,7 @@ const creditsMs = 60_000;
 				<p class="text-ink-2 text-sm {appear}">{source}</p>
 			{/if}
 			{#if card.overview}
-				<div class="rounded-xl bg-white/8 px-4 py-3 text-left backdrop-blur-xl">
+				<div class="glass-plate">
 					<Prose
 						text={card.overview}
 						lines={2}

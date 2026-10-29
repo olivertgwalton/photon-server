@@ -385,12 +385,14 @@ async function ask() {
 				<p class="text-ink font-heading text-lg italic">{t.tagline}</p>
 			{/if}
 			{#if t.overview}
-				<Prose
-					text={t.overview}
-					lines={3}
-					title={titleWithShow(t)}
-					class="text-ink-2 max-w-2xl"
-				/>
+				<div class="glass-plate max-w-2xl">
+					<Prose
+						text={t.overview}
+						lines={3}
+						title={titleWithShow(t)}
+						class="text-ink-2"
+					/>
+				</div>
 			{/if}
 
 			{#if data.asking}
