@@ -52,7 +52,24 @@ you started, where you **stopped at**, and how it reached you:
 - **Direct stream**: the picture was sent as it is, with small changes so the browser could play it.
 - **Transcode**: the server converted it as it played.
 
-An admin can see everyone's history. See
+**Download history** saves every play you have made as a CSV file, which a spreadsheet opens and
+services such as Trakt can import. Each row is one play, the latest first, with these columns:
+
+| Column | What it holds |
+| --- | --- |
+| `started_at`, `stopped_at` | When the play started and stopped, in UTC, such as `2026-10-01T20:00:00Z`. |
+| `profile` | Whose play it was. |
+| `kind` | `movie` or `episode`. |
+| `title`, `year` | The film's or episode's title, and a film's year. |
+| `show_title`, `season`, `episode` | Which show an episode is of, and where in it. |
+| `position_ms` | Where the play stopped, in milliseconds. |
+| `method` | `direct`, `remux` or `transcode`: direct play, direct stream or transcode. |
+| `tmdb_id`, `tvdb_id`, `imdb_id` | The film's ids at TMDB, TheTVDB and IMDb, or for an episode its show's. Empty where it was never matched there. |
+
+The file does not say whether a play was finished, as photon-server keeps only where it stopped.
+
+An admin can see everyone's history in Settings › Server › Play history, and download it there the
+same way: everyone's, or the profile chosen under **Who**. See
 [signed-in devices and what is playing now](../04-access/07-devices-and-playback.md). You can also
 [bring in your history](../06-integrations/07-import-history.md) from Plex, Jellyfin or Emby.
 
