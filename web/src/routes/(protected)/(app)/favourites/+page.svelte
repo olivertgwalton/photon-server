@@ -16,10 +16,8 @@ const groups = $derived(byKind(data.cards, words.kinds));
 	{#each groups as group (group.kind)}
 		<section aria-labelledby="favourite-{group.kind}">
 			<h2 id="favourite-{group.kind}" class="heading mb-3">{group.name}</h2>
-			<CardGrid
-				cards={group.cards}
-				shape={group.kind === "episode" ? "still" : "poster"}
-			/>
+			<!-- An episode too, wearing its season's art, as the apps draw it. -->
+			<CardGrid cards={group.cards} />
 		</section>
 	{:else}
 		<p class="text-ink-3">
