@@ -36,6 +36,7 @@ type editing interface {
 	IdentifySubject(ctx context.Context, id uuid.UUID) (store.Subject, bool, error)
 	ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]store.ArtworkCandidate, error)
 	ChooseArtwork(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind, picture uuid.UUID) error
+	UploadArtwork(ctx context.Context, id, picture uuid.UUID, a domain.Artwork) error
 	ForgetArtworkChoice(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) error
 }
 

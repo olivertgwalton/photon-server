@@ -44,6 +44,8 @@ type fakeEditing struct {
 	marked []domain.Marker
 	absent []domain.MarkerAbsent
 	chosen map[domain.ArtworkKind]uuid.UUID
+	// uploaded is the last picture an admin uploaded, which chosen holds while it is the film's.
+	uploaded domain.Artwork
 }
 
 func (f *fakeEditing) EditMetadata(_ context.Context, id uuid.UUID, m domain.Metadata) error {
@@ -179,6 +181,15 @@ func (f *fakeEditing) ChooseArtwork(_ context.Context, id uuid.UUID, kind domain
 		return store.ErrNotACandidate
 	}
 	f.chosen = map[domain.ArtworkKind]uuid.UUID{kind: picture}
+	return nil
+}
+
+func (f *fakeEditing) UploadArtwork(_ context.Context, id, picture uuid.UUID, a domain.Artwork) error {
+	if id != films {
+		return store.ErrNotFound
+	}
+	f.chosen = map[domain.ArtworkKind]uuid.UUID{a.Kind: picture}
+	f.uploaded = a
 	return nil
 }
 
