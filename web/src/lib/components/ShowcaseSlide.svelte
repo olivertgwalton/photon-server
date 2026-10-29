@@ -35,8 +35,8 @@ import { Button } from "#lib/components/ui/button/index.js";
 import {
 	episodeLabel,
 	playHref,
+	resumeLabel,
 	runtime,
-	timecode,
 	titleWithShow,
 } from "#lib/format.js";
 
@@ -214,7 +214,7 @@ const glass =
 				{#if playable}
 					<Button href={playHref(card.id)} size="lg" class="rounded-full px-5">
 						<PlayIcon class="fill-current" />
-						{position ? `Resume from ${timecode(position)}` : "Play"}
+						{position ? resumeLabel(position) : "Play"}
 						<span class="sr-only">{titleWithShow(card)}</span>
 					</Button>
 				{/if}

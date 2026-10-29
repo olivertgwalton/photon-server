@@ -43,8 +43,8 @@ import {
 	episodeLabel,
 	onDisk,
 	playHref,
+	resumeLabel,
 	runtime,
-	timecode,
 	titleWithShow,
 } from "#lib/format.js";
 import { playQueue } from "#lib/queue.js";
@@ -433,7 +433,7 @@ async function ask() {
 							class="rounded-full px-5"
 						>
 							<PlayIcon class="fill-current" />
-							{position ? `Resume from ${timecode(position)}` : "Play"}
+							{position ? resumeLabel(position) : "Play"}
 						</Button>
 						{#if position}
 							<Button

@@ -47,6 +47,16 @@ export function timecode(ms: number): string {
 	return h ? `${h}:${mm.padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
+// "Resume 01:04:09", "Resume 00:04:09": where Play goes on from, as the apps'
+// Play names it, the hours always written.
+export function resumeLabel(ms: number): string {
+	const s = Math.max(0, Math.floor(ms / 1000));
+	const clock = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+		.map((n) => String(n).padStart(2, "0"))
+		.join(":");
+	return `Resume ${clock}`;
+}
+
 // "S1, E2", "S1, E2–E3" for a double episode, "E5" where the season is not known. The
 // comma is the Photon apps' own spelling, which a card reads beside.
 export function episodeLabel(

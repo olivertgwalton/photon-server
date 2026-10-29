@@ -6,6 +6,7 @@ import {
 	holding,
 	playHref,
 	ratingMark,
+	resumeLabel,
 	runtime,
 	score,
 	showLine,
@@ -21,6 +22,11 @@ test("a running time reads as a listing prints it", () => {
 test("a resume point reads as a player's clock", () => {
 	expect(timecode(249_000)).toBe("4:09");
 	expect(timecode(3_849_000)).toBe("1:04:09");
+});
+
+test("Play names where it resumes as the apps do, the hours always written", () => {
+	expect(resumeLabel(249_000)).toBe("Resume 00:04:09");
+	expect(resumeLabel(3_725_000)).toBe("Resume 01:02:05");
 });
 
 test("a bitrate reads in Mb/s from a thousand kb/s, a whole one without a point", () => {

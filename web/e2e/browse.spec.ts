@@ -40,7 +40,7 @@ test("home's showcase wears what the reader opens, or slides through a row they 
 	).toBeVisible();
 	await expect(
 		showcase.getByRole("link", {
-			name: /^(Play|Resume from [0-9:]+) Quiet Hours$/,
+			name: /^(Play|Resume [0-9:]+) Quiet Hours$/,
 		}),
 	).toBeVisible();
 	await expectAccessible(page);
@@ -157,7 +157,7 @@ test("home's showcase says what the apps' does of an episode", async ({
 	await expect(facts).toContainText("91%");
 	await expect(facts).not.toContainText("7.0");
 	await expect(
-		showcase.getByRole("link", { name: "Resume from 10:00 Small Show: Pilot" }),
+		showcase.getByRole("link", { name: "Resume 00:10:00 Small Show: Pilot" }),
 	).toHaveAttribute("href", "/play/t-ep");
 	await expectAccessible(page);
 });
