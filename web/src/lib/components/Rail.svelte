@@ -5,6 +5,7 @@ import type { Snippet } from "svelte";
 import type { Attachment } from "svelte/attachments";
 import { on as listen } from "svelte/events";
 import type { Shape } from "#lib/artwork.js";
+import { cardRailScale } from "#lib/cardsize.svelte.js";
 import { railLimit } from "#lib/rows.js";
 import { onResize } from "#lib/size.js";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
@@ -67,11 +68,13 @@ const id = $props.id();
 const restMs = 150;
 
 // Each card's width, and what its picture is asked for at.
+// Each card's width at Standard, which the card size takes further.
 const width = $derived(
 	shape === "poster"
-		? "w-32 sm:w-36 lg:w-40 2xl:w-48"
-		: "w-60 sm:w-64 lg:w-72 2xl:w-80",
+		? "[--rail-card:8rem] sm:[--rail-card:9rem] lg:[--rail-card:10rem] 2xl:[--rail-card:12rem]"
+		: "[--rail-card:15rem] sm:[--rail-card:16rem] lg:[--rail-card:18rem] 2xl:[--rail-card:20rem]",
 );
+const scale = $derived(cardRailScale());
 // Which ways there is more to scroll to, for the arrows.
 let list = $state<HTMLUListElement>();
 let back = $state(false);
@@ -156,9 +159,20 @@ function hold(event: MouseEvent) {
 }
 
 const sizes = $derived(
-	shape === "poster"
-		? "(min-width: 1536px) 12rem, (min-width: 1024px) 10rem, 9rem"
-		: "(min-width: 1536px) 20rem, (min-width: 1024px) 18rem, 16rem",
+	(shape === "poster"
+		? [
+				["(min-width: 1536px) ", 12],
+				["(min-width: 1024px) ", 10],
+				["", 9],
+			]
+		: [
+				["(min-width: 1536px) ", 20],
+				["(min-width: 1024px) ", 18],
+				["", 16],
+			]
+	)
+		.map(([when, rem]) => `${when}${(rem as number) * scale}rem`)
+		.join(", "),
 );
 </script>
 
@@ -218,6 +232,7 @@ const sizes = $derived(
 			the page keeps its scroll and the picked card its focus, rather than
 			both going back to the top. -->
 		<ul
+			style:--rail-scale={scale}
 			data-sveltekit-reset={current ? "false" : undefined}
 			bind:this={list}
 			{@attach resized}
@@ -228,7 +243,9 @@ const sizes = $derived(
 			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 scrollbar-none sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each shown as c, i (c.id)}
-				<li class="shrink-0 snap-start {width}">
+				<li
+					class="w-[calc(var(--rail-card)*var(--rail-scale))] shrink-0 snap-start {width}"
+				>
 					<TitleCard
 						card={c}
 						{shape}
@@ -241,7 +258,9 @@ const sizes = $derived(
 			{/each}
 			{#if card}
 				{#each items.slice(0, railLimit) as item (item.id)}
-					<li class="shrink-0 snap-start {width}">
+					<li
+						class="w-[calc(var(--rail-card)*var(--rail-scale))] shrink-0 snap-start {width}"
+					>
 						{@render card(item, sizes)}
 					</li>
 				{/each}
