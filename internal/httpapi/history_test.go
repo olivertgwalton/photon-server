@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -28,6 +29,89 @@ func (f *fakeHistory) History(_ context.Context, profile uuid.UUID, before store
 	f.asked, f.before = append(f.asked, profile), append(f.before, before)
 	play := store.Play{ID: films, Profile: profile, Card: store.Card{ID: films, Kind: domain.ItemMovie, Title: "Heat"}, Method: domain.PlayDirect, StoppedAt: heatPlayed}
 	return []store.Play{play}, before == store.Newest, nil
+}
+
+// PlayRecords answers a film and an episode on the first page and the film again on the second, as
+// though the history were longer than a batch.
+func (f *fakeHistory) PlayRecords(_ context.Context, profile uuid.UUID, before store.Before, _ int) ([]store.PlayRecord, bool, error) {
+	f.asked, f.before = append(f.asked, profile), append(f.before, before)
+	year, season, episode := 1995, 1, 1
+	heat := store.PlayRecord{
+		ID: films, ProfileName: "Oliver", Kind: domain.ItemMovie, Title: "Heat", Year: &year, Method: domain.PlayDirect,
+		StartedAt: heatPlayed.Add(-time.Hour), StoppedAt: heatPlayed, PositionMS: 3_600_000, TMDB: "949", IMDb: "tt0113277",
+	}
+	if before != store.Newest {
+		return []store.PlayRecord{heat}, false, nil
+	}
+	target := store.PlayRecord{
+		ID: shows, ProfileName: "Oliver", Kind: domain.ItemEpisode, Title: "The Target", ShowTitle: "The Wire",
+		SeasonNumber: &season, EpisodeNumber: &episode, Method: domain.PlayTranscode,
+		StartedAt: heatPlayed.Add(time.Hour), StoppedAt: heatPlayed.Add(2 * time.Hour), PositionMS: 60_000, TMDB: "1438", TVDB: "79126",
+	}
+	return []store.PlayRecord{target, heat}, true, nil
+}
+
+func TestHistoryFileIsEveryPlayAsCSV(t *testing.T) {
+	h := &fakeHistory{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, History: h})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/history/file", nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/csv") ||
+		!strings.HasPrefix(rec.Header().Get("Content-Disposition"), `attachment; filename="photon-history-`) {
+		t.Fatalf("%d %v, want a CSV attachment", rec.Code, rec.Header())
+	}
+	rows, err := csv.NewReader(rec.Body).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"started_at", "stopped_at", "profile", "kind", "title", "year", "show_title", "season", "episode", "position_ms", "method", "tmdb_id", "tvdb_id", "imdb_id"},
+		{"2026-10-01T21:00:00Z", "2026-10-01T22:00:00Z", "Oliver", "episode", "The Target", "", "The Wire", "1", "1", "60000", "transcode", "1438", "79126", ""},
+		{"2026-10-01T19:00:00Z", "2026-10-01T20:00:00Z", "Oliver", "movie", "Heat", "1995", "", "", "", "3600000", "direct", "949", "", "tt0113277"},
+		{"2026-10-01T19:00:00Z", "2026-10-01T20:00:00Z", "Oliver", "movie", "Heat", "1995", "", "", "", "3600000", "direct", "949", "", "tt0113277"},
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("rows = %q, want %q", rows, want)
+	}
+	for n := range want {
+		if strings.Join(rows[n], ",") != strings.Join(want[n], ",") {
+			t.Errorf("row %d = %q, want %q", n, rows[n], want[n])
+		}
+	}
+	if len(h.before) != 2 || h.before[1].ID != films {
+		t.Errorf("read from %v, want the newest, then on from the first batch's last play", h.before)
+	}
+}
+
+func TestHistoryFileIsAProfilesOwnAndAnAdminsWhole(t *testing.T) {
+	h := &fakeHistory{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, History: h})
+	for _, tc := range []struct {
+		token, target string
+		want          int
+	}{
+		{memberToken, "/api/v1/history/file", http.StatusOK},
+		{memberToken, "/api/v1/history/file?profile=" + oliver.ID.String(), http.StatusBadRequest},
+		{memberToken, "/api/v1/admin/history/file", http.StatusForbidden},
+		{memberToken, "/api/v1/admin/history/file?profile=" + oliver.ID.String(), http.StatusForbidden},
+		{goodToken, "/api/v1/admin/history/file", http.StatusOK},
+		{goodToken, "/api/v1/admin/history/file?profile=" + oliver.ID.String(), http.StatusOK},
+		{goodToken, "/api/v1/admin/history/file?profile=oliver", http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s as %s: %d %s, want %d", tc.target, tc.token, rec.Code, rec.Body, tc.want)
+		}
+	}
+	// Each file read in two batches: the member's own, everyone's, then Oliver's.
+	if len(h.asked) != 6 || h.asked[0] == oliver.ID || h.asked[0] == (uuid.UUID{}) || h.asked[2] != (uuid.UUID{}) || h.asked[4] != oliver.ID {
+		t.Errorf("asked about %v, want the member's own, everyone's, then Oliver's", h.asked)
+	}
 }
 
 func TestHistoryIsAProfilesOwnAndAnAdminsWhole(t *testing.T) {
