@@ -281,6 +281,7 @@ const trackerClients: Schemas["TrackerClient"][] = [
 ];
 let keys: Schemas["KeyListing"][] = [];
 let chosenPoster = "a-1";
+let uploadedPoster = "";
 let maintenance: Schemas["Maintenance"] = {
 	start_hour: 2,
 	end_hour: 5,
@@ -878,16 +879,42 @@ export async function admin(
 				chosenPoster = ((await request.json()) as Schemas["ChooseArtwork"]).id;
 			}
 			return done();
+		case "POST /api/v1/admin/titles/t-quiet/artwork/poster":
+			uploadedPoster = crypto.randomUUID();
+			chosenPoster = uploadedPoster;
+			return json(
+				{
+					id: uploadedPoster,
+					source: "upload",
+					width: 1,
+					height: 1,
+					chosen: true,
+				} satisfies Schemas["ArtworkCandidate"],
+				201,
+			);
 		case "GET /api/v1/admin/titles/t-quiet/artwork/candidates":
 			return json({
-				items: ["a-1", "a-2"].map((id) => ({
-					id,
-					source: "tmdb",
-					language: "en",
-					width: 1000,
-					height: 1500,
-					chosen: id === chosenPoster,
-				})),
+				items: [
+					...(uploadedPoster === chosenPoster
+						? [
+								{
+									id: uploadedPoster,
+									source: "upload",
+									width: 1,
+									height: 1,
+									chosen: true,
+								},
+							]
+						: []),
+					...["a-1", "a-2"].map((id) => ({
+						id,
+						source: "tmdb",
+						language: "en",
+						width: 1000,
+						height: 1500,
+						chosen: id === chosenPoster,
+					})),
+				],
 			} satisfies Schemas["ArtworkCandidateList"]);
 		case "GET /api/v1/admin/titles/t-quiet/candidates":
 		case "GET /api/v1/admin/titles/t-film/candidates":

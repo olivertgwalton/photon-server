@@ -938,6 +938,18 @@ test("a title is edited, matched, given a poster and marked", async ({
 		.getByRole("button", { pressed: false });
 	await posters.first().click();
 	await expect(page.getByText("Chosen.")).toBeVisible();
+	await page.getByLabel("Poster to upload").setInputFiles({
+		name: "mine.png",
+		mimeType: "image/png",
+		buffer: Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqGcAAAIEAQDeEycgAAAAAElFTkSuQmCC",
+			"base64",
+		),
+	});
+	await expect(page.getByText("Uploaded.")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: /upload · 1×1 · chosen/ }),
+	).toBeVisible();
 
 	await page.getByRole("button", { name: "Add a stretch" }).click();
 	await page.getByLabel("Starts").last().fill("0:30");
