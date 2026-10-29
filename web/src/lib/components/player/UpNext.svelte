@@ -4,6 +4,7 @@ import { blurStyle } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import { episodeLabel } from "#lib/format.js";
+import type { Advance } from "#lib/player/stillwatching.js";
 import { hidesSpoiler } from "#lib/spoilers.js";
 
 // The next episode, offered as the credits roll, playing by itself once the
@@ -19,7 +20,7 @@ let {
 	card: components["schemas"]["Card"];
 	paused: boolean;
 	autoplay: boolean;
-	onplay: () => void;
+	onplay: (by: Advance) => void;
 	ondismiss: () => void;
 } = $props();
 
@@ -35,7 +36,7 @@ $effect(() => {
 		left -= 1;
 		if (left > 0) return;
 		clearInterval(timer);
-		onplay();
+		onplay("itself");
 	}, 1000);
 	return () => clearInterval(timer);
 });
@@ -72,7 +73,7 @@ const where = $derived(episodeLabel(card.season_number, card.episode_number));
 			{/if}
 		</div>
 		<div class="flex gap-2">
-			<Button size="sm" onclick={onplay}>Play now</Button>
+			<Button size="sm" onclick={() => onplay("reader")}>Play now</Button>
 			<Button size="sm" variant="ghost" onclick={ondismiss}>Hide</Button>
 		</div>
 	</div>
