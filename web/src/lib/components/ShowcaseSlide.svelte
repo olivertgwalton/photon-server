@@ -119,10 +119,6 @@ const darkLogo = $derived(logo ? isDark(card.blurhashes?.[logo]) : false);
 
 const falseStartMs = 30_000;
 const creditsMs = 60_000;
-
-// Beside Play, a pane of glass over the backdrop, as on a title's page.
-const glass =
-	"rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14";
 </script>
 
 <div
@@ -218,12 +214,7 @@ const glass =
 						<span class="sr-only">{titleWithShow(card)}</span>
 					</Button>
 				{/if}
-				<Button
-					href="/titles/{card.id}"
-					variant="ghost"
-					size="lg"
-					class={glass}
-				>
+				<Button href="/titles/{card.id}" size="lg" variant="glass">
 					<InfoIcon />More Info
 					<span class="sr-only">about {titleWithShow(card)}</span>
 				</Button>

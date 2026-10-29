@@ -247,11 +247,6 @@ async function shuffle(id: string) {
 	else playQueue(data.items, true);
 }
 
-// What sits beside Play: panes of glass over the backdrop, Play the one
-// filled control on the page.
-const glass =
-	"rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14";
-
 const backdrop = $derived(art("backdrop"));
 // The page takes the title's own colour from its backdrop, so the picture
 // fades into the page rather than stopping on it. Without a backdrop, or
@@ -438,8 +433,7 @@ async function ask() {
 						{#if position}
 							<Button
 								href={playHref(t.id, { ...choice, t: 0 })}
-								variant="ghost"
-								class={glass}
+								variant="glass"
 								size="lg"
 							>
 								<RotateCcwIcon />From the beginning
@@ -470,8 +464,7 @@ async function ask() {
 					{#if shuffles}
 						{@const id = shuffles}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-label="Shuffle"
 							title="Shuffle"
@@ -481,19 +474,13 @@ async function ask() {
 						</Button>
 					{/if}
 					{#if trailer}
-						<Button
-							href={playHref(trailer.id)}
-							variant="ghost"
-							class={glass}
-							size="lg"
-						>
+						<Button href={playHref(trailer.id)} variant="glass" size="lg">
 							<FilmIcon />Trailer
 						</Button>
 					{/if}
 					{#if t.kind !== "collection"}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-pressed={watched}
 							aria-label="Watched"
@@ -504,8 +491,7 @@ async function ask() {
 						</Button>
 					{/if}
 					<Button
-						variant="ghost"
-						class={glass}
+						variant="glass"
 						size="icon-lg"
 						aria-pressed={favourite}
 						aria-label="Favourite"
@@ -516,8 +502,7 @@ async function ask() {
 					</Button>
 					{#if t.kind !== "collection"}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-pressed={watchlisted}
 							aria-label="Watchlist"
@@ -533,8 +518,7 @@ async function ask() {
 						<DropdownMenu.Trigger>
 							{#snippet child({ props })}
 								<Button
-									variant="ghost"
-									class={glass}
+									variant="glass"
 									size="icon-lg"
 									aria-label="More"
 									{...props}
