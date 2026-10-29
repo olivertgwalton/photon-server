@@ -24,6 +24,7 @@ export const settings: Record<string, [string, string, string][]> = {
 		["subtitle-backing", "Subtitle background", "text box shadow outline"],
 	],
 	"/settings/home": [
+		["card-size", "Card size", "density grid columns bigger smaller"],
 		["spoilers", "Hide episode spoilers", "blur unwatched still thumbnail"],
 	],
 	"/settings/notifications": [

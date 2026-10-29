@@ -1,6 +1,7 @@
 <script lang="ts" generics="T extends Record<'id', string>">
 import type { Snippet } from "svelte";
 import type { Shape } from "#lib/artwork.js";
+import { cardMin } from "#lib/cardsize.svelte.js";
 import { gridColumns } from "#lib/grid.js";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
@@ -23,7 +24,7 @@ let {
 
 <ul
 	class="grid gap-x-3 gap-y-4.5"
-	style="grid-template-columns: {gridColumns(shape)}"
+	style="grid-template-columns: {gridColumns(cardMin(shape))}"
 >
 	{#each cards as c, i (c.id)}
 		<li>

@@ -6,6 +6,7 @@ import { act } from "#lib/act.js";
 import { withQuery } from "#lib/address.js";
 import { client, refusal } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
+import { cardMin } from "#lib/cardsize.svelte.js";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import SmartSaveDialog from "#lib/components/SmartSaveDialog.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
@@ -322,7 +323,7 @@ function jump(letters: Letter[], letter: string) {
 			class={view === "list" ? "grid gap-y-4.5" : "grid gap-x-3 gap-y-4.5"}
 			style={view === "list"
 				? ""
-				: `grid-template-columns: ${gridColumns(view === "still" ? "still" : "poster")}`}
+				: `grid-template-columns: ${gridColumns(cardMin(view === "still" ? "still" : "poster"))}`}
 			aria-hidden="true"
 		>
 			{#each blanks as card (card)}

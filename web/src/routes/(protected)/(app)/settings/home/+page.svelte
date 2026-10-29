@@ -7,12 +7,14 @@ import { toast } from "svelte-sonner";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
+import { cardSize, chooseCardSize } from "#lib/cardsize.svelte.js";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
+import type { CardSize } from "#lib/grid.js";
 import { reorder } from "#lib/reorder.svelte.js";
 import { moved } from "#lib/rows.js";
 import { vocabulary } from "#lib/vocabulary.js";
@@ -132,6 +134,17 @@ function hide(chosen: SpoilerMode) {
 	sending = sending.then(send, send);
 }
 
+const sizeOptions: { value: CardSize; label: string }[] = [
+	{ value: "compact", label: "Compact" },
+	{ value: "standard", label: "Standard" },
+	{ value: "large", label: "Large" },
+];
+
+function size(chosen: CardSize) {
+	chooseCardSize(chosen);
+	toast.success("Saved for this browser.");
+}
+
 type Way = "up" | "down";
 
 // A keyed row is moved in the page, which takes focus from its arrow: it is
@@ -218,6 +231,21 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 
 <Card.Root class="mt-6 max-w-2xl">
 	<Card.Content>
+		<Field.Field>
+			<Field.Label for="card-size">Card size</Field.Label>
+			<Choice
+				id="card-size"
+				options={sizeOptions}
+				value={cardSize()}
+				onchange={size}
+				class="w-full sm:w-72"
+			/>
+			<Field.Description>
+				How large a library's, a search's or a list's cards are drawn, in this
+				browser. On a phone, Standard fits three posters across.
+			</Field.Description>
+		</Field.Field>
+		<Field.Separator />
 		<Field.Field>
 			<Field.Label for="card-art">Row pictures</Field.Label>
 			<Choice
