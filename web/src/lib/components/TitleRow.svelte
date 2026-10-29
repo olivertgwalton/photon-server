@@ -1,6 +1,5 @@
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
-import HeartIcon from "@lucide/svelte/icons/heart";
 import type { Snippet } from "svelte";
 import type { components } from "#lib/api/schema.js";
 import { blurStyle } from "#lib/blurhash.js";
@@ -57,13 +56,6 @@ const line = $derived(
 	{#if card.state?.watched_at}
 		<CheckIcon class="text-ink-3 size-4 shrink-0" aria-hidden="true" />
 		<span class="sr-only">Watched</span>
-	{/if}
-	{#if card.state?.favourite_at}
-		<HeartIcon
-			class="text-ink-3 size-4 shrink-0 fill-current"
-			aria-hidden="true"
-		/>
-		<span class="sr-only">Favourite</span>
 	{/if}
 	{#if end}
 		{@render end()}

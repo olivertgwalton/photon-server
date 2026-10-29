@@ -8,7 +8,6 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
-import HeartIcon from "@lucide/svelte/icons/heart";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { Shape } from "#lib/artwork.js";
 import { blurStyle } from "#lib/blurhash.js";
@@ -100,12 +99,6 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 					>
 						{unwatched}
 						<span class="sr-only">unwatched</span>
-					</span>
-				{/if}
-				{#if card.state?.favourite_at}
-					<span class="glass-disc" title="Favourite">
-						<HeartIcon class="size-3.5 fill-current" aria-hidden="true" />
-						<span class="sr-only">Favourite</span>
 					</span>
 				{/if}
 			</div>
