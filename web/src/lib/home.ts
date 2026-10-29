@@ -33,9 +33,23 @@ type HomeRail = Row & {
 	cards: Promise<{ items: Card[] }>;
 };
 
-// The home's rows, each asked for on its own as Jellyfin's are: those the
-// profile shows, in its order, a library's once for each library of the kinds
-// it is made for, as Plex's library hubs are, in the profile's order of them.
+// The home's rows: those the profile shows, in its order, a library's once for
+// each library of the kinds it is made for, as Plex's library hubs are, in the
+// profile's order of them.
+export function homeRows(arrangement: Section[], libraries: Library[]) {
+	return arrangement
+		.filter((s) => s.visibility === "shown")
+		.flatMap(({ row: kind, library_kinds: of }) => {
+			const rows: Row[] = of
+				? libraries
+						.filter((l) => of.includes(l.kind))
+						.map((l) => ({ kind, library: { id: l.id, name: l.name } }))
+				: [{ kind }];
+			return rows.map((row) => ({ ...row, ...rail(row) }));
+		});
+}
+
+// The home's rows, each asked for on its own as Jellyfin's are.
 export function homeRails(
 	fetch: typeof globalThis.fetch,
 	arrangement: Section[],
@@ -43,36 +57,19 @@ export function homeRails(
 ): HomeRail[] {
 	const api = client(fetch);
 	const limit = railLimit;
-	return arrangement
-		.filter((s) => s.visibility === "shown")
-		.flatMap(({ row: kind, library_kinds: of }): HomeRail[] => {
-			if (!of) {
-				const row = { kind };
-				return [
-					{
-						...row,
-						...rail(row),
-						cards: need(
-							api.GET("/api/v1/profile/rows/{row}", {
-								params: { path: { row: kind }, query: { limit } },
-							}),
-						),
-					},
-				];
-			}
-			return libraries
-				.filter((l) => of.includes(l.kind))
-				.map((l) => {
-					const row = { kind, library: { id: l.id, name: l.name } };
-					return {
-						...row,
-						...rail(row),
-						cards: need(
-							api.GET("/api/v1/libraries/{id}/rows/{row}", {
-								params: { path: { id: l.id, row: kind }, query: { limit } },
-							}),
-						),
-					};
-				});
-		});
+	return homeRows(arrangement, libraries).map((row) => ({
+		...row,
+		cards: need(
+			row.library
+				? api.GET("/api/v1/libraries/{id}/rows/{row}", {
+						params: {
+							path: { id: row.library.id, row: row.kind },
+							query: { limit },
+						},
+					})
+				: api.GET("/api/v1/profile/rows/{row}", {
+						params: { path: { row: row.kind }, query: { limit } },
+					}),
+		),
+	}));
 }
