@@ -51,11 +51,42 @@ test("home's showcase wears what the reader opens, or slides through a row they 
 		.getByRole("link", { name: /Pilot/ })
 		.click();
 	await expect(page).toHaveURL("/titles/t-ep");
+	// Slowed, so the new title's words are still coming in when looked at.
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Animation.enable");
+	await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.02 });
 	await page.goBack();
 	await expect(
 		showcase.getByRole("heading", { name: "Small Show" }),
 	).toBeVisible();
 	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+	// A pane of glass under a fading element blurs nothing behind it, so the
+	// words fade and the panes holding them do not.
+	const fading = await showcase.evaluate((section) => {
+		const moving = (el: Element) =>
+			el.getAnimations().some((a) => a.playState === "running");
+		const panes = [...section.querySelectorAll("*")].filter(
+			(el) => getComputedStyle(el).backdropFilter !== "none",
+		);
+		const under = panes.filter((pane) => {
+			for (
+				let el = pane.parentElement;
+				el && el !== section;
+				el = el.parentElement
+			)
+				if (moving(el)) return true;
+			return moving(pane);
+		});
+		return {
+			words: [...section.querySelectorAll("*")].filter(moving).length,
+			panes: panes.length,
+			under: under.length,
+		};
+	});
+	expect(fading.words).toBeGreaterThan(0);
+	expect(fading.panes).toBeGreaterThan(0);
+	expect(fading.under).toBe(0);
+	await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 });
 
 	// A row chosen in this browser is a carousel of its titles.
 	await page.goto("/settings/home");

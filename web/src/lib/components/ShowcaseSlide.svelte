@@ -117,6 +117,10 @@ const accent = $derived(
 const logo = $derived(card.logo);
 const darkLogo = $derived(logo ? isDark(card.blurhashes?.[logo]) : false);
 
+// How another title's words come in.
+const appear =
+	"motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500";
+
 const falseStartMs = 30_000;
 const creditsMs = 60_000;
 </script>
@@ -147,12 +151,14 @@ const creditsMs = 60_000;
 			></div>
 		</div>
 	{/if}
-	<!-- Another title fades its writing in where the last stood. -->
+	<!-- Another title fades its writing in where the last stood: the words, never
+		a pane of glass or what holds one, since a pane under a fading element blurs
+		nothing behind it until the fade is done. -->
 	{#key card.id}
 		<div
-			class="relative grid max-w-180 justify-items-center gap-4 px-3 pt-24 pb-6 text-center motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 sm:justify-items-start sm:px-6 sm:text-left"
+			class="relative grid max-w-180 justify-items-center gap-4 px-3 pt-24 pb-6 text-center sm:justify-items-start sm:px-6 sm:text-left"
 		>
-			<h2>
+			<h2 class={appear}>
 				{#if logo}
 					<Artwork
 						id={logo}
@@ -169,22 +175,24 @@ const creditsMs = 60_000;
 				{/if}
 			</h2>
 			{#if place}
-				<div class="grid gap-1">
+				<div class="grid gap-1 {appear}">
 					<p class="text-ink-2 text-sm">
 						{[place, source].filter(Boolean).join(" · ")}
 					</p>
 					<p class="text-ink font-heading text-lg">{card.title}</p>
 				</div>
 			{:else if source}
-				<p class="text-ink-2 text-sm">{source}</p>
+				<p class="text-ink-2 text-sm {appear}">{source}</p>
 			{/if}
 			{#if card.overview}
-				<Prose
-					text={card.overview}
-					lines={2}
-					title={titleWithShow(card)}
-					class="text-ink-2 rounded-xl bg-white/8 px-4 py-3 text-left backdrop-blur-xl"
-				/>
+				<div class="rounded-xl bg-white/8 px-4 py-3 text-left backdrop-blur-xl">
+					<Prose
+						text={card.overview}
+						lines={2}
+						title={titleWithShow(card)}
+						class="text-ink-2 {appear}"
+					/>
+				</div>
 			{/if}
 			{#if time || card.certificate || ratings.length}
 				<ul
@@ -192,31 +200,39 @@ const creditsMs = 60_000;
 					aria-label="Facts"
 				>
 					{#if time}
-						<li class={[position && "text-ink"]}>{time}</li>
+						<li class={[appear, position && "text-ink"]}>{time}</li>
 					{/if}
 					{#if card.certificate}
-						<li><Badge variant="outline">{card.certificate}</Badge></li>
+						<li class={appear}>
+							<Badge variant="outline">{card.certificate}</Badge>
+						</li>
 					{/if}
 					{#each ratings as rating (rating.site)}
 						<li
 							class="flex rounded-full bg-white/8 px-3 py-1.25 backdrop-blur-xl"
 						>
-							<RatingScore {rating} />
+							<span class={appear}><RatingScore {rating} /></span>
 						</li>
 					{/each}
 				</ul>
 			{/if}
 			<div class="flex flex-wrap justify-center gap-2 pt-1">
 				{#if playable}
-					<Button href={playHref(card.id)} size="lg" class="rounded-full px-5">
+					<Button
+						href={playHref(card.id)}
+						size="lg"
+						class="rounded-full px-5 {appear}"
+					>
 						<PlayIcon class="fill-current" />
 						{position ? resumeLabel(position) : "Play"}
 						<span class="sr-only">{titleWithShow(card)}</span>
 					</Button>
 				{/if}
 				<Button href="/titles/{card.id}" size="lg" variant="glass">
-					<InfoIcon />More Info
-					<span class="sr-only">about {titleWithShow(card)}</span>
+					<span class="inline-flex items-center gap-1.5 {appear}">
+						<InfoIcon />More Info
+						<span class="sr-only">about {titleWithShow(card)}</span>
+					</span>
 				</Button>
 			</div>
 		</div>
