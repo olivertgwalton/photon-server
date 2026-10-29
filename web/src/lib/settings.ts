@@ -25,6 +25,8 @@ export const settings: Record<string, [string, string, string][]> = {
 	],
 	"/settings/home": [
 		["spoilers", "Hide episode spoilers", "blur unwatched still thumbnail"],
+		["showcase", "Showcase", "hero banner featured carousel"],
+		["showcase-row", "Showcase shows", "hero banner featured carousel row"],
 	],
 	"/settings/notifications": [
 		["notify", "Tell me of", "new episodes films follow"],

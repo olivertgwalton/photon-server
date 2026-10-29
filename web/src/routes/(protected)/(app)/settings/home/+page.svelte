@@ -13,8 +13,10 @@ import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
 import { Switch } from "#lib/components/ui/switch/index.js";
+import { homeRows } from "#lib/home.js";
 import { reorder } from "#lib/reorder.svelte.js";
 import { moved } from "#lib/rows.js";
+import { keepShowcase, readShowcase } from "#lib/showcase.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { refreshAll } from "$app/navigation";
 
@@ -132,6 +134,26 @@ function hide(chosen: SpoilerMode) {
 	sending = sending.then(send, send);
 }
 
+// Kept in this browser, as the apps keep it on each device.
+let showcase = $state(readShowcase());
+function choose(next: typeof showcase) {
+	showcase = next;
+	keepShowcase(next);
+	toast.success("Saved for this browser.");
+}
+// Curated, or any row Home draws, as it is arranged above.
+const curated = "";
+const showcaseOptions = $derived([
+	{ value: curated, label: "Curated" },
+	...homeRows(home, data.libraries).map((r) => ({
+		value: r.key,
+		label:
+			(r.library
+				? words.library_rows[r.kind]?.replace("{library}", r.library.name)
+				: words.rows[r.kind]) ?? r.kind,
+	})),
+]);
+
 type Way = "up" | "down";
 
 // A keyed row is moved in the page, which takes focus from its arrow: it is
@@ -247,5 +269,45 @@ function arrow(row: Section["row"], way: Way): Attachment<HTMLElement> {
 				</Field.Description>
 			</Field.Content>
 		</Field.Field>
+	</Card.Content>
+</Card.Root>
+
+<Card.Root class="mt-6 max-w-2xl">
+	<Card.Content>
+		<Field.Field orientation="horizontal">
+			<Switch
+				id="showcase"
+				checked={showcase.visibility === "shown"}
+				onCheckedChange={(v) =>
+					choose({ ...showcase, visibility: v ? "shown" : "hidden" })}
+			/>
+			<Field.Content>
+				<Field.Label for="showcase">Showcase</Field.Label>
+				<Field.Description>
+					A title drawn large at the top of Home, in this browser.
+				</Field.Description>
+			</Field.Content>
+		</Field.Field>
+		{#if showcase.visibility === "shown"}
+			<Field.Separator />
+			<Field.Field>
+				<Field.Label for="showcase-row">Showcase shows</Field.Label>
+				<Choice
+					id="showcase-row"
+					options={showcaseOptions}
+					value={showcaseOptions.some((o) => o.value === showcase.row)
+						? (showcase.row ?? curated)
+						: curated}
+					onchange={(row) =>
+						choose({ ...showcase, row: row === curated ? undefined : row })}
+					class="w-full sm:w-72"
+				/>
+				<Field.Description>
+					Curated is the first library row, following the title you rest on; any
+					other row slides through itself every few seconds until you take it in
+					hand.
+				</Field.Description>
+			</Field.Field>
+		{/if}
 	</Card.Content>
 </Card.Root>

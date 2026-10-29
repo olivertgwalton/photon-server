@@ -29,7 +29,9 @@ test("a title is taken off Continue Watching from its card", async ({
 	await expect(page.getByRole("main").getByRole("listitem")).toHaveCount(20);
 });
 
-test("home's showcase wears what the reader opens", async ({ page }) => {
+test("home's showcase wears what the reader opens, or slides through a row they chose", async ({
+	page,
+}) => {
 	await logIn(page);
 	const showcase = page.getByRole("region", { name: "Showcase" });
 	// Curated, it is the first library row's first title, never the reader's.
@@ -52,6 +54,28 @@ test("home's showcase wears what the reader opens", async ({ page }) => {
 		showcase.getByRole("heading", { name: "Small Show" }),
 	).toBeVisible();
 	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+
+	// A row chosen in this browser is a carousel of its titles.
+	await page.goto("/settings/home");
+	await page.getByRole("combobox", { name: "Showcase shows" }).click();
+	await page.getByRole("option", { name: "Recently Added in Films" }).click();
+	await page.goto("/");
+	await expect(showcase.locator("[aria-roledescription=slide]")).toHaveCount(
+		20,
+	);
+	await showcase.getByRole("button", { name: "Next slide" }).click();
+	await expect(
+		showcase.getByRole("group", { name: "2 of 20", exact: true }),
+	).not.toHaveAttribute("inert");
+
+	// Turned off, Home is its rows.
+	await page.goto("/settings/home");
+	await page.getByRole("switch", { name: "Showcase" }).click();
+	await page.goto("/");
+	await expect(
+		page.getByRole("region", { name: "Continue Watching" }),
+	).toBeVisible();
+	await expect(showcase).toHaveCount(0);
 });
 
 test("a rail shows twenty, and its heading leads to all of them", async ({
