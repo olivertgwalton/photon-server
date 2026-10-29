@@ -123,6 +123,19 @@ export type RatingMark =
 	| "anilist"
 	| "anidb";
 
+// An episode's scores as its page and the showcase draw them: in its show's
+// order, each site taking the episode's own score where it has one, and any
+// site only the episode was scored by after.
+export function lentRatings(
+	own: Schemas["RatingRef"][],
+	show: Schemas["RatingRef"][],
+): Schemas["RatingRef"][] {
+	return [
+		...show.map((r) => own.find((o) => o.site === r.site) ?? r),
+		...own.filter((o) => !show.some((r) => r.site === o.site)),
+	];
+}
+
 export function ratingMark(
 	site: Schemas["RatingSite"],
 	value: number,

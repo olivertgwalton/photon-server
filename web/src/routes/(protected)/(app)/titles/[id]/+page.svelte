@@ -41,6 +41,7 @@ import { type Extra, extrasOf } from "#lib/extras.js";
 import {
 	count,
 	episodeLabel,
+	lentRatings,
 	onDisk,
 	playHref,
 	resumeLabel,
@@ -176,14 +177,9 @@ const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 // show's.
 const about = $derived(data.show ?? t);
 // Every site that did not score an episode lends its show's score.
-const ratings = $derived.by(() => {
-	const own = t.ratings ?? [];
-	const show = data.show?.ratings ?? [];
-	return [
-		...show.map((r) => own.find((o) => o.site === r.site) ?? r),
-		...own.filter((o) => !show.some((r) => r.site === o.site)),
-	];
-});
+const ratings = $derived(
+	lentRatings(t.ratings ?? [], data.show?.ratings ?? []),
+);
 const extras = $derived(
 	data.extras.length || !data.show
 		? { of: t.id, items: data.extras }

@@ -4,6 +4,7 @@ import {
 	episodeLabel,
 	fullTitle,
 	holding,
+	lentRatings,
 	playHref,
 	ratingMark,
 	resumeLabel,
@@ -27,6 +28,24 @@ test("a resume point reads as a player's clock", () => {
 test("Play names where it resumes as the apps do, the hours always written", () => {
 	expect(resumeLabel(249_000)).toBe("Resume 00:04:09");
 	expect(resumeLabel(3_725_000)).toBe("Resume 01:02:05");
+});
+
+test("an episode's scores keep its show's order, its own taking each site's place", () => {
+	const own = [
+		{ site: "imdb" as const, score: 81 },
+		{ site: "anilist" as const, score: 70 },
+	];
+	const show = [
+		{ site: "tmdb" as const, score: 74 },
+		{ site: "imdb" as const, score: 70 },
+		{ site: "rotten_tomatoes" as const, score: 91 },
+	];
+	expect(lentRatings(own, show)).toEqual([
+		{ site: "tmdb", score: 74 },
+		{ site: "imdb", score: 81 },
+		{ site: "rotten_tomatoes", score: 91 },
+		{ site: "anilist", score: 70 },
+	]);
 });
 
 test("a bitrate reads in Mb/s from a thousand kb/s, a whole one without a point", () => {

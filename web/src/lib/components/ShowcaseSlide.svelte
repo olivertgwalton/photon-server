@@ -34,6 +34,7 @@ import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import {
 	episodeLabel,
+	lentRatings,
 	playHref,
 	resumeLabel,
 	runtime,
@@ -87,12 +88,7 @@ $effect(() => {
 const genres = $derived(
 	card.genres?.length ? card.genres : (lent?.genres ?? []),
 );
-const ratings = $derived([
-	...(card.ratings ?? []),
-	...(lent?.ratings ?? []).filter(
-		(r) => !card.ratings?.some((o) => o.site === r.site),
-	),
-]);
+const ratings = $derived(lentRatings(card.ratings ?? [], lent?.ratings ?? []));
 // When it came out: an episode by the day it aired, anything else its year.
 const released = $derived(
 	place && card.release_date
