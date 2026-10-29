@@ -1,4 +1,7 @@
+import { toast } from "svelte-sonner";
+import { refreshAll } from "$app/navigation";
 import { client } from "./api/client.js";
+import { problemMessage } from "./api/problem.js";
 import type { components } from "./api/schema.js";
 
 type Notification = components["schemas"]["Notification"];
@@ -42,6 +45,38 @@ class Inbox {
 		for (const n of this.notifications) {
 			if (through && Date.parse(n.added_at) <= through) n.read_at ??= now;
 		}
+	}
+
+	// A request decided from its notification, which goes here at once: the
+	// server clears it from every inbox that has it and tells each, and the
+	// page of those waiting loads again. One decided by someone else first, or
+	// taken back, is gone already, which is no refusal.
+	async decide(n: Notification, verdict: "approve" | "decline", reason = "") {
+		const r = n.request;
+		if (!r) return;
+		const path = { params: { path: { id: r.id } } };
+		const { error, response } =
+			verdict === "approve"
+				? await client().POST("/api/v1/admin/requests/{id}/approve", path)
+				: await client().POST("/api/v1/admin/requests/{id}/decline", {
+						...path,
+						body: { reason },
+					});
+		const gone = response.status === 404 || response.status === 409;
+		if (error && !gone) {
+			toast.error(problemMessage(error));
+			return;
+		}
+		const unread = this.unread - (n.read_at ? 0 : 1);
+		this.apply({ change: "cleared", cleared: [n.id], unread });
+		if (gone) {
+			toast.info(`${r.title} was decided already.`);
+			return;
+		}
+		await refreshAll();
+		toast.success(
+			`${r.title} is ${verdict === "approve" ? "approved" : "declined"}.`,
+		);
 	}
 
 	// Opened, so gone here at once; the server tells the profile's other

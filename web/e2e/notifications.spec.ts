@@ -190,3 +190,62 @@ test("the open bell menu stays under the bell as the page scrolls", async ({
 	);
 	for (const gap of gaps) expect(Math.abs(gap)).toBeLessThan(16);
 });
+
+test("a request told as waiting is declined from the bell, saying why", async ({
+	page,
+}) => {
+	await logIn(page);
+	await expect
+		.poll(async () => (await page.request.get("/mock/listening")).json())
+		.toBeGreaterThan(0);
+	const alien = {
+		id: "r-alien",
+		profile_id: "p-kids",
+		profile: "Kids",
+		library_id: "l-films",
+		kind: "movie",
+		title: "Alien",
+		year: 1979,
+		ids: { tmdb: "348" },
+		state: "pending",
+		asked_at: "2026-10-17T09:00:00Z",
+	};
+	await page.request.post("/mock/emit", {
+		data: {
+			event: "notifications.changed",
+			data: {
+				change: "added",
+				unread: 2,
+				notifications: [
+					{
+						id: 9,
+						kind: "request",
+						request: alien,
+						message: "Kids asked for it",
+						added_at: "2026-10-17T09:00:00Z",
+					},
+				],
+			},
+		},
+	});
+	await page.getByRole("button", { name: "Notifications: 2 unread" }).click();
+	const inbox = page.getByRole("dialog", { name: "Notifications" });
+	const row = inbox.getByRole("listitem").filter({ hasText: "Alien" });
+	await expect(row).toContainText("Kids asked for it");
+	await expect(row.getByRole("link", { name: /Alien/ })).toHaveAttribute(
+		"href",
+		"/settings/requests",
+	);
+	await expectAccessible(page);
+	await row.getByRole("button", { name: "Decline Alien" }).click();
+	const asked = page.getByRole("alertdialog", { name: "Decline Alien?" });
+	await asked.getByLabel("Why").fill("Too scary");
+	await asked.getByRole("button", { name: "Decline" }).click();
+	await expect(page.getByText("Alien is declined.")).toBeVisible();
+
+	// Decided, it is gone from the bell, which counts it no longer.
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	await expect(
+		inbox.getByRole("listitem").filter({ hasText: "Alien" }),
+	).toHaveCount(0);
+});
