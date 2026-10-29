@@ -196,7 +196,8 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 	}
 	out := Unfetched{}
 	for _, r := range rows {
-		if r.Source != domain.SourceFile && r.Blurhash == nil {
+		// A file or an upload the server has already.
+		if r.Source != domain.SourceFile && r.Source != domain.SourceUpload && r.Blurhash == nil {
 			out[r.ID] = r.Place
 		}
 	}
@@ -210,7 +211,8 @@ func (s *Store) unfetched(ctx context.Context, items []*model.Item) (Unfetched, 
 	return out, nil
 }
 
-// ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose.
+// ArtworkCandidate is a picture of a kind a provider has for a title, for an admin to choose, or
+// one an admin uploaded.
 type ArtworkCandidate struct {
 	ID       uuid.UUID
 	Source   domain.FieldSource
@@ -225,7 +227,7 @@ type ArtworkCandidate struct {
 var ErrNotACandidate = errors.New("not a picture a provider has of that kind for the title")
 
 // ArtworkCandidates answers the pictures of a kind each provider had for a title when it was last
-// matched, best first. ErrNotFound for no title.
+// matched, and one an admin uploaded, best first. ErrNotFound for no title.
 func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) ([]ArtworkCandidate, error) {
 	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
@@ -237,7 +239,7 @@ func (s *Store) ArtworkCandidates(ctx context.Context, id uuid.UUID, kind domain
 	}
 	rows = slices.DeleteFunc(rows, func(r *model.Artwork) bool { return r.Kind != kind })
 	var chosen string
-	if len(rows) > 0 && rows[0].Source == domain.SourceUser {
+	if len(rows) > 0 && (rows[0].Source == domain.SourceUser || rows[0].Source == domain.SourceUpload) {
 		chosen = rows[0].Place
 	}
 	var out []ArtworkCandidate
@@ -267,7 +269,7 @@ func (s *Store) ChooseArtwork(ctx context.Context, id uuid.UUID, kind domain.Art
 		pick, err := tx.Exec(ctx, `
 			INSERT INTO artwork (item_id, source, kind, place, position, language, width, height, blurhash)
 			SELECT item_id, $4, kind, place, 0, language, width, height, blurhash FROM artwork
-			WHERE id = $1 AND item_id = $2 AND kind = $3 AND source NOT IN ('file', 'user')`,
+			WHERE id = $1 AND item_id = $2 AND kind = $3 AND source NOT IN ('file', 'user', 'upload')`,
 			picture, item.ID, kind, domain.SourceUser)
 		if err == nil && pick.RowsAffected() == 0 {
 			err = ErrNotACandidate
@@ -276,8 +278,28 @@ func (s *Store) ChooseArtwork(ctx context.Context, id uuid.UUID, kind domain.Art
 	})
 }
 
-// ForgetArtworkChoice gives a title's picture of a kind back to its sources. ErrNotFound for no
-// title.
+// UploadArtwork makes a picture an admin sent, kept under picture, a title's own of its kind,
+// above every source and through every refresh, in place of any they chose or sent before.
+// ErrNotFound for no title.
+func (s *Store) UploadArtwork(ctx context.Context, id, picture uuid.UUID, a domain.Artwork) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		item, err := readItem(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := forgetChoice(ctx, tx, item.ID, a.Kind); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO artwork (id, item_id, source, kind, place, position, width, height, blurhash)
+			VALUES ($1, $2, $3, $4, $1::text, 0, $5, $6, $7)`,
+			picture, item.ID, domain.SourceUpload, a.Kind, optional(a.Width), optional(a.Height), optional(a.Blurhash))
+		return err
+	})
+}
+
+// ForgetArtworkChoice gives a title's picture of a kind back to its sources, forgetting one an
+// admin chose or uploaded. ErrNotFound for no title.
 func (s *Store) ForgetArtworkChoice(ctx context.Context, id uuid.UUID, kind domain.ArtworkKind) error {
 	item, err := readItem(ctx, s.pool, id)
 	if err != nil {
@@ -287,7 +309,7 @@ func (s *Store) ForgetArtworkChoice(ctx context.Context, id uuid.UUID, kind doma
 }
 
 func forgetChoice(ctx context.Context, tx db, item uuid.UUID, kind domain.ArtworkKind) error {
-	_, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND kind = $2 AND source = $3`, item, kind, domain.SourceUser)
+	_, err := tx.Exec(ctx, `DELETE FROM artwork WHERE item_id = $1 AND kind = $2 AND source IN ('user', 'upload')`, item, kind)
 	return err
 }
 
@@ -342,10 +364,14 @@ func (s *Store) Picture(ctx context.Context, id uuid.UUID) (domain.Picture, erro
 	if err != nil {
 		return domain.Picture{}, err
 	}
-	if source != domain.SourceFile {
-		return domain.Picture{URL: place}, nil
+	// A source is a plugin's as well as a constant's, so this cannot be an exhaustive switch.
+	if source == domain.SourceFile {
+		return domain.Picture{Root: root, Path: place}, nil
 	}
-	return domain.Picture{Root: root, Path: place}, nil
+	if source == domain.SourceUpload {
+		return domain.Picture{Kept: true}, nil
+	}
+	return domain.Picture{URL: place}, nil
 }
 
 // videoStill is where a video's site publishes a still of it, or "" for a site that publishes none

@@ -97,6 +97,8 @@ const (
 	SourceTVDB FieldSource = "tvdb"
 	SourceNFO  FieldSource = "nfo"
 	SourceUser FieldSource = "user"
+	// SourceUpload is a picture an admin sent the server for a title, and says nothing else of it.
+	SourceUpload FieldSource = "upload"
 	// SourceMDBList gives ratings alone.
 	SourceMDBList FieldSource = "mdblist"
 	SourceOMDb    FieldSource = "omdb"
@@ -118,7 +120,7 @@ const (
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceUpload, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files

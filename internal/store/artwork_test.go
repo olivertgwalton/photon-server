@@ -189,6 +189,102 @@ func TestAPictureAnAdminChoseOutranksEverySourceThroughARefresh(t *testing.T) {
 	}
 }
 
+// A picture an admin uploads is the title's over every source, through a refresh and an unmatch,
+// listed among the candidates as chosen, until a provider's is chosen or it is given back.
+func TestAnUploadedPictureOutranksEverySourceUntilGivenBack(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := Film{
+		Title: "heat", Folder: "Heat", Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Heat/poster.jpg"}},
+		Versions: []Version{{ContentKey: []byte("heat"), Parts: []Part{{RelPath: "Heat/Heat.mkv", Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{}}}}},
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "Heat", []byte("v1"), []Film{film}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var id uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	match := func() {
+		t.Helper()
+		m := domain.Metadata{Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, URL: "a.jpg", Width: 2000, Height: 3000}}}
+		if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, m, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	best := func() (uuid.UUID, domain.Picture) {
+		t.Helper()
+		page, err := s.Title(ctx, uuid.UUID{}, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		poster := page.Artwork[domain.ArtworkPoster][0]
+		pic, err := s.Picture(ctx, poster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return poster, pic
+	}
+	match()
+
+	upload := uuid.NewV7()
+	if err := s.UploadArtwork(ctx, id, upload, domain.Artwork{Kind: domain.ArtworkPoster, Width: 1000, Height: 1500, Blurhash: "LEHV6nWB2yk8"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, pic := best(); got != upload || !pic.Kept {
+		t.Errorf("uploaded: best poster %v %+v; want the upload, kept by the server", got, pic)
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, id)
+	if err != nil || page.Blurhashes[upload] != "LEHV6nWB2yk8" {
+		t.Errorf("the upload's BlurHash = %q, %v", page.Blurhashes[upload], err)
+	}
+	offered, err := s.ArtworkCandidates(ctx, id, domain.ArtworkPoster)
+	if err != nil || len(offered) != 2 || offered[0].ID != upload || offered[0].Source != domain.SourceUpload || !offered[0].Chosen ||
+		offered[0].Width != 1000 || offered[1].Chosen {
+		t.Fatalf("candidates = %+v, %v; want the upload first and chosen, then TMDB's", offered, err)
+	}
+	unfetched, err := s.TitleUnfetched(ctx, id)
+	if err != nil || len(unfetched) != 0 {
+		t.Errorf("unfetched = %v, %v; want nothing, the upload being the server's", unfetched, err)
+	}
+	if live, err := s.LivePictures(ctx, []uuid.UUID{upload}); err != nil || !live[upload] {
+		t.Errorf("live = %v, %v; want the upload kept", live, err)
+	}
+
+	match()
+	if err := s.Unmatch(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := best(); got != upload {
+		t.Errorf("after a refresh and an unmatch, best poster %v; want the upload to stand", got)
+	}
+
+	again := uuid.NewV7()
+	if err := s.UploadArtwork(ctx, id, again, domain.Artwork{Kind: domain.ArtworkPoster}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := best(); got != again {
+		t.Errorf("uploaded again: best poster %v; want the second upload", got)
+	}
+	if live, err := s.LivePictures(ctx, []uuid.UUID{upload}); err != nil || live[upload] {
+		t.Errorf("live = %v, %v; want the first upload swept away", live, err)
+	}
+	if err := s.UploadArtwork(ctx, uuid.NewV7(), uuid.NewV7(), domain.Artwork{Kind: domain.ArtworkPoster}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("uploading for no title: %v, want ErrNotFound", err)
+	}
+
+	if err := s.ForgetArtworkChoice(ctx, id, domain.ArtworkPoster); err != nil {
+		t.Fatal(err)
+	}
+	if _, pic := best(); pic.Path != "Heat/poster.jpg" {
+		t.Errorf("given back: best poster %+v; want the file beside the film again", pic)
+	}
+}
+
 // A plugin ranked first for a library's pictures leads its titles' cards until it is removed, and
 // then the next provider does.
 func TestARemovedPluginsPicturesNoLongerLead(t *testing.T) {
