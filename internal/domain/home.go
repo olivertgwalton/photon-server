@@ -21,7 +21,7 @@ const (
 )
 
 func HomeRows() []HomeRow {
-	return []HomeRow{RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
+	return []HomeRow{RowContinueWatching, RowNextUp, RowFavourites, RowWatchlist, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
 }
 
 // LibraryKinds are the kinds of library the row is made once for each of, as Plex's library hubs

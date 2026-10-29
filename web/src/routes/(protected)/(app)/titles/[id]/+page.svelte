@@ -22,12 +22,13 @@ import { setMark } from "#lib/actions.js";
 import { refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import { problemMessage } from "#lib/api/problem.js";
-import { blurStyle, isDark, tintColour } from "#lib/blurhash.js";
+import { blurStyle, tintColour } from "#lib/blurhash.js";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
+import Lettering from "#lib/components/Lettering.svelte";
 import MediaInfo from "#lib/components/MediaInfo.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import PlayChoices from "#lib/components/PlayChoices.svelte";
@@ -41,10 +42,11 @@ import { type Extra, extrasOf } from "#lib/extras.js";
 import {
 	count,
 	episodeLabel,
+	lentRatings,
 	onDisk,
 	playHref,
+	resumeLabel,
 	runtime,
-	timecode,
 	titleWithShow,
 } from "#lib/format.js";
 import { playQueue } from "#lib/queue.js";
@@ -176,14 +178,9 @@ const trailer = $derived(t.extras?.find((e) => e.extra_kind === "trailer"));
 // show's.
 const about = $derived(data.show ?? t);
 // Every site that did not score an episode lends its show's score.
-const ratings = $derived.by(() => {
-	const own = t.ratings ?? [];
-	const show = data.show?.ratings ?? [];
-	return [
-		...show.map((r) => own.find((o) => o.site === r.site) ?? r),
-		...own.filter((o) => !show.some((r) => r.site === o.site)),
-	];
-});
+const ratings = $derived(
+	lentRatings(t.ratings ?? [], data.show?.ratings ?? []),
+);
 const extras = $derived(
 	data.extras.length || !data.show
 		? { of: t.id, items: data.extras }
@@ -247,11 +244,6 @@ async function shuffle(id: string) {
 	else playQueue(data.items, true);
 }
 
-// What sits beside Play: panes of glass over the backdrop, Play the one
-// filled control on the page.
-const glass =
-	"rounded-full border-white/10 bg-white/8 backdrop-blur-xl hover:bg-white/14";
-
 const backdrop = $derived(art("backdrop"));
 // The page takes the title's own colour from its backdrop, so the picture
 // fades into the page rather than stopping on it. Without a backdrop, or
@@ -260,7 +252,6 @@ const accent = $derived(
 	(backdrop && tintColour(t.blurhashes?.[backdrop])) ?? "transparent",
 );
 const logo = $derived(art("logo"));
-const darkLogo = $derived(logo ? isDark(t.blurhashes?.[logo]) : false);
 const poster = $derived(art("poster"));
 
 // A title the server lacks, asked for from here; asked, it says so until the
@@ -342,15 +333,10 @@ async function ask() {
 					{#if logo}
 						{#key logo}
 							{#snippet lettering(alt: string)}
-								<Artwork
+								<Lettering
 									id={logo}
-									shape="still"
-									loading="eager"
-									sizes="24rem"
 									{alt}
-									class="max-h-36 w-auto max-w-[min(24rem,80vw)] object-contain object-left transition-opacity duration-500 data-loading:opacity-0 {darkLogo
-										? "lettering-glow"
-										: ""}"
+									class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)]"
 								/>
 							{/snippet}
 							{#if t.show}
@@ -394,12 +380,14 @@ async function ask() {
 				<p class="text-ink font-heading text-lg italic">{t.tagline}</p>
 			{/if}
 			{#if t.overview}
-				<Prose
-					text={t.overview}
-					lines={3}
-					title={titleWithShow(t)}
-					class="text-ink-2 max-w-2xl"
-				/>
+				<div class="glass-plate max-w-2xl">
+					<Prose
+						text={t.overview}
+						lines={3}
+						title={titleWithShow(t)}
+						class="text-ink-2"
+					/>
+				</div>
 			{/if}
 
 			{#if data.asking}
@@ -433,13 +421,12 @@ async function ask() {
 							class="rounded-full px-5"
 						>
 							<PlayIcon class="fill-current" />
-							{position ? `Resume from ${timecode(position)}` : "Play"}
+							{position ? resumeLabel(position) : "Play"}
 						</Button>
 						{#if position}
 							<Button
 								href={playHref(t.id, { ...choice, t: 0 })}
-								variant="ghost"
-								class={glass}
+								variant="glass"
 								size="lg"
 							>
 								<RotateCcwIcon />From the beginning
@@ -470,8 +457,7 @@ async function ask() {
 					{#if shuffles}
 						{@const id = shuffles}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-label="Shuffle"
 							title="Shuffle"
@@ -481,19 +467,13 @@ async function ask() {
 						</Button>
 					{/if}
 					{#if trailer}
-						<Button
-							href={playHref(trailer.id)}
-							variant="ghost"
-							class={glass}
-							size="lg"
-						>
+						<Button href={playHref(trailer.id)} variant="glass" size="lg">
 							<FilmIcon />Trailer
 						</Button>
 					{/if}
 					{#if t.kind !== "collection"}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-pressed={watched}
 							aria-label="Watched"
@@ -504,8 +484,7 @@ async function ask() {
 						</Button>
 					{/if}
 					<Button
-						variant="ghost"
-						class={glass}
+						variant="glass"
 						size="icon-lg"
 						aria-pressed={favourite}
 						aria-label="Favourite"
@@ -516,8 +495,7 @@ async function ask() {
 					</Button>
 					{#if t.kind !== "collection"}
 						<Button
-							variant="ghost"
-							class={glass}
+							variant="glass"
 							size="icon-lg"
 							aria-pressed={watchlisted}
 							aria-label="Watchlist"
@@ -533,8 +511,7 @@ async function ask() {
 						<DropdownMenu.Trigger>
 							{#snippet child({ props })}
 								<Button
-									variant="ghost"
-									class={glass}
+									variant="glass"
 									size="icon-lg"
 									aria-label="More"
 									{...props}
@@ -636,6 +613,7 @@ async function ask() {
 		<Rail
 			title={picked?.title ?? t.season.title}
 			cards={episodes}
+			resume="shown"
 			shape="still"
 			current={t.id}
 			caption={(i: number) =>

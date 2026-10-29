@@ -8680,7 +8680,7 @@ export interface components {
             next?: string;
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "watchlist" | "favourites" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
             library_kinds?: components["schemas"]["LibraryKind"][];
             row: components["schemas"]["HomeRowKind"];

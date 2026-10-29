@@ -252,6 +252,12 @@
 	.glass-disc {
 		@apply text-ink grid size-6 place-items-center rounded-full bg-black/60 ring-1 ring-white/10;
 	}
+
+	/* A title's write-up, on a pane of glass over its backdrop, as the apps set it
+	   on a title's page and in the showcase. */
+	.glass-plate {
+		@apply rounded-xl bg-white/8 px-4 py-3 text-left backdrop-blur-xl;
+	}
 }
 
 /*
