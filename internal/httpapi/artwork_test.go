@@ -13,6 +13,7 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/artwork"
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
@@ -51,8 +52,8 @@ func (f fakePictures) Open(_ context.Context, id uuid.UUID, p domain.Picture, wi
 	return o, "poster.jpg", err
 }
 
-func (fakePictures) Keep(context.Context, uuid.UUID, io.Reader) error {
-	return errors.New("not kept here")
+func (fakePictures) Keep(context.Context, uuid.UUID, io.Reader) (artwork.KeptPicture, error) {
+	return artwork.KeptPicture{}, errors.New("not kept here")
 }
 
 // Kept answers a theme tune fetched from ThemerrDB's link, kept as "tune".

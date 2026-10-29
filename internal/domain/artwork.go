@@ -18,10 +18,10 @@ func ArtworkKinds() []ArtworkKind {
 	return []ArtworkKind{ArtworkPoster, ArtworkBackdrop, ArtworkLogo, ArtworkThumb, ArtworkBanner}
 }
 
-// ArtworkSources are where pictures come from: an admin's choice of a provider's, files beside the
-// title, then the providers.
+// ArtworkSources are where pictures come from: an admin's choice of a provider's or their own
+// upload, files beside the title, then the providers.
 func ArtworkSources() []FieldSource {
-	return []FieldSource{SourceUser, SourceFile, SourceTMDB, SourceTVDB, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart}
+	return []FieldSource{SourceUser, SourceUpload, SourceFile, SourceTMDB, SourceTVDB, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart}
 }
 
 // Picture is where one picture is: a file under Root, or a provider's URL.
@@ -29,7 +29,8 @@ type Picture struct {
 	Root string
 	Path string
 	URL  string
-	// Kept is a picture given to the server, as an avatar is, held in its picture cache.
+	// Kept is a picture given to the server, as an avatar or an uploaded poster is, held in its
+	// picture cache.
 	Kept bool
 	// Mosaic is the pictures a collection's mosaic is made of, in the order they are laid out.
 	Mosaic []Tile

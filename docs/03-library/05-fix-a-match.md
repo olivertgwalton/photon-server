@@ -1,6 +1,6 @@
 ---
 title: "Fix a title's match and edit its details"
-summary: "Correct a film or show matched to the wrong title, edit its details, choose its pictures, and set its episode order."
+summary: "Correct a film or show matched to the wrong title, edit its details, choose or upload its pictures, and set its episode order."
 ---
 
 photon-server matches most titles from their file names alone. Now and then it picks the wrong
@@ -87,9 +87,16 @@ The **Artwork** tab has a tab for each kind of picture: **Poster**, **Backdrop**
 **Logo** and **Banner**. Each shows every picture the providers have, with where it came from and
 its size. Choose one to use it.
 
-To undo your choice, choose **Give the poster back to the sources** (or the backdrop, and so on).
+To use a picture of your own, choose **Upload a poster** (or a backdrop, and so on) and pick a JPEG,
+PNG, GIF or WebP of at most 32 MiB and 50 megapixels. The server keeps a copy, so the picture needs
+no file in the library. It is listed first, as **upload**, and is used as a chosen picture is.
+Uploading another replaces it.
 
-To use a picture of your own, put it beside the title's file, named as
+A picture you chose or uploaded is used ahead of every source, and stays through every refresh and
+an unmatch. To undo it, choose **Give the poster back to the sources** (or the backdrop, and so
+on). The server clears an uploaded picture from its artwork once it is given back or replaced.
+
+You can also put a picture beside the title's file, named as
 [pictures beside a title](01-name-your-files.md#pictures-beside-a-title) describes. The server
 finds it at the next scan.
 

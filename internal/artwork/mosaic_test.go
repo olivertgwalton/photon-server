@@ -40,7 +40,7 @@ func TestTwoPostersAreLaidOutCrossed(t *testing.T) {
 	red, blue := uuid.NewV7(), uuid.NewV7()
 	// The blue one is wider than a poster, so it is cut to fill its tile.
 	for id, pic := range map[uuid.UUID][]byte{red: solid(color.RGBA{255, 0, 0, 255}, 40, 60), blue: solid(color.RGBA{0, 0, 255, 255}, 90, 60)} {
-		if err := c.Keep(ctx, id, bytes.NewReader(pic)); err != nil {
+		if _, err := c.Keep(ctx, id, bytes.NewReader(pic)); err != nil {
 			t.Fatal(err)
 		}
 	}

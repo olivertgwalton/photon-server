@@ -101,7 +101,7 @@ Scores come from every provider a library uses for details. To show Rotten Tomat
 
 For each kind of picture, the server uses, in order:
 
-1. One you chose yourself (see [choose artwork](05-fix-a-match.md#choose-artwork)).
+1. One you chose or uploaded yourself (see [choose artwork](05-fix-a-match.md#choose-artwork)).
 2. A file beside the title (see
    [pictures beside a title](01-name-your-files.md#pictures-beside-a-title)).
 3. The library's **Image fetchers**, top first.

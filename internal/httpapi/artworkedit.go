@@ -13,7 +13,7 @@ var (
 	artworkPathParam = param{"artwork", domain.ArtworkKind(""), "The kind of picture."}
 )
 
-// artworkCandidateJSON is a picture a provider has, served at /api/v1/artwork/{id} like a title's
+// artworkCandidateJSON is a picture a provider has, or one an admin uploaded, served at /api/v1/artwork/{id} like a title's
 // own, so a browser shows it sized and from this server.
 type artworkCandidateJSON struct {
 	ID       uuid.UUID          `json:"id"`
@@ -83,6 +83,33 @@ func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// uploadArtwork makes the picture in the body a title's own of its kind, over every source and
+// through every refresh, as Jellyfin's Edit Images and Plex's poster upload do.
+func (a *API) uploadArtwork(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	kind, ok := a.pathArtworkKind(w, r)
+	if !ok {
+		return
+	}
+	picture, kept, ok := a.keepPicture(w, r)
+	if !ok {
+		return
+	}
+	err := a.svc.Editing.UploadArtwork(r.Context(), id, picture, domain.Artwork{
+		Kind: kind, Width: kept.Width, Height: kept.Height, Blurhash: kept.Blurhash,
+	})
+	if a.answered(w, r, err) {
+		return
+	}
+	a.titleUpdated(r, id)
+	writeJSON(w, a.logger, "application/json", http.StatusCreated, artworkCandidateJSON{
+		ID: picture, Source: domain.SourceUpload, Width: kept.Width, Height: kept.Height, Chosen: true,
+	})
+}
+
 // forgetArtwork gives a title's picture of a kind back to its sources.
 func (a *API) forgetArtwork(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathID(w, r, "id")
@@ -114,8 +141,13 @@ func (a *API) artworkEditRoutes() []route {
 			path:    []param{artworkPathParam}, body: chooseArtworkJSON{}, status: http.StatusNoContent, handle: a.chooseArtwork,
 		},
 		{
+			pattern: "POST /api/v1/admin/titles/{id}/artwork/{artwork}", access: admin,
+			summary: "Give a title a picture of a kind of the admin's own, over every source: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels",
+			path:    []param{artworkPathParam}, body: pictureTypes, status: http.StatusCreated, reply: artworkCandidateJSON{}, handle: a.uploadArtwork,
+		},
+		{
 			pattern: "DELETE /api/v1/admin/titles/{id}/artwork/{artwork}", access: admin,
-			summary: "Give a title's picture of a kind back to its sources",
+			summary: "Give a title's picture of a kind back to its sources, chosen or uploaded",
 			path:    []param{artworkPathParam}, status: http.StatusNoContent, handle: a.forgetArtwork,
 		},
 	}

@@ -12,9 +12,9 @@ const api = client();
 type Schemas = components["schemas"];
 type Kind = Schemas["ArtworkKind"];
 
-// Choosing a title's pictures from what its providers have, as Jellyfin's
-// Edit Images and Plex's poster chooser do. A choice holds through every
-// refresh until it is given back.
+// Choosing a title's pictures from what its providers have, or uploading the
+// admin's own, as Jellyfin's Edit Images and Plex's poster chooser do. A
+// choice holds through every refresh until it is given back.
 let { title }: { title: Schemas["TitlePage"] } = $props();
 
 const kinds: { kind: Kind; label: string; shape: string; width: number }[] = [
@@ -47,6 +47,22 @@ async function choose(id: string) {
 		"Chosen.",
 	);
 	if (!chosen) listed = ask(kind);
+}
+
+let input = $state<HTMLInputElement>();
+
+// The picture goes up as it is; the server says whether it is one it keeps.
+async function upload() {
+	const file = input?.files?.[0];
+	if (!file || !input) return;
+	const sent = fetch(`/api/v1/admin/titles/${title.id}/artwork/${kind}`, {
+		method: "POST",
+		body: file,
+	}).then(async (answer) =>
+		answer.ok ? {} : { error: await answer.json().catch(() => ({})) },
+	);
+	await act(sent, "Uploaded.");
+	input.value = "";
 }
 
 const giveBack = () =>
@@ -127,8 +143,22 @@ const giveBack = () =>
 				<p class="text-ink-3 text-sm">Asking the providers…</p>
 			{/snippet}
 		</svelte:boundary>
-		<Button variant="outline" class="justify-self-start" onclick={giveBack}>
-			Give the {current.label.toLowerCase()} back to the sources
-		</Button>
+		<div class="flex flex-wrap gap-2">
+			<Button variant="outline" onclick={() => input?.click()}>
+				Upload a {current.label.toLowerCase()}
+			</Button>
+			<input
+				bind:this={input}
+				type="file"
+				accept="image/jpeg,image/png,image/gif,image/webp"
+				class="sr-only"
+				tabindex="-1"
+				aria-label="{current.label} to upload"
+				onchange={upload}
+			>
+			<Button variant="outline" onclick={giveBack}>
+				Give the {current.label.toLowerCase()} back to the sources
+			</Button>
+		</div>
 	</Tabs.Content>
 </Tabs.Root>

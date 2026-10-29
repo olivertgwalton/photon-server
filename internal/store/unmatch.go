@@ -10,8 +10,8 @@ import (
 )
 
 // ownSources are where a title's own words come from, which an unmatch leaves: its files, its NFO
-// and an admin's edits. Every other source is a provider.
-const ownSources = `('file', 'nfo', 'user')`
+// and an admin's edits and uploads. Every other source is a provider.
+const ownSources = `('file', 'nfo', 'user', 'upload')`
 
 // Unmatch takes a film or show off every provider, as Plex's Unmatch does: their ids, words,
 // pictures, scores, credits, videos and box sets go from it, its seasons and its episodes, its

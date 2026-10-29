@@ -3023,9 +3023,44 @@ export interface paths {
                 default: components["responses"]["Problem"];
             };
         };
-        post?: never;
         /**
-         * Give a title's picture of a kind back to its sources
+         * Give a title a picture of a kind of the admin's own, over every source: a JPEG, PNG, GIF or WebP of at most 32 MiB and 50 megapixels
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    /** @description The kind of picture. */
+                    artwork: components["schemas"]["ArtworkKind"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/gif": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ArtworkCandidate"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        /**
+         * Give a title's picture of a kind back to its sources, chosen or uploaded
          * @description Admin only.
          */
         delete: {
@@ -8733,7 +8768,7 @@ export interface components {
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios" | "airs_before_season" | "airs_before_episode" | "airs_after_season";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr");
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "upload" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr");
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
