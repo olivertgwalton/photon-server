@@ -266,6 +266,34 @@ test("home's showcase says what the apps' does of an episode", async ({
 	await expectAccessible(page);
 });
 
+test("a title's page is centred on a phone, as the apps' is", async ({
+	page,
+}) => {
+	await logIn(page, "/titles/t-film");
+	const name = page.getByRole("heading", { level: 1, name: "Quiet Hours" });
+	// The row of Play and what sits beside it.
+	const actions = page
+		.getByRole("link", { name: /^(Play|Resume)/ })
+		.locator("..");
+	const middle = async () => {
+		const main = await page.getByRole("main").boundingBox();
+		return (main?.x ?? 0) + (main?.width ?? 0) / 2;
+	};
+	const centre = async (el: typeof name) => {
+		const box = await el.boundingBox();
+		return (box?.x ?? 0) + (box?.width ?? 0) / 2;
+	};
+	// Wider, it keeps to the leading edge.
+	await expect(name).toBeVisible();
+	expect(Math.abs((await centre(name)) - (await middle()))).toBeGreaterThan(50);
+	// An iPhone 16 Pro Max.
+	await page.setViewportSize({ width: 440, height: 956 });
+	await expect
+		.poll(async () => Math.abs((await centre(name)) - (await middle())))
+		.toBeLessThan(2);
+	expect(Math.abs((await centre(actions)) - (await middle()))).toBeLessThan(2);
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {

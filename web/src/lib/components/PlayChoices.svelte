@@ -55,7 +55,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 	</div>
 {/snippet}
 
-<div class="flex flex-wrap gap-4">
+<div class="flex flex-wrap gap-4 max-sm:justify-center">
 	{#if versions.length > 1}
 		{@render choice(
 			"Version",
