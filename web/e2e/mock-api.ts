@@ -1299,8 +1299,8 @@ const defaults: Schemas["Preferences"] = {
 	home: [
 		"continue_watching",
 		"next_up",
-		"watchlist",
 		"favourites",
+		"watchlist",
 		"recently_added_films",
 		"recently_added_shows",
 		"recently_released",

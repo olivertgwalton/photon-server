@@ -368,8 +368,8 @@ test("the home's rows are put in order and hidden, by pointer or keyboard", asyn
 	await expect(rows).toHaveText([
 		"Continue Watching",
 		"Next Up",
-		"Watchlist",
 		"Favourites",
+		"Watchlist",
 		"Recently Added Films",
 		"Recently Added Shows",
 		"Recently Released",

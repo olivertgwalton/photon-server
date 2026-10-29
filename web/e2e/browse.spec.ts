@@ -60,6 +60,177 @@ test("only Continue Watching's cards say how far the reader is", async ({
 	await expectAccessible(page);
 });
 
+test("home's showcase wears what the reader opens, or slides through a row they chose", async ({
+	page,
+}) => {
+	await logIn(page);
+	const showcase = page.getByRole("region", { name: "Showcase" });
+	// Curated, it is the first library row's first title, never the reader's.
+	await expect(
+		showcase.getByRole("heading", { name: "Quiet Hours" }),
+	).toBeVisible();
+	await expect(
+		showcase.getByRole("link", {
+			name: /^(Play|Resume [0-9:]+) Quiet Hours$/,
+		}),
+	).toBeVisible();
+	await expectAccessible(page);
+
+	// A title opened from a row is the one it wears on coming back.
+	await page
+		.getByRole("region", { name: "Continue Watching" })
+		.getByRole("link", { name: /Pilot/ })
+		.click();
+	await expect(page).toHaveURL("/titles/t-ep");
+	// Slowed, so the new title's words are still coming in when looked at.
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Animation.enable");
+	await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.02 });
+	await page.goBack();
+	await expect(
+		showcase.getByRole("heading", { name: "Small Show" }),
+	).toBeVisible();
+	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+	// A pane of glass under a fading element blurs nothing behind it, so the
+	// words fade and the panes holding them do not.
+	const fading = await showcase.evaluate((section) => {
+		const moving = (el: Element) =>
+			el.getAnimations().some((a) => a.playState === "running");
+		const panes = [...section.querySelectorAll("*")].filter(
+			(el) => getComputedStyle(el).backdropFilter !== "none",
+		);
+		const under = panes.filter((pane) => {
+			for (
+				let el = pane.parentElement;
+				el && el !== section;
+				el = el.parentElement
+			)
+				if (moving(el)) return true;
+			return moving(pane);
+		});
+		return {
+			words: [...section.querySelectorAll("*")].filter(moving).length,
+			panes: panes.length,
+			under: under.length,
+		};
+	});
+	expect(fading.words).toBeGreaterThan(0);
+	expect(fading.panes).toBeGreaterThan(0);
+	expect(fading.under).toBe(0);
+	await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 });
+
+	// A row chosen in this browser is a carousel of its titles.
+	await page.goto("/settings/home");
+	await page.getByRole("combobox", { name: "Showcase shows" }).click();
+	await page.getByRole("option", { name: "Recently Added in Films" }).click();
+	await page.goto("/");
+	await expect(showcase.locator("[aria-roledescription=slide]")).toHaveCount(
+		20,
+	);
+	await showcase.getByRole("button", { name: "Next slide" }).click();
+	await expect(
+		showcase.getByRole("group", { name: "2 of 20", exact: true }),
+	).not.toHaveAttribute("inert");
+
+	// Turned off, Home is its rows.
+	await page.goto("/settings/home");
+	await page.getByRole("switch", { name: "Showcase" }).click();
+	await page.goto("/");
+	await expect(
+		page.getByRole("region", { name: "Continue Watching" }),
+	).toBeVisible();
+	await expect(showcase).toHaveCount(0);
+});
+
+test("home's showcase says what the apps' does of an episode", async ({
+	page,
+}) => {
+	// The first library row led by an episode that has everything the
+	// showcase draws, whose show lends it what it lacks.
+	await page.route(
+		"**/api/v1/libraries/l-films/rows/recently_added_films*",
+		async (route) => {
+			const response = await route.fetch();
+			const page = await response.json();
+			const episode = {
+				id: "t-ep",
+				kind: "episode",
+				title: "Pilot",
+				added_at: "2024-03-12T00:00:00Z",
+				show: { id: "t-show", title: "Small Show" },
+				season_number: 1,
+				episode_number: 1,
+				release_date: "2024-03-12",
+				certificate: "TV-14",
+				overview: "A night shift at a radio station.",
+				duration_ms: 1_800_000,
+				state: { position_ms: 600_000 },
+				ratings: [{ site: "imdb", score: 81 }],
+				logo: "logo-svg",
+			};
+			await route.fulfill({
+				response,
+				json: { ...page, items: [episode, ...page.items] },
+			});
+		},
+	);
+	await page.route("**/api/v1/titles/t-show", async (route) => {
+		const response = await route.fetch();
+		const show = await response.json();
+		await route.fulfill({
+			response,
+			json: {
+				...show,
+				genres: ["Drama", "Mystery"],
+				ratings: [
+					{ site: "imdb", score: 70 },
+					{ site: "rotten_tomatoes", score: 91 },
+				],
+			},
+		});
+	});
+	// A lettering kept as SVG on fanart.tv's clear 800 by 310 canvas, its ink
+	// in the middle half.
+	await page.route("**/api/v1/artwork/logo-svg*", (route) =>
+		route.fulfill({
+			contentType: "image/svg+xml",
+			body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="310" viewBox="0 0 800 310"><rect x="200" y="60" width="400" height="190" fill="#fc0"/></svg>',
+		}),
+	);
+	await logIn(page);
+	const showcase = page.getByRole("region", { name: "Showcase" });
+	const logo = showcase.getByRole("img", { name: "Small Show" });
+	await expect(logo).toBeVisible();
+	// The ink alone is drawn, so it lines up with the words under it.
+	const place = showcase.getByText("S1, E1 · Mar 12, 2024 · Drama · Mystery");
+	const [ink, words] = await Promise.all([
+		logo.boundingBox(),
+		place.boundingBox(),
+	]);
+	expect(Math.abs((ink?.x ?? 0) - (words?.x ?? 0))).toBeLessThan(1);
+	// Read from a 128-pixel sample, as the apps read it: within a pixel of it.
+	const aspect = (ink?.width ?? 0) / (ink?.height ?? 1);
+	expect(Math.abs(aspect / (400 / 190) - 1)).toBeLessThan(0.06);
+	await expect(
+		showcase.getByText("S1, E1 · Mar 12, 2024 · Drama · Mystery"),
+	).toBeVisible();
+	await expect(showcase.getByText("Pilot", { exact: true })).toBeVisible();
+	await expect(
+		showcase.getByText("A night shift at a radio station."),
+	).toBeVisible();
+	const facts = showcase.getByRole("list", { name: "Facts" });
+	await expect(facts).toContainText("20m left");
+	await expect(facts).toContainText("TV-14");
+	// Its own IMDb score, and the show's Rotten Tomatoes where it has none.
+	await expect(facts).toContainText("8.1");
+	await expect(facts).toContainText("91%");
+	await expect(facts).not.toContainText("7.0");
+	await expect(
+		showcase.getByRole("link", { name: "Resume 00:10:00 Small Show: Pilot" }),
+	).toHaveAttribute("href", "/play/t-ep");
+	await expectAccessible(page);
+});
+
 test("a rail shows twenty, and its heading leads to all of them", async ({
 	page,
 }) => {

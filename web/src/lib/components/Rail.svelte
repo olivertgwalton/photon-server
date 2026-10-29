@@ -15,7 +15,8 @@ import TitleCard, { type CardLike } from "./TitleCard.svelte";
 // however much it holds. Its `cards` are TitleCards; other `items` are
 // drawn by `card`, told how wide the row draws them. A row with a `current`
 // card is the whole of a set the page is one of (a season, on an episode's
-// page): it shows all of it, scrolled to that card.
+// page): it shows all of it, scrolled to that card. `onrest` is told of the
+// card the row comes to rest on, and of one opened from it.
 let {
 	title,
 	cards = [],
@@ -29,6 +30,7 @@ let {
 	heading,
 	pill = "past_rail",
 	resume = "hidden",
+	onrest,
 }: {
 	title: string;
 	cards?: CardLike[];
@@ -43,6 +45,7 @@ let {
 	heading?: Snippet;
 	pill?: "past_rail" | "always";
 	resume?: "shown" | "hidden";
+	onrest?: (card: CardLike) => void;
 } = $props();
 
 const shown = $derived(current ? cards : cards.slice(0, railLimit));
@@ -59,6 +62,9 @@ const more = $derived.by(() => {
 });
 
 const id = $props.id();
+// How long a row is still before the card it stopped on is told of, as the
+// apps wait before a passing card dresses the showcase.
+const restMs = 150;
 
 // Each card's width, and what its picture is asked for at.
 const width = $derived(
@@ -76,6 +82,26 @@ function measure() {
 	on = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
 }
 const resized = onResize(measure);
+
+// Once the row has stopped for a moment, the card at its start: a row
+// scrolled through passes its cards, and only one it rests on is told.
+let settling: ReturnType<typeof setTimeout> | undefined;
+function scrolled() {
+	measure();
+	if (!onrest) return;
+	clearTimeout(settling);
+	settling = setTimeout(() => {
+		const ul = list;
+		if (!ul) return;
+		const at = [...ul.children].findIndex(
+			(li) =>
+				li instanceof HTMLElement &&
+				li.offsetLeft + li.offsetWidth / 2 > ul.scrollLeft,
+		);
+		const card = shown[at];
+		if (card) onrest(card);
+	}, restMs);
+}
 
 // Each new set of cards starts at the row's start, or scrolled to the page's
 // own card where it has one.
@@ -123,6 +149,10 @@ function hold(event: MouseEvent) {
 	if (!(event.target instanceof Element)) return;
 	const link = event.target.closest<HTMLElement>("a, button");
 	link?.focus({ preventScroll: true });
+	const at = [...(list?.children ?? [])].findIndex((li) =>
+		li.contains(event.target as Node),
+	);
+	if (shown[at]) onrest?.(shown[at]);
 }
 
 const sizes = $derived(
@@ -192,7 +222,7 @@ const sizes = $derived(
 			bind:this={list}
 			{@attach resized}
 			{@attach start}
-			onscroll={measure}
+			onscroll={scrolled}
 			{@attach (ul) => listen(ul, "keydown", step)}
 			{@attach (ul) => listen(ul, "click", hold)}
 			class="relative -mx-3 flex scroll-smooth snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto overflow-y-hidden px-3 py-2 scrollbar-none sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
