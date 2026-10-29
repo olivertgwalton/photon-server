@@ -138,6 +138,7 @@ var problems = []struct {
 	{err: store.ErrNotListable, code: codeConflict, ownWords: true},
 	{err: store.ErrNothingOnDisk, code: codeConflict, ownWords: true},
 	{err: store.ErrOneVersion, code: codeConflict, ownWords: true},
+	{err: store.ErrNotMergeable, code: codeInvalidBody, ownWords: true},
 	{err: store.ErrDeletionOff, code: codeConflict, ownWords: true},
 	{err: store.ErrUnknownPlugin, code: codeInvalidBody, ownWords: true},
 	{err: store.ErrNotACandidate, code: codeInvalidBody, detail: "id is one of the title's candidates of that kind"},

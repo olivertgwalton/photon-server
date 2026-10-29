@@ -3346,6 +3346,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/titles/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge another film into a film: its versions become the film's, and stay so, its watch state, favourites and lists move with them, and it goes
+         * @description Admin only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Merge"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/titles/{id}/refresh": {
         parameters: {
             query?: never;
@@ -9031,6 +9075,10 @@ export interface components {
         };
         /** @enum {string} */
         MediaDeletion: "off" | "files";
+        Merge: {
+            /** Format: uuid */
+            title_id: string;
+        };
         MetadataProvider: {
             capabilities: components["schemas"]["Capability"][];
             id: components["schemas"]["FieldSource"];

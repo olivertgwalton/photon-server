@@ -29,6 +29,7 @@ type editing interface {
 	Unmatch(ctx context.Context, id uuid.UUID) error
 	SetTitleLocale(ctx context.Context, id uuid.UUID, loc domain.Locale, titles domain.TitleLanguage) error
 	SplitTitle(ctx context.Context, id uuid.UUID) error
+	MergeTitle(ctx context.Context, id, other uuid.UUID) error
 	TitleFiles(ctx context.Context, id uuid.UUID) ([]store.LibraryFile, error)
 	ForgetTitle(ctx context.Context, id uuid.UUID) error
 	SetMarkers(ctx context.Context, version uuid.UUID, markers []domain.Marker, absent []domain.MarkerAbsent) error
@@ -315,6 +316,28 @@ func (a *API) split(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type mergeJSON struct {
+	// TitleID is the film merged in, which goes.
+	TitleID uuid.UUID `json:"title_id"`
+}
+
+// merge merges another film into a film, as Plex's Merge does: its versions become the film's.
+func (a *API) merge(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req mergeJSON
+	if !a.decode(w, r, &req) {
+		return
+	}
+	err := a.svc.Editing.MergeTitle(r.Context(), id, req.TitleID)
+	if a.answeredAs(w, r, err, "no film has that id") {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type titleLocaleJSON struct {
 	// MetadataLanguage is the language a film's or show's metadata is asked in, an IETF tag such
 	// as en-GB, and CertificationCountry the country whose certificates, an ISO 3166-1 alpha-2 code
@@ -439,6 +462,11 @@ func (a *API) editRoutes() []route {
 			pattern: "POST /api/v1/admin/titles/{id}/split", access: admin,
 			summary: "Split a film's versions apart: each but the one that plays first becomes a film of its own, and stays so",
 			status:  http.StatusNoContent, handle: a.split,
+		},
+		{
+			pattern: "POST /api/v1/admin/titles/{id}/merge", access: admin,
+			summary: "Merge another film into a film: its versions become the film's, and stay so, its watch state, favourites and lists move with them, and it goes",
+			body:    mergeJSON{}, status: http.StatusNoContent, handle: a.merge,
 		},
 		{
 			pattern: "DELETE /api/v1/admin/titles/{id}", access: admin,
