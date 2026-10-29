@@ -14,7 +14,8 @@ import { afterNavigate, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 
 // The films and episodes added that the profile follows, newest first, as
-// Plex's and Jellyfin's apps keep a bell beside the profile.
+// Plex's and Jellyfin's apps keep a bell beside the profile. A kind of
+// notification it does not know is left out.
 $effect(() => {
 	inbox.load();
 	keepPushing();
@@ -82,45 +83,48 @@ let open = $state(false);
 			<ScrollArea class="max-h-[60vh]">
 				<ul class="grid gap-1">
 					{#each inbox.notifications as n (n.id)}
-						<li>
-							<Item.Root size="sm">
-								{#snippet child({ props })}
-									<a
-										href="/titles/{n.title.id}?notification={n.id}"
-										{...props}
-										onclick={() => (open = false)}
-									>
-										<Item.Media
-											variant="image"
-											class="bg-raise aspect-2/3 h-auto w-10"
+						{#if n.kind === "title" && n.title}
+							{@const title = n.title}
+							<li>
+								<Item.Root size="sm">
+									{#snippet child({ props })}
+										<a
+											href="/titles/{title.id}?notification={n.id}"
+											{...props}
+											onclick={() => (open = false)}
 										>
-											{#if n.title.poster}
-												<Artwork
-													id={n.title.poster}
-													shape="poster"
-													sizes="40px"
-												/>
+											<Item.Media
+												variant="image"
+												class="bg-raise aspect-2/3 h-auto w-10"
+											>
+												{#if title.poster}
+													<Artwork
+														id={title.poster}
+														shape="poster"
+														sizes="40px"
+													/>
+												{/if}
+											</Item.Media>
+											<Item.Content>
+												<Item.Title class={n.read_at ? "text-ink-2" : ""}>
+													{title.title}
+												</Item.Title>
+												<Item.Description>{n.message}</Item.Description>
+												<span class="text-ink-3 text-xs">
+													{relative(n.added_at, Date.now())}
+												</span>
+											</Item.Content>
+											{#if !n.read_at}
+												<Item.Actions>
+													<span class="bg-signal size-2 rounded-full"></span>
+													<span class="sr-only">Unread</span>
+												</Item.Actions>
 											{/if}
-										</Item.Media>
-										<Item.Content>
-											<Item.Title class={n.read_at ? "text-ink-2" : ""}>
-												{n.title.title}
-											</Item.Title>
-											<Item.Description>{n.message}</Item.Description>
-											<span class="text-ink-3 text-xs">
-												{relative(n.added_at, Date.now())}
-											</span>
-										</Item.Content>
-										{#if !n.read_at}
-											<Item.Actions>
-												<span class="bg-signal size-2 rounded-full"></span>
-												<span class="sr-only">Unread</span>
-											</Item.Actions>
-										{/if}
-									</a>
-								{/snippet}
-							</Item.Root>
-						</li>
+										</a>
+									{/snippet}
+								</Item.Root>
+							</li>
+						{/if}
 					{/each}
 				</ul>
 			</ScrollArea>

@@ -1310,6 +1310,7 @@ const inboxOf = (token: string): Schemas["Inbox"] => {
 		items: [
 			{
 				id: 1,
+				kind: "title",
 				title: base("t-show", "show", "Small Show"),
 				latest: base("t-show-e2", "episode", "Second", {
 					season_number: 1,

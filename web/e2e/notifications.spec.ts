@@ -74,6 +74,7 @@ test("the bell takes what the server tells of, asking it for nothing", async ({
 				notifications: [
 					{
 						id: 2,
+						kind: "title",
 						title: {
 							id: "t-film",
 							kind: "movie",
