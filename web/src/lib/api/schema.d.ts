@@ -6114,7 +6114,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One of the profile's notifications, as an Apple device woken for it shows it */
+        /** One of the profile's notifications, as a device woken for it shows it */
         get: {
             parameters: {
                 query?: never;
@@ -6335,7 +6335,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the browsers and Apple devices pushed the profile's notifications */
+        /** List the browsers and the Apple and Android devices pushed the profile's notifications */
         get: {
             parameters: {
                 query?: never;
@@ -6358,7 +6358,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Push the profile's notifications to a browser, by the subscription it made with the server's key, or to an Apple device by its APNs token; one subscribed already is the profile's from now */
+        /** Push the profile's notifications to a browser, by the subscription it made with the server's key, to an Apple device by its APNs token, or to an Android device by its FCM registration token; one subscribed already is the profile's from now */
         post: {
             parameters: {
                 query?: never;
@@ -6409,7 +6409,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Stop pushing the profile's notifications to a browser or an Apple device */
+        /** Stop pushing the profile's notifications to a browser or a device */
         delete: {
             parameters: {
                 query?: never;
@@ -9548,7 +9548,7 @@ export interface components {
             key: string;
         };
         /** @enum {string} */
-        PushKind: "web" | "apple";
+        PushKind: "web" | "apple" | "android";
         PushSubscription: {
             /** Format: uri */
             endpoint?: string;

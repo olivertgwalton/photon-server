@@ -1,6 +1,7 @@
-// Package pushrelay asks photon's push relay to wake an Apple device. The relay holds the app's
-// APNs key, which no server can be given, and is told nothing of a library: a message carries the
-// device's token and the id of a notification, which the device then asks its own server for.
+// Package pushrelay asks photon's push relay to wake an Apple or Android device. The relay holds the
+// apps' APNs key and Firebase credentials, which no server can be given, and is told nothing of a
+// library: a message carries the device's token and the id of a notification, which the device then
+// asks its own server for.
 package pushrelay
 
 import (
@@ -20,21 +21,24 @@ import (
 // typed.
 const URL = "https://push.photon.oliverwalton.uk"
 
-// sendTimeout is how long the relay has to hand a message to APNs.
+// sendTimeout is how long the relay has to hand a message to APNs or FCM.
 const sendTimeout = 15 * time.Second
 
 var (
-	// ErrGone is a device APNs says no longer takes notifications: it is to be forgotten.
+	// ErrGone is a device APNs or FCM says no longer takes notifications: it is to be forgotten.
 	ErrGone = errors.New("the device no longer takes notifications")
 	// errRefused is a credential the relay does not know, as after its key is changed.
 	errRefused = errors.New("the relay refused the server's credential")
 )
 
-// Message wakes one device for one notification. Collapse stands for what it is of: APNs keeps one
-// of the same for a device that is away, and the device shows one.
+// Message wakes one device for one notification. Collapse stands for what it is of: APNs and FCM
+// keep one of the same for a device that is away, and the device shows one.
 type Message struct {
-	Token        string                 `json:"token"`
-	Environment  domain.APNsEnvironment `json:"environment"`
+	// Platform is apple or android, which the relay hands to APNs or to FCM.
+	Platform domain.PushKind `json:"platform"`
+	Token    string          `json:"token"`
+	// Environment is the APNs environment that issued an Apple device's token.
+	Environment  domain.APNsEnvironment `json:"environment,omitzero"`
 	Collapse     string                 `json:"collapse"`
 	Notification string                 `json:"notification"`
 }
@@ -57,7 +61,7 @@ func New(url string, server uuid.UUID, kept credentials) *Relay {
 	return &Relay{url: url, server: server, kept: kept, client: &http.Client{Timeout: sendTimeout}}
 }
 
-// Send wakes a device. ErrGone for one APNs no longer delivers to.
+// Send wakes a device. ErrGone for one APNs or FCM no longer delivers to.
 func (r *Relay) Send(ctx context.Context, m Message) error {
 	credential, err := r.kept.PushRelayCredential(ctx)
 	if err != nil {

@@ -118,8 +118,8 @@ func (a *API) inbox(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// notification answers one of the profile's notifications, as an Apple device woken for it by its
-// id asks to show it.
+// notification answers one of the profile's notifications, as a device woken for it by its id asks
+// to show it.
 func (a *API) notification(w http.ResponseWriter, r *http.Request) {
 	id, ok := a.pathNumber(w, r, "id")
 	if !ok {
@@ -214,7 +214,7 @@ func (a *API) notificationsRoutes() []route {
 		},
 		{
 			pattern: "GET /api/v1/profile/notifications/{id}", access: signedIn,
-			summary: "One of the profile's notifications, as an Apple device woken for it shows it",
+			summary: "One of the profile's notifications, as a device woken for it shows it",
 			path:    []param{{"id", int64(0), "The notification."}},
 			status:  http.StatusOK, reply: notificationJSON{},
 			handle: a.notification,

@@ -114,6 +114,27 @@ func TestABrowserSubscribesToItsProfilesNotifications(t *testing.T) {
 		t.Errorf("kept %+v, want its APNs environment", kept)
 	}
 
+	// An Android device subscribes by its FCM registration token alone, kept as it is.
+	for _, bad := range []string{`{"kind":"android"}`, `{"kind":"android","token":"has space"}`} {
+		if rec := call(http.MethodPost, "/api/v1/profile/push-subscriptions", bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", bad, rec.Code)
+		}
+	}
+	const fcm = "dQw4w9WgXcQ:APA91bH-Example_Token"
+	rec = call(http.MethodPost, "/api/v1/profile/push-subscriptions", `{"kind":"android","token":"`+fcm+`"}`)
+	var android pushSubscriptionJSON
+	if err := json.Unmarshal(rec.Body.Bytes(), &android); rec.Code != http.StatusCreated || err != nil ||
+		android.Kind != domain.PushAndroid || android.Token != fcm || android.Endpoint != "" {
+		t.Errorf("an Android phone subscribing: %d %s", rec.Code, rec.Body)
+	}
+	if kept := push.subs[len(push.subs)-1]; kept.Kind != domain.PushAndroid || kept.Endpoint != fcm || kept.ApnsEnvironment != nil || kept.P256DH != nil {
+		t.Errorf("kept %+v, want its token alone", kept)
+	}
+	rec = call(http.MethodGet, "/api/v1/profile/push-subscriptions", "")
+	if !strings.Contains(rec.Body.String(), `{"id":"`+android.ID.String()+`","kind":"android","token":"`+fcm+`"}`) {
+		t.Errorf("listed: %s, want the Android phone by its token", rec.Body)
+	}
+
 	if rec := call(http.MethodDelete, "/api/v1/profile/push-subscriptions/"+made.ID.String(), ""); rec.Code != http.StatusNoContent {
 		t.Errorf("unsubscribing: %d", rec.Code)
 	}

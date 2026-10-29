@@ -23,8 +23,8 @@ as their Trakt account or which browsers notify them, they set under their own s
 - [Sync with trackers](04-trackers.md): Trakt, Simkl, MDBList and AniList.
 - [Webhooks](05-webhooks.md): send what happens on the server to Discord, Slack, ntfy, Gotify or
   your own automation.
-- [Notifications and push](06-notifications.md): be told about new titles in the web app, in your
-  browser and on your Apple devices.
+- [Notifications and push](06-notifications.md): be told about new titles, and requests waiting for
+  you, in the web app, in your browser and on your Apple and Android devices.
 - [Import watch history](07-import-history.md): bring what someone watched on Plex, Jellyfin or
   Emby.
 
