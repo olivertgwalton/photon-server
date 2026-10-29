@@ -870,14 +870,37 @@ export async function admin(
 		case "DELETE /api/v1/admin/keys/k-1":
 			keys = [];
 			return done();
+		// What is written or locked is the admin's, as the server keeps it.
+		case "PATCH /api/v1/admin/titles/t-quiet": {
+			const { locked = [], ...written } =
+				(await request.json()) as Schemas["Edit"];
+			film.locked_fields = [
+				...new Set([
+					...(film.locked_fields ?? []),
+					...locked,
+					...(Object.keys(written) as Schemas["Field"][]),
+				]),
+			].sort();
+			return done();
+		}
+		case "DELETE /api/v1/admin/titles/t-quiet/edits": {
+			const fields = url.searchParams.getAll("field");
+			film.locked_fields = fields.length
+				? film.locked_fields?.filter((f) => !fields.includes(f))
+				: [];
+			return json({}, 202);
+		}
 		// Quiet Hours is t-quiet on its admin page and t-film on the home rows.
-		case "PATCH /api/v1/admin/titles/t-quiet":
 		case "PATCH /api/v1/admin/titles/t-film":
 		case "PUT /api/v1/admin/versions/v-quiet/markers":
 		case "PUT /api/v1/admin/titles/t-quiet/artwork/poster":
 			if (route.endsWith("poster")) {
 				chosenPoster = ((await request.json()) as Schemas["ChooseArtwork"]).id;
 			}
+			return done();
+		case "DELETE /api/v1/admin/titles/t-quiet/artwork/poster":
+			chosenPoster = "";
+			uploadedPoster = "";
 			return done();
 		case "POST /api/v1/admin/titles/t-quiet/artwork/poster":
 			uploadedPoster = crypto.randomUUID();
@@ -895,7 +918,7 @@ export async function admin(
 		case "GET /api/v1/admin/titles/t-quiet/artwork/candidates":
 			return json({
 				items: [
-					...(uploadedPoster === chosenPoster
+					...(uploadedPoster && uploadedPoster === chosenPoster
 						? [
 								{
 									id: uploadedPoster,
