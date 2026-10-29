@@ -1,9 +1,11 @@
 <script lang="ts">
 import { act } from "#lib/act.js";
+import { mergeTitle } from "#lib/actions.js";
 import { matchable, refreshable } from "#lib/admin/edit.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
+import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
 import MarkersEditor from "#lib/components/admin/MarkersEditor.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
@@ -12,6 +14,7 @@ import Choice from "#lib/components/Choice.svelte";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Card from "#lib/components/ui/card/index.js";
 import * as Field from "#lib/components/ui/field/index.js";
+import { Input } from "#lib/components/ui/input/index.js";
 import { fields } from "#lib/form.js";
 import { fullTitle } from "#lib/format.js";
 import { getShell } from "#lib/shell.svelte.js";
@@ -64,6 +67,35 @@ const versions = $derived(
 	t.kind === "movie" || t.kind === "episode" ? (t.versions ?? []) : [],
 );
 const name = $derived(fullTitle(t, t.show?.title));
+
+// Another film of its library to merge into it, found by name.
+let query = $state("");
+let found = $state.raw<components["schemas"]["Card"][]>([]);
+
+async function search(event: SubmitEvent) {
+	event.preventDefault();
+	const { data: answer } = await api.GET("/api/v1/search", {
+		params: {
+			query: {
+				q: query,
+				kind: ["movie"],
+				library: t.library_id ?? undefined,
+				limit: 12,
+			},
+		},
+	});
+	found = (answer?.titles.items ?? []).filter((c) => c.id !== t.id);
+}
+
+async function merge(other: components["schemas"]["Card"]) {
+	if (await mergeTitle(t.id, other.id, caption(other))) {
+		found = found.filter((c) => c.id !== other.id);
+	}
+}
+
+function caption(card: components["schemas"]["Card"]) {
+	return card.year ? `${card.title} (${card.year})` : card.title;
+}
 </script>
 
 <svelte:head><title>Edit {t.title} · Settings · Photon</title></svelte:head>
@@ -157,6 +189,48 @@ const name = $derived(fullTitle(t, t.show?.title));
 					</Field.Field>
 					<Button type="submit">Save order</Button>
 				</form>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	{#if t.kind === "movie"}
+		<Card.Root id="versions" class="scroll-mt-20">
+			<Card.Header>
+				<Card.Title><h2 class="heading">Versions</h2></Card.Title>
+				<Card.Description>
+					Merge another film of its library into it, and its versions become
+					this film's, and stay so through every scan. What anyone has watched
+					of it, favourited or listed comes with them.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-3">
+				<form onsubmit={search} class="flex gap-2">
+					<Input
+						bind:value={query}
+						type="search"
+						aria-label="Find a film"
+						placeholder="Find a film"
+						required
+					/>
+					<Button type="submit" variant="outline">Find</Button>
+				</form>
+				{#if found.length}
+					<ul class="grid gap-1">
+						{#each found as card (card.id)}
+							<li class="flex items-center justify-between gap-3 text-sm">
+								<span class="text-ink truncate">{caption(card)}</span>
+								<ConfirmButton
+									label="Merge in"
+									hidden={card.title}
+									title="Merge {caption(card)} into {name}?"
+									body="Its versions become this film's, and it leaves the library. Split apart parts them again."
+									confirm="Merge"
+									onconfirm={() => merge(card)}
+								/>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}

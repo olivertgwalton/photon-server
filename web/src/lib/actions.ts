@@ -145,6 +145,18 @@ export function splitTitle(id: string, name: string) {
 	);
 }
 
+// Merges another film into a film, as Plex's Merge does: its versions become
+// the film's, and it goes.
+export function mergeTitle(id: string, other: string, name: string) {
+	return act(
+		api.POST("/api/v1/admin/titles/{id}/merge", {
+			...path(id),
+			body: { title_id: other },
+		}),
+		`${name} was merged in.`,
+	);
+}
+
 export function deleteTitle(id: string, name: string) {
 	return act(
 		api.DELETE("/api/v1/admin/titles/{id}", path(id)),

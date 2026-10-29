@@ -35,6 +35,7 @@ type fakeEditing struct {
 	analysed  uuid.UUID
 	unmatched uuid.UUID
 	split     uuid.UUID
+	merged    uuid.UUID
 	locale    domain.Locale
 	titles    domain.TitleLanguage
 	// files are films' own; forgot is the title forgotten once they were deleted.
@@ -114,6 +115,17 @@ func (f *fakeEditing) SplitTitle(_ context.Context, id uuid.UUID) error {
 		return store.ErrOneVersion
 	}
 	return store.ErrNotFound
+}
+
+func (f *fakeEditing) MergeTitle(_ context.Context, id, other uuid.UUID) error {
+	switch {
+	case id != films:
+		return store.ErrNotFound
+	case other != bare:
+		return store.ErrNotMergeable
+	}
+	f.merged = other
+	return nil
 }
 
 func (f *fakeEditing) Unmatch(_ context.Context, id uuid.UUID) error {
@@ -237,6 +249,10 @@ func TestAnAdminFixesATitle(t *testing.T) {
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + bare.String() + "/split", "", http.StatusConflict, "one version"},
 		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/split", "", http.StatusNotFound, "no film"},
 		{goodToken, http.MethodPost, base + "/split", "", http.StatusNoContent, ""},
+		{memberToken, http.MethodPost, base + "/merge", `{"title_id": "` + bare.String() + `"}`, http.StatusForbidden, ""},
+		{goodToken, http.MethodPost, base + "/merge", `{"title_id": "` + films.String() + `"}`, http.StatusBadRequest, "another film"},
+		{goodToken, http.MethodPost, "/api/v1/admin/titles/" + uuid.NewV7().String() + "/merge", `{"title_id": "` + bare.String() + `"}`, http.StatusNotFound, "no film"},
+		{goodToken, http.MethodPost, base + "/merge", `{"title_id": "` + bare.String() + `"}`, http.StatusNoContent, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "dvd"}`, http.StatusAccepted, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "production"}`, http.StatusBadRequest, ""},
 		{goodToken, http.MethodPut, base + "/episode-order", `{"order": "group"}`, http.StatusBadRequest, "group"},
@@ -280,7 +296,7 @@ func TestAnAdminFixesATitle(t *testing.T) {
 			t.Errorf("%s %s %s: %d %s, want %d with %s", tc.method, tc.target, tc.body, rec.Code, rec.Body, tc.want, tc.has)
 		}
 	}
-	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderGroup || e.group != "5ad0df1cc3a36825ac00c087" || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || e.titles != domain.TitlesOriginal || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
+	if e.edited.Title != "Heat" || e.edited.ReleaseDate.Year() != 1995 || len(e.edited.Locked) != 1 || len(e.reset) != 2 || e.pinned != "tmdb/949" || e.order != domain.OrderGroup || e.group != "5ad0df1cc3a36825ac00c087" || e.mode != domain.RefreshAll || e.analysed != films || e.unmatched != films || e.split != films || e.merged != bare || e.locale != (domain.Locale{Language: "fr-FR", Country: "FR"}) || e.titles != domain.TitlesOriginal || len(e.marked) != 1 || e.marked[0].EndMS != 121500 ||
 		len(e.absent) != 1 || e.absent[0] != (domain.MarkerAbsent{Kind: domain.MarkerRecap}) {
 		t.Errorf("done: %+v %v %q", e.edited, e.reset, e.pinned)
 	}

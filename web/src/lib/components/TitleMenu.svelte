@@ -11,6 +11,7 @@ import ImageIcon from "@lucide/svelte/icons/image";
 import LayersIcon from "@lucide/svelte/icons/layers";
 import LibraryBigIcon from "@lucide/svelte/icons/library-big";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
+import MergeIcon from "@lucide/svelte/icons/merge";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import PlayIcon from "@lucide/svelte/icons/play";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -181,6 +182,14 @@ const name = $derived(card ? titleWithShow(card) : "");
 					{#if card.kind === "movie" && (card.version_count ?? 0) > 1}
 						<DropdownMenu.Item onSelect={() => shell.askToSplit(card.id, name)}>
 							<SplitIcon />Split apart…
+						</DropdownMenu.Item>
+					{/if}
+					{#if card.kind === "movie"}
+						<DropdownMenu.Item
+							onSelect={() =>
+								goto(`/settings/server/titles/${card.id}#versions`)}
+						>
+							<MergeIcon />Merge…
 						</DropdownMenu.Item>
 					{/if}
 				{/if}

@@ -45,7 +45,7 @@ func (s *Store) SplitTitle(ctx context.Context, id uuid.UUID) error {
 			if err := describe(ctx, tx, film.ID, film.ScanTitle, deref(item.Year), nil, nil); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE versions SET item_id = $2, split_at = now() WHERE id = $1`, version, film.ID); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE versions SET item_id = $2, split_at = now(), merged_at = NULL WHERE id = $1`, version, film.ID); err != nil {
 				return err
 			}
 			if err := keyTitle(ctx, tx, film.ID); err != nil {

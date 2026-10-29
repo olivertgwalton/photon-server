@@ -122,6 +122,16 @@ Sometimes the server treats two different films as two versions of one, because 
 a folder and a name. **Split apart…** fixes this. The first version stays; each other one becomes a
 film of its own and is matched afresh. It stays separate through later scans.
 
+## Merge films
+
+The opposite happens too: a director's cut in a folder of its own shows up as a second film.
+Choose **Merge…** on the film to keep, or open its **Manage…** page, and find the other film under
+**Versions**. **Merge in** makes its versions this film's. The other film leaves the library, and
+what anyone had watched, favourited or put on a watchlist or playlist of it moves to this one.
+
+Only films of the same library can be merged. They stay together through later scans, and the film
+kept keeps its own name and details. **Split apart…** parts them again.
+
 ## Refresh a title
 
 **Refresh metadata…** looks a title up again now, rather than waiting for the library's schedule.
