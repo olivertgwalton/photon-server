@@ -8,6 +8,7 @@ import {
 	ratingMark,
 	runtime,
 	score,
+	showLine,
 	timecode,
 } from "./format.ts";
 
@@ -45,6 +46,17 @@ test("an episode is named with its show and place, anything else alone", () => {
 		"Season 1",
 	);
 	expect(fullTitle({ kind: "movie", title: "Heat" }, undefined)).toBe("Heat");
+});
+
+test("under its own name, an episode's card says its place and show, a season's its show", () => {
+	const show = { title: "Small Show" };
+	expect(
+		showLine({ kind: "episode", show, season_number: 1, episode_number: 2 }),
+	).toBe("S1, E2 · Small Show");
+	expect(showLine({ kind: "season", show, season_number: 1 })).toBe(
+		"Small Show",
+	);
+	expect(showLine({ kind: "episode", episode_number: 2 })).toBe("E2");
 });
 
 test("each site's score is printed on that site's own scale", () => {
