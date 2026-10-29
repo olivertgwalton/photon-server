@@ -57,10 +57,10 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 	user := addProfile(t, s, "Sam", domain.RoleUser, nil)
 	other := addProfile(t, s, "Alex", domain.RoleUser, nil)
 
-	if _, err := s.AskFor(ctx, user.ID, film.ID, []int{1}); !errors.Is(err, ErrFilmSeasons) {
+	if _, _, err := s.AskFor(ctx, user.ID, film.ID, []int{1}); !errors.Is(err, ErrFilmSeasons) {
 		t.Errorf("a film by seasons: %v, want ErrFilmSeasons", err)
 	}
-	r, err := s.AskFor(ctx, user.ID, film.ID, nil)
+	r, _, err := s.AskFor(ctx, user.ID, film.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +68,10 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 		r.Provider != domain.ProviderTMDB || r.Value != "27205" || r.ProfileName != "Sam" || r.Seasons != nil {
 		t.Errorf("asked for %+v", r)
 	}
-	if _, err := s.AskFor(ctx, other.ID, film.ID, nil); !errors.Is(err, ErrAskedFor) {
+	if _, _, err := s.AskFor(ctx, other.ID, film.ID, nil); !errors.Is(err, ErrAskedFor) {
 		t.Errorf("asked for again: %v, want ErrAskedFor", err)
 	}
-	seasons, err := s.AskFor(ctx, user.ID, show.ID, []int{3, 1, 3})
+	seasons, _, err := s.AskFor(ctx, user.ID, show.ID, []int{3, 1, 3})
 	if err != nil || !slices.Equal(seasons.Seasons, []int{1, 3}) {
 		t.Errorf("a show by seasons: %+v, %v; want seasons 1 and 3", seasons, err)
 	}
@@ -88,13 +88,13 @@ func TestAProfileAsksForATitleALibraryLacks(t *testing.T) {
 		t.Errorf("waiting for an admin %+v of %d, %v", waiting, total, err)
 	}
 
-	if err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.WithdrawRequest(ctx, other.ID, r.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("taken back by another: %v, want ErrNotFound", err)
 	}
-	if err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil {
+	if _, err := s.WithdrawRequest(ctx, user.ID, r.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AskFor(ctx, other.ID, film.ID, nil); err != nil {
+	if _, _, err := s.AskFor(ctx, other.ID, film.ID, nil); err != nil {
 		t.Errorf("asked for once taken back: %v", err)
 	}
 }
@@ -115,10 +115,10 @@ func TestOnlyWhatAProfileMaySearchIsAskedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AskFor(ctx, user.ID, streamed[0].ID, nil); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.AskFor(ctx, user.ID, streamed[0].ID, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a remote library's find: %v, want ErrNotFound", err)
 	}
-	if _, err := s.AskFor(ctx, user.ID, uuid.NewV7(), nil); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.AskFor(ctx, user.ID, uuid.NewV7(), nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no find: %v, want ErrNotFound", err)
 	}
 
@@ -127,14 +127,14 @@ func TestOnlyWhatAProfileMaySearchIsAskedFor(t *testing.T) {
 	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxAge: &twelve, Unrated: domain.UnratedBlock}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AskFor(ctx, kid.ID, film.ID, nil); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.AskFor(ctx, kid.ID, film.ID, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a profile held to 12: %v, want ErrNotFound", err)
 	}
 	filmsOnly := addProfile(t, s, "Films only", domain.RoleUser, nil)
 	if err := s.SetAccess(ctx, filmsOnly.ID, ProfileAccess{Libraries: []uuid.UUID{films.ID}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AskFor(ctx, filmsOnly.ID, show.ID, nil); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.AskFor(ctx, filmsOnly.ID, show.ID, nil); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a find of a library the profile may not see: %v, want ErrNotFound", err)
 	}
 
@@ -144,7 +144,7 @@ func TestOnlyWhatAProfileMaySearchIsAskedFor(t *testing.T) {
 	if _, err := s.SaveFolder(ctx, films.ID, "I", []byte("v1"), []Film{inception}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AskFor(ctx, user.ID, film.ID, nil); !errors.Is(err, ErrAlreadyHeld) {
+	if _, _, err := s.AskFor(ctx, user.ID, film.ID, nil); !errors.Is(err, ErrAlreadyHeld) {
 		t.Errorf("a film a library has come to hold: %v, want ErrAlreadyHeld", err)
 	}
 }
@@ -161,12 +161,12 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	stranger := addProfile(t, s, "Neighbour", domain.RoleManager, nil)
 	child := addProfile(t, s, "Teen", domain.RoleUser, &manager.ID)
 
-	own, err := s.AskFor(ctx, admin.ID, show.ID, nil)
+	own, _, err := s.AskFor(ctx, admin.ID, show.ID, nil)
 	if err != nil || own.State != domain.RequestApproved || own.DecidedBy != admin.ID || own.DecidedAt.IsZero() {
 		t.Errorf("an admin's own request %+v, %v; want it approved by the admin", own, err)
 	}
 
-	r, err := s.AskFor(ctx, child.ID, film.ID, nil)
+	r, _, err := s.AskFor(ctx, child.ID, film.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,24 +176,24 @@ func TestARequestIsApprovedOrDeclinedByWhoKeepsItsProfile(t *testing.T) {
 	if kept, total, err := totalled(s.RequestsKept(ctx, &stranger.ID, "", totalledPage(0, 10))); err != nil || total != 0 || len(kept) != 0 {
 		t.Errorf("another manager's %+v of %d, %v; want none", kept, total, err)
 	}
-	if _, err := s.DecideRequest(ctx, r.ID, &stranger.ID, stranger.ID, domain.RequestApproved, ""); !errors.Is(err, ErrNotFound) {
+	if _, _, err := s.DecideRequest(ctx, r.ID, &stranger.ID, stranger.ID, domain.RequestApproved, ""); !errors.Is(err, ErrNotFound) {
 		t.Errorf("approved by another manager: %v, want ErrNotFound", err)
 	}
-	declined, err := s.DecideRequest(ctx, r.ID, &manager.ID, manager.ID, domain.RequestDeclined, "Not until you're older")
+	declined, _, err := s.DecideRequest(ctx, r.ID, &manager.ID, manager.ID, domain.RequestDeclined, "Not until you're older")
 	if err != nil || declined.State != domain.RequestDeclined || declined.Reason != "Not until you're older" || declined.DecidedBy != manager.ID {
 		t.Errorf("declined %+v, %v", declined, err)
 	}
-	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); !errors.Is(err, ErrDecided) {
+	if _, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("decided again: %v, want ErrDecided", err)
 	}
-	if err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
+	if _, err := s.WithdrawRequest(ctx, child.ID, r.ID); !errors.Is(err, ErrDecided) {
 		t.Errorf("taken back once declined: %v, want ErrDecided", err)
 	}
-	again, err := s.AskFor(ctx, child.ID, film.ID, nil)
+	again, _, err := s.AskFor(ctx, child.ID, film.ID, nil)
 	if err != nil {
 		t.Fatalf("asked for again once declined: %v", err)
 	}
-	if approved, err := s.DecideRequest(ctx, again.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil || approved.State != domain.RequestApproved {
+	if approved, _, err := s.DecideRequest(ctx, again.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil || approved.State != domain.RequestApproved {
 		t.Errorf("approved by an admin %+v, %v", approved, err)
 	}
 	if done, total, err := totalled(s.RequestsKept(ctx, nil, domain.RequestDeclined, totalledPage(0, 10))); err != nil || total != 1 || done[0].ID != r.ID {
@@ -214,7 +214,7 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 		return countRows(t, s, `SELECT count(*) FROM jobs WHERE kind = 'send_request'`)
 	}
 
-	unsent, err := s.AskFor(ctx, admin.ID, show.ID, nil)
+	unsent, _, err := s.AskFor(ctx, admin.ID, show.ID, nil)
 	if err != nil || unsent.State != domain.RequestApproved || sends() != 0 {
 		t.Fatalf("a request of a library that sends nowhere: %+v, %v, %d sends; want it approved, and none", unsent, err, sends())
 	}
@@ -222,14 +222,14 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Requests: &riven}); err != nil {
 		t.Fatal(err)
 	}
-	r, err := s.AskFor(ctx, user.ID, film.ID, nil)
+	r, _, err := s.AskFor(ctx, user.ID, film.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if sends() != 0 {
 		t.Errorf("%d sends of a request waiting for an admin", sends())
 	}
-	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
+	if _, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
 		t.Fatal(err)
 	}
 	if sends() != 1 {
@@ -246,14 +246,14 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 	if _, _, ok, err := s.Sending(ctx, r.ID); err != nil || ok {
 		t.Errorf("a failed request is still being sent: %v, %v", ok, err)
 	}
-	again, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, "")
+	again, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, "")
 	if err != nil || again.State != domain.RequestApproved || again.Reason != "" {
 		t.Errorf("approved again once failed: %+v, %v", again, err)
 	}
 	if err := s.SentRequest(ctx, r.ID, domain.RequestSent, ""); err != nil {
 		t.Fatal(err)
 	}
-	if sent, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
+	if sent, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestDeclined, ""); !errors.Is(err, ErrDecided) {
 		t.Errorf("a sent request declined: %+v, %v; want ErrDecided", sent, err)
 	}
 	if mine, _, err := totalled(s.Requests(ctx, user.ID, totalledPage(0, 1))); err != nil || mine[0].State != domain.RequestSent {
@@ -277,11 +277,11 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	ctx := t.Context()
 	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
 	asker := addProfile(t, s, "Sam", domain.RoleUser, nil)
-	r, err := s.AskFor(ctx, asker.ID, film.ID, nil)
+	r, _, err := s.AskFor(ctx, asker.ID, film.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
+	if _, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
 		t.Fatal(err)
 	}
 	inception := Film{Title: "Inception", Folder: "I", IDs: map[domain.Provider]string{domain.ProviderTMDB: "27205"}, Versions: []Version{{
@@ -295,7 +295,7 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(told) != 1 || told[0].ProfileID != asker.ID {
+	if len(told.Told) != 1 || told.Told[0].ProfileID != asker.ID || len(told.Cleared) != 0 {
 		t.Errorf("told %+v, want the asker alone", told)
 	}
 	mine, _, err := totalled(s.Requests(ctx, asker.ID, totalledPage(0, 1)))
@@ -306,23 +306,24 @@ func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	if err != nil || inbox.Unread != 1 || len(inbox.Notifications) != 1 {
 		t.Errorf("the asker's inbox %+v, %v; want Inception in it", inbox, err)
 	}
-	if again, err := s.Identified(ctx, item.ID); err != nil || len(again) != 0 {
+	if again, err := s.Identified(ctx, item.ID); err != nil || len(again.Told) != 0 {
 		t.Errorf("identified again: told %+v, %v; want no one twice", again, err)
 	}
 }
 
-// A title may come while its request still waits, which no one then decides: it is available, and
-// a profile that hears of nothing is not told of it.
+// A title may come while its request still waits, which no one then decides: it is available, a
+// profile that hears of nothing is not told of it, and the admin told it waits no longer is.
 func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 	s, films, film, _ := askable(t)
 	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
 	quiet := addProfile(t, s, "Quiet", domain.RoleUser, nil)
 	prefs := domain.DefaultPreferences()
 	prefs.Notify = domain.NotifyNone
 	if _, err := s.SetPreferences(ctx, quiet.ID, prefs); err != nil {
 		t.Fatal(err)
 	}
-	r, err := s.AskFor(ctx, quiet.ID, film.ID, nil)
+	r, _, err := s.AskFor(ctx, quiet.ID, film.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,10 +334,94 @@ func TestARequestIsAvailableQuietlyWhereItsAskerHearsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	told, err := s.Identified(ctx, oneItem(t, s, "title = $1", "Inception").ID)
-	if err != nil || len(told) != 0 {
+	if err != nil || len(told.Told) != 0 {
 		t.Errorf("told %+v, %v; want no one", told, err)
+	}
+	if len(told.Cleared) != 1 || told.Cleared[0].ProfileID != admin.ID || told.Cleared[0].Unread != 0 {
+		t.Errorf("cleared %+v, want the admin's notification of the request, none left unread", told.Cleared)
+	}
+	if inbox, err := s.Inbox(ctx, admin.ID, nil); err != nil || len(inbox.Notifications) != 0 {
+		t.Errorf("the admin's inbox %+v, %v; want the request gone from it", inbox, err)
 	}
 	if mine, _, err := totalled(s.Requests(ctx, quiet.ID, totalledPage(0, 1))); err != nil || mine[0].ID != r.ID || mine[0].State != domain.RequestAvailable {
 		t.Errorf("the request %+v, %v; want it available", mine, err)
+	}
+}
+
+// A request that waits is told to each who may decide it: every admin, and the manager that keeps
+// the user who asked; not another manager, the one who asked, nor an admin who hears of nothing.
+// It stays in their inboxes until it no longer waits, taken back or decided by any of them, when
+// it is cleared from every one. An admin's own, approved as it is asked, is told to no one.
+func TestARequestWaitingIsToldToWhoeverDecidesIt(t *testing.T) {
+	s, _, film, show := askable(t)
+	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
+	hushed := addProfile(t, s, "Hushed", domain.RoleAdmin, nil)
+	prefs := domain.DefaultPreferences()
+	prefs.Notify = domain.NotifyNone
+	if _, err := s.SetPreferences(ctx, hushed.ID, prefs); err != nil {
+		t.Fatal(err)
+	}
+	manager := addProfile(t, s, "Parent", domain.RoleManager, nil)
+	stranger := addProfile(t, s, "Neighbour", domain.RoleManager, nil)
+	child := addProfile(t, s, "Teen", domain.RoleUser, &manager.ID)
+
+	r, told, err := s.AskFor(ctx, child.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[uuid.UUID][]int64{}
+	for _, n := range told {
+		ids[n.ProfileID] = n.IDs
+	}
+	if len(ids) != 2 || len(ids[admin.ID]) != 1 || len(ids[manager.ID]) != 1 {
+		t.Fatalf("told %+v, want the admin and the parent once each", told)
+	}
+	for _, p := range []domain.Profile{admin, manager} {
+		inbox, err := s.Inbox(ctx, p.ID, nil)
+		if err != nil || inbox.Unread != 1 || len(inbox.Notifications) != 1 {
+			t.Fatalf("%s's inbox %+v, %v; want the request, unread", p.Name, inbox, err)
+		}
+		if n := inbox.Notifications[0]; n.ID != ids[p.ID][0] || n.Kind != domain.NotificationRequest || n.Request != r.ID ||
+			inbox.Requests[r.ID].ProfileName != "Teen" || inbox.Requests[r.ID].Title != "Inception" {
+			t.Errorf("%s's notification %+v of %+v; want the teen's Inception", p.Name, n, inbox.Requests)
+		}
+	}
+	for _, p := range []domain.Profile{hushed, stranger, child} {
+		if inbox, err := s.Inbox(ctx, p.ID, nil); err != nil || inbox.Unread != 0 || len(inbox.Notifications) != 0 {
+			t.Errorf("%s's inbox %+v, %v; want nothing", p.Name, inbox, err)
+		}
+	}
+
+	// A manager's own request waits for the admins alone, and taken back is cleared.
+	asked, told, err := s.AskFor(ctx, manager.ID, show.ID, nil)
+	if err != nil || len(told) != 1 || told[0].ProfileID != admin.ID {
+		t.Fatalf("the parent's own request told %+v, %v; want the admin alone", told, err)
+	}
+	cleared, err := s.WithdrawRequest(ctx, manager.ID, asked.ID)
+	if err != nil || len(cleared) != 1 || cleared[0].ProfileID != admin.ID || !slices.Equal(cleared[0].IDs, told[0].IDs) || cleared[0].Unread != 1 {
+		t.Errorf("taken back, cleared %+v, %v; want the admin's, the teen's left unread", cleared, err)
+	}
+
+	_, cleared, err = s.DecideRequest(ctx, r.ID, &manager.ID, manager.ID, domain.RequestApproved, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	left := map[uuid.UUID]Cleared{}
+	for _, c := range cleared {
+		left[c.ProfileID] = c
+	}
+	if len(left) != 2 || !slices.Equal(left[admin.ID].IDs, ids[admin.ID]) || !slices.Equal(left[manager.ID].IDs, ids[manager.ID]) ||
+		left[admin.ID].Unread != 0 || left[manager.ID].Unread != 0 {
+		t.Errorf("decided, cleared %+v; want the admin's and the parent's, none left unread", cleared)
+	}
+	for _, p := range []domain.Profile{admin, manager} {
+		if inbox, err := s.Inbox(ctx, p.ID, nil); err != nil || inbox.Unread != 0 || len(inbox.Notifications) != 0 {
+			t.Errorf("%s's inbox once decided %+v, %v; want it empty", p.Name, inbox, err)
+		}
+	}
+
+	if _, told, err := s.AskFor(ctx, admin.ID, show.ID, nil); err != nil || len(told) != 0 {
+		t.Errorf("an admin's own request told %+v, %v; want no one", told, err)
 	}
 }

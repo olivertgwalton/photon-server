@@ -20,14 +20,18 @@ type notifications interface {
 	Cards(ctx context.Context, profile uuid.UUID, titles []uuid.UUID) ([]store.Card, error)
 }
 
-// notificationJSON is a film added, or a show's episodes added while it was unread.
+// notificationJSON is a film added, or a show's episodes added while it was unread, or a request
+// waiting for the profile to decide it. A client drops a kind it does not know.
 type notificationJSON struct {
-	ID int64 `json:"id"`
-	// Title is the film or the show, Latest the film or the newest of the episodes it brings.
-	Title  cardJSON `json:"title"`
-	Latest cardJSON `json:"latest"`
-	New    int      `json:"new"`
-	// Message says what it brings, beside the title's name.
+	ID   int64                   `json:"id"`
+	Kind domain.NotificationKind `json:"kind"`
+	// Title is a title's film or show, Latest the film or the newest of the episodes it brings.
+	Title  cardJSON `json:"title,omitzero"`
+	Latest cardJSON `json:"latest,omitzero"`
+	New    int      `json:"new,omitzero"`
+	// Request is a request's, as the requests one keeps list it.
+	Request requestJSON `json:"request,omitzero"`
+	// Message says what it brings, beside the title's name, or who asked for a request.
 	Message string `json:"message"`
 	// AddedAt is when its newest was added.
 	AddedAt time.Time  `json:"added_at"`
@@ -60,12 +64,14 @@ type inboxMarkerJSON struct {
 	Through time.Time `json:"through"`
 }
 
-// notificationsOf words an inbox's notifications for a reader, as cards it may see; one whose
-// title it no longer sees is left out.
+// notificationsOf words an inbox's notifications for a reader, a title's as cards it may see; one
+// whose title it no longer sees, or whose request has gone, is left out.
 func (a *API) notificationsOf(ctx context.Context, profile uuid.UUID, said words.Words, in store.Inbox) ([]notificationJSON, error) {
 	ids := make([]uuid.UUID, 0, 2*len(in.Notifications))
 	for _, n := range in.Notifications {
-		ids = append(ids, n.Title, n.Latest)
+		if n.Kind == domain.NotificationTitle {
+			ids = append(ids, n.Title, n.Latest)
+		}
 	}
 	cards, err := a.svc.Notifications.Cards(ctx, profile, ids)
 	if err != nil {
@@ -77,20 +83,29 @@ func (a *API) notificationsOf(ctx context.Context, profile uuid.UUID, said words
 	}
 	out := []notificationJSON{}
 	for _, n := range in.Notifications {
-		title, ok := byID[n.Title]
-		latest, seen := byID[n.Latest]
-		if !ok || !seen {
-			continue
+		shown := notificationJSON{ID: n.ID, Kind: n.Kind, AddedAt: n.AddedAt, ReadAt: n.ReadAt}
+		switch n.Kind {
+		case domain.NotificationTitle:
+			title, ok := byID[n.Title]
+			latest, seen := byID[n.Latest]
+			if !ok || !seen {
+				continue
+			}
+			shown.Title, shown.Latest, shown.New, shown.Message = cardOf(title), cardOf(latest), n.New, said.Notification(n.New, latest)
+		case domain.NotificationRequest:
+			r, ok := in.Requests[n.Request]
+			if !ok {
+				continue
+			}
+			shown.Request, shown.Message = requestOf(r), said.AskedFor(r.ProfileName)
 		}
-		out = append(out, notificationJSON{
-			ID: n.ID, Title: cardOf(title), Latest: cardOf(latest), New: n.New, Message: said.Notification(n.New, latest),
-			AddedAt: n.AddedAt, ReadAt: n.ReadAt,
-		})
+		out = append(out, shown)
 	}
 	return out, nil
 }
 
-// inbox answers the profile's notifications of the films and episodes added that it follows.
+// inbox answers the profile's notifications of the films and episodes added that it follows, and of
+// the requests waiting for it to decide them.
 func (a *API) inbox(w http.ResponseWriter, r *http.Request) {
 	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
 	in, err := a.svc.Notifications.Inbox(ctx, profile, nil)
@@ -194,7 +209,7 @@ func (a *API) notificationsRoutes() []route {
 	return []route{
 		{
 			pattern: "GET /api/v1/profile/notifications", access: signedIn,
-			summary: "List the profile's notifications of the films and episodes added that it follows, newest first",
+			summary: "List the profile's notifications of the films and episodes added that it follows, and of the requests waiting for it to decide them, newest first",
 			status:  http.StatusOK, reply: inboxJSON{}, handle: a.inbox,
 		},
 		{

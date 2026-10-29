@@ -54,10 +54,16 @@ func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Ca
 		if err != nil {
 			return err
 		}
-		// Those who asked for the title are told of it as a scan tells of titles added.
-		for _, t := range told {
+		// Those who asked for the title are told of it as a scan tells of titles added, and those
+		// who were to decide a request for it no longer are.
+		for _, t := range told.Told {
 			raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
 				Change: domain.NotificationsAdded, IDs: t.IDs,
+			}})
+		}
+		for _, c := range told.Cleared {
+			raise(ctx, domain.Event{Kind: domain.EventNotificationsChanged, Profile: c.ProfileID, Details: domain.NotificationsDetails{
+				Change: domain.NotificationsCleared, IDs: c.IDs, Unread: c.Unread,
 			}})
 		}
 		fetch(ctx, st, pictures, id, log)

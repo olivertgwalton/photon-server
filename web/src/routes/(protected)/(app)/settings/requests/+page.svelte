@@ -5,13 +5,11 @@ import { when } from "#lib/admin/words.js";
 import { client } from "#lib/api/client.js";
 import type { components } from "#lib/api/schema.js";
 import Choice from "#lib/components/Choice.svelte";
+import DeclineRequest from "#lib/components/DeclineRequest.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import Pager from "#lib/components/Pager.svelte";
 import RequestTitle from "#lib/components/RequestTitle.svelte";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Textarea } from "#lib/components/ui/textarea/index.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -21,7 +19,6 @@ type Request = components["schemas"]["Request"];
 let { data } = $props();
 const words = vocabulary();
 const api = client();
-const id = $props.id();
 
 const states = [
 	...(
@@ -43,12 +40,11 @@ const approve = (r: Request) =>
 	);
 
 let declining = $state<Request>();
-let reason = $state("");
-const decline = (r: Request) =>
+const decline = (r: Request, reason: string) =>
 	act(
 		api.POST("/api/v1/admin/requests/{id}/decline", {
 			params: { path: { id: r.id } },
-			body: { reason: reason.trim() },
+			body: { reason },
 		}),
 		`${r.title} is declined.`,
 	);
@@ -111,14 +107,7 @@ const { offset, total } = $derived(data.requests);
 							{r.state === "failed" ? "Approve again" : "Approve"}
 							<span class="sr-only">{r.title}</span>
 						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onclick={() => {
-								reason = "";
-								declining = r;
-							}}
-						>
+						<Button variant="outline" size="sm" onclick={() => (declining = r)}>
 							Decline <span class="sr-only">{r.title}</span>
 						</Button>
 					</div>
@@ -131,42 +120,4 @@ const { offset, total } = $derived(data.requests);
 {/if}
 <Pager {offset} total={total ?? 0} />
 
-<AlertDialog.Root
-	bind:open={
-		() => !!declining,
-		(open) => {
-	if (!open) declining = undefined;
-}
-	}
->
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Decline {declining?.title}?</AlertDialog.Title>
-			<AlertDialog.Description>
-				{declining?.profile}
-				sees that it was declined, and why, if you say.
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<Field.Field>
-			<Field.Label for="{id}-reason">Why</Field.Label>
-			<Textarea
-				id="{id}-reason"
-				bind:value={reason}
-				rows={2}
-				placeholder="Optional"
-			/>
-		</Field.Field>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action
-				onclick={() => {
-					const r = declining;
-					declining = undefined;
-					if (r) decline(r);
-				}}
-			>
-				Decline
-			</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
+<DeclineRequest bind:request={declining} ondecline={decline} />

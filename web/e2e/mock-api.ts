@@ -49,6 +49,18 @@ const asks: Schemas["Request"][] = [
 		state: "pending",
 		asked_at: "2026-10-18T09:00:00Z",
 	},
+	{
+		id: "r-alien",
+		profile_id: "p-kids",
+		profile: "Kids",
+		library_id: "l-films",
+		kind: "movie",
+		title: "Alien",
+		year: 1979,
+		ids: { tmdb: "348" },
+		state: "pending",
+		asked_at: "2026-10-17T09:00:00Z",
+	},
 ];
 
 // Requests, a profile's own and an admin's to decide, as the server keeps
@@ -1310,6 +1322,7 @@ const inboxOf = (token: string): Schemas["Inbox"] => {
 		items: [
 			{
 				id: 1,
+				kind: "title",
 				title: base("t-show", "show", "Small Show"),
 				latest: base("t-show-e2", "episode", "Second", {
 					season_number: 1,

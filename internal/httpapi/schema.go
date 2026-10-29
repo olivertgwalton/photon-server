@@ -122,6 +122,7 @@ var enums = map[reflect.Type][]string{
 	reflect.TypeFor[domain.GroupKind]():           values(domain.GroupKinds()),
 	reflect.TypeFor[domain.Notify]():              values(domain.Notifies()),
 	reflect.TypeFor[domain.PushKind]():            values(domain.PushKinds()),
+	reflect.TypeFor[domain.NotificationKind]():    values(domain.NotificationKinds()),
 	reflect.TypeFor[domain.APNsEnvironment]():     values(domain.APNsEnvironments()),
 	reflect.TypeFor[domain.NotificationChange]():  values(domain.NotificationChanges()),
 	reflect.TypeFor[domain.Unrated]():             values(domain.UnratedPolicies()),

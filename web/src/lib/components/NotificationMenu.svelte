@@ -2,7 +2,9 @@
 import BellIcon from "@lucide/svelte/icons/bell";
 import BellRingIcon from "@lucide/svelte/icons/bell-ring";
 import { relative } from "#lib/admin/words.js";
+import type { components } from "#lib/api/schema.js";
 import Artwork from "#lib/components/Artwork.svelte";
+import DeclineRequest from "#lib/components/DeclineRequest.svelte";
 import { Badge } from "#lib/components/ui/badge/index.js";
 import { Button } from "#lib/components/ui/button/index.js";
 import * as Empty from "#lib/components/ui/empty/index.js";
@@ -13,8 +15,10 @@ import { inbox, keepPushing } from "#lib/notifications.svelte.js";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 
-// The films and episodes added that the profile follows, newest first, as
-// Plex's and Jellyfin's apps keep a bell beside the profile.
+// The films and episodes added that the profile follows, and the requests
+// waiting for it to decide them, newest first, as Plex's and Jellyfin's apps
+// keep a bell beside the profile. A kind of notification it does not know is
+// left out.
 $effect(() => {
 	inbox.load();
 	keepPushing();
@@ -32,6 +36,8 @@ afterNavigate(({ to }) => {
 });
 
 let open = $state(false);
+// The notification of a request being declined.
+let declining = $state<components["schemas"]["Notification"]>();
 </script>
 
 <Popover.Root bind:open>
@@ -82,45 +88,96 @@ let open = $state(false);
 			<ScrollArea class="max-h-[60vh]">
 				<ul class="grid gap-1">
 					{#each inbox.notifications as n (n.id)}
-						<li>
-							<Item.Root size="sm">
-								{#snippet child({ props })}
-									<a
-										href="/titles/{n.title.id}?notification={n.id}"
-										{...props}
-										onclick={() => (open = false)}
-									>
-										<Item.Media
-											variant="image"
-											class="bg-raise aspect-2/3 h-auto w-10"
+						{#if n.kind === "title" && n.title}
+							{@const title = n.title}
+							<li>
+								<Item.Root size="sm">
+									{#snippet child({ props })}
+										<a
+											href="/titles/{title.id}?notification={n.id}"
+											{...props}
+											onclick={() => (open = false)}
 										>
-											{#if n.title.poster}
-												<Artwork
-													id={n.title.poster}
-													shape="poster"
-													sizes="40px"
-												/>
+											<Item.Media
+												variant="image"
+												class="bg-raise aspect-2/3 h-auto w-10"
+											>
+												{#if title.poster}
+													<Artwork
+														id={title.poster}
+														shape="poster"
+														sizes="40px"
+													/>
+												{/if}
+											</Item.Media>
+											<Item.Content>
+												<Item.Title class={n.read_at ? "text-ink-2" : ""}>
+													{title.title}
+												</Item.Title>
+												<Item.Description>{n.message}</Item.Description>
+												<span class="text-ink-3 text-xs">
+													{relative(n.added_at, Date.now())}
+												</span>
+											</Item.Content>
+											{#if !n.read_at}
+												<Item.Actions>
+													<span class="bg-signal size-2 rounded-full"></span>
+													<span class="sr-only">Unread</span>
+												</Item.Actions>
 											{/if}
-										</Item.Media>
-										<Item.Content>
-											<Item.Title class={n.read_at ? "text-ink-2" : ""}>
-												{n.title.title}
-											</Item.Title>
-											<Item.Description>{n.message}</Item.Description>
-											<span class="text-ink-3 text-xs">
-												{relative(n.added_at, Date.now())}
-											</span>
-										</Item.Content>
+										</a>
+									{/snippet}
+								</Item.Root>
+							</li>
+						{:else if n.kind === "request" && n.request}
+							{@const r = n.request}
+							<li>
+								<Item.Root size="sm" class="flex-wrap">
+									<Item.Content>
+										<Item.Title class={n.read_at ? "text-ink-2" : ""}>
+											<a
+												href="/settings/requests"
+												class="hover:underline"
+												onclick={() => (open = false)}
+											>
+												{r.title}
+												{#if r.year}
+													<span class="text-ink-3 font-normal">
+														({r.year})</span
+													>
+												{/if}
+											</a>
+										</Item.Title>
+										<Item.Description>{n.message}</Item.Description>
+										<span class="text-ink-3 text-xs">
+											{relative(n.added_at, Date.now())}
+										</span>
+									</Item.Content>
+									<Item.Actions>
+										<Button
+											size="sm"
+											onclick={() => inbox.decide(n, "approve")}
+										>
+											Approve <span class="sr-only">{r.title}</span>
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onclick={() => {
+												open = false;
+												declining = n;
+											}}
+										>
+											Decline <span class="sr-only">{r.title}</span>
+										</Button>
 										{#if !n.read_at}
-											<Item.Actions>
-												<span class="bg-signal size-2 rounded-full"></span>
-												<span class="sr-only">Unread</span>
-											</Item.Actions>
+											<span class="bg-signal size-2 rounded-full"></span>
+											<span class="sr-only">Unread</span>
 										{/if}
-									</a>
-								{/snippet}
-							</Item.Root>
-						</li>
+									</Item.Actions>
+								</Item.Root>
+							</li>
+						{/if}
 					{/each}
 				</ul>
 			</ScrollArea>
@@ -146,3 +203,15 @@ let open = $state(false);
 		</Button>
 	</Popover.Content>
 </Popover.Root>
+
+<DeclineRequest
+	bind:request={
+		() => declining?.request,
+		(r) => {
+	if (!r) declining = undefined;
+}
+	}
+	ondecline={(_, reason) => {
+		if (declining) inbox.decide(declining, "decline", reason);
+	}}
+/>

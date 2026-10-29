@@ -107,14 +107,78 @@ const fulfilled = `
 			AND NOT EXISTS (SELECT 1 FROM notification_items n WHERE n.item_id = x.id AND n.profile_id = d.profile_id)
 	), ` + telling
 
-func fulfil(ctx context.Context, tx db, item uuid.UUID) ([]Told, error) {
-	return tell(ctx, tx, fulfilled, pgx.NamedArgs{"item": item})
+// Fulfilled is who was told of a title asked for as it was matched: those who asked, and those
+// whose notifications of the requests, which no longer wait, were cleared.
+type Fulfilled struct {
+	Told    []Told
+	Cleared []Cleared
+}
+
+func fulfil(ctx context.Context, tx db, item uuid.UUID) (Fulfilled, error) {
+	args := pgx.NamedArgs{"item": item}
+	told, err := tell(ctx, tx, fulfilled, args)
+	if err != nil {
+		return Fulfilled{}, err
+	}
+	cleared, err := clearAsked(ctx, tx, `r.item_id = @item AND r.state = 'available'`, args)
+	return Fulfilled{Told: told, Cleared: cleared}, err
 }
 
 // Told is a profile told of titles added, and its notifications added or gathering more.
 type Told struct {
 	ProfileID uuid.UUID
 	IDs       []int64
+}
+
+// Cleared is a profile's notifications of requests cleared as the requests stopped waiting, and how
+// many it has left unread.
+type Cleared struct {
+	ProfileID uuid.UUID
+	IDs       []int64
+	Unread    int
+}
+
+// tellDeciders tells each who may decide a request that waits of it: every admin, and the manager
+// that keeps the user who asked, but never the one who asked, nor one whose notify is none. It
+// answers the profiles told.
+func tellDeciders(ctx context.Context, tx db, request uuid.UUID) ([]Told, error) {
+	return queryStructs[Told](ctx, tx, `
+		INSERT INTO notifications (profile_id, kind, request_id)
+		SELECT k.id, 'request', r.id
+		FROM requests r JOIN profiles a ON a.id = r.profile_id
+		JOIN profiles k ON k.id <> a.id
+			AND (k.role = 'admin' OR k.role = 'manager' AND a.role = 'user' AND k.id = a.managed_by)
+		LEFT JOIN profile_preferences pp ON pp.profile_id = k.id
+		WHERE r.id = $1 AND r.state = 'pending' AND coalesce(pp.notify, 'marked') <> 'none'
+		RETURNING profile_id, ARRAY[id] AS ids`, request)
+}
+
+// clearAsked clears, read, every profile's notifications of the requests where says, which no
+// longer wait, answering the profiles whose were; countUnread fills in the rest once tx is done.
+func clearAsked(ctx context.Context, tx db, where string, args pgx.NamedArgs) ([]Cleared, error) {
+	told, err := queryStructs[Told](ctx, tx, `
+		WITH cleared AS (
+			UPDATE notifications n SET cleared_at = now(), read_at = coalesce(n.read_at, now())
+			FROM requests r WHERE n.request_id = r.id AND n.cleared_at IS NULL AND `+where+`
+			RETURNING n.profile_id, n.id
+		)
+		SELECT profile_id, array_agg(id) AS ids FROM cleared GROUP BY profile_id`, args)
+	out := make([]Cleared, len(told))
+	for i, t := range told {
+		out[i] = Cleared{ProfileID: t.ProfileID, IDs: t.IDs}
+	}
+	return out, err
+}
+
+// countUnread fills in how many notifications each profile whose were cleared has left unread.
+func (s *Store) countUnread(ctx context.Context, cleared []Cleared) error {
+	for i := range cleared {
+		var err error
+		if cleared[i].Unread, err = s.unread(ctx, cleared[i].ProfileID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // pushSettle is how long a profile's push waits after its last notification: long enough for the
@@ -157,14 +221,16 @@ func tell(ctx context.Context, tx db, statement string, args pgx.NamedArgs) ([]T
 	return out, nil
 }
 
-// Inbox is a profile's notifications, newest first, and how many are unread.
+// Inbox is a profile's notifications, newest first, the requests they are of, and how many are
+// unread.
 type Inbox struct {
 	Notifications []domain.Notification
+	Requests      map[uuid.UUID]Request
 	Unread        int
 }
 
 // told are a notification's films or episodes that a profile still may see: how many, and the
-// newest in its show.
+// newest in its show. A request's has none.
 const told = `
 	CROSS JOIN LATERAL (
 		SELECT count(*)::int AS new,
@@ -173,40 +239,63 @@ const told = `
 		WHERE ni.notification_id = n.id AND sees(v, i)
 	) t`
 
-// Inbox answers a profile's notifications of what it still may see: the newest, or those of ids.
+// Inbox answers a profile's notifications of what it still may see, and of the requests waiting
+// for it: the newest, or those of ids.
 func (s *Store) Inbox(ctx context.Context, profile uuid.UUID, ids []int64) (Inbox, error) {
 	type row struct {
-		ID      int64
-		TitleID uuid.UUID
-		Latest  uuid.UUID
-		New     int
-		AddedAt time.Time
-		ReadAt  *time.Time
+		ID        int64
+		Kind      domain.NotificationKind
+		TitleID   *uuid.UUID
+		Latest    *uuid.UUID
+		New       int
+		RequestID *uuid.UUID
+		AddedAt   time.Time
+		ReadAt    *time.Time
 	}
 	rows, err := queryStructs[row](ctx, s.pool, `
-		SELECT n.id, n.title_id, t.latest, t.new, n.added_at, n.read_at
+		SELECT n.id, n.kind, n.title_id, t.latest, t.new, n.request_id, n.added_at, n.read_at
 		FROM notifications n CROSS JOIN viewer($1) v`+told+`
-		WHERE n.profile_id = $1 AND n.cleared_at IS NULL AND t.new > 0 AND ($3::bigint[] IS NULL OR n.id = ANY($3))
+		WHERE n.profile_id = $1 AND n.cleared_at IS NULL AND (n.kind = 'request' OR t.new > 0)
+			AND ($3::bigint[] IS NULL OR n.id = ANY($3))
 		ORDER BY n.added_at DESC, n.id DESC LIMIT $2`, profile, inboxLength, ids)
 	if err != nil {
 		return Inbox{}, err
 	}
 	out := Inbox{Notifications: make([]domain.Notification, len(rows))}
+	var asked []uuid.UUID
 	for i, r := range rows {
-		out.Notifications[i] = domain.Notification{ID: r.ID, Title: r.TitleID, Latest: r.Latest, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt}
+		out.Notifications[i] = domain.Notification{
+			ID: r.ID, Kind: r.Kind, Title: deref(r.TitleID), Latest: deref(r.Latest), New: r.New,
+			Request: deref(r.RequestID), AddedAt: r.AddedAt, ReadAt: r.ReadAt,
+		}
+		if r.RequestID != nil {
+			asked = append(asked, *r.RequestID)
+		}
+	}
+	if len(asked) > 0 {
+		requests, err := queryStructs[requestRow](ctx, s.pool, `SELECT `+requestColumns+`
+			FROM requests r JOIN profiles p ON p.id = r.profile_id WHERE r.id = ANY($1)`, asked)
+		if err != nil {
+			return Inbox{}, err
+		}
+		out.Requests = make(map[uuid.UUID]Request, len(requests))
+		for _, r := range requests {
+			out.Requests[r.ID] = r.request()
+		}
 	}
 	out.Unread, err = s.unread(ctx, profile)
 	return out, err
 }
 
-// unread counts a profile's unread notifications of what it still may see.
+// unread counts a profile's unread notifications of what it still may see, and of the requests
+// waiting for it.
 func (s *Store) unread(ctx context.Context, profile uuid.UUID) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*) FROM notifications n CROSS JOIN viewer($1) v
-		WHERE n.profile_id = $1 AND n.read_at IS NULL AND EXISTS (
+		WHERE n.profile_id = $1 AND n.read_at IS NULL AND (n.kind = 'request' OR EXISTS (
 			SELECT 1 FROM notification_items ni JOIN items i ON i.id = ni.item_id
-			WHERE ni.notification_id = n.id AND sees(v, i))`, profile).Scan(&n)
+			WHERE ni.notification_id = n.id AND sees(v, i)))`, profile).Scan(&n)
 	return n, err
 }
 
@@ -349,7 +438,7 @@ func (s *Store) Pushes(ctx context.Context, profile uuid.UUID) ([]Push, error) {
 	}
 	out := make([]Push, len(rows))
 	for i, r := range rows {
-		out[i] = Push{ID: r.ID, Title: r.TitleID, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt, Items: r.Items}
+		out[i] = Push{ID: r.ID, Kind: domain.NotificationTitle, Title: r.TitleID, New: r.New, AddedAt: r.AddedAt, ReadAt: r.ReadAt, Items: r.Items}
 		if r.Latest != nil {
 			out[i].Latest = *r.Latest
 		}

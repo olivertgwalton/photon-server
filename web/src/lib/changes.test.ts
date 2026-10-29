@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { adminAffected, affected, keys } from "./changes.ts";
+import { adminAffected, affected, inboxAffected, keys } from "./changes.ts";
 
 test("a library's change reloads its wall and home, nothing else", () => {
 	expect(affected({ kind: "library.changed", library_id: "l-1" })).toEqual([
@@ -33,4 +33,28 @@ test("a scan's progress reloads nothing: the page draws it as it comes", () => {
 test("an admin event reloads the dashboard page that lists it, nothing else", () => {
 	expect(adminAffected("job.dead")).toEqual([keys.admin.jobs]);
 	expect(adminAffected("scan.progress")).toEqual([]);
+});
+
+test("a request told as waiting, or a notification cleared, reloads the requests waiting", () => {
+	const at = "2026-10-29T12:00:00Z";
+	const request = {
+		id: 13,
+		kind: "request" as const,
+		message: "Kit asked for it",
+		added_at: at,
+	};
+	expect(
+		inboxAffected({ change: "added", notifications: [request], unread: 1 }),
+	).toEqual([keys.requests]);
+	expect(
+		inboxAffected({ change: "cleared", cleared: [13], unread: 0 }),
+	).toEqual([keys.requests]);
+	expect(
+		inboxAffected({
+			change: "added",
+			notifications: [{ ...request, kind: "title" }],
+			unread: 1,
+		}),
+	).toEqual([]);
+	expect(inboxAffected({ change: "read", through: at, unread: 0 })).toEqual([]);
 });

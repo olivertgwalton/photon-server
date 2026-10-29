@@ -1,7 +1,12 @@
 import { invalidate, refreshAll } from "$app/navigation";
 import type { LiveStream } from "./admin/stream.svelte.js";
 import type { components } from "./api/schema.js";
-import { adminAffected, affected, type Change } from "./changes.js";
+import {
+	adminAffected,
+	affected,
+	type Change,
+	inboxAffected,
+} from "./changes.js";
 import { inbox } from "./notifications.svelte.js";
 import { restoring } from "./restoring.svelte.js";
 import { settling } from "./settle.js";
@@ -70,9 +75,12 @@ export function connectLive(server?: LiveStream): () => void {
 					}
 					reconnected = true;
 					break;
-				case "notifications.changed":
-					inbox.apply(data as components["schemas"]["InboxChange"]);
+				case "notifications.changed": {
+					const change = data as components["schemas"]["InboxChange"];
+					inbox.apply(change);
+					later.add(inboxAffected(change));
 					break;
+				}
 				case "restore.started":
 					restoring.on = true;
 					break;

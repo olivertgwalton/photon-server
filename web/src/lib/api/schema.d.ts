@@ -5999,7 +5999,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the profile's notifications of the films and episodes added that it follows, newest first */
+        /** List the profile's notifications of the films and episodes added that it follows, and of the requests waiting for it to decide them, newest first */
         get: {
             parameters: {
                 query?: never;
@@ -9099,15 +9099,19 @@ export interface components {
             added_at: string;
             /** Format: int64 */
             id: number;
-            latest: components["schemas"]["Card"];
+            kind: components["schemas"]["NotificationKind"];
+            latest?: components["schemas"]["Card"];
             message: string;
-            new: number;
+            new?: number;
             /** Format: date-time */
             read_at?: string | null;
-            title: components["schemas"]["Card"];
+            request?: components["schemas"]["Request"];
+            title?: components["schemas"]["Card"];
         };
         /** @enum {string} */
         NotificationChange: "added" | "read" | "cleared";
+        /** @enum {string} */
+        NotificationKind: "title" | "request";
         /** @enum {string} */
         Notify: "marked" | "all" | "none";
         NowPlaying: {

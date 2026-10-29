@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -65,9 +66,9 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	added := time.Date(2026, time.October, 15, 20, 0, 0, 0, time.UTC)
 	notes := &fakeNotifications{
 		inbox: store.Inbox{Unread: 2, Notifications: []domain.Notification{
-			{ID: 3, Title: show, Latest: episode, New: 2, AddedAt: added},
-			{ID: 2, Title: gone, Latest: gone, New: 1, AddedAt: added},
-			{ID: 1, Title: film, Latest: film, New: 1, AddedAt: added},
+			{ID: 3, Kind: domain.NotificationTitle, Title: show, Latest: episode, New: 2, AddedAt: added},
+			{ID: 2, Kind: domain.NotificationTitle, Title: gone, Latest: gone, New: 1, AddedAt: added},
+			{ID: 1, Kind: domain.NotificationTitle, Title: film, Latest: film, New: 1, AddedAt: added},
 		}},
 		cards: []store.Card{
 			{ID: show, Kind: domain.ItemShow, Title: "Severance"},
@@ -165,5 +166,57 @@ func TestAProfileReadsItsNotifications(t *testing.T) {
 	}
 	if _, ok, err := api.toldTo(t.Context(), uuid.NewV7(), said, fresh); err != nil || ok {
 		t.Error("another profile was told of the profile's notifications")
+	}
+}
+
+// The inbox tells each kind of notification in its own shape, tagged by its kind: a title's with
+// its cards and what it brings, a request's with the request and who asked, and neither with the
+// other's fields.
+func TestTheInboxTellsEachKindInItsShape(t *testing.T) {
+	film, asked := uuid.NewV7(), uuid.NewV7()
+	added := time.Date(2026, time.October, 15, 20, 0, 0, 0, time.UTC)
+	notes := &fakeNotifications{
+		inbox: store.Inbox{Unread: 2, Notifications: []domain.Notification{
+			{ID: 13, Kind: domain.NotificationRequest, Request: asked, AddedAt: added},
+			{ID: 12, Kind: domain.NotificationTitle, Title: film, Latest: film, New: 1, AddedAt: added},
+			{ID: 11, Kind: domain.NotificationRequest, Request: uuid.NewV7(), AddedAt: added},
+		}, Requests: map[uuid.UUID]store.Request{asked: {
+			ID: asked, Profile: sam.ID, ProfileName: "Kit", Library: uuid.NewV7(), Kind: domain.ItemMovie,
+			Provider: domain.ProviderTMDB, Value: "438631", Title: "Dune", Year: 2021, State: domain.RequestPending, AskedAt: added,
+		}}},
+		cards: []store.Card{{ID: film, Kind: domain.ItemMovie, Title: "Heat"}},
+	}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}, Notifications: notes, Events: &fakeEvents{}})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/profile/notifications", nil)
+	req.Header.Set("Authorization", "Bearer "+goodToken)
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	var got struct {
+		Items  []map[string]json.RawMessage `json:"items"`
+		Unread int                          `json:"unread"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); rec.Code != http.StatusOK || err != nil {
+		t.Fatalf("inbox: %d %s %v", rec.Code, rec.Body, err)
+	}
+	if got.Unread != 2 || len(got.Items) != 2 {
+		t.Fatalf("inbox %s; want the request and the film, the request that has gone left out", rec.Body)
+	}
+	keys := func(m map[string]json.RawMessage) []string { return slices.Sorted(maps.Keys(m)) }
+	request, title := got.Items[0], got.Items[1]
+	if want := []string{"added_at", "id", "kind", "message", "request"}; !slices.Equal(keys(request), want) {
+		t.Errorf("a request's notification has %v, want %v", keys(request), want)
+	}
+	if string(request["kind"]) != `"request"` || string(request["message"]) != `"Kit asked for it"` {
+		t.Errorf("a request's notification: %s", rec.Body)
+	}
+	var r requestJSON
+	if err := json.Unmarshal(request["request"], &r); err != nil || r.ID != asked || r.Title != "Dune" || r.Profile != "Kit" || r.State != domain.RequestPending {
+		t.Errorf("the request told: %s, %v", request["request"], err)
+	}
+	if want := []string{"added_at", "id", "kind", "latest", "message", "new", "title"}; !slices.Equal(keys(title), want) {
+		t.Errorf("a title's notification has %v, want %v", keys(title), want)
+	}
+	if string(title["kind"]) != `"title"` || string(title["message"]) != `"New film"` {
+		t.Errorf("a title's notification: %s", rec.Body)
 	}
 }

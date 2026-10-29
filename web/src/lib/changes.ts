@@ -1,3 +1,7 @@
+import type { components } from "./api/schema.js";
+
+type InboxChange = components["schemas"]["InboxChange"];
+
 // What a page's data depends on, so a change reloads only the pages it touches.
 export const keys = {
 	home: "photon:home",
@@ -7,6 +11,8 @@ export const keys = {
 	downloads: "photon:downloads",
 	// The profile's accounts on its trackers, and the codes it is entering.
 	trackers: "photon:trackers",
+	// The requests waiting for the profile to decide them.
+	requests: "photon:requests",
 	library: (id: string) => `photon:library:${id}` as const,
 	title: (id: string) => `photon:title:${id}` as const,
 	// What the dashboard's pages load, as the admin stream tells of it.
@@ -60,6 +66,13 @@ export function affected(change: Change): `photon:${string}`[] {
 			break;
 	}
 	return [...out];
+}
+
+// The data a change of the profile's inbox makes stale: a request told as
+// waiting, or one cleared, which may be a request someone decided.
+export function inboxAffected(change: InboxChange): `photon:${string}`[] {
+	const asked = change.notifications?.some((n) => n.kind === "request");
+	return asked || change.change === "cleared" ? [keys.requests] : [];
 }
 
 // The dashboard's data an admin event makes stale, by the event's name.
