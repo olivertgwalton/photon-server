@@ -140,12 +140,12 @@ func passedOver(ctx context.Context, err error, log *slog.Logger) bool {
 // that fails, as one past its daily allowance does, is reported rather than failing the job and
 // asking every provider again.
 func rate(ctx context.Context, st *store.Store, r provider.Rater, id uuid.UUID, sub store.Subject, log *slog.Logger) {
-	ratings, err := r.Ratings(ctx, sub.Kind, sub.IDs)
+	rated, err := r.Ratings(ctx, sub.Kind, sub.IDs)
 	if errors.Is(err, provider.ErrNotConfigured) {
 		return
 	}
 	if err == nil {
-		err = st.SaveRatings(ctx, id, r.Info().ID, ratings)
+		err = st.SaveRatings(ctx, id, r.Info().ID, rated)
 	}
 	if err != nil && ctx.Err() == nil {
 		log.WarnContext(ctx, "ratings not read", slog.Any("err", err))

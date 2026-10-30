@@ -68,7 +68,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 			t.Fatal(err)
 		}
 		if f.imdb > 0 {
-			if err := s.SaveRatings(ctx, id, domain.SourceMDBList, []domain.Rating{{Site: domain.SiteIMDb, Score: f.imdb}}); err != nil {
+			if err := s.SaveRatings(ctx, id, domain.SourceMDBList, domain.Rated{Ratings: []domain.Rating{{Site: domain.SiteIMDb, Score: f.imdb}}}); err != nil {
 				t.Fatal(err)
 			}
 		}

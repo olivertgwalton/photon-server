@@ -53,14 +53,14 @@ func (critics) Info() provider.Info {
 	return provider.Info{ID: domain.SourceMDBList, Name: "Critics", Kinds: []domain.ItemKind{domain.ItemMovie}}
 }
 
-func (c critics) Ratings(_ context.Context, _ domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error) {
+func (c critics) Ratings(_ context.Context, _ domain.ItemKind, ids map[domain.Provider]string) (domain.Rated, error) {
 	if c.fail {
-		return nil, errors.New("daily limit exceeded")
+		return domain.Rated{}, errors.New("daily limit exceeded")
 	}
 	if ids[domain.ProviderIMDb] != "tt0073195" {
-		return nil, nil
+		return domain.Rated{}, nil
 	}
-	return []domain.Rating{{Site: domain.SiteIMDb, Score: 81}}, nil
+	return domain.Rated{Ratings: []domain.Rating{{Site: domain.SiteIMDb, Score: 81}}}, nil
 }
 
 func TestEachProviderTheLibraryTakesIsAsked(t *testing.T) {

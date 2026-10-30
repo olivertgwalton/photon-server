@@ -143,7 +143,7 @@ func (c *client) Candidates(ctx context.Context, loc domain.Locale, kind domain.
 	return found, err
 }
 
-func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error) {
+func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) (domain.Rated, error) {
 	out, err := post[pluginv1.RatingsResponse](ctx, c, domain.CapabilityRate, "ratings", func(s pluginv1.Settings) pluginv1.RatingsRequest {
 		return pluginv1.RatingsRequest{Settings: s, Kind: string(kind), IDs: sentIDs(ids)}
 	})
@@ -153,7 +153,7 @@ func (c *client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 			ratings = append(ratings, domain.Rating{Site: site, Score: min(max(r.Score, 0), 100), Votes: max(r.Votes, 0)})
 		}
 	}
-	return ratings, err
+	return domain.Rated{Ratings: ratings}, err
 }
 
 func (c *client) DescribePerson(ctx context.Context, loc domain.Locale, ids map[domain.Provider]string) (domain.Person, error) {

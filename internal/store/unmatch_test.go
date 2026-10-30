@@ -29,6 +29,9 @@ func TestAnUnmatchedFilmKeepsOnlyItsOwnWordsUntilItIsFixed(t *testing.T) {
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, domain.Rated{CommonSenseAge: 13}); err != nil {
+		t.Fatal(err)
+	}
 	// An admin's own words are no provider's.
 	if err := s.EditMetadata(ctx, id, domain.Metadata{Tagline: "You'll never go in the water again."}); err != nil {
 		t.Fatal(err)
@@ -45,9 +48,9 @@ func TestAnUnmatchedFilmKeepsOnlyItsOwnWordsUntilItIsFixed(t *testing.T) {
 		t.Errorf("unmatched: %q, %q, %v, tagline %q; want the file's name, no provider's words, the admin's tagline",
 			page.Title, page.Overview, page.Genres, page.Tagline)
 	}
-	if len(page.IDs) != 0 || len(page.Ratings) != 0 || len(page.Credits) != 0 || len(page.Artwork) != 0 {
-		t.Errorf("unmatched: ids %v, ratings %v, credits %v, artwork %v; want none of a provider's",
-			page.IDs, page.Ratings, page.Credits, page.Artwork)
+	if len(page.IDs) != 0 || len(page.Ratings) != 0 || page.CommonSenseAge != 0 || len(page.Credits) != 0 || len(page.Artwork) != 0 {
+		t.Errorf("unmatched: ids %v, ratings %v, Common Sense age %d, credits %v, artwork %v; want none of a provider's",
+			page.IDs, page.Ratings, page.CommonSenseAge, page.Credits, page.Artwork)
 	}
 	// Held: identify asks no provider about it, however its library refreshes, though an admin
 	// may still search them for it, to fix its match.

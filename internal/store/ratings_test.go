@@ -30,9 +30,9 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 	}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, []domain.Rating{
+	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, domain.Rated{Ratings: []domain.Rating{
 		{Site: domain.SiteTMDB, Score: 77, Votes: 10114}, {Site: domain.SiteRottenTomatoes, Score: 97}, {Site: domain.SiteIMDb, Score: 81, Votes: 673852},
-	}); err != nil {
+	}, CommonSenseAge: 13}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := s.Title(ctx, uuid.UUID{}, id)
@@ -40,8 +40,8 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Rating{{Site: domain.SiteIMDb, Score: 81, Votes: 673852}, {Site: domain.SiteTMDB, Score: 77, Votes: 10114}, {Site: domain.SiteRottenTomatoes, Score: 97}}
-	if !slices.Equal(page.Ratings, want) {
-		t.Errorf("ratings = %v, want %v", page.Ratings, want)
+	if !slices.Equal(page.Ratings, want) || page.CommonSenseAge != 13 {
+		t.Errorf("ratings = %v, Common Sense age %d; want %v, 13", page.Ratings, page.CommonSenseAge, want)
 	}
 	// Its card on the wall says the same, with what a showcase writes beside it.
 	cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortTitle, Limit: 1})
@@ -53,11 +53,11 @@ func TestATitleShowsEachSitesRatingFromItsBestSource(t *testing.T) {
 		t.Errorf("card = %+v, want the page's ratings, overview, certificate and genres", c)
 	}
 	// Asked again, MDBList has nothing: TMDB's own score stands.
-	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, nil); err != nil {
+	if err := s.SaveRatings(ctx, id, domain.SourceMDBList, domain.Rated{}); err != nil {
 		t.Fatal(err)
 	}
-	if page, err = s.Title(ctx, uuid.UUID{}, id); err != nil || !slices.Equal(page.Ratings, []domain.Rating{{Site: domain.SiteTMDB, Score: 76, Votes: 10000}}) {
-		t.Errorf("after MDBList forgets it: %v, %v; want TMDB's own", page.Ratings, err)
+	if page, err = s.Title(ctx, uuid.UUID{}, id); err != nil || !slices.Equal(page.Ratings, []domain.Rating{{Site: domain.SiteTMDB, Score: 76, Votes: 10000}}) || page.CommonSenseAge != 0 {
+		t.Errorf("after MDBList forgets it: %v, Common Sense age %d, %v; want TMDB's own and no age", page.Ratings, page.CommonSenseAge, err)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestATitleIsSortedAndFilteredByTheRatingItsCardShows(t *testing.T) {
 		source domain.FieldSource
 		score  float64
 	}{{jaws.ID, domain.SourceTMDB, 60}, {jaws.ID, domain.SourceMDBList, 90}, {heat, domain.SourceMDBList, 75}} {
-		if err := s.SaveRatings(ctx, r.id, r.source, []domain.Rating{{Site: domain.SiteIMDb, Score: r.score}}); err != nil {
+		if err := s.SaveRatings(ctx, r.id, r.source, domain.Rated{Ratings: []domain.Rating{{Site: domain.SiteIMDb, Score: r.score}}}); err != nil {
 			t.Fatal(err)
 		}
 	}

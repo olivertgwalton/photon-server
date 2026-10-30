@@ -57,9 +57,11 @@ type titlePageJSON struct {
 	LockedFields []domain.Field             `json:"locked_fields,omitzero"`
 	IDs          map[domain.Provider]string `json:"ids,omitzero"`
 	Ratings      []ratingRefJSON            `json:"ratings,omitzero"`
-	Collections  []collectionCardJSON       `json:"collections,omitzero"`
-	Credits      []creditRefJSON            `json:"credits,omitzero"`
-	Origin       domain.CollectionOrigin    `json:"origin,omitzero"`
+	// CommonSenseAge is the age Common Sense Media advises the title for.
+	CommonSenseAge int                     `json:"common_sense_age,omitzero"`
+	Collections    []collectionCardJSON    `json:"collections,omitzero"`
+	Credits        []creditRefJSON         `json:"credits,omitzero"`
+	Origin         domain.CollectionOrigin `json:"origin,omitzero"`
 	// Rule is what finds a smart collection's titles, List the list a list collection holds.
 	Rule *smartRuleJSON `json:"rule,omitzero"`
 	List *listRefJSON   `json:"list,omitzero"`
@@ -300,10 +302,11 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		ID: p.ID, LibraryID: p.Library, Kind: p.Kind, Title: p.Title, OriginalTitle: p.OriginalTitle, Overview: p.Overview,
 		Tagline: p.Tagline, Certificate: domain.Bare(p.Certificate), QualifiedCertificate: p.Certificate, Year: p.Year, ReleaseDate: p.ReleaseDate,
 		Genres: p.Genres, Studios: p.Studios, LockedFields: p.LockedFields, IDs: p.IDs,
-		Ratings:     each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
-		Collections: each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
-		Credits:     each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
-		Origin:      p.Origin, Rule: ruleOf(p.Rule), List: listOf(p.List), LibraryIDs: p.Libraries, BoxSet: p.BoxSet, EpisodeOrder: p.EpisodeOrder, EpisodeGroup: p.EpisodeGroup,
+		Ratings:        each(p.Ratings, func(r domain.Rating) ratingRefJSON { return ratingRefJSON(r) }),
+		CommonSenseAge: p.CommonSenseAge,
+		Collections:    each(p.Collections, func(c store.CollectionCard) collectionCardJSON { return collectionCardJSON(c) }),
+		Credits:        each(p.Credits, func(c store.CreditRef) creditRefJSON { return creditRefJSON(c) }),
+		Origin:         p.Origin, Rule: ruleOf(p.Rule), List: listOf(p.List), LibraryIDs: p.Libraries, BoxSet: p.BoxSet, EpisodeOrder: p.EpisodeOrder, EpisodeGroup: p.EpisodeGroup,
 		MetadataLanguage: domain.LanguageTag(p.Locale.Language), CertificationCountry: domain.CountryCode(p.Locale.Country), TitleLanguage: p.Titles, AddedAt: p.AddedAt, SeasonNumber: p.SeasonNumber,
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd, AirsBeforeSeason: p.AirsBeforeSeason,
 		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,

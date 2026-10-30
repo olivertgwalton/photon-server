@@ -114,6 +114,7 @@ const facts = $derived(
 			episodeLabel(t.season_number, t.episode_number, t.episode_end),
 		t.year,
 		t.certificate,
+		t.common_sense_age && `Common Sense ${t.common_sense_age}+`,
 		duration && runtime(duration),
 		t.kind === "show" && t.seasons?.length && count(t.seasons.length, "season"),
 		t.kind === "show" &&

@@ -23,8 +23,8 @@ func (unpaused) Pause(context.Context, string, time.Duration) error { return nil
 func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // Jaws as MDBList answers it, IMDb's score among others MDBList scores out of 100, one site it
-// has nothing for, and sites the server leaves out.
-const jaws = `{"title": "Jaws", "ratings": [
+// has nothing for, sites the server leaves out, and the age Common Sense Media advises it for.
+const jaws = `{"title": "Jaws", "commonsense": true, "age_rating": 13, "ratings": [
 	{"source": "imdb", "value": 8.1, "score": 81, "votes": 673852},
 	{"source": "tomatoes", "value": 97, "score": 97, "votes": 102},
 	{"source": "popcorn", "value": 90, "score": 90, "votes": 250000},
@@ -61,13 +61,38 @@ func TestRatingsAreFoundByTheFirstIDMDBListKnows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []domain.Rating{
+	want := domain.Rated{Ratings: []domain.Rating{
 		{Site: domain.SiteIMDb, Score: 81, Votes: 673852},
 		{Site: domain.SiteRottenTomatoes, Score: 97, Votes: 102},
 		{Site: domain.SiteRottenTomatoesAudience, Score: 90, Votes: 250000},
-	}
+	}, CommonSenseAge: 13}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ratings (-want +got):\n%s", diff)
+	}
+}
+
+// MDBList answers an age_rating of its own, read off the title's certificate, where Common Sense
+// Media advises none: it is no Common Sense age.
+func TestOnlyCommonSenseMediasAgeIsKept(t *testing.T) {
+	for _, answer := range []string{
+		`{"commonsense": {}, "age_rating": 18}`,
+		`{"commonsense": false, "age_rating": 18}`,
+		`{"age_rating": 18}`,
+		`{"commonsense": true, "age_rating": 0}`,
+		`{"commonsense": true, "age_rating": 99}`,
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if _, err := io.WriteString(w, answer); err != nil {
+				t.Error(err)
+			}
+		}))
+		c := client(t, "secret")
+		c.api.Base = srv.URL
+		got, err := c.Ratings(t.Context(), domain.ItemMovie, map[domain.Provider]string{domain.ProviderTMDB: "578"})
+		srv.Close()
+		if err != nil || got.CommonSenseAge != 0 {
+			t.Errorf("%s: age %d, %v; want none", answer, got.CommonSenseAge, err)
+		}
 	}
 }
 

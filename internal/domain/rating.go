@@ -28,6 +28,16 @@ type Rating struct {
 	Votes int
 }
 
+// Rated is what a rater says of a title: what sites make of it, and the age Common Sense Media
+// advises it for, 0 where it advises none.
+type Rated struct {
+	Ratings        []Rating
+	CommonSenseAge int
+}
+
+// MaxCommonSenseAge is the oldest age Common Sense Media advises a title for.
+const MaxCommonSenseAge = 18
+
 // RatingSources are the sources that give ratings.
 func RatingSources() []FieldSource {
 	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB}
