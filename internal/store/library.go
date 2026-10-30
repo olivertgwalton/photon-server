@@ -43,9 +43,9 @@ func hasLibrary(ctx context.Context, q db, lib uuid.UUID) error {
 // AddLibrary adds a library of the files under a folder, whose search finds titles a profile may
 // ask for where discover names a provider.
 func (s *Store) AddLibrary(ctx context.Context, name string, kind domain.LibraryKind, root string, discover domain.FieldSource) (domain.Library, error) {
-	return s.addLibrary(ctx, kind, `
-		INSERT INTO libraries (name, kind, root, discover_source) VALUES ($1, $2, $3, nullif($4, '')) RETURNING `+libraryColumns,
-		name, kind, root, discover)
+	l := domain.NewLibrary(kind, domain.MediaFolder)
+	l.Name, l.Root, l.DiscoverSource = name, root, discover
+	return s.addLibrary(ctx, l)
 }
 
 // Remote is where a remote library's titles come from and are played from: the titles of a list
@@ -58,27 +58,38 @@ type Remote struct {
 	StreamSource   domain.FieldSource
 }
 
-// AddRemoteLibrary adds a library of titles a provider streams. It has no folder to watch, delete
-// from or read whole for previews and markers.
+// AddRemoteLibrary adds a library of titles a provider streams.
 func (s *Store) AddRemoteLibrary(ctx context.Context, name string, kind domain.LibraryKind, r Remote) (domain.Library, error) {
-	return s.addLibrary(ctx, kind, `
-		INSERT INTO libraries (name, kind, media, list_source, list_id, discover_source, stream_source, monitor, previews, markers)
-		VALUES ($1, $2, 'remote', nullif($3, ''), nullif($4, ''), nullif($5, ''), $6, 'off', 'off', 'off') RETURNING `+libraryColumns,
-		name, kind, r.ListSource, r.ListID, r.DiscoverSource, r.StreamSource)
+	l := domain.NewLibrary(kind, domain.MediaRemote)
+	l.Name, l.ListSource, l.ListID, l.DiscoverSource, l.StreamSource = name, r.ListSource, r.ListID, r.DiscoverSource, r.StreamSource
+	return s.addLibrary(ctx, l)
 }
 
-func (s *Store) addLibrary(ctx context.Context, kind domain.LibraryKind, insert string, args ...any) (domain.Library, error) {
+func (s *Store) addLibrary(ctx context.Context, l domain.Library) (domain.Library, error) {
+	subtitles := make([]string, len(l.SubtitleLanguages))
+	for i, t := range l.SubtitleLanguages {
+		subtitles[i] = t.String()
+	}
 	var row model.Library
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		row, err = readRow[model.Library](ctx, tx, insert, args...)
+		row, err = readRow[model.Library](ctx, tx, `
+			INSERT INTO libraries (name, kind, media, root, list_source, list_id, discover_source, stream_source, monitor,
+				refresh_days, previews, markers, keyframes, themes, deletion, missing_versions, artwork_language, title_language,
+				box_sets, subtitle_languages, subtitle_match)
+			VALUES ($1, $2, $3, nullif($4, ''), nullif($5, ''), nullif($6, ''), nullif($7, ''), nullif($8, ''), $9,
+				$10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			RETURNING `+libraryColumns,
+			l.Name, l.Kind, l.Media, l.Root, l.ListSource, l.ListID, l.DiscoverSource, l.StreamSource, l.Monitor,
+			l.RefreshDays, l.Previews, l.Markers, l.Keyframes, l.Themes, l.Deletion, l.MissingVersions, l.Locale.Artwork, l.Titles,
+			l.BoxSets, subtitles, l.SubtitleMatch)
 		if err != nil {
 			return err
 		}
-		if err := saveSources(ctx, tx, row.ID, domain.DefaultSources(kind)); err != nil {
+		if err := saveSources(ctx, tx, row.ID, l.Sources); err != nil {
 			return err
 		}
-		return saveRemoteExtras(ctx, tx, row.ID, domain.DefaultRemoteExtras())
+		return saveRemoteExtras(ctx, tx, row.ID, l.RemoteExtras)
 	})
 	if violates(err, uniqueViolation) {
 		return domain.Library{}, ErrLibraryExists
@@ -86,7 +97,7 @@ func (s *Store) addLibrary(ctx context.Context, kind domain.LibraryKind, insert 
 	if err != nil {
 		return domain.Library{}, fmt.Errorf("adding library: %w", err)
 	}
-	return library(row, domain.DefaultSources(kind), domain.DefaultRemoteExtras()), nil
+	return library(row, l.Sources, l.RemoteExtras), nil
 }
 
 func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
