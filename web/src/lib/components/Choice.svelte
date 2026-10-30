@@ -1,5 +1,5 @@
 <script lang="ts" generics="T extends string">
-import * as Select from "#lib/components/ui/select/index.js";
+import * as Select from "#lib/components/ui/select/index.ts";
 
 // One of a few answers, sent with its form by `name` where it has one, and
 // named by its label followed by the answer shown, as a native select reads.

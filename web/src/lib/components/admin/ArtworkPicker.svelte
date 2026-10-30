@@ -1,12 +1,12 @@
 <script lang="ts">
 import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
-import { artworkURL } from "#lib/artwork.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Tabs from "#lib/components/ui/tabs/index.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { artworkURL } from "#lib/artwork.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Tabs from "#lib/components/ui/tabs/index.ts";
 
 const api = client();
 

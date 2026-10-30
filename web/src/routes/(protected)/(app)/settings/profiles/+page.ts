@@ -1,5 +1,5 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
 import type { PageLoad } from "./$types";
 
 // An admin sees every profile; a manager, the ones it keeps.

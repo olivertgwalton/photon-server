@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { bitrate, bytes, language, runtime, timecode } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import type { components } from "#lib/api/schema.d.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { bitrate, bytes, language, runtime, timecode } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 type Version = components["schemas"]["VersionPage"];
 type Stream = components["schemas"]["StreamPage"];

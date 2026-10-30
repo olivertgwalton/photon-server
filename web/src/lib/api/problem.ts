@@ -1,4 +1,4 @@
-import type { components } from "./schema.js";
+import type { components } from "./schema.d.ts";
 
 type Problem = components["schemas"]["Problem"];
 

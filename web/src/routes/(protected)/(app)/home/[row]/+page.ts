@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
-import { loadRow } from "#lib/home.js";
-import { isHomeRow, rowPages } from "#lib/rows.js";
+import { loadRow } from "#lib/home.ts";
+import { isHomeRow, rowPages } from "#lib/rows.ts";
 import type { PageLoad } from "./$types";
 
 // One home row, a page at a time.

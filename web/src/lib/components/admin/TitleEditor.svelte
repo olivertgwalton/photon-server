@@ -1,14 +1,14 @@
 <script lang="ts">
-import { matchable } from "#lib/admin/edit.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
+import { matchable } from "#lib/admin/edit.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
 import TitleLocale from "#lib/components/admin/TitleLocale.svelte";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Tabs from "#lib/components/ui/tabs/index.js";
-import { type EditorTab, getShell } from "#lib/shell.svelte.js";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import * as Tabs from "#lib/components/ui/tabs/index.ts";
+import { type EditorTab, getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 

@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { toast } from "svelte-sonner";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
 
 // A secret the server answers once, when it is made: shown to be copied, and
 // never again. It is open while `value` is set.

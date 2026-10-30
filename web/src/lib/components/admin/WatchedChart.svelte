@@ -1,7 +1,7 @@
 <script lang="ts">
-import type { Bucket } from "#lib/admin/statistics.js";
-import * as Tooltip from "#lib/components/ui/tooltip/index.js";
-import { count, runtime } from "#lib/format.js";
+import type { Bucket } from "#lib/admin/statistics.ts";
+import * as Tooltip from "#lib/components/ui/tooltip/index.ts";
+import { count, runtime } from "#lib/format.ts";
 
 // How long was watched in each column's day or week, as columns from one
 // baseline: one series, so the card's title names it and no legend repeats it.

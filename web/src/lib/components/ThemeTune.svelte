@@ -1,7 +1,7 @@
 <script lang="ts">
 import VolumeXIcon from "@lucide/svelte/icons/volume-x";
 import type { Attachment } from "svelte/attachments";
-import { Button } from "#lib/components/ui/button/index.js";
+import { Button } from "#lib/components/ui/button/index.ts";
 
 // A title's theme tunes, played once under its page, one after another, as
 // Jellyfin's web client plays theme songs. Leaving the page takes the element

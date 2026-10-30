@@ -1,7 +1,7 @@
 <script lang="ts">
-import { client } from "#lib/api/client.js";
+import { client } from "#lib/api/client.ts";
 import Wall from "#lib/components/Wall.svelte";
-import { wallPageSize } from "#lib/wall.js";
+import { wallPageSize } from "#lib/wall.ts";
 
 let { data } = $props();
 

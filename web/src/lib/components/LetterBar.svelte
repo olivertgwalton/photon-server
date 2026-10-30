@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 
 // The jump bar beside a wall in title order: a letter with nothing under it
 // is drawn, so the bar does not move, and cannot be chosen.

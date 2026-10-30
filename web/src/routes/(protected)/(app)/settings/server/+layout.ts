@@ -1,4 +1,4 @@
-import { client, need } from "#lib/api/client.js";
+import { client, need } from "#lib/api/client.ts";
 import type { LayoutLoad } from "./$types";
 
 // The server as an admin sees it, and its nodes. The API refuses anyone else, so a member who

@@ -1,6 +1,6 @@
 <script lang="ts">
-import { relative, when } from "#lib/admin/words.js";
-import type { components } from "#lib/api/schema.js";
+import { relative, when } from "#lib/admin/words.ts";
+import type { components } from "#lib/api/schema.d.ts";
 
 type Event = components["schemas"]["Event"];
 

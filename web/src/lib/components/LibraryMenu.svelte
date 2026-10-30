@@ -5,10 +5,10 @@ import FolderSyncIcon from "@lucide/svelte/icons/folder-sync";
 import PencilIcon from "@lucide/svelte/icons/pencil";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import TrashIcon from "@lucide/svelte/icons/trash";
-import { scanLibrary } from "#lib/actions.js";
-import type { components } from "#lib/api/schema.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { scanLibrary } from "#lib/actions.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

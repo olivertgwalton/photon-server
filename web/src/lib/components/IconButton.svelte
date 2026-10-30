@@ -1,8 +1,8 @@
 <script lang="ts">
 import { mergeProps } from "bits-ui";
 import type { Component } from "svelte";
-import { Button, type ButtonProps } from "#lib/components/ui/button/index.js";
-import * as Tooltip from "#lib/components/ui/tooltip/index.js";
+import { Button, type ButtonProps } from "#lib/components/ui/button/index.ts";
+import * as Tooltip from "#lib/components/ui/tooltip/index.ts";
 
 // A button shown as its icon, named by a tooltip; the props of a dialog's or
 // popover's trigger may be spread on it. A busy one spins its icon.

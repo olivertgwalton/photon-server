@@ -1,5 +1,5 @@
-import type { components } from "./api/schema.js";
-import type { Row } from "./rows.js";
+import type { components } from "./api/schema.d.ts";
+import type { Row } from "./rows.ts";
 
 type Card = components["schemas"]["Card"];
 

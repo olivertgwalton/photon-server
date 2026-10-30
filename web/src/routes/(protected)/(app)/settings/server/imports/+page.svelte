@@ -1,19 +1,19 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { byName, when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { byName, when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, textAsTyped } from "#lib/form.js";
-import { pollWhile, progressEvery } from "#lib/poll.svelte.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, textAsTyped } from "#lib/form.ts";
+import { pollWhile, progressEvery } from "#lib/poll.svelte.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { refreshAll } from "$app/navigation";
 
 type Source = components["schemas"]["ImportSource"];

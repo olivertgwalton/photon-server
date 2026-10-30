@@ -1,5 +1,5 @@
 <script lang="ts" module>
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 
 type Card = components["schemas"]["Card"];
 // A card names its title; everything else it shows is what it has.
@@ -9,12 +9,12 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import PlayIcon from "@lucide/svelte/icons/play";
-import type { Shape } from "#lib/artwork.js";
-import { blurStyle } from "#lib/blurhash.js";
+import type { Shape } from "#lib/artwork.ts";
+import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
-import { Progress } from "#lib/components/ui/progress/index.js";
-import { showLine } from "#lib/format.js";
-import { hidesSpoiler } from "#lib/spoilers.js";
+import { Progress } from "#lib/components/ui/progress/index.ts";
+import { showLine } from "#lib/format.ts";
+import { hidesSpoiler } from "#lib/spoilers.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
 // A title on a wall or a rail: a poster, or for an episode or a row about

@@ -1,15 +1,15 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
-import { act } from "#lib/act.js";
-import { when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { leaveFor, refusalMessage } from "#lib/signin.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { leaveFor, refusalMessage } from "#lib/signin.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { components } from "./api/schema.js";
+import type { components } from "./api/schema.d.ts";
 import { showcasePool } from "./showcase.ts";
 
 type Card = components["schemas"]["Card"];

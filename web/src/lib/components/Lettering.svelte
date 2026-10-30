@@ -1,6 +1,6 @@
 <script lang="ts">
 import Artwork from "#lib/components/Artwork.svelte";
-import { inkOf, letteringHeight } from "#lib/lettering.js";
+import { inkOf, letteringHeight } from "#lib/lettering.ts";
 
 // A title's lettering, as the apps draw it: its ink alone, cut from the clear
 // margins a logo is often set on so it lines up with the words beside it, and

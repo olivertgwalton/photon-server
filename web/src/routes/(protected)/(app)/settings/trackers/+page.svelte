@@ -1,18 +1,18 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { Clock } from "#lib/admin/clock.js";
-import { when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { keys } from "#lib/changes.js";
+import { act } from "#lib/act.ts";
+import { Clock } from "#lib/admin/clock.ts";
+import { when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { keys } from "#lib/changes.ts";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, text } from "#lib/form.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, text } from "#lib/form.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { invalidate } from "$app/navigation";
 
 type Tracker = components["schemas"]["Tracker"];

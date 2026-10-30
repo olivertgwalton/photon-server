@@ -1,16 +1,16 @@
 <script lang="ts">
 import { untrack } from "svelte";
 import { toast } from "svelte-sonner";
-import { accessOf } from "#lib/admin/access.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { accessOf } from "#lib/admin/access.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, text } from "#lib/form.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, text } from "#lib/form.ts";
 import { refreshAll } from "$app/navigation";
 
 type Provider = components["schemas"]["AdminSignInProvider"];

@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
-import { client, need } from "#lib/api/client.js";
-import { LOGIN } from "#lib/session.js";
+import { client, need } from "#lib/api/client.ts";
+import { LOGIN } from "#lib/session.ts";
 import type { PageLoad } from "./$types";
 
 // The server says whether it is still to be set up, and by whom; a server set

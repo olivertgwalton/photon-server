@@ -1,7 +1,7 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { onDisk } from "#lib/format.js";
+import { onDisk } from "#lib/format.ts";
 
 type Version = components["schemas"]["VersionPage"];
 

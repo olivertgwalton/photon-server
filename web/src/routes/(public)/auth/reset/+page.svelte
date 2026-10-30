@@ -1,14 +1,14 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
-import { LOGIN } from "#lib/session.js";
-import { attempt } from "#lib/signin.js";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields } from "#lib/form.ts";
+import { LOGIN } from "#lib/session.ts";
+import { attempt } from "#lib/signin.ts";
 import { goto } from "$app/navigation";
 
 type Asked = components["schemas"]["ResetStart"];

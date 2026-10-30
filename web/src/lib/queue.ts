@@ -1,4 +1,4 @@
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import { goto } from "$app/navigation";
 
 type Card = components["schemas"]["Card"];

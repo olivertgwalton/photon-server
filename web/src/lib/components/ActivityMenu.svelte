@@ -1,14 +1,14 @@
 <script lang="ts">
 import ActivityIcon from "@lucide/svelte/icons/activity";
-import { Clock } from "#lib/admin/clock.js";
-import { positionAt } from "#lib/admin/live.js";
-import { liveStream } from "#lib/admin/stream.svelte.js";
-import { byName } from "#lib/admin/words.js";
-import type { components } from "#lib/api/schema.js";
+import { Clock } from "#lib/admin/clock.ts";
+import { positionAt } from "#lib/admin/live.ts";
+import { liveStream } from "#lib/admin/stream.svelte.ts";
+import { byName } from "#lib/admin/words.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import RunningNow from "#lib/components/admin/RunningNow.svelte";
-import * as Popover from "#lib/components/ui/popover/index.js";
-import { Progress } from "#lib/components/ui/progress/index.js";
-import { fullTitle } from "#lib/format.js";
+import * as Popover from "#lib/components/ui/popover/index.ts";
+import { Progress } from "#lib/components/ui/progress/index.ts";
+import { fullTitle } from "#lib/format.ts";
 
 // What the server is doing, beside the profile, as Plex's activity panel is:
 // drawn only while something plays or runs.

@@ -1,4 +1,4 @@
-import type { client } from "#lib/api/client.js";
+import type { client } from "#lib/api/client.ts";
 
 // A season's episodes, as cards.
 export async function episodesOf(

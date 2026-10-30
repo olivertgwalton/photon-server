@@ -1,9 +1,9 @@
 <script lang="ts">
-import { blurStyle } from "#lib/blurhash.js";
+import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
-import { wallSearch } from "#lib/wall.js";
+import { wallSearch } from "#lib/wall.ts";
 
 let { data } = $props();
 

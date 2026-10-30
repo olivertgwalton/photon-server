@@ -1,11 +1,11 @@
 <script lang="ts">
 import type { Attachment } from "svelte/attachments";
 import { innerHeight } from "svelte/reactivity/window";
-import type { components } from "#lib/api/schema.js";
-import { cardMin } from "#lib/cardsize.svelte.js";
-import { columnGap, columnsFor, gridColumns } from "#lib/grid.js";
-import { onResize } from "#lib/size.js";
-import type { ViewStyle } from "#lib/wall.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { cardMin } from "#lib/cardsize.svelte.ts";
+import { columnGap, columnsFor, gridColumns } from "#lib/grid.ts";
+import { onResize } from "#lib/size.ts";
+import type { ViewStyle } from "#lib/wall.ts";
 import TitleCard from "./TitleCard.svelte";
 import TitleRow from "./TitleRow.svelte";
 

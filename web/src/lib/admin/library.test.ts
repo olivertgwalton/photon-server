@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import { libraryChange, offeredSources } from "./library";
 
 type Schemas = components["schemas"];

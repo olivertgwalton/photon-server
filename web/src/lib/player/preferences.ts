@@ -1,4 +1,4 @@
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 
 type Schemas = components["schemas"];
 export type Preferences = Schemas["Preferences"];

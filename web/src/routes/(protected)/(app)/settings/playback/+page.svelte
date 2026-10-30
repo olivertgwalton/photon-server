@@ -1,14 +1,14 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Switch } from "#lib/components/ui/switch/index.js";
-import { bitrate, localeOptions } from "#lib/format.js";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Switch } from "#lib/components/ui/switch/index.ts";
+import { bitrate, localeOptions } from "#lib/format.ts";
 import {
 	type Appearance,
 	backings,
@@ -16,9 +16,9 @@ import {
 	keepAppearance,
 	keptAppearance,
 	sizes,
-} from "#lib/player/appearance.js";
-import type { PreferencesChange } from "#lib/player/preferences.js";
-import { qualities } from "#lib/player/words.js";
+} from "#lib/player/appearance.ts";
+import type { PreferencesChange } from "#lib/player/preferences.ts";
+import { qualities } from "#lib/player/words.ts";
 
 type Schemas = components["schemas"];
 

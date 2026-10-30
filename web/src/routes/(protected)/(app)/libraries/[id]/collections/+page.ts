@@ -1,5 +1,5 @@
-import { client, need } from "#lib/api/client.js";
-import { wallPageSize } from "#lib/wall.js";
+import { client, need } from "#lib/api/client.ts";
+import { wallPageSize } from "#lib/wall.ts";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, params }) => ({

@@ -1,5 +1,5 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
 import type { PageLoad } from "./$types";
 
 // Every favourite the server will list at once: its home row at its longest.

@@ -1,6 +1,6 @@
 <script lang="ts">
-import { Button } from "#lib/components/ui/button/index.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 // A button for something that cannot be undone, which asks first.
 let {

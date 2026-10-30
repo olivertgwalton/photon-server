@@ -2,16 +2,16 @@
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import XIcon from "@lucide/svelte/icons/x";
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { moved } from "#lib/rows.js";
-import { ruleQuery, wallSearch } from "#lib/wall.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { moved } from "#lib/rows.ts";
+import { ruleQuery, wallSearch } from "#lib/wall.ts";
 
 const api = client();
 

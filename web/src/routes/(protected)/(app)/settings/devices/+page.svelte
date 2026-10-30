@@ -1,11 +1,11 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { logOut } from "#lib/logout.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { logOut } from "#lib/logout.ts";
 
 let { data } = $props();
 

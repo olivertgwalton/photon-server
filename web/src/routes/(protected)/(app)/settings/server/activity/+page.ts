@@ -1,6 +1,6 @@
-import { client, need } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { afterOf, pageSize } from "#lib/paging.js";
+import { client, need } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { afterOf, pageSize } from "#lib/paging.ts";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, url, parent }) => {

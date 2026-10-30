@@ -1,13 +1,13 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import SignInProviderForm from "#lib/components/admin/SignInProviderForm.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
 
 let { data } = $props();
 let adding = $state(false);

@@ -1,10 +1,10 @@
 import { error, isHttpError, isRedirect, redirect } from "@sveltejs/kit";
 import createClient from "openapi-fetch";
-import { loginPath } from "#lib/session.js";
+import { loginPath } from "#lib/session.ts";
 import { goto } from "$app/navigation";
 import { navigating } from "$app/state";
-import { problemMessage } from "./problem.js";
-import type { paths } from "./schema.js";
+import { problemMessage } from "./problem.ts";
+import type { paths } from "./schema.d.ts";
 
 // The API, on this origin, as the browser's session: the server keeps it in a
 // cookie the page's script never sees. A load passes its own `fetch`.

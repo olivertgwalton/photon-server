@@ -1,5 +1,5 @@
 <script lang="ts" module>
-import { client } from "#lib/api/client.js";
+import { client } from "#lib/api/client.ts";
 
 type Rating = components["schemas"]["RatingRef"];
 type Lent = { genres: string[]; ratings: Rating[] };
@@ -25,14 +25,14 @@ function lentBy(id: string): Promise<Lent> {
 <script lang="ts">
 import InfoIcon from "@lucide/svelte/icons/info";
 import PlayIcon from "@lucide/svelte/icons/play";
-import type { components } from "#lib/api/schema.js";
-import { blurStyle, tintColour } from "#lib/blurhash.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import Lettering from "#lib/components/Lettering.svelte";
 import Prose from "#lib/components/Prose.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
 import {
 	episodeLabel,
 	lentRatings,
@@ -40,7 +40,7 @@ import {
 	resumeLabel,
 	runtime,
 	titleWithShow,
-} from "#lib/format.js";
+} from "#lib/format.ts";
 
 // One title of Home's showcase, as the apps' column draws it over its
 // backdrop: the lettering, what the title is (an episode by its place, then

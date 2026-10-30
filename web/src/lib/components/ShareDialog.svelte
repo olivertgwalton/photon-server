@@ -1,7 +1,7 @@
 <script lang="ts">
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { getShell } from "#lib/shell.svelte.js";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 </script>

@@ -1,9 +1,9 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { Checkbox } from "#lib/components/ui/checkbox/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Switch } from "#lib/components/ui/switch/index.js";
+import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Switch } from "#lib/components/ui/switch/index.ts";
 
 let {
 	access,

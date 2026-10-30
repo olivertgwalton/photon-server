@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
-import { client } from "#lib/api/client.js";
-import { returnPath, SETUP } from "#lib/session.js";
+import { client } from "#lib/api/client.ts";
+import { returnPath, SETUP } from "#lib/session.ts";
 import type { PageLoad } from "./$types";
 
 // A reader already signed in goes on, and one reaching a server still to be

@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
-import { Progress } from "#lib/components/ui/progress/index.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { Progress } from "#lib/components/ui/progress/index.ts";
 
 // A library's scan as it goes. The walk counts folders as it finds them, so
 // the bar's end moves out while it fills.

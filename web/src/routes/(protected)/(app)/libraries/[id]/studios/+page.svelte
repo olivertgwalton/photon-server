@@ -1,5 +1,5 @@
 <script lang="ts">
-import { wallSearch } from "#lib/wall.js";
+import { wallSearch } from "#lib/wall.ts";
 
 let { data } = $props();
 

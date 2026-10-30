@@ -1,10 +1,10 @@
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import type { Snippet } from "svelte";
-import type { components } from "#lib/api/schema.js";
-import { blurStyle } from "#lib/blurhash.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
-import { runtime, showLine } from "#lib/format.js";
+import { runtime, showLine } from "#lib/format.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
 type Card = components["schemas"]["Card"];

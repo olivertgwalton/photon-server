@@ -1,4 +1,4 @@
-import { withQuery } from "#lib/address.js";
+import { withQuery } from "#lib/address.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

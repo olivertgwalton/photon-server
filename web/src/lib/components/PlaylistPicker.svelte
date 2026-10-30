@@ -1,14 +1,14 @@
 <script lang="ts">
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
-import { addToPlaylist, newPlaylist } from "#lib/actions.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, text } from "#lib/form.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { addToPlaylist, newPlaylist } from "#lib/actions.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, text } from "#lib/form.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 

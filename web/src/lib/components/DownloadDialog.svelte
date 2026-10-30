@@ -1,12 +1,12 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { fields } from "#lib/form.js";
-import { bitrate, runtime } from "#lib/format.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { fields } from "#lib/form.ts";
+import { bitrate, runtime } from "#lib/format.ts";
 
 // Asks the server for a copy to keep, as Plex's Download asks: the file as it
 // is, or converted down to a size for a phone or a slow connection. A version

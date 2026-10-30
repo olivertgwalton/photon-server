@@ -1,4 +1,4 @@
-import type { components, paths } from "./api/schema.js";
+import type { components, paths } from "./api/schema.d.ts";
 
 type Schemas = components["schemas"];
 

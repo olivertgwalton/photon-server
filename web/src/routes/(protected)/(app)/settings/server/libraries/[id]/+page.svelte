@@ -1,15 +1,15 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { scanLibrary } from "#lib/actions.js";
-import { libraryChange } from "#lib/admin/library.js";
-import { liveStream } from "#lib/admin/stream.svelte.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { scanLibrary } from "#lib/actions.ts";
+import { libraryChange } from "#lib/admin/library.ts";
+import { liveStream } from "#lib/admin/stream.svelte.ts";
+import { client } from "#lib/api/client.ts";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
 import ScanProgress from "#lib/components/admin/ScanProgress.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { fields } from "#lib/form.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { fields } from "#lib/form.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 import { page } from "$app/state";
 
 let { data } = $props();

@@ -1,15 +1,15 @@
 <script lang="ts">
 import { toast } from "svelte-sonner";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields } from "#lib/form.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { refreshAll } from "$app/navigation";
 
 let { data } = $props();

@@ -3,11 +3,11 @@ import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
 import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
 import FolderCheckIcon from "@lucide/svelte/icons/folder-check";
 import LoaderCircleIcon from "@lucide/svelte/icons/loader-circle";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import IconButton from "#lib/components/IconButton.svelte";
-import * as Popover from "#lib/components/ui/popover/index.js";
+import * as Popover from "#lib/components/ui/popover/index.ts";
 
 type Check = components["schemas"]["LibraryCheck"];
 type Access = components["schemas"]["RootAccess"];

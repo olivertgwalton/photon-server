@@ -1,4 +1,4 @@
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 
 // What a form holding AccessFields lets a profile see. No library ticked is
 // every library, as the server reads it.

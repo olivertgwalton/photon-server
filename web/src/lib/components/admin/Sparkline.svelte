@@ -1,5 +1,5 @@
 <script lang="ts">
-import { keepFor, sparkPath } from "#lib/admin/metrics.js";
+import { keepFor, sparkPath } from "#lib/admin/metrics.ts";
 
 // A reading over the last few minutes to its latest, without axes: the value
 // beside it says how much.

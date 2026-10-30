@@ -1,15 +1,15 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, textAsTyped } from "#lib/form.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, textAsTyped } from "#lib/form.ts";
 
 let { data } = $props();
 

@@ -1,8 +1,8 @@
 import { toast } from "svelte-sonner";
-import { act } from "./act.js";
-import { client } from "./api/client.js";
-import { problemMessage } from "./api/problem.js";
-import type { components } from "./api/schema.js";
+import { act } from "./act.ts";
+import { client } from "./api/client.ts";
+import { problemMessage } from "./api/problem.ts";
+import type { components } from "./api/schema.d.ts";
 
 type RefreshMode = components["schemas"]["RefreshMode"];
 type TaskKey = components["schemas"]["TaskKey"];

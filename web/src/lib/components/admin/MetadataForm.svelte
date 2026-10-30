@@ -2,16 +2,16 @@
 import LockIcon from "@lucide/svelte/icons/lock";
 import LockOpenIcon from "@lucide/svelte/icons/lock-open";
 import { SvelteSet } from "svelte/reactivity";
-import { act } from "#lib/act.js";
-import { editOf, fieldsOf } from "#lib/admin/edit.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { Textarea } from "#lib/components/ui/textarea/index.js";
-import { fields as formFields } from "#lib/form.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { act } from "#lib/act.ts";
+import { editOf, fieldsOf } from "#lib/admin/edit.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { Textarea } from "#lib/components/ui/textarea/index.ts";
+import { fields as formFields } from "#lib/form.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const api = client();
 

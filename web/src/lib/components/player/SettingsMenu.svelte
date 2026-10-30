@@ -1,13 +1,13 @@
 <script lang="ts">
 import InfoIcon from "@lucide/svelte/icons/info";
 import SettingsIcon from "@lucide/svelte/icons/settings";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
-import { bitrate, timecode } from "#lib/format.js";
-import type { SubtitleDrawing } from "#lib/player/drawing.svelte.js";
-import type { Choice } from "#lib/player/subtitles.js";
-import { type Fit, fits, qualities, speeds } from "#lib/player/words.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Menu from "#lib/components/ui/dropdown-menu/index.ts";
+import { bitrate, timecode } from "#lib/format.ts";
+import type { SubtitleDrawing } from "#lib/player/drawing.svelte.ts";
+import type { Choice } from "#lib/player/subtitles.ts";
+import { type Fit, fits, qualities, speeds } from "#lib/player/words.ts";
 
 // The player's settings: the tracks, the subtitle's timing, the quality, the
 // speed and the picture, its chapters, and how it is playing.

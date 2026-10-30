@@ -1,5 +1,5 @@
-import { client, need } from "#lib/api/client.js";
-import { returnPath } from "#lib/session.js";
+import { client, need } from "#lib/api/client.ts";
+import { returnPath } from "#lib/session.ts";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, parent, url }) => {

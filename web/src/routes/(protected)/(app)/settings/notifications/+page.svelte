@@ -1,16 +1,16 @@
 <script lang="ts">
 import BellOffIcon from "@lucide/svelte/icons/bell-off";
 import { toast } from "svelte-sonner";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import * as Alert from "#lib/components/ui/alert/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { Checkbox } from "#lib/components/ui/checkbox/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Switch } from "#lib/components/ui/switch/index.js";
+import * as Alert from "#lib/components/ui/alert/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Switch } from "#lib/components/ui/switch/index.ts";
 
 type Notify = components["schemas"]["Notify"];
 

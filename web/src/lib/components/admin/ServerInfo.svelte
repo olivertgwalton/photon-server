@@ -5,12 +5,12 @@ import {
 	relative,
 	transcodeLoad,
 	when,
-} from "#lib/admin/words.js";
-import type { components } from "#lib/api/schema.js";
+} from "#lib/admin/words.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import NodeActions from "#lib/components/admin/NodeActions.svelte";
-import * as Table from "#lib/components/ui/table/index.js";
-import { bitrate, bytes } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import * as Table from "#lib/components/ui/table/index.ts";
+import { bitrate, bytes } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 // How the server is set up, read-only but for what each node does, and its nodes.
 let {

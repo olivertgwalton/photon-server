@@ -2,7 +2,7 @@
 import CardGrid from "#lib/components/CardGrid.svelte";
 import ExtraCard from "#lib/components/ExtraCard.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
-import type { Extra } from "#lib/extras.js";
+import type { Extra } from "#lib/extras.ts";
 
 let { data } = $props();
 

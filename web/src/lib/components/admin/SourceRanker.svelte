@@ -2,12 +2,12 @@
 import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
 import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
-import type { components } from "#lib/api/schema.js";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import { Checkbox } from "#lib/components/ui/checkbox/index.js";
-import { reorder } from "#lib/reorder.svelte.js";
-import { moved } from "#lib/rows.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
+import { reorder } from "#lib/reorder.svelte.ts";
+import { moved } from "#lib/rows.ts";
 
 // A built-in's name or plugin:<slug>.
 type Source = components["schemas"]["FieldSource"];

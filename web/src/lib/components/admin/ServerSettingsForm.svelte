@@ -1,13 +1,13 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, textAsTyped } from "#lib/form.js";
-import { country, localeOptions } from "#lib/format.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, textAsTyped } from "#lib/form.ts";
+import { country, localeOptions } from "#lib/format.ts";
 
 type Schemas = components["schemas"];
 type ReleaseCheck = Schemas["ReleaseCheck"];

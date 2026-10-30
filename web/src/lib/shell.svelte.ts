@@ -7,11 +7,11 @@ import {
 	type RefreshOf,
 	removeLibrary,
 	splitTitle,
-} from "./actions.js";
-import { client } from "./api/client.js";
-import { problemMessage } from "./api/problem.js";
-import type { components } from "./api/schema.js";
-import { playHref } from "./format.js";
+} from "./actions.ts";
+import { client } from "./api/client.ts";
+import { problemMessage } from "./api/problem.ts";
+import type { components } from "./api/schema.d.ts";
+import { playHref } from "./format.ts";
 
 export type MenuCard = Pick<
 	components["schemas"]["Card"],

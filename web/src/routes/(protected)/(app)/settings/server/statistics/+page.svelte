@@ -1,13 +1,13 @@
 <script lang="ts">
-import { narrow } from "#lib/admin/narrow.js";
-import { buckets } from "#lib/admin/statistics.js";
+import { narrow } from "#lib/admin/narrow.ts";
+import { buckets } from "#lib/admin/statistics.ts";
 import WatchedChart from "#lib/components/admin/WatchedChart.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import * as Card from "#lib/components/ui/card/index.js";
-import { Label } from "#lib/components/ui/label/index.js";
-import * as Table from "#lib/components/ui/table/index.js";
-import { count, fullTitle, runtime } from "#lib/format.js";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { Label } from "#lib/components/ui/label/index.ts";
+import * as Table from "#lib/components/ui/table/index.ts";
+import { count, fullTitle, runtime } from "#lib/format.ts";
 
 let { data } = $props();
 

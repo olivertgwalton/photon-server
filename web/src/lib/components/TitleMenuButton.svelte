@@ -1,9 +1,9 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import type { Attachment } from "svelte/attachments";
-import { titleWithShow } from "#lib/format.js";
-import { getShell, type MenuCard } from "#lib/shell.svelte.js";
-import { cn } from "#lib/utils.js";
+import { titleWithShow } from "#lib/format.ts";
+import { getShell, type MenuCard } from "#lib/shell.svelte.ts";
+import { cn } from "#lib/utils.ts";
 
 // Opens the shell's one title menu beside it.
 let { card, class: className }: { card: MenuCard; class?: string } = $props();

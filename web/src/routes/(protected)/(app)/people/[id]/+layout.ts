@@ -1,6 +1,6 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
-import { workOf } from "#lib/credits.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
+import { workOf } from "#lib/credits.ts";
 import type { LayoutLoad } from "./$types";
 
 // A person, for their page and each craft's own page, loaded once.

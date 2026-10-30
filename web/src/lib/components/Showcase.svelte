@@ -1,9 +1,9 @@
 <script lang="ts">
 import { prefersReducedMotion } from "svelte/motion";
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import ShowcaseSlide from "#lib/components/ShowcaseSlide.svelte";
-import type { CarouselAPI } from "#lib/components/ui/carousel/context.js";
-import * as Carousel from "#lib/components/ui/carousel/index.js";
+import type { CarouselAPI } from "#lib/components/ui/carousel/context.ts";
+import * as Carousel from "#lib/components/ui/carousel/index.ts";
 
 // Home's showcase: the title the reader rested on, or a row they chose, which
 // slides through itself, as the apps' carousel turns, a few seconds after
