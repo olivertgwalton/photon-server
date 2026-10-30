@@ -270,3 +270,19 @@ test("a browser refused notifications says so at once", async ({ page }) => {
 	).toBeVisible();
 	await expect(push).toBeDisabled();
 });
+
+test("a read the server refuses leaves the inbox unread", async ({ page }) => {
+	await logIn(page);
+	await page.route("**/api/v1/profile/notifications/read", (route) =>
+		route.fulfill({
+			status: 503,
+			json: { code: "unavailable", message: "Try again." },
+		}),
+	);
+	await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+	const inbox = page.getByRole("dialog", { name: "Notifications" });
+	await inbox.getByRole("button", { name: "Mark all read" }).click();
+	await expect(
+		page.getByRole("button", { name: "Notifications: 1 unread" }),
+	).toBeVisible();
+});

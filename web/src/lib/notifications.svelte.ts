@@ -111,12 +111,16 @@ class Inbox {
 		if (error) await this.load();
 	}
 
-	// Everything shown read; one added since stays unread.
-	readAll() {
+	// Everything shown read; one added since stays unread. A read the server
+	// refused is undone by asking it again.
+	async readAll() {
 		const through = this.notifications[0]?.added_at;
 		if (!through) return;
 		this.apply({ change: "read", through, unread: 0 });
-		client().PUT("/api/v1/profile/notifications/read", { body: { through } });
+		const { error } = await client().PUT("/api/v1/profile/notifications/read", {
+			body: { through },
+		});
+		if (error) await this.load();
 	}
 }
 
