@@ -517,6 +517,9 @@ test("a film's page plays the version and tracks chosen", async ({ page }) => {
 		page.getByRole("heading", { level: 1, name: "Quiet Hours" }),
 	).toBeVisible();
 	await expect(page.getByText("Nobody is listening.")).toBeVisible();
+	await expect(
+		page.getByText("Common Sense 14+", { exact: true }),
+	).toBeVisible();
 	const ratings = page.getByRole("list", { name: "Ratings" });
 	await expect(ratings.getByRole("img", { name: "IMDb" })).toBeVisible();
 	await expect(ratings).toContainText("7.8");
