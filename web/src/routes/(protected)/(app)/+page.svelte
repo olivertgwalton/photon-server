@@ -6,9 +6,7 @@ const resting = $state<{ id?: string }>({});
 </script>
 
 <script lang="ts">
-import { SvelteMap } from "svelte/reactivity";
 import { refusal } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
 import Rail from "#lib/components/Rail.svelte";
 import Showcase from "#lib/components/Showcase.svelte";
 import { homeRows } from "#lib/rows.js";
@@ -24,17 +22,20 @@ const pool = $derived(
 		? showcasePool(data.rails, showcase.row)
 		: undefined,
 );
-// Every title on Home as its row answered, for the one the reader rested on.
-const known = new SvelteMap<string, components["schemas"]["Card"]>();
-$effect(() => {
-	for (const r of data.rails)
-		r.cards.then(
-			(p) => {
-				for (const c of p.items) known.set(c.id, c);
-			},
-			() => {},
-		);
-});
+// Every title on Home once each row has answered, for the one the reader
+// rested on: Home asked again is read afresh, so one gone from it is not kept.
+const known = $derived(
+	Promise.allSettled(data.rails.map((r) => r.cards)).then(
+		(answers) =>
+			new Map(
+				answers.flatMap((a) =>
+					a.status === "fulfilled"
+						? a.value.items.map((c) => [c.id, c] as const)
+						: [],
+				),
+			),
+	),
+);
 
 // What the page says in place of its rows once every row has answered: why
 // none could be read, or that none has anything.
@@ -69,7 +70,9 @@ function title(r: (typeof data.rails)[number]) {
 		<svelte:boundary>
 			{@const { cards, turn } = await pool}
 			{@const rested =
-				turn === "rests" && resting.id ? known.get(resting.id) : undefined}
+				turn === "rests" && resting.id
+					? (await known).get(resting.id)
+					: undefined}
 			{#if cards.length}
 				<!-- Curated, the showcase wears the title the reader rests on. -->
 				<Showcase cards={turn === "slides" ? cards : [rested ?? cards[0]]} />
