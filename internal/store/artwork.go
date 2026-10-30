@@ -292,8 +292,8 @@ func (s *Store) UploadArtwork(ctx context.Context, id, picture uuid.UUID, a doma
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO artwork (id, item_id, source, kind, place, position, width, height, blurhash)
-			VALUES ($1, $2, $3, $4, $1::text, 0, $5, $6, $7)`,
-			picture, item.ID, domain.SourceUpload, a.Kind, optional(a.Width), optional(a.Height), optional(a.Blurhash))
+			VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8)`,
+			picture, item.ID, domain.SourceUpload, a.Kind, picture.String(), optional(a.Width), optional(a.Height), optional(a.Blurhash))
 		return err
 	})
 }
