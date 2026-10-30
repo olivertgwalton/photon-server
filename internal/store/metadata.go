@@ -1,7 +1,6 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -78,20 +77,36 @@ func (f *fields) apply(ctx context.Context, tx db, source domain.FieldSource, m 
 	var assigns []string
 	args := []any{f.item}
 	var written []domain.Field
-	// A field is named as the column it is written to.
-	set := func(name domain.Field, said bool, value any) {
+	assign := func(name domain.Field, value any) {
+		args = append(args, value)
+		assigns = append(assigns, fmt.Sprintf("%s = $%d", name, len(args)))
+	}
+	outranks := func(name domain.Field) bool {
 		from, ok := f.sources[name]
-		if (said || slices.Contains(m.Locked, name)) && (!ok || rank >= f.ranked[from]) {
-			if said {
-				args = append(args, value)
-				assigns = append(assigns, fmt.Sprintf("%s = $%d", name, len(args)))
-			}
-			written = append(written, name)
+		return !ok || rank >= f.ranked[from]
+	}
+	// A field is named as the column it is written to. set answers whether it wrote a value.
+	set := func(name domain.Field, said bool, value any) bool {
+		if !said && !slices.Contains(m.Locked, name) || !outranks(name) {
+			return false
+		}
+		if said {
+			assign(name, value)
+		}
+		written = append(written, name)
+		return said
+	}
+	wroteTitle := set(domain.FieldTitle, m.Title != "", m.Title)
+	if m.SortTitle != "" || slices.Contains(m.Locked, domain.FieldSortTitle) {
+		set(domain.FieldSortTitle, m.SortTitle != "", sortTitle(m.SortTitle))
+	} else if wroteTitle && outranks(domain.FieldSortTitle) {
+		// A sort title read off the title goes with it. An admin who edits the title locks the title
+		// alone, so the sort title stays its source's, and goes back with the title once reset.
+		assign(domain.FieldSortTitle, sortTitle(m.Title))
+		if source != domain.SourceUser {
+			written = append(written, domain.FieldSortTitle)
 		}
 	}
-	set(domain.FieldTitle, m.Title != "", m.Title)
-	sort := cmp.Or(m.SortTitle, m.Title)
-	set(domain.FieldSortTitle, sort != "", sortTitle(sort))
 	set(domain.FieldOriginalTitle, m.OriginalTitle != "", m.OriginalTitle)
 	set(domain.FieldOverview, m.Overview != "", m.Overview)
 	set(domain.FieldTagline, m.Tagline != "", m.Tagline)
