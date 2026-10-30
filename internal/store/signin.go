@@ -23,12 +23,12 @@ var (
 )
 
 const signInProviderColumns = `slug, name, issuer, client_id, client_secret, provisioning, required_group, recheck,
-	max_age, unrated, array(SELECT l.library_id FROM sign_in_provider_libraries l WHERE l.provider = slug ORDER BY l.library_id)`
+	max_age, unrated, max_common_sense_age, array(SELECT l.library_id FROM sign_in_provider_libraries l WHERE l.provider = slug ORDER BY l.library_id)`
 
 func scanSignInProvider(row pgx.CollectableRow) (domain.SignInProvider, error) {
 	var p domain.SignInProvider
 	err := row.Scan(&p.Slug, &p.Name, &p.Issuer, &p.ClientID, &p.ClientSecret, &p.Provisioning, &p.Group, &p.Recheck,
-		&p.MaxAge, &p.Unrated, &p.Libraries)
+		&p.MaxAge, &p.Unrated, &p.MaxCommonSenseAge, &p.Libraries)
 	return p, err
 }
 
@@ -64,14 +64,15 @@ func (s *Store) SetSignInProvider(ctx context.Context, p domain.SignInProvider) 
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO sign_in_providers (slug, name, issuer, client_id, client_secret, provisioning, required_group,
-				recheck, max_age, unrated)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				recheck, max_age, unrated, max_common_sense_age)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			ON CONFLICT (slug) DO UPDATE SET name = excluded.name, issuer = excluded.issuer,
 				client_id = excluded.client_id, client_secret = excluded.client_secret,
 				provisioning = excluded.provisioning, required_group = excluded.required_group,
-				recheck = excluded.recheck, max_age = excluded.max_age, unrated = excluded.unrated`,
+				recheck = excluded.recheck, max_age = excluded.max_age, unrated = excluded.unrated,
+				max_common_sense_age = excluded.max_common_sense_age`,
 			p.Slug, p.Name, p.Issuer, p.ClientID, p.ClientSecret, p.Provisioning, p.Group, p.Recheck, p.MaxAge,
-			cmp.Or(p.Unrated, domain.UnratedAllow))
+			cmp.Or(p.Unrated, domain.UnratedAllow), p.MaxCommonSenseAge)
 		if err != nil {
 			return err
 		}
@@ -199,8 +200,8 @@ func (s *Store) AddSignInProfile(ctx context.Context, name, provider, subject, u
 			}
 			row.Name = numbered(name, n)
 			err := tx.QueryRow(ctx, `
-				INSERT INTO profiles (name, role, max_age, unrated)
-				SELECT $1, $2, p.max_age, p.unrated FROM sign_in_providers p WHERE p.slug = $3
+				INSERT INTO profiles (name, role, max_age, unrated, max_common_sense_age)
+				SELECT $1, $2, p.max_age, p.unrated, p.max_common_sense_age FROM sign_in_providers p WHERE p.slug = $3
 				ON CONFLICT ((lower(name))) DO NOTHING RETURNING id`, row.Name, row.Role, provider).Scan(&row.ID)
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err

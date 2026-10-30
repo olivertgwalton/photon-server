@@ -531,7 +531,12 @@ export async function admin(
 			provisioning: body.provisioning,
 			group: body.group,
 			recheck: body.recheck ?? "hourly",
-			access: body.access ?? { max_age: null, unrated: "allow", libraries: [] },
+			access: body.access ?? {
+				max_age: null,
+				unrated: "allow",
+				max_common_sense_age: null,
+				libraries: [],
+			},
 			callback_url: `${network.public_url}/api/v1/auth/sign-in-providers/${provider}/callback`,
 		};
 		signInProviders = [
@@ -733,6 +738,7 @@ export async function admin(
 			return json({
 				max_age: 12,
 				unrated: "block",
+				max_common_sense_age: 10,
 				libraries: [],
 			} satisfies Schemas["Access"]);
 		case "PUT /api/v1/admin/profiles/p-kids/access":

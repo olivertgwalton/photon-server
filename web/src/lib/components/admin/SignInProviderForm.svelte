@@ -241,6 +241,7 @@ async function save(event: SubmitEvent) {
 					libraries: [],
 					max_age: null,
 					unrated: "allow",
+					max_common_sense_age: null,
 				}}
 				{libraries}
 			/>

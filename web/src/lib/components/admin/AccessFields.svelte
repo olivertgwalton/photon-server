@@ -30,6 +30,20 @@ const ageOptions = $derived(
 		: [...ages, { value: age, label: `Up to ${age}` }],
 );
 
+// The ages Common Sense Media advises titles for.
+const commonSenseAges = [
+	{ value: "any", label: "Any" },
+	...Array.from({ length: 17 }, (_, i) => i + 2).map((age) => ({
+		value: String(age),
+		label: `Up to ${age}`,
+	})),
+];
+const commonSenseAge = $derived(
+	access.max_common_sense_age == null
+		? "any"
+		: String(access.max_common_sense_age),
+);
+
 let every = $derived(access.libraries.length === 0);
 </script>
 
@@ -75,5 +89,19 @@ let every = $derived(access.libraries.length === 0);
 				{ value: "block", label: "Hidden" },
 			]}
 		/>
+	</Field.Field>
+	<Field.Field>
+		<Field.Label for="{id}-max_common_sense_age"
+			>Common Sense Media age</Field.Label
+		>
+		<Choice
+			id="{id}-max_common_sense_age"
+			name="max_common_sense_age"
+			value={commonSenseAge}
+			options={commonSenseAges}
+		/>
+		<Field.Description>
+			Titles Common Sense Media has no age for are judged by their certificate.
+		</Field.Description>
 	</Field.Field>
 </div>

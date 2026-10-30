@@ -118,7 +118,12 @@ async function add(event: SubmitEvent) {
 						</Field.Field>
 						{#if data.me.role === "admin"}
 							<AccessFields
-								access={{ libraries: [], max_age: null, unrated: "allow" }}
+								access={{
+									libraries: [],
+									max_age: null,
+									unrated: "allow",
+									max_common_sense_age: null,
+								}}
 								libraries={data.libraries}
 							/>
 						{/if}

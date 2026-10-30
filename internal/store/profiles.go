@@ -44,8 +44,8 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 			return ErrBeyondManager
 		}
 		err := tx.QueryRow(ctx, `
-			INSERT INTO profiles (name, role, password_hash, managed_by, max_age, unrated)
-			SELECT $1, $2, $3, m.id, m.max_age, m.unrated FROM profiles m WHERE m.id = $4 RETURNING id`,
+			INSERT INTO profiles (name, role, password_hash, managed_by, max_age, unrated, max_common_sense_age)
+			SELECT $1, $2, $3, m.id, m.max_age, m.unrated, m.max_common_sense_age FROM profiles m WHERE m.id = $4 RETURNING id`,
 			name, role, passwordHash, by).Scan(&row.ID)
 		if err != nil {
 			return found(err)
@@ -397,20 +397,25 @@ func otherAdmin(ctx context.Context, tx db, id uuid.UUID) error {
 }
 
 // ProfileAccess is what a profile may see: titles rated for MaxAge and younger (nil for any), unrated
-// ones as Unrated says where there is an age, and only Libraries (none for every library).
+// ones as Unrated says where there is an age, none Common Sense Media advises for older than
+// MaxCommonSenseAge (nil for any), and only Libraries (none for every library).
 type ProfileAccess struct {
-	MaxAge    *int
-	Unrated   domain.Unrated
-	Libraries []uuid.UUID
+	MaxAge            *int
+	Unrated           domain.Unrated
+	MaxCommonSenseAge *int
+	Libraries         []uuid.UUID
 }
 
 // within is whether a grants no more than limit: libraries among limit's where limit names any,
-// an age no older than limit's where limit has one, and unrated titles blocked where limit blocks
+// ages no older than limit's where limit has them, and unrated titles blocked where limit blocks
 // them.
 func (a ProfileAccess) within(limit ProfileAccess) bool {
 	if len(limit.Libraries) > 0 && (len(a.Libraries) == 0 || slices.ContainsFunc(a.Libraries, func(l uuid.UUID) bool {
 		return !slices.Contains(limit.Libraries, l)
 	})) {
+		return false
+	}
+	if limit.MaxCommonSenseAge != nil && (a.MaxCommonSenseAge == nil || *a.MaxCommonSenseAge > *limit.MaxCommonSenseAge) {
 		return false
 	}
 	if limit.MaxAge == nil {
@@ -430,9 +435,9 @@ func (s *Store) Access(ctx context.Context, id uuid.UUID, by *uuid.UUID) (Profil
 func access(ctx context.Context, db db, id uuid.UUID, by *uuid.UUID) (ProfileAccess, error) {
 	var out ProfileAccess
 	err := db.QueryRow(ctx, `
-		SELECT p.max_age, p.unrated,
+		SELECT p.max_age, p.unrated, p.max_common_sense_age,
 			array(SELECT l.library_id FROM profile_libraries l WHERE l.profile_id = p.id)
-		FROM profiles p WHERE p.id = $1 AND `+keptBy, id, by).Scan(&out.MaxAge, &out.Unrated, &out.Libraries)
+		FROM profiles p WHERE p.id = $1 AND `+keptBy, id, by).Scan(&out.MaxAge, &out.Unrated, &out.MaxCommonSenseAge, &out.Libraries)
 	if out.Libraries == nil {
 		out.Libraries = []uuid.UUID{}
 	}
@@ -452,8 +457,8 @@ func (s *Store) SetAccess(ctx context.Context, id uuid.UUID, a ProfileAccess, by
 				return ErrBeyondManager
 			}
 		}
-		if err := affected(tx.Exec(ctx, `UPDATE profiles SET unrated = $3, max_age = $4 WHERE id = $1 AND `+keptBy,
-			id, by, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge)); err != nil {
+		if err := affected(tx.Exec(ctx, `UPDATE profiles SET unrated = $3, max_age = $4, max_common_sense_age = $5 WHERE id = $1 AND `+keptBy,
+			id, by, cmp.Or(a.Unrated, domain.UnratedAllow), a.MaxAge, a.MaxCommonSenseAge)); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM profile_libraries WHERE profile_id = $1`, id); err != nil {

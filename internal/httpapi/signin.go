@@ -140,7 +140,10 @@ func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProvider
 	out := adminSignInProviderJSON{
 		Slug: p.Slug, Name: p.Name, Issuer: uri(p.Issuer), ClientID: p.ClientID, ClientSecretSet: p.ClientSecret != "",
 		Provisioning: p.Provisioning, Group: p.Group, Recheck: p.Recheck,
-		Access: accessJSON{MaxAge: p.MaxAge, Unrated: cmp.Or(p.Unrated, domain.UnratedAllow), Libraries: p.Libraries},
+		Access: accessJSON{
+			MaxAge: p.MaxAge, Unrated: cmp.Or(p.Unrated, domain.UnratedAllow), MaxCommonSenseAge: p.MaxCommonSenseAge,
+			Libraries: p.Libraries,
+		},
 	}
 	if out.Access.Libraries == nil {
 		out.Access.Libraries = []uuid.UUID{}
@@ -178,7 +181,8 @@ func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
 		Slug: slug, Name: name, Issuer: strings.TrimSpace(string(req.Issuer)), ClientID: strings.TrimSpace(req.ClientID),
 		ClientSecret: req.ClientSecret, Provisioning: req.Provisioning, Group: strings.TrimSpace(req.Group),
 		Recheck: cmp.Or(req.Recheck, domain.RecheckHourly),
-		MaxAge:  req.Access.MaxAge, Unrated: cmp.Or(req.Access.Unrated, domain.UnratedAllow), Libraries: req.Access.Libraries,
+		MaxAge:  req.Access.MaxAge, Unrated: cmp.Or(req.Access.Unrated, domain.UnratedAllow),
+		MaxCommonSenseAge: req.Access.MaxCommonSenseAge, Libraries: req.Access.Libraries,
 	}
 	switch {
 	case !nameOK:
@@ -198,6 +202,9 @@ func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	case p.MaxAge != nil && (*p.MaxAge < 0 || *p.MaxAge > 21):
 		writeProblem(w, a.logger, codeInvalidBody, "access.max_age is an age to 21 or null")
+		return
+	case !commonSenseAgeOK(p.MaxCommonSenseAge):
+		writeProblem(w, a.logger, codeInvalidBody, "access.max_common_sense_age is an age from 1 to 18 or null")
 		return
 	}
 	if p.ClientSecret == "" {

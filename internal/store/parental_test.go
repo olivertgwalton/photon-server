@@ -207,3 +207,76 @@ func TestCertificatesAreReadAsTheirCountriesRateThem(t *testing.T) {
 		t.Errorf("the server's counts: %+v, want %+v", counts[lib.ID], want)
 	}
 }
+
+// A Common Sense age hides what Common Sense Media advises for older, a show's episodes with it,
+// and leaves a title it has no age for to its certificate.
+func TestACommonSenseAgeHidesWhatItAdvisesForOlder(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	films, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, err := s.AddLibrary(ctx, "TV", domain.LibraryShows, "/srv/tv", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []struct {
+		title string
+		age   int
+	}{{"Paddington", 6}, {"Heat", 17}, {"Home Movie", 0}} {
+		if _, err := s.SaveFolder(ctx, films.ID, f.title, []byte("v1"), []Film{{Title: f.title, Folder: f.title}}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if f.age > 0 {
+			if err := s.SaveRatings(ctx, oneItem(t, s, "title = $1", f.title).ID, domain.SourceMDBList, domain.Rated{CommonSenseAge: f.age}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	episode := Episode{Season: 1, Episodes: []int{1}, Title: "Show", Folder: "Show/Season 1", ByNumber: true}
+	if _, err := s.SaveShowFolder(ctx, tv.ID, "Show/Season 1", []byte("v1"), Show{Title: "Show", Folder: "Show"}, []Episode{episode}, nil); err != nil {
+		t.Fatal(err)
+	}
+	show, ep := oneItem(t, s, `kind = 'show'`).ID, oneItem(t, s, `kind = 'episode'`).ID
+	if err := s.SaveRatings(ctx, show, domain.SourceMDBList, domain.Rated{CommonSenseAge: 15}); err != nil {
+		t.Fatal(err)
+	}
+
+	kid, err := s.AddProfile(ctx, "Kid", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ten := 10
+	if err := s.SetAccess(ctx, kid.ID, ProfileAccess{MaxCommonSenseAge: &ten}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	for _, lib := range []uuid.UUID{films.ID, tv.ID} {
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib}, WallPage{Profile: kid.ID, Sort: domain.SortTitle, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cards {
+			seen = append(seen, c.Title)
+		}
+	}
+	if !slices.Equal(seen, []string{"Home Movie", "Paddington"}) {
+		t.Errorf("Common Sense 10 and under: %q, want Home Movie, which it has no age for, and Paddington", seen)
+	}
+	if _, err := s.Title(ctx, kid.ID, ep); !errors.Is(err, ErrNotFound) {
+		t.Errorf("an episode of a show advised for 15: %v, want ErrNotFound", err)
+	}
+	got, err := s.Access(ctx, kid.ID, nil)
+	if err != nil || got.MaxCommonSenseAge == nil || *got.MaxCommonSenseAge != 10 {
+		t.Errorf("access = %+v, %v; want Common Sense 10", got, err)
+	}
+	// A profile its manager makes starts held as the manager is.
+	made, err := s.AddProfile(ctx, "Younger", domain.RoleUser, "hash", &kid.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Access(ctx, made.ID, nil); err != nil || got.MaxCommonSenseAge == nil || *got.MaxCommonSenseAge != 10 {
+		t.Errorf("a managed profile's access = %+v, %v; want its manager's Common Sense 10", got, err)
+	}
+}

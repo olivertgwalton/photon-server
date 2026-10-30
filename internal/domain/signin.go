@@ -49,8 +49,8 @@ func Rechecks() []Recheck {
 // SignInProvider is an OpenID Connect provider an admin registered the server on as a client, which
 // the household signs in through. Slug names it in the address the provider sends a browser back
 // to, and Group, when set, is the group an account must be in there to sign in here, read as it
-// signs in. MaxAge, Unrated and Libraries are what a profile it makes may see, as a profile's
-// access says it: every library where none are named.
+// signs in. MaxAge, Unrated, MaxCommonSenseAge and Libraries are what a profile it makes may see, as
+// a profile's access says it: every library where none are named.
 type SignInProvider struct {
 	Slug         string
 	Name         string
@@ -62,7 +62,9 @@ type SignInProvider struct {
 	Recheck      Recheck
 	MaxAge       *int
 	Unrated      Unrated
-	Libraries    []uuid.UUID
+	// MaxCommonSenseAge is the oldest age Common Sense Media advises a title it sees for; nil for any.
+	MaxCommonSenseAge *int
+	Libraries         []uuid.UUID
 }
 
 // SignInIdentity is the account at a sign-in provider that a session was signed in by, or whose
