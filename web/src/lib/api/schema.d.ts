@@ -10208,6 +10208,7 @@ export interface components {
             certificate?: string;
             certification_country?: string;
             collections?: components["schemas"]["CollectionCard"][];
+            common_sense_age?: number;
             credits?: components["schemas"]["CreditRef"][];
             episode_end?: number | null;
             episode_group?: string;
