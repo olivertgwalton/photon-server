@@ -126,10 +126,31 @@ const madeWith = (kind: Schemas["ItemKind"]): Schemas["KindSources"] => ({
 	],
 	images: [{ source: "tmdb", enabled: true }],
 });
+// How the server keeps a new library: one of files, and a remote one, which
+// has no folder to watch or files to read whole.
+const defaults = (sources: Schemas["KindSources"][]): Schemas["NewLibrary"][] =>
+	(["folder", "remote"] as const).map((media) => ({
+		media,
+		sources,
+		remote_extras: ["trailer", "featurette", "behind_the_scenes"],
+		monitor: media === "remote" ? "off" : "realtime",
+		refresh_days: 30,
+		previews: media === "remote" ? "off" : "all",
+		markers: media === "remote" ? "off" : "all",
+		keyframes: "index",
+		themes: "local",
+		deletion: "off",
+		missing_versions: "keep",
+		artwork_language: "localized",
+		title_language: "localized",
+		box_sets: "expanded",
+		subtitle_languages: [],
+		subtitle_match: "release",
+	}));
 const libraryKinds: Schemas["LibraryKindOptions"][] = [
 	{
 		kind: "movies",
-		sources: [madeWith("movie")],
+		defaults: defaults([madeWith("movie")]),
 		fetchable: [
 			{
 				kind: "movie",
@@ -140,7 +161,11 @@ const libraryKinds: Schemas["LibraryKindOptions"][] = [
 	},
 	{
 		kind: "shows",
-		sources: [madeWith("show"), madeWith("season"), madeWith("episode")],
+		defaults: defaults([
+			madeWith("show"),
+			madeWith("season"),
+			madeWith("episode"),
+		]),
 		fetchable: [
 			{
 				kind: "show",

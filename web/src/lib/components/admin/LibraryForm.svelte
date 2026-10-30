@@ -52,22 +52,6 @@ const countries = $derived([
 	...localeOptions(locales.countries, country),
 ]);
 
-const defaults = {
-	remote_extras: ["trailer", "featurette", "behind_the_scenes"],
-	monitor: "realtime",
-	refresh_days: 30,
-	previews: "all",
-	markers: "all",
-	keyframes: "index",
-	themes: "local",
-	deletion: "off",
-	missing_versions: "keep",
-	artwork_language: "localized",
-	title_language: "localized",
-	box_sets: "expanded",
-	subtitle_match: "release",
-} as const;
-
 // A new library's kind changes the sources offered; a library's own is fixed.
 let kind = $derived<Schemas["LibraryKind"]>(library?.kind ?? "movies");
 
@@ -120,14 +104,16 @@ const fetchers = [
 	},
 ] as const;
 
-// What a library of its kind ranks sources for, and what a new one ranks.
+// What a library of its kind ranks sources for, and how the server keeps a
+// new one of its kind and media.
 const options = $derived(kinds.find((k) => k.kind === kind));
+const fresh = $derived(options?.defaults.find((d) => d.media === media));
 const chosen = (made: Schemas["KindSources"]) =>
 	library?.sources.find((s) => s.kind === made.kind) ?? made;
+// How it is kept: as it is, or as a new one would be.
+const kept = $derived(library ?? fresh);
 
-const extras = $derived<readonly string[]>(
-	library?.remote_extras ?? defaults.remote_extras,
-);
+const extras = $derived<readonly string[]>(kept?.remote_extras ?? []);
 
 // The languages offered: the common ones, and any the library already has.
 const fetching = $derived(library?.subtitle_languages ?? []);
@@ -142,9 +128,7 @@ const refreshing = [
 	{ value: "60", label: "Every 60 days" },
 	{ value: "90", label: "Every 90 days" },
 ];
-const refresh = $derived(
-	String(library?.refresh_days ?? defaults.refresh_days),
-);
+const refresh = $derived(String(kept?.refresh_days));
 const refreshOptions = $derived(
 	refreshing.some((r) => r.value === refresh)
 		? refreshing
@@ -341,7 +325,7 @@ const refreshOptions = $derived(
 		</summary>
 		<Field.Group class="mt-7">
 			{#key kind}
-				{#each options?.sources ?? [] as made (made.kind)}
+				{#each fresh?.sources ?? [] as made (made.kind)}
 					{@const item = made.kind}
 					{@const fetchable = options?.fetchable.find((x) => x.kind === item)}
 					{#each fetchers as { f, title, said } (f)}
@@ -412,7 +396,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-subtitle-match"
 						name="subtitle_match"
-						value={library?.subtitle_match ?? defaults.subtitle_match}
+						value={kept?.subtitle_match}
 						options={[
 							{ value: "release", label: "Only those made for the file" },
 							{ value: "any", label: "The best found" },
@@ -434,7 +418,7 @@ const refreshOptions = $derived(
 						<Choice
 							id="{id}-library-monitor"
 							name="monitor"
-							value={library?.monitor ?? defaults.monitor}
+							value={kept?.monitor}
 							options={[
 								{ value: "realtime", label: "As they happen" },
 								{ value: "off", label: "Only when scanned" },
@@ -456,7 +440,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-previews"
 						name="previews"
-						value={library?.previews ?? (remote ? "off" : defaults.previews)}
+						value={kept?.previews}
 						options={[
 							{ value: "all", label: "Chapters and seeking" },
 							{ value: "chapters", label: "Chapter images only" },
@@ -471,7 +455,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-markers"
 						name="markers"
-						value={library?.markers ?? (remote ? "off" : defaults.markers)}
+						value={kept?.markers}
 						options={[
 							{ value: "all", label: "From chapters, sound and picture" },
 							{ value: "chapters", label: "From chapters only" },
@@ -488,7 +472,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-keyframes"
 						name="keyframes"
-						value={library?.keyframes ?? defaults.keyframes}
+						value={kept?.keyframes}
 						options={[
 							{ value: "index", label: "From the file's index" },
 							{ value: "full", label: "Read every file through" },
@@ -506,7 +490,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-themes"
 						name="themes"
-						value={library?.themes ?? defaults.themes}
+						value={kept?.themes}
 						options={[
 							{ value: "local", label: "Local files only" },
 							{ value: "themerr", label: "Local files and ThemerrDB's" },
@@ -540,7 +524,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-titles"
 						name="title_language"
-						value={library?.title_language ?? defaults.title_language}
+						value={kept?.title_language}
 						options={[
 							{ value: "localized", label: "In its language" },
 							{ value: "original", label: "As first named" },
@@ -556,7 +540,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-box-sets"
 						name="box_sets"
-						value={library?.box_sets ?? defaults.box_sets}
+						value={kept?.box_sets}
 						options={[
 							{ value: "expanded", label: "Each title on its own" },
 							{ value: "collapsed", label: "One tile for the set" },
@@ -575,7 +559,7 @@ const refreshOptions = $derived(
 					<Choice
 						id="{id}-library-artwork"
 						name="artwork_language"
-						value={library?.artwork_language ?? defaults.artwork_language}
+						value={kept?.artwork_language}
 						options={[
 							{ value: "localized", label: "In its language first" },
 							{ value: "any", label: "The most liked, any language" },
@@ -609,7 +593,7 @@ const refreshOptions = $derived(
 						<Choice
 							id="{id}-library-deletion"
 							name="deletion"
-							value={library?.deletion ?? defaults.deletion}
+							value={kept?.deletion}
 							options={[
 								{ value: "off", label: "Not allowed" },
 								{ value: "files", label: "Allowed, files and all" },
@@ -628,7 +612,7 @@ const refreshOptions = $derived(
 						<Choice
 							id="{id}-library-missing"
 							name="missing_versions"
-							value={library?.missing_versions ?? defaults.missing_versions}
+							value={kept?.missing_versions}
 							options={[
 								{ value: "keep", label: "Kept, marked missing" },
 								{ value: "forget", label: "Forgotten at the end of a scan" },
