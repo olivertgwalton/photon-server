@@ -1,9 +1,9 @@
 <script lang="ts">
-import { addLibrary } from "#lib/admin/add.js";
+import { addLibrary } from "#lib/admin/add.ts";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { fields } from "#lib/form.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { fields } from "#lib/form.ts";
 import { goto } from "$app/navigation";
 
 let { data } = $props();

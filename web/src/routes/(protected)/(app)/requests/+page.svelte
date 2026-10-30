@@ -1,11 +1,11 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
 import Pager from "#lib/components/Pager.svelte";
 import RequestTitle from "#lib/components/RequestTitle.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { askerState } from "#lib/requests.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { askerState } from "#lib/requests.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
 const words = vocabulary();

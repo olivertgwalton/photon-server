@@ -6,12 +6,12 @@ const resting = $state<{ id?: string }>({});
 </script>
 
 <script lang="ts">
-import { refusal } from "#lib/api/client.js";
+import { refusal } from "#lib/api/client.ts";
 import Rail from "#lib/components/Rail.svelte";
 import Showcase from "#lib/components/Showcase.svelte";
-import { homeRows } from "#lib/rows.js";
-import { readShowcase, showcasePool } from "#lib/showcase.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { homeRows } from "#lib/rows.ts";
+import { readShowcase, showcasePool } from "#lib/showcase.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
 const words = vocabulary();

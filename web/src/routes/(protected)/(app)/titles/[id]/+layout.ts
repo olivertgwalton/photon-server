@@ -1,7 +1,7 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
-import { castOf } from "#lib/credits.js";
-import { extrasOf } from "#lib/extras.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
+import { castOf } from "#lib/credits.ts";
+import { extrasOf } from "#lib/extras.ts";
 import type { LayoutLoad } from "./$types";
 
 // A title, for its page and each of its rails' own pages, loaded once. One the

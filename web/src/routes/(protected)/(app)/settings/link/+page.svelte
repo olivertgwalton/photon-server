@@ -1,16 +1,16 @@
 <script lang="ts">
 import ShieldAlertIcon from "@lucide/svelte/icons/shield-alert";
-import { relative } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { relative } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import * as Alert from "#lib/components/ui/alert/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
-import { attempt } from "#lib/signin.js";
+import * as Alert from "#lib/components/ui/alert/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields } from "#lib/form.ts";
+import { attempt } from "#lib/signin.ts";
 import { page } from "$app/state";
 
 let { data } = $props();

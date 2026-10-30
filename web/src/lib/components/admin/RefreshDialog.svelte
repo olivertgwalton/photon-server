@@ -2,11 +2,11 @@
 import DatabaseBackupIcon from "@lucide/svelte/icons/database-backup";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import type { Component } from "svelte";
-import { type RefreshOf, refresh } from "#lib/actions.js";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { type RefreshOf, refresh } from "#lib/actions.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 

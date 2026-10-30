@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import anidb from "#lib/assets/ratings/anidb.png";
 import anilist from "#lib/assets/ratings/anilist.svg";
 import imdb from "#lib/assets/ratings/imdb.svg";
@@ -8,8 +8,8 @@ import popcornUpright from "#lib/assets/ratings/popcorn-upright.svg";
 import tmdb from "#lib/assets/ratings/tmdb.svg";
 import tomatometerFresh from "#lib/assets/ratings/tomatometer-fresh.svg";
 import tomatometerRotten from "#lib/assets/ratings/tomatometer-rotten.svg";
-import { type RatingMark, ratingMark, score } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { type RatingMark, ratingMark, score } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 let { rating }: { rating: components["schemas"]["RatingRef"] } = $props();
 const words = vocabulary();

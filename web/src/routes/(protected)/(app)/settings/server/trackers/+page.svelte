@@ -1,15 +1,15 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, text } from "#lib/form.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, text } from "#lib/form.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 type Tracker = components["schemas"]["Tracker"];
 

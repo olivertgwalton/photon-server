@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 
 // A request's title, a link once the library holds it, and its year.
 let {

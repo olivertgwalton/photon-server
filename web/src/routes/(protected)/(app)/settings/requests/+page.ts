@@ -1,7 +1,7 @@
-import { client, need } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { keys } from "#lib/changes.js";
-import { offsetOf, pageSize } from "#lib/paging.js";
+import { client, need } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { keys } from "#lib/changes.ts";
+import { offsetOf, pageSize } from "#lib/paging.ts";
 import type { PageLoad } from "./$types";
 
 type RequestState = components["schemas"]["RequestState"];

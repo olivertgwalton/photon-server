@@ -4,10 +4,10 @@ import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 import type { Snippet } from "svelte";
 import type { Attachment } from "svelte/attachments";
 import { on as listen } from "svelte/events";
-import type { Shape } from "#lib/artwork.js";
-import { cardRailScale } from "#lib/cardsize.svelte.js";
-import { railLimit } from "#lib/rows.js";
-import { onResize } from "#lib/size.js";
+import type { Shape } from "#lib/artwork.ts";
+import { cardRailScale } from "#lib/cardsize.svelte.ts";
+import { railLimit } from "#lib/rows.ts";
+import { onResize } from "#lib/size.ts";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A named row of titles that scrolls sideways. Where it holds more than it

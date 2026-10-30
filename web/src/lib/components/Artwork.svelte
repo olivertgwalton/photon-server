@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { HTMLImgAttributes } from "svelte/elements";
-import { type ArtworkShape, artworkSrc, artworkSrcset } from "#lib/artwork.js";
-import { fadeIn } from "#lib/fade.js";
+import { type ArtworkShape, artworkSrc, artworkSrcset } from "#lib/artwork.ts";
+import { fadeIn } from "#lib/fade.ts";
 
 // A picture the server keeps, by its id, at the widths its shape is asked for
 // at. It is marked `data-loading` until it arrives, for its class to fade it

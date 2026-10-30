@@ -1,17 +1,17 @@
 <script lang="ts">
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
-import { act } from "#lib/act.js";
-import { relative } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { relative } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import NodeSettings from "#lib/components/admin/NodeSettings.svelte";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
-import { buttonVariants } from "#lib/components/ui/button/index.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Textarea } from "#lib/components/ui/textarea/index.js";
-import { getShell } from "#lib/shell.svelte.js";
-import { cn } from "#lib/utils.js";
+import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
+import { buttonVariants } from "#lib/components/ui/button/index.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Textarea } from "#lib/components/ui/textarea/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
+import { cn } from "#lib/utils.ts";
 
 type Node = components["schemas"]["KnownNode"];
 

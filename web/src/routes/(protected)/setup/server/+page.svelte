@@ -1,6 +1,6 @@
 <script lang="ts">
 import ServerSettingsForm from "#lib/components/admin/ServerSettingsForm.svelte";
-import * as Card from "#lib/components/ui/card/index.js";
+import * as Card from "#lib/components/ui/card/index.ts";
 
 let { data } = $props();
 </script>

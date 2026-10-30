@@ -1,14 +1,14 @@
 <script lang="ts">
 import DownloadIcon from "@lucide/svelte/icons/download";
 import XIcon from "@lucide/svelte/icons/x";
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import { Progress } from "#lib/components/ui/progress/index.js";
-import { bitrate, bytes } from "#lib/format.js";
-import { pollWhile } from "#lib/poll.svelte.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { Progress } from "#lib/components/ui/progress/index.ts";
+import { bitrate, bytes } from "#lib/format.ts";
+import { pollWhile } from "#lib/poll.svelte.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { invalidate } from "$app/navigation";
 
 let { data } = $props();

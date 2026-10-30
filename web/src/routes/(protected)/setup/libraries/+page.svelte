@@ -1,9 +1,9 @@
 <script lang="ts">
-import { addLibrary } from "#lib/admin/add.js";
+import { addLibrary } from "#lib/admin/add.ts";
 import LibraryForm from "#lib/components/admin/LibraryForm.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { fields } from "#lib/form.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { fields } from "#lib/form.ts";
 import { refreshAll } from "$app/navigation";
 
 let { data } = $props();

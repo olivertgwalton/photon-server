@@ -2,19 +2,19 @@
 import PlusIcon from "@lucide/svelte/icons/plus";
 import XIcon from "@lucide/svelte/icons/x";
 import { untrack } from "svelte";
-import { act } from "#lib/act.js";
-import { markersOf } from "#lib/admin/edit.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { markersOf } from "#lib/admin/edit.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { Checkbox } from "#lib/components/ui/checkbox/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { Label } from "#lib/components/ui/label/index.js";
-import { fields } from "#lib/form.js";
-import { timecode } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { Label } from "#lib/components/ui/label/index.ts";
+import { fields } from "#lib/form.ts";
+import { timecode } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 type Schemas = components["schemas"];
 

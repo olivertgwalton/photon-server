@@ -1,4 +1,4 @@
-import { artworkURL } from "./artwork.js";
+import { artworkURL } from "./artwork.ts";
 
 // What a title's lettering is, read off its pixels as the apps read it: where
 // its ink lies (fractions of each side, from the top left), the ink's width

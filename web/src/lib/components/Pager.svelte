@@ -1,7 +1,7 @@
 <script lang="ts">
-import { withQuery } from "#lib/address.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import { pageSize } from "#lib/paging.js";
+import { withQuery } from "#lib/address.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { pageSize } from "#lib/paging.ts";
 import { page } from "$app/state";
 
 // Newer and older pages of a list the server pages by offset, as links, so

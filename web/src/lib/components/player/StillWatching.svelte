@@ -1,9 +1,9 @@
 <script lang="ts">
 import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
 import PlayIcon from "@lucide/svelte/icons/play";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import { episodeLabel } from "#lib/format.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { episodeLabel } from "#lib/format.ts";
 
 // The whole player covered, a couple of minutes into an episode nobody has
 // answered for, with the picture paused under it: the question, what is

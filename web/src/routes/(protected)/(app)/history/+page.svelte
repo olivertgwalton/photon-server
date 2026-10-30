@@ -1,9 +1,9 @@
 <script lang="ts">
 import CursorPager from "#lib/components/CursorPager.svelte";
 import TitleRow from "#lib/components/TitleRow.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { timecode } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { timecode } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
 const words = vocabulary();

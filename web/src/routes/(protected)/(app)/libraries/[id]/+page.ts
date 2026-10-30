@@ -1,12 +1,12 @@
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
 import {
 	type ViewStyle,
 	viewKey,
 	viewStyles,
 	wallPageSize,
 	wallQuery,
-} from "#lib/wall.js";
+} from "#lib/wall.ts";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, params, url, depends }) => {

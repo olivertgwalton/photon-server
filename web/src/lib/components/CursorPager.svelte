@@ -1,6 +1,6 @@
 <script lang="ts">
-import { withQuery } from "#lib/address.js";
-import { Button } from "#lib/components/ui/button/index.js";
+import { withQuery } from "#lib/address.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
 import { page } from "$app/state";
 
 // The newest and the next older page of a list the server pages on from the

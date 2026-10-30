@@ -1,8 +1,8 @@
 <script lang="ts">
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 const asked = shell.versions;

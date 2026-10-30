@@ -1,16 +1,16 @@
 <script lang="ts">
-import { runTask } from "#lib/actions.js";
-import { Clock } from "#lib/admin/clock.js";
-import { liveStream } from "#lib/admin/stream.svelte.js";
-import { byName, elapsed } from "#lib/admin/words.js";
+import { runTask } from "#lib/actions.ts";
+import { Clock } from "#lib/admin/clock.ts";
+import { liveStream } from "#lib/admin/stream.svelte.ts";
+import { byName, elapsed } from "#lib/admin/words.ts";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import NowPlayingCard from "#lib/components/admin/NowPlayingCard.svelte";
 import RunningNow from "#lib/components/admin/RunningNow.svelte";
 import ServerInfo from "#lib/components/admin/ServerInfo.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import { Progress } from "#lib/components/ui/progress/index.js";
-import { count } from "#lib/format.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import { Progress } from "#lib/components/ui/progress/index.ts";
+import { count } from "#lib/format.ts";
 
 let { data } = $props();
 

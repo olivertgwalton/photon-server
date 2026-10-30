@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { backAfterRestore } from "./restored.js";
+import { backAfterRestore } from "./restored.ts";
 
 function clock() {
 	let t = 0;

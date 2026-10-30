@@ -2,10 +2,10 @@
 import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
 import PlayIcon from "@lucide/svelte/icons/play";
 import Artwork from "#lib/components/Artwork.svelte";
-import type { Extra } from "#lib/extras.js";
-import { fadeIn } from "#lib/fade.js";
-import { playHref, runtime } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import type { Extra } from "#lib/extras.ts";
+import { fadeIn } from "#lib/fade.ts";
+import { playHref, runtime } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 // An extra by a still of its video, played here; or a video a provider links
 // to elsewhere, by its site's still served from this server, opened there.

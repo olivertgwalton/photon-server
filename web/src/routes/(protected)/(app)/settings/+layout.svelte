@@ -28,8 +28,8 @@ import UserIcon from "@lucide/svelte/icons/user";
 import UsersIcon from "@lucide/svelte/icons/users";
 import WebhookIcon from "@lucide/svelte/icons/webhook";
 import type { Component } from "svelte";
-import { Input } from "#lib/components/ui/input/index.js";
-import { settings } from "#lib/settings.js";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { settings } from "#lib/settings.ts";
 import { afterNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
 

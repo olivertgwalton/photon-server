@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Attachment } from "svelte/attachments";
-import { backAfterRestore } from "#lib/restored.js";
-import { restoring } from "#lib/restoring.svelte.js";
+import { backAfterRestore } from "#lib/restored.ts";
+import { restoring } from "#lib/restoring.svelte.ts";
 import { page } from "$app/state";
 
 const id = $props.id();

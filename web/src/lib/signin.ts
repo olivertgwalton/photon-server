@@ -1,5 +1,5 @@
-import { problemMessage } from "#lib/api/problem.js";
-import { CLIENT, deviceName } from "#lib/device.js";
+import { problemMessage } from "#lib/api/problem.ts";
+import { CLIENT, deviceName } from "#lib/device.ts";
 
 // What the server says in `refused` when a provider's answer signed no one
 // in, said to the reader.

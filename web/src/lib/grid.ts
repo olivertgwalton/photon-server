@@ -1,4 +1,4 @@
-import type { Shape } from "./artwork.js";
+import type { Shape } from "./artwork.ts";
 
 // How large a wall draws its cards, as the apps' Card Size has it.
 export type CardSize = "compact" | "standard" | "large";

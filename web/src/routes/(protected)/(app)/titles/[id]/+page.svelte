@@ -17,12 +17,12 @@ import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import WrenchIcon from "@lucide/svelte/icons/wrench";
 import { toast } from "svelte-sonner";
-import { act } from "#lib/act.js";
-import { setMark } from "#lib/actions.js";
-import { refreshable } from "#lib/admin/edit.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import { blurStyle, tintColour } from "#lib/blurhash.js";
+import { act } from "#lib/act.ts";
+import { setMark } from "#lib/actions.ts";
+import { refreshable } from "#lib/admin/edit.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
@@ -36,9 +36,9 @@ import Prose from "#lib/components/Prose.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import RatingScore from "#lib/components/RatingScore.svelte";
 import ThemeTune from "#lib/components/ThemeTune.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { type Extra, extrasOf } from "#lib/extras.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+import { type Extra, extrasOf } from "#lib/extras.ts";
 import {
 	count,
 	episodeLabel,
@@ -48,10 +48,10 @@ import {
 	resumeLabel,
 	runtime,
 	titleWithShow,
-} from "#lib/format.js";
-import { playQueue } from "#lib/queue.js";
-import { episodesOf } from "#lib/seasons.js";
-import { getShell } from "#lib/shell.svelte.js";
+} from "#lib/format.ts";
+import { playQueue } from "#lib/queue.ts";
+import { episodesOf } from "#lib/seasons.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 import { goto } from "$app/navigation";
 
 let { data } = $props();

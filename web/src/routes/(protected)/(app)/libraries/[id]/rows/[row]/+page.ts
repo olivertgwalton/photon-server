@@ -1,7 +1,7 @@
 import { error } from "@sveltejs/kit";
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
-import { isHomeRow, railLimit } from "#lib/rows.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
+import { isHomeRow, railLimit } from "#lib/rows.ts";
 import type { PageLoad } from "./$types";
 
 // What one of a library's rails holds, as the Photon apps open it from its

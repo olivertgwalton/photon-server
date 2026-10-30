@@ -1,15 +1,15 @@
 import { invalidate, refreshAll } from "$app/navigation";
-import type { LiveStream } from "./admin/stream.svelte.js";
-import type { components } from "./api/schema.js";
+import type { LiveStream } from "./admin/stream.svelte.ts";
+import type { components } from "./api/schema.d.ts";
 import {
 	adminAffected,
 	affected,
 	type Change,
 	inboxAffected,
-} from "./changes.js";
-import { inbox } from "./notifications.svelte.js";
-import { restoring } from "./restoring.svelte.js";
-import { settling } from "./settle.js";
+} from "./changes.ts";
+import { inbox } from "./notifications.svelte.ts";
+import { restoring } from "./restoring.svelte.ts";
+import { settling } from "./settle.ts";
 
 // A dropped socket is opened again after this long.
 const retryAfter = 5_000;

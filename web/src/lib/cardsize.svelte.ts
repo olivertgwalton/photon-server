@@ -1,6 +1,6 @@
 import { MediaQuery } from "svelte/reactivity";
-import type { Shape } from "./artwork.js";
-import { type CardSize, cardSizes, minCardWidth, railScale } from "./grid.js";
+import type { Shape } from "./artwork.ts";
+import { type CardSize, cardSizes, minCardWidth, railScale } from "./grid.ts";
 
 // The size chosen, kept in this browser as the apps keep it on each device.
 const key = "card-size";

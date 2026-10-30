@@ -1,15 +1,15 @@
 <script lang="ts">
 import StarIcon from "@lucide/svelte/icons/star";
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { language, localeOptions } from "#lib/format.js";
-import { subtitleLanguages } from "#lib/player/words.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { language, localeOptions } from "#lib/format.ts";
+import { subtitleLanguages } from "#lib/player/words.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 const shell = getShell();
 

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fadeIn } from "./fade.js";
+import { fadeIn } from "./fade.ts";
 
 // A card is handed another title's picture as a wall follows the server, and
 // the one it is handed may be in the browser's store already: it is there

@@ -1,17 +1,17 @@
 <script lang="ts">
 import BellIcon from "@lucide/svelte/icons/bell";
 import BellRingIcon from "@lucide/svelte/icons/bell-ring";
-import { relative } from "#lib/admin/words.js";
-import type { components } from "#lib/api/schema.js";
+import { relative } from "#lib/admin/words.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import DeclineRequest from "#lib/components/DeclineRequest.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Empty from "#lib/components/ui/empty/index.js";
-import * as Item from "#lib/components/ui/item/index.js";
-import * as Popover from "#lib/components/ui/popover/index.js";
-import { ScrollArea } from "#lib/components/ui/scroll-area/index.js";
-import { inbox, keepPushing } from "#lib/notifications.svelte.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Empty from "#lib/components/ui/empty/index.ts";
+import * as Item from "#lib/components/ui/item/index.ts";
+import * as Popover from "#lib/components/ui/popover/index.ts";
+import { ScrollArea } from "#lib/components/ui/scroll-area/index.ts";
+import { inbox, keepPushing } from "#lib/notifications.svelte.ts";
 import { afterNavigate, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 

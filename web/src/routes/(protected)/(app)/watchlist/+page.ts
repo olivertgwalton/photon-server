@@ -1,4 +1,4 @@
-import { loadRow } from "#lib/home.js";
+import { loadRow } from "#lib/home.ts";
 import type { PageLoad } from "./$types";
 
 // The watchlist is a page of its own, as Plex's is, not a row's.

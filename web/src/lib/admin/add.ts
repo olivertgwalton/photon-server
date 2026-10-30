@@ -1,9 +1,9 @@
 import { toast } from "svelte-sonner";
-import { libraryChange } from "#lib/admin/library.js";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
-import { text, textAsTyped } from "#lib/form.js";
+import { libraryChange } from "#lib/admin/library.ts";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { text, textAsTyped } from "#lib/form.ts";
 
 // Adds the library a LibraryForm describes, and says so. It starts as the
 // server's defaults; what the form says differently is set before its first

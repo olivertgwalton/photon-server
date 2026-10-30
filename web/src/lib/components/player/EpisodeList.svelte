@@ -1,15 +1,15 @@
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import EpisodesIcon from "@lucide/svelte/icons/list";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
-import { blurStyle } from "#lib/blurhash.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
-import { buttonVariants } from "#lib/components/ui/button/index.js";
-import * as Popover from "#lib/components/ui/popover/index.js";
-import { episodeLabel, timecode } from "#lib/format.js";
-import { hidesSpoiler } from "#lib/spoilers.js";
+import { buttonVariants } from "#lib/components/ui/button/index.ts";
+import * as Popover from "#lib/components/ui/popover/index.ts";
+import { episodeLabel, timecode } from "#lib/format.ts";
+import { hidesSpoiler } from "#lib/spoilers.ts";
 
 type Schemas = components["schemas"];
 

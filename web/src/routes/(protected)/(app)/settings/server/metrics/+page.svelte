@@ -1,24 +1,24 @@
 <script lang="ts">
 import { untrack } from "svelte";
-import { Clock } from "#lib/admin/clock.js";
+import { Clock } from "#lib/admin/clock.ts";
 import {
 	keepFor,
 	type Point,
 	pollEvery,
 	series,
 	total,
-} from "#lib/admin/metrics.js";
-import { relative } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+} from "#lib/admin/metrics.ts";
+import { relative } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import JobsTable from "#lib/components/admin/JobsTable.svelte";
 import Sparkline from "#lib/components/admin/Sparkline.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Table from "#lib/components/ui/table/index.js";
-import { bitrate, bytes, count } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Table from "#lib/components/ui/table/index.ts";
+import { bitrate, bytes, count } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 type Schemas = components["schemas"];
 

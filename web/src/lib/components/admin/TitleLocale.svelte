@@ -1,13 +1,13 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { serverLocale } from "#lib/admin/library.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { serverLocale } from "#lib/admin/library.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { fields } from "#lib/form.js";
-import { country, language, localeOptions } from "#lib/format.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { fields } from "#lib/form.ts";
+import { country, language, localeOptions } from "#lib/format.ts";
 
 type Schemas = components["schemas"];
 

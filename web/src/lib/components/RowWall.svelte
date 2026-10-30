@@ -1,10 +1,10 @@
 <script lang="ts">
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Wall from "#lib/components/Wall.svelte";
-import { homeRows } from "#lib/rows.js";
-import { vocabulary } from "#lib/vocabulary.js";
-import { wallPageSize } from "#lib/wall.js";
+import { homeRows } from "#lib/rows.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
+import { wallPageSize } from "#lib/wall.ts";
 
 type Kind = components["schemas"]["HomeRowKind"];
 

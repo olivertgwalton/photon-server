@@ -1,14 +1,14 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { positionAt } from "#lib/admin/live.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { positionAt } from "#lib/admin/live.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Artwork from "#lib/components/Artwork.svelte";
-import { Badge } from "#lib/components/ui/badge/index.js";
-import { Progress } from "#lib/components/ui/progress/index.js";
-import { bitrate, fullTitle, timecode } from "#lib/format.js";
-import { getShell } from "#lib/shell.svelte.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Badge } from "#lib/components/ui/badge/index.ts";
+import { Progress } from "#lib/components/ui/progress/index.ts";
+import { bitrate, fullTitle, timecode } from "#lib/format.ts";
+import { getShell } from "#lib/shell.svelte.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 const api = client();
 

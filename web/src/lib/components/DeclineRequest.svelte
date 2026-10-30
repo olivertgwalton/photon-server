@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { components } from "#lib/api/schema.js";
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Textarea } from "#lib/components/ui/textarea/index.js";
+import type { components } from "#lib/api/schema.d.ts";
+import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Textarea } from "#lib/components/ui/textarea/index.ts";
 
 type Request = components["schemas"]["Request"];
 

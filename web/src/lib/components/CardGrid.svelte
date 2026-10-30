@@ -1,8 +1,8 @@
 <script lang="ts" generics="T extends Record<'id', string>">
 import type { Snippet } from "svelte";
-import type { Shape } from "#lib/artwork.js";
-import { cardMin } from "#lib/cardsize.svelte.js";
-import { gridColumns } from "#lib/grid.js";
+import type { Shape } from "#lib/artwork.ts";
+import { cardMin } from "#lib/cardsize.svelte.ts";
+import { gridColumns } from "#lib/grid.ts";
 import TitleCard, { type CardLike } from "./TitleCard.svelte";
 
 // A short list of titles, all drawn: what a wall is before it needs paging.

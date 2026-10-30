@@ -1,7 +1,7 @@
 import type JASSUB from "jassub";
 import type { PgsRenderer, VobSubRenderer } from "libbitsub";
-import type { components } from "#lib/api/schema.js";
-import { delayCues, webVTT } from "./subtitles.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { delayCues, webVTT } from "./subtitles.ts";
 
 type Subtitle = components["schemas"]["Subtitle"];
 

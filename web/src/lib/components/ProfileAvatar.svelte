@@ -1,7 +1,7 @@
 <script lang="ts">
-import { artworkURL } from "#lib/artwork.js";
-import * as Avatar from "#lib/components/ui/avatar/index.js";
-import { cn } from "#lib/utils.js";
+import { artworkURL } from "#lib/artwork.ts";
+import * as Avatar from "#lib/components/ui/avatar/index.ts";
+import { cn } from "#lib/utils.ts";
 
 // A profile's face: its picture, else its initial. It is drawn beside the
 // name, so it says nothing to a screen reader.

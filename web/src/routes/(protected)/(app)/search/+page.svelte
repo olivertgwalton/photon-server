@@ -1,11 +1,11 @@
 <script lang="ts">
-import { withQuery } from "#lib/address.js";
+import { withQuery } from "#lib/address.ts";
 import Choice from "#lib/components/Choice.svelte";
 import PersonCard from "#lib/components/PersonCard.svelte";
 import Rail from "#lib/components/Rail.svelte";
 import TitleCard from "#lib/components/TitleCard.svelte";
-import { byKind } from "#lib/rows.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { byKind } from "#lib/rows.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

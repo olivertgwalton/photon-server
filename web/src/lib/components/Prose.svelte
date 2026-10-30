@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Attachment } from "svelte/attachments";
-import * as Dialog from "#lib/components/ui/dialog/index.js";
-import { onResize } from "#lib/size.js";
+import * as Dialog from "#lib/components/ui/dialog/index.ts";
+import { onResize } from "#lib/size.ts";
 
 // Writing held to a few lines, as the app's synopses and biographies are, with
 // Read more opening the whole of it over the page rather than pushing the page

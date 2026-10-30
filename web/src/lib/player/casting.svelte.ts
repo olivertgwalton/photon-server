@@ -1,4 +1,4 @@
-import { castSession } from "./cast.js";
+import { castSession } from "./cast.ts";
 
 // What a player is told of the Chromecast: its session started, joined or
 // ended, where the receiver has got to, and that it plays or is paused.

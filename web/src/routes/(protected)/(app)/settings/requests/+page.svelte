@@ -1,16 +1,16 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { withQuery } from "#lib/address.js";
-import { when } from "#lib/admin/words.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { withQuery } from "#lib/address.ts";
+import { when } from "#lib/admin/words.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
 import DeclineRequest from "#lib/components/DeclineRequest.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import Pager from "#lib/components/Pager.svelte";
 import RequestTitle from "#lib/components/RequestTitle.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

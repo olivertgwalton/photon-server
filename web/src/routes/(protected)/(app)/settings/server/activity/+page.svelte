@@ -1,13 +1,13 @@
 <script lang="ts">
-import { Clock } from "#lib/admin/clock.js";
-import { narrow } from "#lib/admin/narrow.js";
-import { liveStream } from "#lib/admin/stream.svelte.js";
+import { Clock } from "#lib/admin/clock.ts";
+import { narrow } from "#lib/admin/narrow.ts";
+import { liveStream } from "#lib/admin/stream.svelte.ts";
 import ActivityList from "#lib/components/admin/ActivityList.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import CursorPager from "#lib/components/CursorPager.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
-import { Label } from "#lib/components/ui/label/index.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import { Label } from "#lib/components/ui/label/index.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
 const words = vocabulary();

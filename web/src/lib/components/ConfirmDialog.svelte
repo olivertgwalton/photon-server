@@ -1,8 +1,8 @@
 <script lang="ts">
-import * as AlertDialog from "#lib/components/ui/alert-dialog/index.js";
-import { buttonVariants } from "#lib/components/ui/button/index.js";
-import { getShell } from "#lib/shell.svelte.js";
-import { cn } from "#lib/utils.js";
+import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
+import { buttonVariants } from "#lib/components/ui/button/index.ts";
+import { getShell } from "#lib/shell.svelte.ts";
+import { cn } from "#lib/utils.ts";
 
 const shell = getShell();
 </script>

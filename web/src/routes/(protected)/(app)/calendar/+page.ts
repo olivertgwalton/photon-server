@@ -1,7 +1,7 @@
-import { client, need } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { monthOf, today, upcoming, weeks } from "#lib/calendar.js";
-import { keys } from "#lib/changes.js";
+import { client, need } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { monthOf, today, upcoming, weeks } from "#lib/calendar.ts";
+import { keys } from "#lib/changes.ts";
 import type { PageLoad } from "./$types";
 
 type Filter = components["schemas"]["CalendarFilter"];

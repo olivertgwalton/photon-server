@@ -1,13 +1,13 @@
 <script lang="ts">
 import FilterIcon from "@lucide/svelte/icons/filter";
 import ListVideoIcon from "@lucide/svelte/icons/list-video";
-import { act } from "#lib/act.js";
-import { client } from "#lib/api/client.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields, text } from "#lib/form.js";
-import { count, runtime } from "#lib/format.js";
+import { act } from "#lib/act.ts";
+import { client } from "#lib/api/client.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields, text } from "#lib/form.ts";
+import { count, runtime } from "#lib/format.ts";
 
 let { data } = $props();
 

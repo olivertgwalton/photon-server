@@ -1,16 +1,16 @@
 <script lang="ts">
 import ListFilterIcon from "@lucide/svelte/icons/list-filter";
-import type { components } from "#lib/api/schema.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { score } from "#lib/format.js";
-import { vocabulary } from "#lib/vocabulary.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+import { score } from "#lib/format.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import {
 	filterCount,
 	type ListFilter,
 	toggled,
 	type WallQuery,
-} from "#lib/wall.js";
+} from "#lib/wall.ts";
 
 type Facets = components["schemas"]["Facets"];
 type Site = components["schemas"]["RatingSite"];

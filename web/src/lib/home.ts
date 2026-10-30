@@ -1,8 +1,8 @@
-import { client, need } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { keys } from "#lib/changes.js";
-import { type Row, rail, railLimit } from "#lib/rows.js";
-import { wallPageSize } from "#lib/wall.js";
+import { client, need } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { keys } from "#lib/changes.ts";
+import { type Row, rail, railLimit } from "#lib/rows.ts";
+import { wallPageSize } from "#lib/wall.ts";
 
 // A home row's first page, for the page that draws all of it.
 export async function loadRow(

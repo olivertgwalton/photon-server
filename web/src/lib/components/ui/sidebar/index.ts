@@ -10,7 +10,7 @@ import Provider from "./sidebar-provider.svelte";
 import Rail from "./sidebar-rail.svelte";
 import Trigger from "./sidebar-trigger.svelte";
 import Root from "./sidebar.svelte";
-import { useSidebar } from "./context.svelte.js";
+import { useSidebar } from "./context.svelte.ts";
 
 export {
 	Content,

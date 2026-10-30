@@ -1,8 +1,8 @@
 import { toast } from "svelte-sonner";
 import { refreshAll } from "$app/navigation";
-import { client } from "./api/client.js";
-import { problemMessage } from "./api/problem.js";
-import type { components } from "./api/schema.js";
+import { client } from "./api/client.ts";
+import { problemMessage } from "./api/problem.ts";
+import type { components } from "./api/schema.d.ts";
 
 type Notification = components["schemas"]["Notification"];
 type InboxChange = components["schemas"]["InboxChange"];

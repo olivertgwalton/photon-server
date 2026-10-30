@@ -1,4 +1,4 @@
-import { client, need } from "#lib/api/client.js";
+import { client, need } from "#lib/api/client.ts";
 import type { PageLoad } from "./$types";
 
 // What the player needs before it asks to play: the versions, their tracks,

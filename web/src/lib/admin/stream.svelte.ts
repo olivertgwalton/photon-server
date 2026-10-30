@@ -1,5 +1,5 @@
 import { createContext } from "svelte";
-import { apply, idle, type Live } from "./live.js";
+import { apply, idle, type Live } from "./live.ts";
 
 // What the server is doing, as its feed on the events socket tells it to the
 // dashboard's pages and the activity menu.

@@ -1,4 +1,4 @@
-import type { components } from "#lib/api/schema.js";
+import type { components } from "#lib/api/schema.d.ts";
 import { page } from "$app/state";
 
 type Schemas = components["schemas"];

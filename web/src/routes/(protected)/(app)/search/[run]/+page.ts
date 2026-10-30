@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
-import { client, need } from "#lib/api/client.js";
-import { byKind } from "#lib/rows.js";
+import { client, need } from "#lib/api/client.ts";
+import { byKind } from "#lib/rows.ts";
 import type { PageLoad } from "./$types";
 
 // The most the server answers at once. It pages a search's titles of every

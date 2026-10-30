@@ -30,11 +30,11 @@ import {
 	forgetProgress,
 	setMark,
 	unmatchTitle,
-} from "#lib/actions.js";
-import { matchable, refreshable } from "#lib/admin/edit.js";
-import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
-import { playHref, titleWithShow } from "#lib/format.js";
-import { getShell } from "#lib/shell.svelte.js";
+} from "#lib/actions.ts";
+import { matchable, refreshable } from "#lib/admin/edit.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+import { playHref, titleWithShow } from "#lib/format.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

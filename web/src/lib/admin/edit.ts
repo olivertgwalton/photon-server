@@ -1,6 +1,6 @@
-import type { components } from "#lib/api/schema.js";
-import { text } from "#lib/form.js";
-import { parseClock } from "./words.js";
+import type { components } from "#lib/api/schema.d.ts";
+import { text } from "#lib/form.ts";
+import { parseClock } from "./words.ts";
 
 type Schemas = components["schemas"];
 type Field = Schemas["Field"];

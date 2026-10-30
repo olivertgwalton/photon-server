@@ -2,20 +2,20 @@
 import LayoutGridIcon from "@lucide/svelte/icons/layout-grid";
 import ListIcon from "@lucide/svelte/icons/list";
 import RectangleHorizontalIcon from "@lucide/svelte/icons/rectangle-horizontal";
-import { act } from "#lib/act.js";
-import { withQuery } from "#lib/address.js";
-import { client, refusal } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
-import { cardMin } from "#lib/cardsize.svelte.js";
+import { act } from "#lib/act.ts";
+import { withQuery } from "#lib/address.ts";
+import { client, refusal } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { cardMin } from "#lib/cardsize.svelte.ts";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import SmartSaveDialog from "#lib/components/SmartSaveDialog.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as ToggleGroup from "#lib/components/ui/toggle-group/index.ts";
 import Wall from "#lib/components/Wall.svelte";
 import WallFilterMenu from "#lib/components/WallFilterMenu.svelte";
 import WallSortMenu from "#lib/components/WallSortMenu.svelte";
-import { count } from "#lib/format.js";
-import { gridColumns } from "#lib/grid.js";
+import { count } from "#lib/format.ts";
+import { gridColumns } from "#lib/grid.ts";
 import {
 	cleared,
 	filterCount,
@@ -27,7 +27,7 @@ import {
 	type WallQuery,
 	wallPageSize,
 	wallSearch,
-} from "#lib/wall.js";
+} from "#lib/wall.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
 

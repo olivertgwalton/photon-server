@@ -18,35 +18,35 @@ import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
 import { onMount, untrack } from "svelte";
 import { on } from "svelte/events";
-import { client } from "#lib/api/client.js";
-import { problemMessage } from "#lib/api/problem.js";
-import type { components } from "#lib/api/schema.js";
-import { artworkURL } from "#lib/artwork.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import { fullTitle, timecode } from "#lib/format.js";
-import { cueStyle, keptAppearance } from "#lib/player/appearance.js";
-import { castContext, castRequest } from "#lib/player/cast.js";
-import { Casting } from "#lib/player/casting.svelte.js";
-import { SubtitleDrawing } from "#lib/player/drawing.svelte.js";
-import { type Preferences, skipping } from "#lib/player/preferences.js";
+import { client } from "#lib/api/client.ts";
+import { problemMessage } from "#lib/api/problem.ts";
+import type { components } from "#lib/api/schema.d.ts";
+import { artworkURL } from "#lib/artwork.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import { fullTitle, timecode } from "#lib/format.ts";
+import { cueStyle, keptAppearance } from "#lib/player/appearance.ts";
+import { castContext, castRequest } from "#lib/player/cast.ts";
+import { Casting } from "#lib/player/casting.svelte.ts";
+import { SubtitleDrawing } from "#lib/player/drawing.svelte.ts";
+import { type Preferences, skipping } from "#lib/player/preferences.ts";
 import {
 	browserProfile,
 	type Capabilities,
 	castProfile,
 	probe,
-} from "#lib/player/profile.js";
-import { ProgressReporter, type Report } from "#lib/player/progress.js";
-import { type Advance, isDue, runAfter } from "#lib/player/stillwatching.js";
+} from "#lib/player/profile.ts";
+import { ProgressReporter, type Report } from "#lib/player/progress.ts";
+import { type Advance, isDue, runAfter } from "#lib/player/stillwatching.ts";
 import {
 	beside,
 	choices,
 	needsReplay,
 	startingSubtitle,
 	wants,
-} from "#lib/player/subtitles.js";
-import { type Fit, fits, skips } from "#lib/player/words.js";
-import { queued } from "#lib/queue.js";
-import { vocabulary } from "#lib/vocabulary.js";
+} from "#lib/player/subtitles.ts";
+import { type Fit, fits, skips } from "#lib/player/words.ts";
+import { queued } from "#lib/queue.ts";
+import { vocabulary } from "#lib/vocabulary.ts";
 import { goto } from "$app/navigation";
 import EpisodeList from "./EpisodeList.svelte";
 import PlaybackInfo from "./PlaybackInfo.svelte";

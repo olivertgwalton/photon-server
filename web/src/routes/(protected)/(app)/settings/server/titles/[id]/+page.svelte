@@ -1,9 +1,9 @@
 <script lang="ts">
-import { act } from "#lib/act.js";
-import { mergeTitle } from "#lib/actions.js";
-import { matchable, refreshable } from "#lib/admin/edit.js";
-import { client } from "#lib/api/client.js";
-import type { components } from "#lib/api/schema.js";
+import { act } from "#lib/act.ts";
+import { mergeTitle } from "#lib/actions.ts";
+import { matchable, refreshable } from "#lib/admin/edit.ts";
+import { client } from "#lib/api/client.ts";
+import type { components } from "#lib/api/schema.d.ts";
 import ArtworkPicker from "#lib/components/admin/ArtworkPicker.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
 import IdentifyPanel from "#lib/components/admin/IdentifyPanel.svelte";
@@ -11,13 +11,13 @@ import MarkersEditor from "#lib/components/admin/MarkersEditor.svelte";
 import MetadataForm from "#lib/components/admin/MetadataForm.svelte";
 import TitleLocale from "#lib/components/admin/TitleLocale.svelte";
 import Choice from "#lib/components/Choice.svelte";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { fields } from "#lib/form.js";
-import { fullTitle } from "#lib/format.js";
-import { getShell } from "#lib/shell.svelte.js";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { fields } from "#lib/form.ts";
+import { fullTitle } from "#lib/format.ts";
+import { getShell } from "#lib/shell.svelte.ts";
 
 let { data } = $props();
 const shell = getShell();

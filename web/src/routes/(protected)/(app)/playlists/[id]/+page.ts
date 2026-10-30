@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
-import { client, need } from "#lib/api/client.js";
-import { keys } from "#lib/changes.js";
+import { client, need } from "#lib/api/client.ts";
+import { keys } from "#lib/changes.ts";
 import type { PageLoad } from "./$types";
 
 // The most entries one request answers.

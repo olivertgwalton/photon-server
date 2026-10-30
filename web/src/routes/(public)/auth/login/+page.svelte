@@ -1,18 +1,18 @@
 <script lang="ts">
-import { client } from "#lib/api/client.js";
-import { Button } from "#lib/components/ui/button/index.js";
-import * as Card from "#lib/components/ui/card/index.js";
-import * as Field from "#lib/components/ui/field/index.js";
-import { Input } from "#lib/components/ui/input/index.js";
-import { CLIENT, deviceName } from "#lib/device.js";
-import { fields } from "#lib/form.js";
-import { returnPath } from "#lib/session.js";
+import { client } from "#lib/api/client.ts";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as Card from "#lib/components/ui/card/index.ts";
+import * as Field from "#lib/components/ui/field/index.ts";
+import { Input } from "#lib/components/ui/input/index.ts";
+import { CLIENT, deviceName } from "#lib/device.ts";
+import { fields } from "#lib/form.ts";
+import { returnPath } from "#lib/session.ts";
 import {
 	attempt,
 	browserSession,
 	leaveFor,
 	refusalMessage,
-} from "#lib/signin.js";
+} from "#lib/signin.ts";
 import { goto, preloadData } from "$app/navigation";
 import { page } from "$app/state";
 import type { PageData as PickerData } from "../../../(protected)/profiles/$types";
