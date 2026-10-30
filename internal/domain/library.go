@@ -220,6 +220,21 @@ type Library struct {
 	SubtitleMatch     SubtitleMatch
 }
 
+// NewLibrary is how a library of kind is kept until an admin says otherwise. A remote one has no
+// folder to watch, nor files to read whole for previews and markers.
+func NewLibrary(kind LibraryKind, media LibraryMedia) Library {
+	l := Library{
+		Kind: kind, Media: media, Sources: DefaultSources(kind), RemoteExtras: DefaultRemoteExtras(),
+		Monitor: MonitorRealtime, RefreshDays: 30, Previews: PreviewsAll, Markers: MarkersAll, Keyframes: KeyframesIndex,
+		Themes: ThemesLocal, Deletion: DeletionOff, MissingVersions: MissingKept, Locale: Locale{Artwork: ArtworkLocalized},
+		Titles: TitlesLocalized, BoxSets: BoxSetsExpanded, SubtitleLanguages: []language.Tag{}, SubtitleMatch: SubtitleMatchRelease,
+	}
+	if media == MediaRemote {
+		l.Monitor, l.Previews, l.Markers = MonitorOff, PreviewsOff, MarkersOff
+	}
+	return l
+}
+
 // SubtitleMatch is which subtitle a library fetches for a version itself, as Jellyfin's "Only
 // download subtitles that are a perfect match": one made for its very file, found by its hash, or
 // the best of any, which may be timed for another release.

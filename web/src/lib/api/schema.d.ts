@@ -1194,7 +1194,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the kinds of library, the sources a new one of each ranks, and those it may
+         * List the kinds of library, how a new one of each is kept, and the sources it may rank
          * @description Admin only.
          */
         get: {
@@ -9027,9 +9027,9 @@ export interface components {
         /** @enum {string} */
         LibraryKind: "movies" | "shows" | "mixed";
         LibraryKindOptions: {
+            defaults: components["schemas"]["NewLibrary"][];
             fetchable: components["schemas"]["Fetchable"][];
             kind: components["schemas"]["LibraryKind"];
-            sources: components["schemas"]["KindSources"][];
         };
         LibraryKindOptionsList: {
             items: components["schemas"]["LibraryKindOptions"][];
@@ -9185,6 +9185,26 @@ export interface components {
         };
         NewKey: {
             name: string;
+        };
+        NewLibrary: {
+            artwork_language: components["schemas"]["ArtworkLanguage"];
+            box_sets: components["schemas"]["BoxSetMode"];
+            certification_country?: string;
+            deletion: components["schemas"]["MediaDeletion"];
+            keyframes: components["schemas"]["KeyframeMode"];
+            markers: components["schemas"]["MarkerDetection"];
+            media: components["schemas"]["LibraryMedia"];
+            metadata_language?: string;
+            missing_versions: components["schemas"]["MissingVersion"];
+            monitor: components["schemas"]["Monitor"];
+            previews: components["schemas"]["PreviewLevel"];
+            refresh_days: number;
+            remote_extras: components["schemas"]["ExtraKind"][];
+            sources: components["schemas"]["KindSources"][];
+            subtitle_languages: string[];
+            subtitle_match: components["schemas"]["SubtitleMatch"];
+            themes: components["schemas"]["ThemeLookup"];
+            title_language: components["schemas"]["TitleLanguage"];
         };
         /** @enum {string} */
         NextEpisode: "play" | "offer";

@@ -55,16 +55,15 @@ func (f *fakeLibraries) AddLibrary(_ context.Context, name string, kind domain.L
 	if slices.ContainsFunc(f.libs, func(l domain.Library) bool { return l.Name == name || l.Root == root }) {
 		return domain.Library{}, store.ErrLibraryExists
 	}
-	l := domain.Library{ID: uuid.NewV7(), Name: name, Kind: kind, Root: root, DiscoverSource: discover, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorRealtime}
+	l := domain.NewLibrary(kind, domain.MediaFolder)
+	l.ID, l.Name, l.Root, l.DiscoverSource = uuid.NewV7(), name, root, discover
 	f.libs = append(f.libs, l)
 	return l, nil
 }
 
 func (f *fakeLibraries) AddRemoteLibrary(_ context.Context, name string, kind domain.LibraryKind, r store.Remote) (domain.Library, error) {
-	l := domain.Library{
-		ID: uuid.NewV7(), Name: name, Kind: kind, Media: domain.MediaRemote, ListSource: r.ListSource, ListID: r.ListID,
-		DiscoverSource: r.DiscoverSource, StreamSource: r.StreamSource, Sources: domain.DefaultSources(kind), Monitor: domain.MonitorOff,
-	}
+	l := domain.NewLibrary(kind, domain.MediaRemote)
+	l.ID, l.Name, l.ListSource, l.ListID, l.DiscoverSource, l.StreamSource = uuid.NewV7(), name, r.ListSource, r.ListID, r.DiscoverSource, r.StreamSource
 	f.libs = append(f.libs, l)
 	return l, nil
 }

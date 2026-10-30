@@ -76,15 +76,17 @@ func TestAnAdminSetsAProvidersKeyAndNeverSeesItAgain(t *testing.T) {
 	}
 }
 
-func TestAnAdminIsToldWhatEachKindOfLibraryRanksItsSourcesFor(t *testing.T) {
+func TestAnAdminIsToldHowANewLibraryOfEachKindIsKept(t *testing.T) {
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{Auth: fakeAuth{}})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/library-kinds", nil)
 	req.Header.Set("Authorization", "Bearer "+goodToken)
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	for _, want := range []string{
-		`{"kind":"movies","sources":[{"kind":"movie","metadata":[{"source":"nfo","enabled":true},{"source":"tmdb","enabled":true}],` +
-			`"images":[{"source":"tmdb","enabled":true}]}]`,
+		`{"kind":"movies","defaults":[{"media":"folder","sources":[{"kind":"movie","metadata":[{"source":"nfo","enabled":true},{"source":"tmdb","enabled":true}],` +
+			`"images":[{"source":"tmdb","enabled":true}]}],"remote_extras":["trailer","featurette","behind_the_scenes"],"monitor":"realtime","refresh_days":30,` +
+			`"previews":"all","markers":"all"`,
+		`"monitor":"off","refresh_days":30,"previews":"off","markers":"off"`,
 		`{"kind":"season","metadata":["nfo","tmdb","tvdb","anilist","anidb"],"images":["tmdb","tvdb","anilist","anidb"]}`,
 	} {
 		if !strings.Contains(rec.Body.String(), want) {

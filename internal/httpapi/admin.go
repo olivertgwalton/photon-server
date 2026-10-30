@@ -59,7 +59,12 @@ type adminLibraryJSON struct {
 	Streams  domain.FieldSource  `json:"streams,omitzero"`
 	Discover domain.FieldSource  `json:"discover,omitzero"`
 	// Requests is the provider a library of files' approved requests are sent to.
-	Requests     domain.FieldSource     `json:"requests,omitzero"`
+	Requests domain.FieldSource `json:"requests,omitzero"`
+	librarySettingsJSON
+}
+
+// librarySettingsJSON is how a library is kept, which a new one has as the server says.
+type librarySettingsJSON struct {
 	Sources      []kindSourcesJSON      `json:"sources"`
 	RemoteExtras []domain.ExtraKind     `json:"remote_extras"`
 	Monitor      domain.Monitor         `json:"monitor"`
@@ -110,7 +115,16 @@ type rankedSourceJSON struct {
 func adminLibrary(l domain.Library) adminLibraryJSON {
 	j := adminLibraryJSON{
 		ID: l.ID, Name: l.Name, Kind: l.Kind, Media: l.Media, Root: l.Root, Streams: l.StreamSource, Discover: l.DiscoverSource,
-		Requests:     l.RequestSource,
+		Requests: l.RequestSource, librarySettingsJSON: librarySettings(l),
+	}
+	if l.ListSource != "" {
+		j.List = &listRefJSON{Source: l.ListSource, ID: l.ListID}
+	}
+	return j
+}
+
+func librarySettings(l domain.Library) librarySettingsJSON {
+	j := librarySettingsJSON{
 		Sources:      []kindSourcesJSON{},
 		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
@@ -118,9 +132,6 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 		MetadataLanguage: domain.LanguageTag(l.Locale.Language), CertificationCountry: domain.CountryCode(l.Locale.Country), ArtworkLanguage: l.Locale.Artwork,
 		TitleLanguage: l.Titles, BoxSets: l.BoxSets, SubtitleLanguages: nonNil(each(l.SubtitleLanguages, domain.TagOf)),
 		SubtitleMatch: l.SubtitleMatch,
-	}
-	if l.ListSource != "" {
-		j.List = &listRefJSON{Source: l.ListSource, ID: l.ListID}
 	}
 	for _, k := range l.Sources {
 		j.Sources = append(j.Sources, kindSourcesOf(k))
