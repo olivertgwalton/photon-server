@@ -23,9 +23,17 @@ type profileAdmin interface {
 
 type accessJSON struct {
 	// MaxAge is the oldest certificate it sees, by the age it is for; null for any.
-	MaxAge    *int           `json:"max_age"`
-	Unrated   domain.Unrated `json:"unrated"`
-	Libraries []uuid.UUID    `json:"libraries"`
+	MaxAge  *int           `json:"max_age"`
+	Unrated domain.Unrated `json:"unrated"`
+	// MaxCommonSenseAge is the oldest age Common Sense Media advises a title it sees for; null for
+	// any. A title Common Sense has no age for is judged by its certificate alone.
+	MaxCommonSenseAge *int        `json:"max_common_sense_age"`
+	Libraries         []uuid.UUID `json:"libraries"`
+}
+
+// commonSenseAgeOK is whether an age is one Common Sense Media advises titles for, or none.
+func commonSenseAgeOK(age *int) bool {
+	return age == nil || *age >= 1 && *age <= domain.MaxCommonSenseAge
 }
 
 // profileAccess answers what a profile may see, as Jellyfin's parental control and library access
@@ -56,6 +64,10 @@ func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
 	req.Unrated = cmp.Or(req.Unrated, domain.UnratedAllow)
 	if req.MaxAge != nil && (*req.MaxAge < 0 || *req.MaxAge > 21) {
 		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
+		return
+	}
+	if !commonSenseAgeOK(req.MaxCommonSenseAge) {
+		writeProblem(w, a.logger, codeInvalidBody, "max_common_sense_age is an age from 1 to 18 or null")
 		return
 	}
 	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req), keeper(r))

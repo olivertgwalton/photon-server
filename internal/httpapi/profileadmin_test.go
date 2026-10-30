@@ -101,6 +101,7 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		{goodToken, http.MethodDelete, "/api/v1/admin/profiles/" + oliver.ID.String(), "", http.StatusConflict},
 		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"max_age": 12, "unrated": "block", "libraries": []}`, http.StatusNoContent},
 		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"max_age": -1}`, http.StatusBadRequest},
+		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"max_common_sense_age": 0}`, http.StatusBadRequest},
 		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", `{"unrated": "maybe"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPut, "/api/v1/admin/profiles/" + uuid.NewV7().String() + "/access", `{}`, http.StatusNotFound},
 		{goodToken, http.MethodGet, "/api/v1/admin/profiles/" + oliver.ID.String() + "/access", "", http.StatusOK},

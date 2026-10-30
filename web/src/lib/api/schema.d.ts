@@ -8037,6 +8037,7 @@ export interface components {
         Access: {
             libraries: string[];
             max_age: number | null;
+            max_common_sense_age: number | null;
             unrated: components["schemas"]["Unrated"];
         };
         AddCollection: {

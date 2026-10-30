@@ -219,10 +219,15 @@ func TestAnAdminKeepsAProvidersSecretOnlyForTheSameIssuerAndClient(t *testing.T)
 		t.Errorf("provisioning none of its values: %d", rec.Code)
 	}
 	rec = put(`{"name":"Pocket ID","issuer":"https://id.example.com","client_id":"photon","provisioning":"create","group":"kids",` +
-		`"access":{"max_age":12,"unrated":"block","libraries":[]}}`)
+		`"access":{"max_age":12,"unrated":"block","max_common_sense_age":10,"libraries":[]}}`)
 	if rec.Code != http.StatusOK || f.provider.MaxAge == nil || *f.provider.MaxAge != 12 || f.provider.Unrated != domain.UnratedBlock ||
-		!strings.Contains(rec.Body.String(), `"access":{"max_age":12,"unrated":"block","libraries":[]}`) {
+		f.provider.MaxCommonSenseAge == nil || *f.provider.MaxCommonSenseAge != 10 ||
+		!strings.Contains(rec.Body.String(), `"access":{"max_age":12,"unrated":"block","max_common_sense_age":10,"libraries":[]}`) {
 		t.Errorf("the access a made profile gets: %d %s; kept %+v", rec.Code, rec.Body, f.provider)
+	}
+	if rec := put(`{"name":"Pocket ID","issuer":"https://id.example.com","client_id":"photon","provisioning":"create","group":"kids",` +
+		`"access":{"max_common_sense_age":19,"libraries":[]}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a Common Sense age past 18: %d", rec.Code)
 	}
 	if rec := put(`{"name":"Pocket ID","issuer":"https://id.example.com","client_id":"photon","provisioning":"create","group":"kids",` +
 		`"access":{"max_age":40,"unrated":"allow","libraries":[]}}`); rec.Code != http.StatusBadRequest {
