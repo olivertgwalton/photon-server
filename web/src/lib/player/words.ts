@@ -9,6 +9,18 @@ export const skips: Record<Schemas["MarkerKind"], string> = {
 	preview: "Skip Preview",
 };
 
+export const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+// How the picture meets a screen of another shape: whole, cropped to fill it,
+// or stretched to it.
+export const fits = {
+	contain: { label: "Fit", class: "object-contain" },
+	cover: { label: "Crop to fill", class: "object-cover" },
+	fill: { label: "Stretch", class: "object-fill" },
+};
+
+export type Fit = keyof typeof fits;
+
 // The most the server may send, as Jellyfin's quality menu offers it; zero
 // is the file as it is.
 export const qualities = [
