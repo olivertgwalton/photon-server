@@ -41,6 +41,10 @@ type fakeMisses map[string]time.Duration
 
 func (fakeMisses) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
 
+func (fakeMisses) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (fakeMisses) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
+
 func (m fakeMisses) NoteThemeMissing(_ context.Context, key string, ttl time.Duration) error {
 	m[key] = ttl
 	return nil

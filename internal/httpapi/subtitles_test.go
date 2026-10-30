@@ -65,7 +65,7 @@ func TestAViewerFindsAndFetchesSubtitlesForTheirVersion(t *testing.T) {
 	if want := (domain.FoundSubtitle{Source: domain.SourceOpenSubtitles, ID: "2", Language: language.French, Release: "Heat.1995.BluRay", Forced: true}); rec.Code != http.StatusCreated || fetched.fetched != want {
 		t.Errorf("fetch: %d %s, fetched %+v", rec.Code, rec.Body, fetched.fetched)
 	}
-	for err, want := range map[error]int{provider.ErrNoSubtitler: http.StatusConflict, provider.ErrQuota: http.StatusTooManyRequests} {
+	for err, want := range map[error]int{provider.ErrNoSubtitler: http.StatusConflict, provider.ErrQuota: http.StatusTooManyRequests, provider.ErrLimited: http.StatusTooManyRequests} {
 		fetched.err = err
 		if rec := do(memberToken, http.MethodPost, base, `{"source": "opensubtitles", "id": "2"}`); rec.Code != want {
 			t.Errorf("fetching with %v: %d, want %d", err, rec.Code, want)

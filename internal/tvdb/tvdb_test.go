@@ -14,16 +14,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
 // gb is what the tests ask in, as a server set to en-GB asks.
 var gb = domain.LocaleOf("en-GB")
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // withKey is settings with a project key and no PIN.
 func withKey(context.Context) (map[string]string, error) {
@@ -98,7 +99,7 @@ func fake(t *testing.T) (*Client, *int) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withKey, unlimited{})
+	c := New(withKey, unpaused{})
 	c.api.Base = srv.URL
 	return c, &logins
 }
@@ -218,7 +219,7 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 			{"tvdb_id":"1","name":"Wired","overview":"Only in its own words."}]}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withKey, unlimited{})
+	c := New(withKey, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, "The Wire", 0)
 	if err != nil {
@@ -231,7 +232,7 @@ func TestSearchSaysWhatEachShowIsAboutInTheClientsLanguage(t *testing.T) {
 
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
-	got := provider.Capabilities(New(withKey, unlimited{}))
+	got := provider.Capabilities(New(withKey, unpaused{}))
 	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
@@ -254,7 +255,7 @@ func TestAShowsPicturesAreRankedByTheLanguageAskedIn(t *testing.T) {
 			{"type":7,"image":"/season.jpg","language":"deu"}]}}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withKey, unlimited{})
+	c := New(withKey, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.Details(t.Context(), domain.LocaleOf("de-DE"), 79126)
 	if err != nil {

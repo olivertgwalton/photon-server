@@ -18,7 +18,6 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
@@ -38,9 +37,6 @@ const (
 	passwordSetting = "password"
 )
 
-// limit is OpenSubtitles' own: five requests a second.
-var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
-
 // tokenFor is how long a sign-in is used before signing in again; OpenSubtitles' last a day.
 const tokenFor = 12 * time.Hour
 
@@ -53,8 +49,8 @@ type Client struct {
 	signed time.Time
 }
 
-func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{settings: settings, api: provider.Client{Name: "opensubtitles", Base: baseURL, Limits: limits, Limit: limit}}
+func New(settings provider.Settings, pauses provider.Pauses) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "opensubtitles", Base: baseURL, Pauses: pauses}}
 }
 
 func (c *Client) Info() provider.Info {

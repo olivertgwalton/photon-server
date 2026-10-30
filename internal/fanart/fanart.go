@@ -12,10 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
@@ -29,16 +27,13 @@ const projectKey = "097e6f9e491fdeb5d46b5198dfa28fa2"
 // project key alone sees.
 const clientSetting = "client_key"
 
-// limit is gentle: fanart.tv publishes none, and a library's first scan asks for every title.
-var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
-
 type Client struct {
 	settings provider.Settings
 	api      provider.Client
 }
 
-func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{settings: settings, api: provider.Client{Name: "fanart", Base: baseURL, Limits: limits, Limit: limit}}
+func New(settings provider.Settings, pauses provider.Pauses) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "fanart", Base: baseURL, Pauses: pauses}}
 }
 
 func (c *Client) Info() provider.Info {

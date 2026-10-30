@@ -12,13 +12,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // Answers as fanart.tv gives them, by path.
 var answers = map[string]string{
@@ -59,7 +60,7 @@ func client(t *testing.T, personal string, refuse bool) (*Client, *[]string) {
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) {
 		return map[string]string{"client_key": personal}, nil
-	}, unlimited{})
+	}, unpaused{})
 	c.api.Base = srv.URL + "/"
 	return c, &asked
 }

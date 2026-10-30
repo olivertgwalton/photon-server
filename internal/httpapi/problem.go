@@ -179,6 +179,7 @@ var problems = []struct {
 	{err: provider.ErrNoSubtitler, code: codeConflict, detail: "no provider finds subtitles: an admin sets OpenSubtitles up under Providers"},
 	{err: provider.ErrNotConfigured, code: codeConflict, detail: "the provider is not set up: an admin sets it up under Providers"},
 	{err: provider.ErrQuota, code: codeRateLimited, detail: "the provider's downloads for today are used: try again tomorrow"},
+	{err: provider.ErrLimited, code: codeRateLimited, detail: "the provider asked to be left for now: try again later"},
 }
 
 // answered writes the problem err is, if it is one. A client that has gone is told nothing.

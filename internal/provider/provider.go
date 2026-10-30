@@ -31,6 +31,9 @@ var (
 	// ErrQuota is an account that has used what a provider lets it have today: what is left is
 	// asked for tomorrow.
 	ErrQuota = errors.New("provider: today's quota is used")
+	// ErrLimited is a provider that asked to be left longer than one request waits, with 429 Too
+	// Many Requests: its job is tried again later.
+	ErrLimited = errors.New("provider: asked to be left for now")
 )
 
 // Info is what a provider is and what an admin may set of it.

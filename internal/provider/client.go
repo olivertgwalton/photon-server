@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
 // MaxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
@@ -24,19 +22,26 @@ const MaxAnswer = 8 << 20
 // builtinHTTP is the built-in providers' HTTP client.
 var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
 
-// Client asks a provider for JSON, as every provider is asked: after its share of Limit where
-// Limits is set, again after a 429 as the provider says (send), and reading at most MaxAnswer. A
-// request goes to Base and nowhere else: what a caller names is a path under it. An error names
-// Name and the path, never the address, which may carry a key.
+// Client asks a provider for JSON, as every provider is asked: again after a 429 once the provider
+// says it may (send), and reading at most MaxAnswer. A request goes to Base and nowhere else: what
+// a caller names is a path under it. An error names Name and the path, never the address, which
+// may carry a key.
 type Client struct {
 	Name string
 	// Base is the provider's http or https address: a built-in provider's own, or the one an
 	// admin registered for a plugin or a server to import from.
 	Base string
 	// HTTP is nil for a built-in provider's.
-	HTTP   *http.Client
-	Limits kv.Limiter
-	Limit  kv.Limit
+	HTTP *http.Client
+	// Pauses, where it is set, holds every node's requests to Name back while the provider has
+	// asked for time, as the server's own key is one allowance however many nodes spend it.
+	Pauses Pauses
+}
+
+// Pauses is where a provider's asking for time is kept: KV, or a test's own.
+type Pauses interface {
+	Pause(ctx context.Context, name string, d time.Duration) error
+	Paused(ctx context.Context, name string) (time.Duration, error)
 }
 
 // Request is what a provider is asked: a path under its Client's Base, already escaped, and what
@@ -60,7 +65,8 @@ type Refusal struct {
 func (r *Refusal) Error() string { return r.Status }
 
 func (r *Refusal) Is(target error) bool {
-	return target == ErrNotFound && r.Code == http.StatusNotFound
+	return target == ErrNotFound && r.Code == http.StatusNotFound ||
+		target == ErrLimited && r.Code == http.StatusTooManyRequests
 }
 
 // Do sends r and decodes a 2xx's JSON into out; any other status is a *Refusal.
@@ -87,12 +93,10 @@ func (c Client) Bytes(ctx context.Context, r Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.Limits != nil {
-		if err := kv.Wait(ctx, c.Limits, c.Name, c.Limit); err != nil {
-			return nil, err
-		}
+	resp, err := c.send(req)
+	if errors.Is(err, ErrLimited) {
+		return nil, fmt.Errorf("%s %s: %w", c.Name, r.Path, err)
 	}
-	resp, err := send(cmp.Or(c.HTTP, builtinHTTP), req)
 	if err != nil {
 		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
@@ -151,19 +155,38 @@ func (c Client) request(ctx context.Context, r Request) (*http.Request, error) {
 }
 
 // maxRetryAfter is the longest a provider's asking to be given time is waited out within one
-// request; one asking longer fails it, and its job is tried again later.
+// request; one asking longer fails it with ErrLimited, and its job is tried again later.
 const maxRetryAfter = 30 * time.Second
 
-// send sends req, and sends it again once a provider answering 429 Too Many Requests says it may,
-// so a burst of identifying waits a moment rather than failing titles into their backoff.
-func send(hc *http.Client, req *http.Request) (*http.Response, error) {
+// send sends req once the provider has no pause on it, and again once a provider answering 429 Too
+// Many Requests says it may, so a burst of identifying waits a moment rather than failing titles
+// into their backoff. What it asked for is kept in Pauses, so no node asks before then.
+func (c Client) send(req *http.Request) (*http.Response, error) {
+	ctx := req.Context()
 	var waited time.Duration
 	for {
-		resp, err := hc.Do(req)
+		wait, err := c.paused(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if wait > 0 {
+			if waited += wait; waited > maxRetryAfter {
+				return nil, fmt.Errorf("%w for %v", ErrLimited, wait.Round(time.Second))
+			}
+			if err := sleep(ctx, wait); err != nil {
+				return nil, err
+			}
+		}
+		resp, err := cmp.Or(c.HTTP, builtinHTTP).Do(req) //nolint:gosec // G704: Base, a provider's own address or one an admin registered
 		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
 			return resp, err
 		}
-		wait := retryAfter(resp.Header.Get("Retry-After"))
+		wait = retryAfter(resp.Header.Get("Retry-After"))
+		if c.Pauses != nil {
+			if err := c.Pauses.Pause(ctx, c.Name, wait); err != nil {
+				return nil, errors.Join(err, resp.Body.Close())
+			}
+		}
 		if waited += wait; waited > maxRetryAfter {
 			return resp, nil
 		}
@@ -175,11 +198,26 @@ func send(hc *http.Client, req *http.Request) (*http.Response, error) {
 				return nil, err
 			}
 		}
-		select {
-		case <-req.Context().Done():
-			return nil, req.Context().Err()
-		case <-time.After(wait):
+		if err := sleep(ctx, wait); err != nil {
+			return nil, err
 		}
+	}
+}
+
+// paused answers how long the provider has asked every node to wait still.
+func (c Client) paused(ctx context.Context) (time.Duration, error) {
+	if c.Pauses == nil {
+		return 0, nil
+	}
+	return c.Pauses.Paused(ctx, c.Name)
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
 	}
 }
 

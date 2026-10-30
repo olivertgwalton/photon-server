@@ -18,7 +18,6 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
@@ -28,9 +27,6 @@ const baseURL = "https://api4.thetvdb.com/v4"
 // key. TVDB's terms make it free for a project under its revenue threshold, with attribution. An
 // admin's own key, and a subscriber's PIN, replace it.
 const defaultKey = "cdff72c4-d3d6-4ae5-99e6-cae67aff0646"
-
-// TVDB publishes no rate limit; this keeps every node together well within reason.
-var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 
 // A token lasts a month; it is renewed a few days early.
 const tokenLife = 25 * 24 * time.Hour
@@ -54,8 +50,8 @@ type Client struct {
 }
 
 // New makes a client signed in as settings say.
-func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{settings: settings, api: provider.Client{Name: "tvdb", Base: baseURL, Limits: limits, Limit: limit}}
+func New(settings provider.Settings, pauses provider.Pauses) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "tvdb", Base: baseURL, Pauses: pauses}}
 }
 
 // languageOf is a locale's language as TVDB names it, ISO 639-2.

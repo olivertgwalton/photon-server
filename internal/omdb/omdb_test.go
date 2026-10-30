@@ -14,13 +14,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // Answers as OMDb gives them, keyed by the query past the key.
 var answers = map[string]string{
@@ -67,7 +68,7 @@ func client(t *testing.T, key string) *Client {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unpaused{})
 	c.api.Base = srv.URL + "/"
 	return c
 }
@@ -147,7 +148,7 @@ func TestAKeyIsNeededAndARefusedOneIsPassedOver(t *testing.T) {
 
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
-	got := provider.Capabilities(New(func(context.Context) (map[string]string, error) { return nil, nil }, unlimited{}))
+	got := provider.Capabilities(New(func(context.Context) (map[string]string, error) { return nil, nil }, unpaused{}))
 	if want := []domain.Capability{domain.CapabilityDescribe}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}

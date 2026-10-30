@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -77,5 +78,67 @@ func TestOnlyAProviderThatAnswersSubtitlesIsAskedForThem(t *testing.T) {
 	}
 	if _, err := r.FetchSubtitle(t.Context(), silent.id, "1"); !errors.Is(err, ErrNoSubtitler) {
 		t.Errorf("fetching from the silent plugin: %v, want ErrNoSubtitler", err)
+	}
+}
+
+// pauses is Valkey's pauses held in memory, shared by every client given it as nodes share Valkey.
+type pauses map[string]time.Time
+
+func (p pauses) Pause(_ context.Context, name string, d time.Duration) error {
+	if until := time.Now().Add(d); until.After(p[name]) {
+		p[name] = until
+	}
+	return nil
+}
+
+func (p pauses) Paused(_ context.Context, name string) (time.Duration, error) {
+	return max(time.Until(p[name]), 0), nil
+}
+
+// A provider asking to be left longer than a request waits, as MDBList does once a day's requests
+// are spent, is not asked again by any node until then.
+func TestALongPauseHoldsEveryNodeBack(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		w.Header().Set("Retry-After", "3600")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	shared := pauses{}
+	one, other := Client{Name: "test", Base: srv.URL, Pauses: shared}, Client{Name: "test", Base: srv.URL, Pauses: shared}
+	if _, err := one.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/"}); !errors.Is(err, ErrLimited) {
+		t.Errorf("asked to wait an hour: %v, want ErrLimited", err)
+	}
+	if _, err := other.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/"}); !errors.Is(err, ErrLimited) || asked != 1 {
+		t.Errorf("another node within the hour: %v after %d requests; want ErrLimited, the provider asked once", err, asked)
+	}
+	unrelated := Client{Name: "another provider", Base: srv.URL, Pauses: shared}
+	if _, err := unrelated.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/"}); asked != 2 {
+		t.Errorf("another provider: %v after %d requests; want it asked", err, asked)
+	}
+}
+
+// A moment another node was asked to wait is waited out before asking, not spent on a 429.
+func TestAShortPauseIsWaitedOut(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		if _, err := w.Write([]byte(`{}`)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+	shared := pauses{}
+	if err := shared.Pause(t.Context(), "test", 200*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	c := Client{Name: "test", Base: srv.URL, Pauses: shared}
+	if _, err := c.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/"}); err != nil || asked != 1 {
+		t.Fatalf("after the pause: %v after %d requests; want an answer", err, asked)
+	}
+	if waited := time.Since(start); waited < 150*time.Millisecond {
+		t.Errorf("asked after %v, want the pause waited out", waited)
 	}
 }

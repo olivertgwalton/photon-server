@@ -40,7 +40,8 @@ const (
 	imageURL = "https://cdn.anidb.net/images/main/"
 )
 
-// limit keeps every node together to one request every two seconds and a half, over AniDB's two.
+// limit keeps every node together to one request every two seconds and a half, over AniDB's two:
+// AniDB answers asking faster with a ban, never with 429.
 var limit = kv.Limit{Every: 2500 * time.Millisecond, Burst: 1}
 
 // answers are AniDB's answers kept, so no anime is asked for twice a day, and the server's ban.
@@ -60,7 +61,7 @@ type Client struct {
 func New(settings provider.Settings, l animelist.Lists, a answers) *Client {
 	return &Client{
 		settings: settings, lists: l, answers: a,
-		api: provider.Client{Name: "anidb", Base: "http://api.anidb.net:9001", Limits: a, Limit: limit},
+		api: provider.Client{Name: "anidb", Base: "http://api.anidb.net:9001"},
 	}
 }
 
@@ -220,6 +221,9 @@ func (c *Client) ask(ctx context.Context, aid int) ([]byte, error) {
 	client, version := set[clientSetting], set[versionSetting]
 	if client == "" || version == "" {
 		return nil, provider.ErrNotConfigured
+	}
+	if err := kv.Wait(ctx, c.answers, "anidb", limit); err != nil {
+		return nil, err
 	}
 	data, err := c.api.Bytes(ctx, provider.Request{Method: http.MethodGet, Path: "/httpapi", Query: url.Values{
 		"request": {"anime"}, "client": {client}, "clientver": {version}, "protover": {"1"}, "aid": {strconv.Itoa(aid)},

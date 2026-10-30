@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/olivertgwalton/photon-server/internal/anilist"
 	"github.com/olivertgwalton/photon-server/internal/animelist"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -37,8 +36,8 @@ type aniList struct {
 	lists animelist.Lists
 }
 
-func newAniList(l animelist.Lists, limits kv.Limiter) aniList {
-	return aniList{api: provider.Client{Name: "anilist", Base: "https://graphql.anilist.co", Limits: limits, Limit: anilist.Limit}, lists: l}
+func newAniList(l animelist.Lists, pauses provider.Pauses) aniList {
+	return aniList{api: provider.Client{Name: "anilist", Base: "https://graphql.anilist.co", Pauses: pauses}, lists: l}
 }
 
 func (aniList) flow() LinkFlow { return LinkToken }
