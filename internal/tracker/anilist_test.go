@@ -15,12 +15,13 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/animelist"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // animeLists place Attack on Titan's season 3 in two cours, and Princess Mononoke.
 type animeLists struct{}
@@ -91,7 +92,7 @@ func (f *fakeAniList) serve(t *testing.T) aniList {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := newAniList(animeLists{}, unlimited{})
+	c := newAniList(animeLists{}, unpaused{})
 	c.api.Base = srv.URL
 	return c
 }

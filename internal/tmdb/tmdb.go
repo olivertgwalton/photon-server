@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
@@ -28,9 +27,6 @@ const (
 // defaultToken is the project's own API read access token, shipped in the source as Jellyfin
 // ships its key, so matching works without an account. An admin's own token replaces it.
 const defaultToken = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJkYzYwYTNmZmYyZTRlOWQyZmU3ZTliYzgzYWI1ODNhYSIsIm5iZiI6MTc2MTg2OTQzNi41NDEsInN1YiI6IjY5MDNmZTdjMDIyZTUxOWZlMTJmZGI1YyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.H6Hra5soywDrjrzesbmH2wzHscr1Vx5ZwfhPTa5nN1Y" //nolint:gosec // public by design
-
-// limit keeps every node together well under TMDB's rate limit of about 50 requests a second.
-var limit = kv.Limit{Every: 50 * time.Millisecond, Burst: 20}
 
 type Kind string
 
@@ -49,8 +45,8 @@ type Client struct {
 
 // New makes a client that authenticates with the API read access token settings hold. Each
 // request is asked in a locale: its language the words', its country the certificates'.
-func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{settings: settings, api: provider.Client{Name: "tmdb", Base: baseURL, Limits: limits, Limit: limit}}
+func New(settings provider.Settings, pauses provider.Pauses) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "tmdb", Base: baseURL, Pauses: pauses}}
 }
 
 func (c *Client) get(ctx context.Context, loc domain.Locale, path string, query url.Values, into any) error {

@@ -14,21 +14,16 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/animelist"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
-
-// Limit keeps every node together under AniList's 30 requests a minute, which its tracker's
-// requests count against too.
-var Limit = kv.Limit{Every: 2 * time.Second, Burst: 3}
 
 type Client struct {
 	api   provider.Client
 	lists animelist.Lists
 }
 
-func New(l animelist.Lists, limits kv.Limiter) *Client {
-	return &Client{api: provider.Client{Name: "anilist", Base: "https://graphql.anilist.co", Limits: limits, Limit: Limit}, lists: l}
+func New(l animelist.Lists, pauses provider.Pauses) *Client {
+	return &Client{api: provider.Client{Name: "anilist", Base: "https://graphql.anilist.co", Pauses: pauses}, lists: l}
 }
 
 func (c *Client) Info() provider.Info {

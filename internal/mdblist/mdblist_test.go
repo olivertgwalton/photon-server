@@ -13,13 +13,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // Jaws as MDBList answers it, IMDb's score among others MDBList scores out of 100, one site it
 // has nothing for, and sites the server leaves out.
@@ -48,7 +49,7 @@ func client(t *testing.T, key string) *Client {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unlimited{})
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": key}, nil }, unpaused{})
 	c.api.Base = srv.URL
 	return c
 }
@@ -78,7 +79,7 @@ func TestAKeyIsNeededAndNeverLogged(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), "wrong") {
 		t.Errorf("with a wrong key: %v, want an error that does not carry the key", err)
 	}
-	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unpaused{})
 	c.api.Base = "http://127.0.0.1:1"
 	_, err = c.Ratings(t.Context(), domain.ItemMovie, map[domain.Provider]string{domain.ProviderTMDB: "578"})
 	if err == nil || strings.Contains(err.Error(), "secret") {
@@ -102,7 +103,7 @@ func TestAListIsItsTitlesInRankOrder(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "garycrawfordgc/top-horror")
 	if err != nil {
@@ -133,7 +134,7 @@ func TestListsAreTheBestLikedUnlessSearched(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unlimited{})
+	c := New(func(context.Context) (map[string]string, error) { return map[string]string{"api_key": "secret"}, nil }, unpaused{})
 	c.api.Base = srv.URL
 	top, err := c.Lists(t.Context(), "")
 	if err != nil {

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
@@ -24,16 +23,13 @@ const baseURL = "https://www.omdbapi.com/"
 // keySetting is the setting that holds the key.
 const keySetting = "api_key"
 
-// limit keeps well inside the free tier, which counts requests a day.
-var limit = kv.Limit{Every: 200 * time.Millisecond, Burst: 5}
-
 type Client struct {
 	settings provider.Settings
 	api      provider.Client
 }
 
-func New(settings provider.Settings, limits kv.Limiter) *Client {
-	return &Client{settings: settings, api: provider.Client{Name: "omdb", Base: baseURL, Limits: limits, Limit: limit}}
+func New(settings provider.Settings, pauses provider.Pauses) *Client {
+	return &Client{settings: settings, api: provider.Client{Name: "omdb", Base: baseURL, Pauses: pauses}}
 }
 
 func (c *Client) Info() provider.Info {

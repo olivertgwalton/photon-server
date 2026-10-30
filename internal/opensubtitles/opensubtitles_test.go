@@ -14,13 +14,14 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // server is OpenSubtitles: it knows Alien in English, and an episode of Lost; it signs Ada in,
 // takes back the first token it gave once, and lets her fetch until quota runs out.
@@ -79,7 +80,7 @@ func client(t *testing.T, s *server) *Client {
 	t.Cleanup(srv.Close)
 	c := New(func(context.Context) (map[string]string, error) {
 		return map[string]string{"api_key": "consumer", "username": "ada", "password": "secret"}, nil
-	}, unlimited{})
+	}, unpaused{})
 	c.api.Base = srv.URL
 	return c
 }
@@ -136,7 +137,7 @@ func TestASubtitleIsFetchedSignedIn(t *testing.T) {
 	if s.signIns != 2 {
 		t.Errorf("signed in %d times, want the token kept", s.signIns)
 	}
-	if _, err := New(func(context.Context) (map[string]string, error) { return map[string]string{}, nil }, unlimited{}).
+	if _, err := New(func(context.Context) (map[string]string, error) { return map[string]string{}, nil }, unpaused{}).
 		SearchSubtitles(t.Context(), domain.SubtitleQuery{}); !errors.Is(err, provider.ErrNotConfigured) {
 		t.Errorf("with no key: %v, want ErrNotConfigured", err)
 	}

@@ -16,13 +16,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // withToken is settings with an API read access token.
 func withToken(context.Context) (map[string]string, error) {
@@ -52,7 +53,7 @@ func serveIn(t *testing.T, language string, routes map[string]string) *Client {
 		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withToken, unlimited{})
+	c := New(withToken, unpaused{})
 	c.api.Base = srv.URL
 	return c
 }
@@ -210,7 +211,7 @@ func TestARequestTMDBAsksToSlowIsSentAgain(t *testing.T) {
 		reply(t, w, `{"results":[{"id":348,"title":"Alien","release_date":"1979-05-25"}]}`)
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withToken, unlimited{})
+	c := New(withToken, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.Search(t.Context(), gb, Movie, "Alien", 0)
 	if err != nil || len(got) != 1 || asked != 2 {
@@ -238,7 +239,7 @@ func TestAnEpisodeIsRatedByItsVotesAlone(t *testing.T) {
 
 // A provider is found able to do what it does only while its methods are the capabilities' own.
 func TestItHasItsCapabilities(t *testing.T) {
-	got := provider.Capabilities(New(withToken, unlimited{}))
+	got := provider.Capabilities(New(withToken, unpaused{}))
 	if want := []domain.Capability{domain.CapabilityDescribe, domain.CapabilitySearch, domain.CapabilityPerson, domain.CapabilityList}; !slices.Equal(got, want) {
 		t.Errorf("capabilities %v, want %v", got, want)
 	}
@@ -301,7 +302,7 @@ func TestAListIsReadInItsOrder(t *testing.T) {
 		reply(t, w, body)
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withToken, unlimited{})
+	c := New(withToken, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "8136")
 	if err != nil {
@@ -328,7 +329,7 @@ func TestAChartIsReadAsAList(t *testing.T) {
 		reply(t, w, fmt.Sprintf(`{"results":[{"id":%s}],"total_pages":500}`, r.URL.Query().Get("page")))
 	}))
 	t.Cleanup(srv.Close)
-	c := New(withToken, unlimited{})
+	c := New(withToken, unpaused{})
 	c.api.Base = srv.URL
 	got, err := c.List(t.Context(), "movie/popular")
 	if err != nil {
@@ -398,7 +399,7 @@ func reply(t *testing.T, w io.Writer, body string) {
 }
 
 func TestChartsAreTheListsTMDBOffers(t *testing.T) {
-	got, err := New(withToken, unlimited{}).Lists(t.Context(), "popular")
+	got, err := New(withToken, unpaused{}).Lists(t.Context(), "popular")
 	if err != nil {
 		t.Fatal(err)
 	}

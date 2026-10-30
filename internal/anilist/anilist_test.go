@@ -12,13 +12,14 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/animelist"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/provider"
 )
 
-type unlimited struct{}
+type unpaused struct{}
 
-func (unlimited) Allow(context.Context, string, kv.Limit) (time.Duration, error) { return 0, nil }
+func (unpaused) Pause(context.Context, string, time.Duration) error { return nil }
+
+func (unpaused) Paused(context.Context, string) (time.Duration, error) { return 0, nil }
 
 // titan is Attack on Titan as the anime lists place it: its first season, and season 3's two cours.
 var titan = []animelist.Entry{
@@ -88,7 +89,7 @@ func serve(t *testing.T) (*Client, *[][]int) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	c := New(fakeLists{}, unlimited{})
+	c := New(fakeLists{}, unpaused{})
 	c.api.Base = srv.URL
 	return c, &asked
 }

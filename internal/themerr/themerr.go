@@ -29,12 +29,9 @@ import (
 // DB is where ThemerrDB publishes its entries, each at {type}/{site}/{id}.json.
 const DB = "https://app.lizardbyte.dev/ThemerrDB/"
 
-var (
-	// dbLimit keeps every node together gentle with a host that publishes no limit.
-	dbLimit = kv.Limit{Every: time.Second, Burst: 5}
-	// youtubeLimit keeps every node together from fetching like a bot, which YouTube stops.
-	youtubeLimit = kv.Limit{Every: 10 * time.Second, Burst: 1}
-)
+// youtubeLimit keeps every node together from fetching like a bot, which YouTube stops rather than
+// answering 429.
+var youtubeLimit = kv.Limit{Every: 10 * time.Second, Burst: 1}
 
 const (
 	// unlistedFor is how long a title ThemerrDB has no theme for goes unasked, as Themerr keeps
@@ -59,6 +56,7 @@ type cache interface {
 
 type misses interface {
 	kv.Limiter
+	provider.Pauses
 	NoteThemeMissing(ctx context.Context, key string, ttl time.Duration) error
 	ThemeMissing(ctx context.Context, key string) (bool, error)
 }
@@ -68,7 +66,7 @@ type misses interface {
 // fetched again; a title ThemerrDB does not list, or a link YouTube refuses, is an answer of no
 // theme, noted for a while rather than failed.
 func Fetch(st subjects, c cache, m misses, db, ytdlp, ffmpeg string, logger *slog.Logger) jobs.Handler {
-	api := provider.Client{Name: "themerrdb", Base: db, Limits: m, Limit: dbLimit}
+	api := provider.Client{Name: "themerrdb", Base: db, Pauses: m}
 	return func(ctx context.Context, item uuid.UUID) error {
 		s, ok, err := st.ThemeSubject(ctx, item)
 		if err != nil || !ok {
