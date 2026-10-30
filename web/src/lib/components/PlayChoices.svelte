@@ -6,7 +6,8 @@ import { onDisk } from "#lib/format.ts";
 type Version = components["schemas"]["VersionPage"];
 
 // Which version, which sound and which subtitles a title is played with: only
-// what the reader changed is bound. A choice with one answer is not offered. Subtitle files beside the version are
+// what the reader changed is bound, and unchosen each shows what the server
+// chose for this profile. A choice with one answer is not offered. Subtitle files beside the version are
 // the player's to offer: the server hands them over when the title starts.
 let {
 	versions,
@@ -28,12 +29,6 @@ const audios = $derived(
 const subtitles = $derived(
 	chosen?.streams.filter((s) => s.kind === "subtitle") ?? [],
 );
-
-// What plays when the reader chooses nothing: the version's default track, and
-// its default or forced subtitles. Left unchosen, nothing is sent and the
-// server decides as it would for any client.
-const audible = $derived(audios.find((s) => s.default) ?? audios[0]);
-const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 </script>
 
 {#snippet choice(
@@ -79,7 +74,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 		{@render choice(
 			"Audio",
 			"audio",
-			String(audio ?? audible?.index),
+			String(audio ?? chosen?.default_audio_stream),
 			audios.map((s) => ({ value: String(s.index), label: s.display_title })),
 			(value) => (audio = Number(value)),
 		)}
@@ -88,7 +83,7 @@ const captioned = $derived(subtitles.find((s) => s.default || s.forced));
 		{@render choice(
 			"Subtitles",
 			"subtitle",
-			String(subtitle ?? captioned?.index ?? "off"),
+			String(subtitle ?? chosen?.default_subtitle_stream ?? "off"),
 			[
 				{ value: "off", label: "Off" },
 				...subtitles.map((s) => ({
