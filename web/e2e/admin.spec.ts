@@ -432,6 +432,7 @@ test("a profile is added seeing one library, and what another may see is set", a
 	expect((await limited).postDataJSON()).toEqual({
 		max_age: null,
 		unrated: "allow",
+		max_common_sense_age: null,
 		libraries: ["l-films"],
 	});
 	await expect(page.getByText("Guest was added.")).toBeVisible();
@@ -443,8 +444,15 @@ test("a profile is added seeing one library, and what another may see is set", a
 	await expect(page.getByRole("combobox", { name: "Certificates" })).toHaveText(
 		"Up to 12",
 	);
+	await expect(
+		page.getByRole("combobox", { name: "Common Sense Media age" }),
+	).toHaveText("Up to 10");
 	await expectAccessible(page);
+	const saved = page.waitForRequest("**/api/v1/admin/profiles/p-kids/access");
 	await page.getByRole("button", { name: "Save access" }).click();
+	expect((await saved).postDataJSON()).toMatchObject({
+		max_common_sense_age: 10,
+	});
 	await expect(
 		page.getByText("What this profile sees was saved."),
 	).toBeVisible();

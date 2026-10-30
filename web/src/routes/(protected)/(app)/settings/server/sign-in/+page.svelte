@@ -99,7 +99,10 @@ const remove = (slug: string, name: string) =>
 											.join(", ")
 									: "Every library"}{p.access.max_age == null
 									? ""
-									: `, up to ${p.access.max_age}`}
+									: `, up to ${p.access.max_age}`}{p.access
+									.max_common_sense_age == null
+									? ""
+									: `, Common Sense up to ${p.access.max_common_sense_age}`}
 							</dd>
 						{/if}
 						{#if p.callback_url}
