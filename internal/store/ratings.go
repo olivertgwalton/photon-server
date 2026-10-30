@@ -15,15 +15,31 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// SaveRatings replaces what a source says sites make of a title.
-func (s *Store) SaveRatings(ctx context.Context, id uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {
+// SaveRatings replaces what a source says sites make of a title, and the age it says Common Sense
+// Media advises it for.
+func (s *Store) SaveRatings(ctx context.Context, id uuid.UUID, source domain.FieldSource, rated domain.Rated) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		asks, err := askedOf(ctx, tx, id, source)
 		if err != nil {
 			return err
 		}
-		return saveRatings(ctx, tx, id, source, asks.of(asks.title, domain.Metadata{Ratings: ratings}).Ratings)
+		if err := saveRatings(ctx, tx, id, source, asks.of(asks.title, domain.Metadata{Ratings: rated.Ratings}).Ratings); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM common_sense_ages WHERE item_id = $1 AND source = $2`, id, source); err != nil || rated.CommonSenseAge == 0 {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO common_sense_ages (item_id, source, age) VALUES ($1, $2, $3)`, id, source, rated.CommonSenseAge)
+		return err
 	})
+}
+
+// commonSenseAge answers the age Common Sense Media advises a title for, 0 for none. Should two
+// sources differ, the older stands.
+func (s *Store) commonSenseAge(ctx context.Context, id uuid.UUID) (int, error) {
+	var age *int
+	err := s.pool.QueryRow(ctx, `SELECT max(age) FROM common_sense_ages WHERE item_id = $1`, id).Scan(&age)
+	return deref(age), err
 }
 
 func saveRatings(ctx context.Context, tx db, item uuid.UUID, source domain.FieldSource, ratings []domain.Rating) error {

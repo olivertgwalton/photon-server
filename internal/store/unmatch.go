@@ -63,13 +63,14 @@ func (s *Store) Unmatch(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// unsay takes back what providers said of the items in scope: their pictures, scores and
-// credits go, a name one gave falls back to the file's, and any other word of one's is unsaid.
+// unsay takes back what providers said of the items in scope: their pictures, scores, advised ages
+// and credits go, a name one gave falls back to the file's, and any other word of one's is unsaid.
 // What files and NFOs say, and an admin's edits, stand.
 func unsay(ctx context.Context, tx pgx.Tx, scope []uuid.UUID) error {
 	for _, stmt := range []string{
 		`DELETE FROM artwork WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
 		`DELETE FROM ratings WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
+		`DELETE FROM common_sense_ages WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
 		`DELETE FROM credits WHERE item_id = ANY(@scope) AND source NOT IN ` + ownSources,
 		`UPDATE items i SET
 			title = CASE WHEN f.fields @> '{title}' THEN i.scan_title ELSE i.title END,

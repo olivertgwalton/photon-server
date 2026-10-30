@@ -145,7 +145,7 @@ func rate(ctx context.Context, st *store.Store, r provider.Rater, id uuid.UUID, 
 		return
 	}
 	if err == nil {
-		err = st.SaveRatings(ctx, id, r.Info().ID, rated.Ratings)
+		err = st.SaveRatings(ctx, id, r.Info().ID, rated)
 	}
 	if err != nil && ctx.Err() == nil {
 		log.WarnContext(ctx, "ratings not read", slog.Any("err", err))

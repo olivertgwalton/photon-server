@@ -35,6 +35,8 @@ type TitlePage struct {
 	LockedFields []domain.Field
 	IDs          map[domain.Provider]string
 	Ratings      []domain.Rating
+	// CommonSenseAge is the age Common Sense Media advises it for, 0 for none.
+	CommonSenseAge int
 	// Collections are the box sets it is in.
 	Collections []CollectionCard
 	// Credits are its cast and crew, as the highest-ranked source gives them.
@@ -204,6 +206,10 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 	g.Go(func() error {
 		ratings, err := s.ratings(gctx, []*model.Item{item})
 		p.Ratings = ratings[item.ID]
+		return err
+	})
+	g.Go(func() (err error) {
+		p.CommonSenseAge, err = s.commonSenseAge(gctx, item.ID)
 		return err
 	})
 	g.Go(func() (err error) {

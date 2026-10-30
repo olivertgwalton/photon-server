@@ -128,17 +128,18 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 func TestProviderConstraintsTakeEveryGoName(t *testing.T) {
 	s := migrated(t)
 	for constraint, want := range map[string][]string{
-		"field_source":        names(domain.FieldSources()),
-		"library_source":      names(domain.MetadataSources()),
-		"artwork_source":      names(domain.ArtworkSources()),
-		"rating_source":       names(domain.RatingSources()),
-		"credit_source":       names(domain.CreditSources()),
-		"id_provider":         names(domain.Providers()),
-		"person_id_provider":  names(domain.Providers()),
-		"discovery_provider":  names(domain.Providers()),
-		"request_provider":    names(domain.Providers()),
-		"remote_video_source": {string(domain.SourceTMDB), string(domain.SourceTVDB)},
-		"announced_source":    {string(domain.SourceTMDB), string(domain.SourceTVDB)},
+		"field_source":            names(domain.FieldSources()),
+		"library_source":          names(domain.MetadataSources()),
+		"artwork_source":          names(domain.ArtworkSources()),
+		"rating_source":           names(domain.RatingSources()),
+		"common_sense_age_source": names(domain.RatingSources()),
+		"credit_source":           names(domain.CreditSources()),
+		"id_provider":             names(domain.Providers()),
+		"person_id_provider":      names(domain.Providers()),
+		"discovery_provider":      names(domain.Providers()),
+		"request_provider":        names(domain.Providers()),
+		"remote_video_source":     {string(domain.SourceTMDB), string(domain.SourceTVDB)},
+		"announced_source":        {string(domain.SourceTMDB), string(domain.SourceTVDB)},
 	} {
 		var def string
 		err := s.pool.QueryRow(t.Context(),
