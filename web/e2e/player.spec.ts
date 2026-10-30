@@ -439,6 +439,18 @@ test("without trickplay, scrubbing shows the chapter's picture", async ({
 	expect((await picture).ok()).toBe(true);
 });
 
+test("a title's page shows the sound the profile plays", async ({ page }) => {
+	await logIn(page, "/");
+	const set = await page.request.patch("/api/v1/profile/preferences", {
+		data: { audio_language: "fr", audio_track: "language" },
+	});
+	expect(set.ok()).toBe(true);
+	await page.goto("/titles/p-film");
+	await expect(page.getByRole("combobox", { name: "Audio" })).toHaveText(
+		/French/,
+	);
+});
+
 test("the player follows how the profile plays", async ({ page }) => {
 	await logIn(page, "/");
 	const set = await page.request.patch("/api/v1/profile/preferences", {

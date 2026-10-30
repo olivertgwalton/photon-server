@@ -1498,21 +1498,24 @@ const server_ = Bun.serve<Socket>({
 			const [, id, action] = title;
 			if (!action && request.method === "GET") {
 				const at = stopped.get(id);
-				// The server chooses the sound in the reader's language, as it does
-				// where they ask for it over the file's default.
+				// The server chooses the sound in the reader's language where they
+				// ask for it over the file's default, else the default, else the
+				// first.
 				const prefs = preferences.get(token as string) ?? defaults;
 				const page = {
 					...titles[id],
-					versions: titles[id].versions?.map((v) => ({
-						...v,
-						default_audio_stream:
-							prefs.audio_track === "language"
-								? v.streams.find(
-										(s) =>
-											s.kind === "audio" && s.language === prefs.audio_language,
-									)?.index
-								: undefined,
-					})),
+					versions: titles[id].versions?.map((v) => {
+						const audio = v.streams.filter((s) => s.kind === "audio");
+						return {
+							...v,
+							default_audio_stream: (
+								(prefs.audio_track === "language" &&
+									audio.find((s) => s.language === prefs.audio_language)) ||
+								audio.find((s) => s.default) ||
+								audio[0]
+							)?.index,
+						};
+					}),
 				};
 				return Response.json(
 					at === undefined ? page : { ...page, state: { position_ms: at } },
