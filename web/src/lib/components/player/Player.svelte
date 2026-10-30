@@ -3,7 +3,6 @@ import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
 import CaptionsIcon from "@lucide/svelte/icons/captions";
 import CaptionsOffIcon from "@lucide/svelte/icons/captions-off";
 import CastIcon from "@lucide/svelte/icons/cast";
-import InfoIcon from "@lucide/svelte/icons/info";
 import LoaderIcon from "@lucide/svelte/icons/loader-circle";
 import MaximizeIcon from "@lucide/svelte/icons/maximize";
 import MinimizeIcon from "@lucide/svelte/icons/minimize";
@@ -12,14 +11,11 @@ import PipIcon from "@lucide/svelte/icons/picture-in-picture-2";
 import PlayIcon from "@lucide/svelte/icons/play";
 import BackIcon from "@lucide/svelte/icons/rotate-ccw";
 import ForwardIcon from "@lucide/svelte/icons/rotate-cw";
-import SettingsIcon from "@lucide/svelte/icons/settings";
 import PreviousIcon from "@lucide/svelte/icons/skip-back";
 import NextIcon from "@lucide/svelte/icons/skip-forward";
 import VolumeIcon from "@lucide/svelte/icons/volume-2";
 import MuteIcon from "@lucide/svelte/icons/volume-x";
 import type Hls from "hls.js";
-import type JASSUB from "jassub";
-import type { PgsRenderer, VobSubRenderer } from "libbitsub";
 import { onMount, untrack } from "svelte";
 import { on } from "svelte/events";
 import { client } from "#lib/api/client.js";
@@ -27,10 +23,11 @@ import { problemMessage } from "#lib/api/problem.js";
 import type { components } from "#lib/api/schema.js";
 import { artworkURL } from "#lib/artwork.js";
 import { Button } from "#lib/components/ui/button/index.js";
-import * as Menu from "#lib/components/ui/dropdown-menu/index.js";
-import { bitrate, fullTitle, timecode } from "#lib/format.js";
+import { fullTitle, timecode } from "#lib/format.js";
 import { cueStyle, keptAppearance } from "#lib/player/appearance.js";
-import { castContext, castRequest, castSession } from "#lib/player/cast.js";
+import { castContext, castRequest } from "#lib/player/cast.js";
+import { Casting } from "#lib/player/casting.svelte.js";
+import { SubtitleDrawing } from "#lib/player/drawing.svelte.js";
 import { type Preferences, skipping } from "#lib/player/preferences.js";
 import {
 	browserProfile,
@@ -43,19 +40,18 @@ import { type Advance, isDue, runAfter } from "#lib/player/stillwatching.js";
 import {
 	beside,
 	choices,
-	delayCues,
 	needsReplay,
 	startingSubtitle,
 	wants,
-	webVTT,
 } from "#lib/player/subtitles.js";
-import { qualities, skips } from "#lib/player/words.js";
+import { type Fit, fits, skips } from "#lib/player/words.js";
 import { queued } from "#lib/queue.js";
 import { vocabulary } from "#lib/vocabulary.js";
 import { goto } from "$app/navigation";
 import EpisodeList from "./EpisodeList.svelte";
 import PlaybackInfo from "./PlaybackInfo.svelte";
 import SeekBar from "./SeekBar.svelte";
+import SettingsMenu from "./SettingsMenu.svelte";
 import StillWatching from "./StillWatching.svelte";
 import UpNext from "./UpNext.svelte";
 
@@ -92,14 +88,6 @@ const api = client();
 const step = 10;
 const nudge = 5;
 const restAfter = 3000;
-const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-// How the picture meets a screen of another shape: whole, cropped to fill it,
-// or stretched to it.
-const fits = {
-	contain: { label: "Fit", class: "object-contain" },
-	cover: { label: "Crop to fill", class: "object-cover" },
-	fill: { label: "Stretch", class: "object-fill" },
-};
 
 let root = $state<HTMLElement>();
 let video = $state<HTMLVideoElement>();
@@ -129,25 +117,11 @@ let subtitleKey = $derived(
 	startVersion && startingSubtitle(startVersion, askedSubtitle),
 );
 let lastSubtitle = $state<string>();
-// How much later than its file the subtitle shows, in seconds, as the reader
-// set it; another subtitle starts on time.
-let subtitleDelay = $state(0);
-const delayed = new WeakMap<object, number>();
+const drawing = new SubtitleDrawing(() => video);
 const appearance = keptAppearance();
 let quality = $derived(prefs.max_bitrate_kbps);
 // The file as it is would not play here after all; the server converts it.
 let convert = $state(false);
-let trackSrc = $state<string>();
-let trackURL: string | undefined;
-// The styled subtitle JASSUB draws over the video, by its address.
-let styled: JASSUB | undefined;
-let styledURL: string | undefined;
-// The PGS or VobSub subtitle libbitsub draws over the video, by its address.
-let pictures:
-	| { renderer: PgsRenderer | VobSubRenderer; canvas: HTMLCanvasElement }
-	| undefined;
-let picturesURL: string | undefined;
-
 let part = $state(0);
 let time = $state(0);
 // What the video element says of itself, bound to it.
@@ -177,7 +151,7 @@ $effect(() => {
 	}
 });
 let rate = $state(1);
-let fit = $state<keyof typeof fits>("contain");
+let fit = $state<Fit>("contain");
 let fullscreenElement = $state<Element | null>(null);
 const pipAvailable = document.pictureInPictureEnabled;
 // Whether there is a screen to play on through the browser: AirPlay in
@@ -185,18 +159,8 @@ const pipAvailable = document.pictureInPictureEnabled;
 // not one hls.js feeds it, so Google's sender stands in for it where it finds
 // a Chromecast.
 let remoteAvailable = $state(false);
-// Whether a Chromecast is on the network, through Google's sender, and the
-// session playing on one.
-let castDevices = $state(false);
-let casting = $state.raw<cast.framework.CastSession>();
-let castPaused = $state(true);
-let castWaiting = $state(false);
-let remote:
-	| {
-			player: cast.framework.RemotePlayer;
-			controller: cast.framework.RemotePlayerController;
-	  }
-	| undefined;
+const chromecast = new Casting();
+const casting = $derived(chromecast.session);
 let resting = $state(false);
 let menuOpen = $state(false);
 let infoOpen = $state(false);
@@ -220,18 +184,15 @@ const bufferedTo = $derived(
 	casting ? position : offset + (buffered.at(-1)?.end ?? 0),
 );
 const waiting = $derived(
-	casting ? castWaiting : readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
+	casting ? chromecast.waiting : readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
 );
-const halted = $derived(casting ? castPaused : paused);
+const halted = $derived(casting ? chromecast.paused : paused);
 const fullscreen = $derived(!!fullscreenElement);
 const subtitleChoices = $derived(version ? choices(version) : []);
 const subtitle = $derived(subtitleChoices.find((c) => c.key === subtitleKey));
 const burned = $derived(
 	playback?.video?.burned_subtitle != null ||
 		playback?.video?.burned_subtitle_file != null,
-);
-const audioStreams = $derived(
-	version?.streams.filter((s) => s.kind === "audio") ?? [],
 );
 const playingAudio = $derived(playback?.audio?.stream ?? audio);
 const marker = $derived(
@@ -298,8 +259,7 @@ async function open(at: number) {
 	reporter = undefined;
 	await previous?.stop();
 	detach();
-	casting ??= castSession();
-	const session = casting;
+	const session = chromecast.join();
 	caps ??= await probe();
 	const asked = wants(subtitle);
 	const profile = session
@@ -362,33 +322,25 @@ async function castOn(
 	}
 	part = 0;
 	time = at;
-	castWaiting = true;
 	const art = title.artwork?.thumb?.[0] ?? title.artwork?.poster?.[0];
-	const failed = await session
-		.loadMedia(
-			castRequest(p.playlist, at, {
-				title: heading,
-				picture: art && artworkURL(art, 640),
-			}),
-		)
-		.catch((code) => code ?? "failed");
+	const played = await chromecast.play(
+		session,
+		castRequest(p.playlist, at, {
+			title: heading,
+			picture: art && artworkURL(art, 640),
+		}),
+		() => {
+			if (mine === opening) ended();
+		},
+	);
 	if (mine !== opening) return;
-	if (failed) {
+	if (!played) {
 		refusal = {
 			message: "The Chromecast couldn't play the stream.",
 			reasons: [],
 		};
 		return;
 	}
-	const media = session.getMediaSession();
-	media?.addUpdateListener(() => {
-		if (
-			mine === opening &&
-			media.playerState === chrome.cast.media.PlayerState.IDLE &&
-			media.idleReason === chrome.cast.media.IdleReason.FINISHED
-		)
-			ended();
-	});
 	await showSubtitle();
 }
 
@@ -445,19 +397,11 @@ async function attach(p: Schemas["Playback"], at: number, mine: number) {
 function detach() {
 	hls?.destroy();
 	hls = undefined;
-	void showStyled(undefined);
-	void showPictures(undefined);
-	clearTrack();
+	drawing.clear();
 	if (video?.hasAttribute("src")) {
 		video.removeAttribute("src");
 		video.load();
 	}
-}
-
-function clearTrack() {
-	if (trackSrc?.startsWith("blob:")) URL.revokeObjectURL(trackSrc);
-	trackSrc = undefined;
-	trackURL = undefined;
 }
 
 function partAt(seconds: number): number {
@@ -479,9 +423,7 @@ function load(index: number, at: number) {
 
 function seek(seconds: number) {
 	const to = Math.min(Math.max(seconds, 0), duration || seconds);
-	if (casting && remote) {
-		remote.player.currentTime = to;
-		remote.controller.seek();
+	if (casting && chromecast.seek(to)) {
 		time = to;
 		reporter?.seeked();
 		return;
@@ -503,34 +445,14 @@ function seek(seconds: number) {
 // out of it as a track, or one of the HLS playlist's renditions.
 async function showSubtitle() {
 	if (!playback || !video) return;
-	if (casting) {
-		castSubtitle(casting);
-		return;
-	}
-	const given = beside(subtitle, playback);
-	const drawn = given?.kind === "styled" || given?.kind === "picture";
-	void showStyled(given?.kind === "styled" ? given : undefined);
-	void showPictures(given?.kind === "picture" ? given : undefined);
-	if (playback.method === "direct") {
-		const file = drawn ? undefined : given;
-		if (file?.url === trackURL) return;
-		clearTrack();
-		trackURL = file?.url;
-		if (!file) return;
-		// A track inside the file is read out as WebVTT.
-		if (file.codec === "webvtt" || file.stream != null) {
-			trackSrc = file.url;
-			return;
-		}
-		const srt = await fetch(file.url).then((r) => r.text());
-		// Another file was chosen, or the playback closed, while this one came.
-		if (trackURL !== file.url) return;
-		trackSrc = URL.createObjectURL(
-			new Blob([webVTT(srt)], { type: "text/vtt" }),
-		);
-		return;
-	}
 	const n = burned ? -1 : (subtitle?.rendition ?? -1);
+	if (casting) {
+		chromecast.subtitle(n);
+		return;
+	}
+	const direct = playback.method === "direct";
+	await drawing.draw(beside(subtitle, playback), direct);
+	if (direct) return;
 	if (hls) {
 		hls.subtitleTrack = n;
 		hls.subtitleDisplay = n >= 0;
@@ -544,99 +466,11 @@ async function showSubtitle() {
 	});
 }
 
-// Shows the chosen subtitle on the Chromecast: the HLS playlist's rendition,
-// which the receiver lists among its text tracks in the playlist's order.
-function castSubtitle(session: cast.framework.CastSession) {
-	const media = session.getMediaSession();
-	if (!media) return;
-	const n = burned ? -1 : (subtitle?.rendition ?? -1);
-	const text = (media.media?.tracks ?? []).filter(
-		(t) => t.type === chrome.cast.media.TrackType.TEXT,
-	);
-	const shown = text[n];
-	media.editTracksInfo(
-		new chrome.cast.media.EditTracksInfoRequest(shown ? [shown.trackId] : []),
-		() => {},
-		() => {},
-	);
-}
-
-// Draws styled text over the video with JASSUB, with the fonts its file
-// carries, or stops drawing it. JASSUB's worker and WebAssembly load the first
-// time; one asked for after a later one is dropped.
-async function showStyled(sub: Schemas["Subtitle"] | undefined) {
-	if (sub?.url === styledURL) return;
-	styledURL = sub?.url;
-	void styled?.destroy();
-	styled = undefined;
-	if (!sub || !video) return;
-	const absolute = (url: string) => new URL(url, location.href).href;
-	const [{ default: JASSUB }, fonts] = await Promise.all([
-		import("jassub"),
-		sub.fonts
-			? fetch(sub.fonts)
-					.then((r) => r.json() as Promise<Schemas["Fonts"]>)
-					.then((f) => f.fonts.map((font) => absolute(font.url)))
-					.catch(() => [])
-			: [],
-	]);
-	if (styledURL !== sub.url || !video) return;
-	styled = new JASSUB({
-		video,
-		subUrl: absolute(sub.url),
-		fonts,
-		timeOffset: -subtitleDelay,
-	});
-}
-
-// Draws PGS or VobSub over the video with libbitsub, or stops drawing it. The
-// server hands VobSub in Matroska. The canvas sits just after the video, as
-// JASSUB's does, so the controls stay above it.
-async function showPictures(sub: Schemas["Subtitle"] | undefined) {
-	if (sub?.url === picturesURL) return;
-	picturesURL = sub?.url;
-	pictures?.renderer.dispose();
-	pictures?.canvas.remove();
-	pictures = undefined;
-	if (!sub || !video) return;
-	const { PgsRenderer, VobSubRenderer } = await import("libbitsub");
-	if (picturesURL !== sub.url || !video) return;
-	const canvas = document.createElement("canvas");
-	canvas.style.zIndex = "auto";
-	video.after(canvas);
-	const subUrl = new URL(sub.url, location.href).href;
-	const renderer =
-		sub.codec === "dvd_subtitle"
-			? new VobSubRenderer({ video, canvas, subUrl, fileName: "track.mks" })
-			: new PgsRenderer({ video, canvas, subUrl });
-	renderer.timeOffset = -subtitleDelay;
-	pictures = { renderer, canvas };
-}
-
-// Shows the subtitle as late as the reader set it: its cues moved, or the
-// clock JASSUB and libbitsub draw by.
-function delaySubtitle() {
-	for (const t of video?.textTracks ?? []) {
-		if (t.mode === "showing" && t.cues)
-			delayCues(t.cues, subtitleDelay, delayed);
-	}
-	if (styled) styled.timeOffset = -subtitleDelay;
-	if (pictures) pictures.renderer.timeOffset = -subtitleDelay;
-}
-
-function moveSubtitle(by: number) {
-	subtitleDelay = Math.round((subtitleDelay + by) * 10) / 10;
-	delaySubtitle();
-}
-
-// A choice in one of the settings menu's submenus leaves bits-ui's menu open,
-// so each closes it.
 function chooseSubtitle(key: string) {
-	menuOpen = false;
 	const chosen = subtitleChoices.find((c) => c.key === key);
 	if (chosen) lastSubtitle = key;
 	subtitleKey = chosen?.key;
-	subtitleDelay = 0;
+	drawing.delay = 0;
 	if (playback && needsReplay(chosen, playback)) reopen();
 	else void showSubtitle();
 }
@@ -647,14 +481,12 @@ function toggleSubtitles() {
 }
 
 function chooseAudio(index: number) {
-	menuOpen = false;
 	if (index === playingAudio) return;
 	audio = index;
 	reopen();
 }
 
 function chooseQuality(kbps: number) {
-	menuOpen = false;
 	if (kbps === quality) return;
 	quality = kbps;
 	// The quality chosen here is the profile's from now on, as Jellyfin's is.
@@ -666,14 +498,13 @@ function chooseQuality(kbps: number) {
 
 // A new source starts at the default rate, so it is the chosen one too.
 function chooseSpeed(r: number) {
-	menuOpen = false;
 	if (video) video.defaultPlaybackRate = r;
 	rate = r;
 }
 
 function toggle() {
 	if (casting) {
-		remote?.controller.playOrPause();
+		chromecast.toggle();
 		return;
 	}
 	if (!video) return;
@@ -917,7 +748,16 @@ onMount(() => {
 	let unwatch: (() => void) | undefined;
 	let gone = false;
 	void castContext().then((context) => {
-		if (context && !gone) unwatch = watchCast(context);
+		if (context && !gone)
+			unwatch = chromecast.watch(context, {
+				moved: (seconds) => {
+					time = seconds;
+					passed();
+				},
+				playing: () => reporter?.playing(),
+				paused: () => reporter?.paused(),
+				changed: reopen,
+			});
 	});
 	void open(start);
 	wake();
@@ -927,103 +767,10 @@ onMount(() => {
 		unwatch?.();
 		clearTimeout(restTimer);
 		void reporter?.stop();
-		// The server lets the playback go, so the receiver stops it too; a
-		// title opened next on the same session plays on it again.
-		casting?.getMediaSession()?.stop(
-			new chrome.cast.media.StopRequest(),
-			() => {},
-			() => {},
-		);
+		chromecast.stop();
 		detach();
 	};
 });
-
-// Follows the Chromecasts on the network and the session on one: a session
-// started opens the playback on it where it is, and one ended opens it here
-// again.
-function watchCast(context: cast.framework.CastContext) {
-	const {
-		CastContextEventType,
-		CastState,
-		RemotePlayerEventType,
-		SessionState,
-	} = cast.framework;
-	const player = new cast.framework.RemotePlayer();
-	const controller = new cast.framework.RemotePlayerController(player);
-	remote = { player, controller };
-	castDevices = context.getCastState() !== CastState.NO_DEVICES_AVAILABLE;
-	const devices = (e: cast.framework.CastStateEventData) => {
-		castDevices = e.castState !== CastState.NO_DEVICES_AVAILABLE;
-	};
-	const sessions = (e: cast.framework.SessionStateEventData) => {
-		if (
-			e.sessionState === SessionState.SESSION_STARTED ||
-			e.sessionState === SessionState.SESSION_RESUMED
-		) {
-			if (casting === e.session) return;
-			casting = e.session;
-			reopen();
-		} else if (e.sessionState === SessionState.SESSION_ENDED && casting) {
-			casting = undefined;
-			reopen();
-		}
-	};
-	const moved = () => {
-		if (!casting || !player.isMediaLoaded) return;
-		time = player.currentTime;
-		passed();
-	};
-	const state = () => {
-		if (!casting) return;
-		const { PlayerState } = chrome.cast.media;
-		castWaiting = player.playerState === PlayerState.BUFFERING;
-		if (player.playerState === PlayerState.PLAYING) {
-			castPaused = false;
-			reporter?.playing();
-		} else if (player.playerState === PlayerState.PAUSED) {
-			castPaused = true;
-			reporter?.paused();
-		}
-	};
-	context.addEventListener(CastContextEventType.CAST_STATE_CHANGED, devices);
-	context.addEventListener(
-		CastContextEventType.SESSION_STATE_CHANGED,
-		sessions,
-	);
-	controller.addEventListener(
-		RemotePlayerEventType.CURRENT_TIME_CHANGED,
-		moved,
-	);
-	controller.addEventListener(
-		RemotePlayerEventType.PLAYER_STATE_CHANGED,
-		state,
-	);
-	// A session already playing, from another page of this server, is joined.
-	const current = context.getCurrentSession();
-	if (current && casting !== current) {
-		casting = current;
-		reopen();
-	}
-	return () => {
-		context.removeEventListener(
-			CastContextEventType.CAST_STATE_CHANGED,
-			devices,
-		);
-		context.removeEventListener(
-			CastContextEventType.SESSION_STATE_CHANGED,
-			sessions,
-		);
-		controller.removeEventListener(
-			RemotePlayerEventType.CURRENT_TIME_CHANGED,
-			moved,
-		);
-		controller.removeEventListener(
-			RemotePlayerEventType.PLAYER_STATE_CHANGED,
-			state,
-		);
-		remote = undefined;
-	};
-}
 </script>
 
 <!-- A page the browser kept and brought back has stopped its playback on
@@ -1090,7 +837,7 @@ function watchCast(context: cast.framework.CastContext) {
 		ontimeupdate={() => {
 			if (!video || pendingSeek !== undefined) return;
 			time = video.currentTime;
-			delaySubtitle();
+			drawing.follow();
 			passed();
 		}}
 		onplay={wake}
@@ -1105,8 +852,13 @@ function watchCast(context: cast.framework.CastContext) {
 			} else if (playback) mend("This browser couldn't play the stream.");
 		}}
 	>
-		{#if trackSrc}
-			<track kind="subtitles" src={trackSrc} label={subtitle?.label} default>
+		{#if drawing.track}
+			<track
+				kind="subtitles"
+				src={drawing.track}
+				label={subtitle?.label}
+				default
+			>
 		{/if}
 	</video>
 
@@ -1115,9 +867,7 @@ function watchCast(context: cast.framework.CastContext) {
 			class="text-ink pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-3 p-6 text-center"
 		>
 			<CastIcon class="size-12" aria-hidden="true" />
-			<p class="font-heading text-lg">
-				Playing on {casting.getCastDevice().friendlyName}
-			</p>
+			<p class="font-heading text-lg">Playing on {chromecast.device}</p>
 		</div>
 	{/if}
 
@@ -1311,184 +1061,35 @@ function watchCast(context: cast.framework.CastContext) {
 							{/if}
 						</Button>
 					{/if}
-					<Menu.Root bind:open={menuOpen}>
-						<Menu.Trigger>
-							{#snippet child({ props })}
-								<Button
-									{...props}
-									variant="ghost"
-									size="icon"
-									aria-label="Settings"
-								>
-									<SettingsIcon class="size-5" />
-								</Button>
-							{/snippet}
-						</Menu.Trigger>
-						<Menu.Content
-							portalProps={{ to: root }}
-							side="top"
-							align="end"
-							class="w-56"
-						>
-							{#if audioStreams.length > 1}
-								<Menu.Sub>
-									<Menu.SubTrigger>Audio</Menu.SubTrigger>
-									<Menu.SubContent
-										portalProps={{ to: root }}
-										class="max-h-80 overflow-y-auto"
-									>
-										<Menu.RadioGroup
-											value={String(playingAudio)}
-											onValueChange={(v) => chooseAudio(Number(v))}
-										>
-											{#each audioStreams as s (s.index)}
-												<Menu.RadioItem value={String(s.index)}
-													>{s.display_title}</Menu.RadioItem
-												>
-											{/each}
-										</Menu.RadioGroup>
-									</Menu.SubContent>
-								</Menu.Sub>
-							{/if}
-							{#if subtitleChoices.length}
-								<Menu.Sub>
-									<Menu.SubTrigger>Subtitles</Menu.SubTrigger>
-									<Menu.SubContent
-										portalProps={{ to: root }}
-										class="max-h-80 overflow-y-auto"
-									>
-										<Menu.RadioGroup
-											value={subtitleKey ?? "off"}
-											onValueChange={chooseSubtitle}
-										>
-											<Menu.RadioItem value="off">Off</Menu.RadioItem>
-											{#each subtitleChoices as c (c.key)}
-												<Menu.RadioItem value={c.key}>{c.label}</Menu.RadioItem>
-											{/each}
-										</Menu.RadioGroup>
-									</Menu.SubContent>
-								</Menu.Sub>
-							{/if}
-							{#if subtitle && !burned && !casting}
-								<Menu.Sub>
-									<Menu.SubTrigger>
-										Subtitle timing
-										<span class="text-ink-2 ml-auto text-xs tabular-nums">
-											{subtitleDelay
-												? `${Math.abs(subtitleDelay)} s ${subtitleDelay > 0 ? "later" : "earlier"}`
-												: "On time"}
-										</span>
-									</Menu.SubTrigger>
-									<Menu.SubContent portalProps={{ to: root }}>
-										{#each [-1, -0.1, 0.1, 1] as by (by)}
-											<Menu.Item
-												closeOnSelect={false}
-												onSelect={() => moveSubtitle(by)}
-											>
-												{by < 0 ? "Earlier" : "Later"}
-												by {Math.abs(by)} s
-											</Menu.Item>
-										{/each}
-										<Menu.Item
-											closeOnSelect={false}
-											disabled={!subtitleDelay}
-											onSelect={() => moveSubtitle(-subtitleDelay)}
-										>
-											On time
-										</Menu.Item>
-									</Menu.SubContent>
-								</Menu.Sub>
-							{/if}
-							<Menu.Sub>
-								<Menu.SubTrigger>Quality</Menu.SubTrigger>
-								<Menu.SubContent
-									portalProps={{ to: root }}
-									class="max-h-80 overflow-y-auto"
-								>
-									<Menu.RadioGroup
-										value={String(quality)}
-										onValueChange={(v) => chooseQuality(Number(v))}
-									>
-										{#each qualities as kbps (kbps)}
-											<Menu.RadioItem value={String(kbps)}
-												>{kbps ? bitrate(kbps) : "Original"}</Menu.RadioItem
-											>
-										{/each}
-									</Menu.RadioGroup>
-								</Menu.SubContent>
-							</Menu.Sub>
-							{#if !casting}
-								<Menu.Sub>
-									<Menu.SubTrigger>Speed</Menu.SubTrigger>
-									<Menu.SubContent portalProps={{ to: root }}>
-										<Menu.RadioGroup
-											value={String(rate)}
-											onValueChange={(v) => chooseSpeed(Number(v))}
-										>
-											{#each speeds as s (s)}
-												<Menu.RadioItem value={String(s)}
-													>{s === 1 ? "Normal" : `${s}×`}</Menu.RadioItem
-												>
-											{/each}
-										</Menu.RadioGroup>
-									</Menu.SubContent>
-								</Menu.Sub>
-								<Menu.Sub>
-									<Menu.SubTrigger>Picture</Menu.SubTrigger>
-									<Menu.SubContent portalProps={{ to: root }}>
-										<Menu.RadioGroup
-											value={fit}
-											onValueChange={(v) => {
-												menuOpen = false;
-												fit = v as keyof typeof fits;
-											}}
-										>
-											{#each Object.entries(fits) as [value, f] (value)}
-												<Menu.RadioItem {value}>{f.label}</Menu.RadioItem>
-											{/each}
-										</Menu.RadioGroup>
-									</Menu.SubContent>
-								</Menu.Sub>
-							{/if}
-							{#if version?.chapters?.length}
-								<Menu.Sub>
-									<Menu.SubTrigger>Chapters</Menu.SubTrigger>
-									<Menu.SubContent
-										portalProps={{ to: root }}
-										class="max-h-80 overflow-y-auto"
-									>
-										{#each version.chapters as c, i}
-											<Menu.Item onSelect={() => seek(c.start_ms / 1000)}>
-												<span class="truncate"
-													>{c.title || `Chapter ${i + 1}`}</span
-												>
-												<Menu.Shortcut>{timecode(c.start_ms)}</Menu.Shortcut>
-											</Menu.Item>
-										{/each}
-									</Menu.SubContent>
-								</Menu.Sub>
-							{/if}
-							{#if playback}
-								<Menu.Separator />
-								<Menu.Item
-									onSelect={() => {
-										frames = video?.getVideoPlaybackQuality();
-										infoOpen = true;
-									}}
-								>
-									<InfoIcon />
-									Playback info
-								</Menu.Item>
-							{/if}
-						</Menu.Content>
-					</Menu.Root>
-					{#if castDevices}
+					<SettingsMenu
+						bind:open={menuOpen}
+						bind:fit
+						portal={root}
+						{version}
+						audio={playingAudio}
+						subtitles={subtitleChoices}
+						subtitle={subtitleKey}
+						{drawing}
+						timing={!!subtitle && !burned && !casting}
+						{quality}
+						{rate}
+						casting={!!casting}
+						info={!!playback}
+						onaudio={chooseAudio}
+						onsubtitle={chooseSubtitle}
+						onquality={chooseQuality}
+						onspeed={chooseSpeed}
+						onseek={seek}
+						oninfo={() => {
+							frames = video?.getVideoPlaybackQuality();
+							infoOpen = true;
+						}}
+					/>
+					{#if chromecast.devices}
 						<Button
 							variant="ghost"
 							size="icon"
-							aria-label={casting
-								? `Playing on ${casting.getCastDevice().friendlyName}`
-								: "Cast"}
+							aria-label={casting ? `Playing on ${chromecast.device}` : "Cast"}
 							aria-pressed={!!casting}
 							onclick={() =>
 								cast.framework.CastContext.getInstance()
