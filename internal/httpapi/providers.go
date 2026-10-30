@@ -156,12 +156,17 @@ func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []
 
 type libraryKindOptionsJSON struct {
 	Kind domain.LibraryKind `json:"kind"`
-	// Sources are what a new library of the kind ranks, one for each kind of item it holds, its
-	// titles' first.
-	Sources []kindSourcesJSON `json:"sources"`
+	// Defaults are how a new library of the kind is kept, of files and remote, until an admin says
+	// otherwise. Its sources rank one for each kind of item it holds, its titles' first.
+	Defaults []newLibraryJSON `json:"defaults"`
 	// Fetchable are, for each kind of item it holds, the built-in sources it may rank for its
 	// metadata and its pictures. A plugin may be ranked for what its provider's kinds say.
 	Fetchable []fetchableJSON `json:"fetchable"`
+}
+
+type newLibraryJSON struct {
+	Media domain.LibraryMedia `json:"media"`
+	librarySettingsJSON
 }
 
 type fetchableJSON struct {
@@ -175,9 +180,11 @@ type fetchableJSON struct {
 func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
 	out := []libraryKindOptionsJSON{}
 	for _, lib := range domain.LibraryKinds() {
-		j := libraryKindOptionsJSON{Kind: lib, Sources: []kindSourcesJSON{}, Fetchable: []fetchableJSON{}}
+		j := libraryKindOptionsJSON{Kind: lib, Fetchable: []fetchableJSON{}}
+		for _, media := range domain.LibraryMedias() {
+			j.Defaults = append(j.Defaults, newLibraryJSON{media, librarySettings(domain.NewLibrary(lib, media))})
+		}
 		for _, k := range domain.DefaultSources(lib) {
-			j.Sources = append(j.Sources, kindSourcesOf(k))
 			j.Fetchable = append(j.Fetchable, fetchableJSON{
 				Kind:     k.Kind,
 				Metadata: nonNil(domain.Fetchable(domain.FetcherMetadata, k.Kind)),
@@ -198,7 +205,7 @@ func (a *API) providersRoutes() []route {
 		},
 		{
 			pattern: "GET /api/v1/admin/library-kinds", access: admin,
-			summary: "List the kinds of library, the sources a new one of each ranks, and those it may",
+			summary: "List the kinds of library, how a new one of each is kept, and the sources it may rank",
 			status:  http.StatusOK, reply: listJSON[libraryKindOptionsJSON]{}, handle: a.libraryKinds,
 		},
 		{
