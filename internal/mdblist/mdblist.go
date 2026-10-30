@@ -4,8 +4,10 @@
 package mdblist
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -48,16 +50,16 @@ var sites = map[string]domain.RatingSite{
 	"popcorn": domain.SiteRottenTomatoesAudience,
 }
 
-// Ratings answers a title's ratings, found by its IMDb id, else its TMDB id, else its TVDB id.
-// MDBList scores every site out of 100 already.
-func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error) {
+// Ratings answers a title's ratings, found by its IMDb id, else its TMDB id, else its TVDB id,
+// and the age Common Sense Media advises it for. MDBList scores every site out of 100 already.
+func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) (domain.Rated, error) {
 	set, err := c.settings(ctx)
 	if err != nil {
-		return nil, err
+		return domain.Rated{}, err
 	}
 	key := set[keySetting]
 	if key == "" {
-		return nil, provider.ErrNotConfigured
+		return domain.Rated{}, provider.ErrNotConfigured
 	}
 	media := map[domain.ItemKind]string{domain.ItemMovie: "movie", domain.ItemShow: "show"}[kind]
 	for _, by := range []domain.Provider{domain.ProviderIMDb, domain.ProviderTMDB, domain.ProviderTVDB} {
@@ -65,27 +67,33 @@ func (c *Client) Ratings(ctx context.Context, kind domain.ItemKind, ids map[doma
 		if id == "" {
 			continue
 		}
-		ratings, err := c.ratings(ctx, key, string(by)+"/"+media+"/"+url.PathEscape(id))
+		rated, err := c.rated(ctx, key, string(by)+"/"+media+"/"+url.PathEscape(id))
 		if errors.Is(err, provider.ErrNotFound) {
 			continue
 		}
-		return ratings, err
+		return rated, err
 	}
-	return nil, nil
+	return domain.Rated{}, nil
 }
 
-func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating, error) {
+// commonSense is MDBList's mark of an age_rating as Common Sense Media's; it answers {} for one of
+// its own, which is left out, as it is read off the certificate the title already has.
+var commonSense = []byte("true")
+
+func (c *Client) rated(ctx context.Context, key, path string) (domain.Rated, error) {
 	var body struct {
 		Ratings []struct {
 			Source string   `json:"source"`
 			Score  *float64 `json:"score"`
 			Votes  *int     `json:"votes"`
 		} `json:"ratings"`
+		CommonSense json.RawMessage `json:"commonsense"`
+		AgeRating   int             `json:"age_rating"`
 	}
 	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: url.Values{"apikey": {key}}}, &body); err != nil {
-		return nil, err
+		return domain.Rated{}, err
 	}
-	var out []domain.Rating
+	var out domain.Rated
 	for _, r := range body.Ratings {
 		site, ok := sites[r.Source]
 		if !ok || r.Score == nil || *r.Score <= 0 {
@@ -95,7 +103,10 @@ func (c *Client) ratings(ctx context.Context, key, path string) ([]domain.Rating
 		if r.Votes != nil {
 			rating.Votes = *r.Votes
 		}
-		out = append(out, rating)
+		out.Ratings = append(out.Ratings, rating)
+	}
+	if bytes.Equal(body.CommonSense, commonSense) && body.AgeRating > 0 && body.AgeRating <= domain.MaxCommonSenseAge {
+		out.CommonSenseAge = body.AgeRating
 	}
 	return out, nil
 }

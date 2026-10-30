@@ -23,8 +23,8 @@ func (keyed) Info() provider.Info {
 	}
 }
 
-func (keyed) Ratings(context.Context, domain.ItemKind, map[domain.Provider]string) ([]domain.Rating, error) {
-	return nil, nil
+func (keyed) Ratings(context.Context, domain.ItemKind, map[domain.Provider]string) (domain.Rated, error) {
+	return domain.Rated{}, nil
 }
 
 type memorySettings map[domain.FieldSource]map[string]string

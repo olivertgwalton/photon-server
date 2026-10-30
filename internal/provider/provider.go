@@ -264,10 +264,11 @@ type Searcher interface {
 	Candidates(ctx context.Context, loc domain.Locale, kind domain.ItemKind, title string, year int) ([]domain.Candidate, error)
 }
 
-// Rater says what sites' readers and critics make of a title, found by the ids it carries.
+// Rater says what sites' readers and critics make of a title, found by the ids it carries, and
+// what age it is advised for.
 type Rater interface {
 	Provider
-	Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) ([]domain.Rating, error)
+	Ratings(ctx context.Context, kind domain.ItemKind, ids map[domain.Provider]string) (domain.Rated, error)
 }
 
 // PersonDescriber says what a provider knows of someone it credits, found by their ids.
