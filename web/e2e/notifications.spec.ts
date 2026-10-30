@@ -249,3 +249,24 @@ test("a request told as waiting is declined from the bell, saying why", async ({
 		inbox.getByRole("listitem").filter({ hasText: "Alien" }),
 	).toHaveCount(0);
 });
+
+test("a browser refused notifications says so at once", async ({ page }) => {
+	// A browser not asked yet, whose person refuses when it asks.
+	await page.addInitScript(() => {
+		let permission: NotificationPermission = "default";
+		Object.defineProperty(Notification, "permission", {
+			get: () => permission,
+		});
+		Notification.requestPermission = async () => {
+			permission = "denied";
+			return permission;
+		};
+	});
+	await logIn(page, "/settings/notifications");
+	const push = page.getByRole("switch", { name: "Notify this browser" });
+	await push.click();
+	await expect(
+		page.getByText("Notifications are blocked for this site", { exact: true }),
+	).toBeVisible();
+	await expect(push).toBeDisabled();
+});
