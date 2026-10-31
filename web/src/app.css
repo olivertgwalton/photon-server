@@ -227,9 +227,11 @@
 	}
 
 	/* What a card's words sit on over its picture: a shade that gathers toward
-	   the foot, eased rather than straight, so it has no edge to see. */
+	   the foot, eased rather than straight, so it has no edge to see. Its one
+	   column is the card's width, or a caption that does not wrap widens it
+	   past the card and the name beside it is cut off rather than clamped. */
 	.card-shade {
-		@apply absolute inset-x-0 bottom-0 px-2.5 pt-7 pb-2.5;
+		@apply absolute inset-x-0 bottom-0 grid grid-cols-1 gap-0.5 px-2.5 pt-7 pb-2.5;
 		background: linear-gradient(
 			to bottom,
 			transparent,

@@ -38,7 +38,7 @@ let {
 				{name.slice(0, 1)}
 			</span>
 		{/if}
-		<span class="card-shade grid gap-0.5">
+		<span class="card-shade">
 			<span
 				class="text-ink line-clamp-2 text-[0.8125rem] leading-tight font-semibold"
 			>

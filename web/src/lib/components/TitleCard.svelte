@@ -107,7 +107,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 					</span>
 				{/if}
 			</div>
-			<div class="card-shade grid gap-0.5">
+			<div class="card-shade">
 				<p
 					class="text-ink line-clamp-2 text-[0.8125rem] leading-tight font-semibold"
 				>
