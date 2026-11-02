@@ -42,11 +42,10 @@ type taskJSON struct {
 
 // adminTasks lists the scheduled tasks as Jellyfin's dashboard does: how each last ran, whether it
 // is running, and when it next will.
-func (a *API) adminTasks(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminTasks(r *http.Request, _ none) (listJSON[taskJSON], error) {
 	statuses, err := a.svc.Tasks.Statuses(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[taskJSON]{}, err
 	}
 	out := make([]taskJSON, len(statuses))
 	for i, s := range statuses {
@@ -55,38 +54,34 @@ func (a *API) adminTasks(w http.ResponseWriter, r *http.Request) {
 			Result: s.State.Result, Error: s.State.Error, NextAt: s.Next, Jobs: s.Key.Jobs(),
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[taskJSON]{Items: out})
+	return listJSON[taskJSON]{Items: out}, nil
 }
 
 // runTask asks for a task to run now, on whichever node schedules tasks.
-func (a *API) runTask(w http.ResponseWriter, r *http.Request) {
-	if !a.answered(w, r, a.svc.Tasks.Request(r.Context(), domain.TaskKey(r.PathValue("key")))) {
-		w.WriteHeader(http.StatusAccepted)
-	}
+func (a *API) runTask(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Tasks.Request(r.Context(), domain.TaskKey(r.PathValue("key")))
 }
 
 // stopTask takes the jobs a task queued off the queue, as Jellyfin's dashboard stops a task: what
 // it had done stands, and its next run queues what is left.
-func (a *API) stopTask(w http.ResponseWriter, r *http.Request) {
+func (a *API) stopTask(r *http.Request, _ none) (none, error) {
 	key := domain.TaskKey(r.PathValue("key"))
 	if !slices.Contains(domain.TaskKeys(), key) {
-		a.answered(w, r, task.ErrNoTask)
-		return
+		return none{}, task.ErrNoTask
 	}
 	kinds := key.Jobs()
 	if len(kinds) == 0 {
-		writeProblem(w, a.logger, codeConflict, "the task does all it does in moments, and queues no work to stop")
-		return
+		return none{}, refuse(codeConflict, "the task does all it does in moments, and queues no work to stop")
 	}
-	if a.answered(w, r, a.svc.Jobs.StopJobs(r.Context(), kinds)) {
-		return
+	if err := a.svc.Jobs.StopJobs(r.Context(), kinds); err != nil {
+		return none{}, err
 	}
 	for _, kind := range kinds {
-		if a.answered(w, r, a.svc.Events.BacklogStopped(r.Context(), kind)) {
-			return
+		if err := a.svc.Events.BacklogStopped(r.Context(), kind); err != nil {
+			return none{}, err
 		}
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 type jobCountJSON struct {
@@ -109,11 +104,10 @@ type jobQueueJSON struct {
 }
 
 // adminJobs answers the job queue: how many of each kind are in each state, and those that died.
-func (a *API) adminJobs(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminJobs(r *http.Request, _ none) (jobQueueJSON, error) {
 	counts, dead, err := a.svc.Jobs.JobQueue(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return jobQueueJSON{}, err
 	}
 	var out jobQueueJSON
 	for _, c := range counts {
@@ -122,19 +116,16 @@ func (a *API) adminJobs(w http.ResponseWriter, r *http.Request) {
 	for _, d := range dead {
 		out.Dead = append(out.Dead, deadJobJSON{ID: d.ID, Kind: d.Kind, Subject: d.Subject, Attempts: d.Attempts, Error: d.Error})
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // retryJob gives a dead job a fresh set of attempts.
-func (a *API) retryJob(w http.ResponseWriter, r *http.Request) {
+func (a *API) retryJob(r *http.Request, _ none) (none, error) {
 	id, err := pathNumber(r, "id")
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return none{}, err
 	}
-	if a.answered(w, r, a.svc.Jobs.RetryJob(r.Context(), int64(id))) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, a.svc.Jobs.RetryJob(r.Context(), int64(id))
 }
 
 // transcodesJSON is how many videos a node is transcoding, against its limit if it has one, and
@@ -152,14 +143,13 @@ type nowPlayingListJSON struct {
 
 // adminPlaybacks answers who is playing what, how, on which node, and where they have got to, and
 // how many videos the node answering is transcoding against its limit, absent where it has none.
-func (a *API) adminPlaybacks(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminPlaybacks(r *http.Request, _ none) (nowPlayingListJSON, error) {
 	all, err := a.svc.NowPlaying.Playbacks(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return nowPlayingListJSON{}, err
 	}
 	active, conversions, limit := a.svc.HLS.Transcodes()
-	writeJSON(w, a.logger, "application/json", http.StatusOK, nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, conversions, limit}})
+	return nowPlayingListJSON{playbacksJSON(all), transcodesJSON{active, conversions, limit}}, nil
 }
 
 func playbacksJSON(all []domain.Playback) []domain.NowPlaying {
@@ -181,35 +171,35 @@ func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) workRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/tasks", access: admin, summary: "List the scheduled tasks and how each last ran",
-			status: http.StatusOK, reply: listJSON[taskJSON]{}, handle: a.adminTasks,
-		},
-		{
+			status: http.StatusOK,
+		}, a.adminTasks),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/tasks/{key}/run", access: admin, summary: "Run a task now",
 			path:   []param{{"key", domain.TaskKey(""), "The task."}},
-			status: http.StatusAccepted, handle: a.runTask,
-		},
-		{
+			status: http.StatusAccepted,
+		}, a.runTask),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/tasks/{key}/run", access: admin,
 			summary: "Stop a task's run: take the jobs it queued off the queue, running or not",
 			path:    []param{{"key", domain.TaskKey(""), "The task."}},
-			status:  http.StatusNoContent, handle: a.stopTask,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.stopTask),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/jobs", access: admin, summary: "Count the job queue and list the dead jobs",
-			status: http.StatusOK, reply: jobQueueJSON{}, handle: a.adminJobs,
-		},
-		{
+			status: http.StatusOK,
+		}, a.adminJobs),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/jobs/{id}/retry", access: admin, summary: "Retry a dead job",
 			path:   []param{{"id", int64(0), "The job."}},
-			status: http.StatusAccepted, handle: a.retryJob,
-		},
-		{
+			status: http.StatusAccepted,
+		}, a.retryJob),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/playbacks", access: admin,
 			summary: "List who is playing what, and how many videos this node is transcoding",
-			status:  http.StatusOK, reply: nowPlayingListJSON{}, handle: a.adminPlaybacks,
-		},
+			status:  http.StatusOK,
+		}, a.adminPlaybacks),
 		{
 			pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
 			summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
