@@ -56,7 +56,7 @@ func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 // what it decodes stays on it, in the format its frames are, and what FFmpeg decodes in its stead,
 // as a codec or bit depth it has no decoder for, is uploaded. AMF is given what FFmpeg decodes.
 func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
-	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR, ToneMap: true}
+	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR}
 	// QSV decodes through VAAPI on Linux and D3D11 on Windows.
 	qsv := "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi:extra_hw_frames=64,hwmap=derive_device=qsv,"
 	if runtime.GOOS == "windows" {
@@ -231,7 +231,7 @@ func TestAVAAPIDevicesToneMapperIsChosenByItsDriver(t *testing.T) {
 // picture: Vulkan's with VAAPI and Vulkan opened on one DRM device, the CPU's scaling on the device
 // before it maps.
 func TestEachVAAPIToneMapperMapsTheWholeChain(t *testing.T) {
-	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: true}
+	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR}
 	const dev = "-init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw "
 	const vk = "-init_hw_device drm=dr:/dev/dri/renderD128 -init_hw_device vaapi=hw@dr -init_hw_device vulkan=vk@dr -filter_hw_device vk "
 	for _, tc := range []struct {
@@ -253,7 +253,7 @@ func TestEachVAAPIToneMapperMapsTheWholeChain(t *testing.T) {
 			t.Errorf("%s: %q, want %q", tc.mapper, filter, tc.filter)
 		}
 		kept := e
-		kept.ToneMap, kept.Range, kept.Codec = false, domain.RangeHDR10, domain.VideoHEVC
+		kept.ToneMap, kept.Range, kept.Codec = domain.ToneMapNone, domain.RangeHDR10, domain.VideoHEVC
 		if init := strings.Join(hw.inputArgs(kept), " "); !strings.HasPrefix(init, dev) {
 			t.Errorf("%s: HDR kept opens %q", tc.mapper, init)
 		}

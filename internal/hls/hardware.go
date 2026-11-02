@@ -233,7 +233,7 @@ func (h Hardware) inputArgs(e domain.VideoEncode) []string {
 		decode = []string{"-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"}
 	case domain.AccelVAAPI:
 		init = []string{"-init_hw_device", "vaapi=hw:" + h.Device, "-filter_hw_device", "hw"}
-		if h.burnsThroughVulkan(e) || e.ToneMap && h.ToneMapper == ToneMapperVulkan {
+		if h.burnsThroughVulkan(e) || e.ToneMap != domain.ToneMapNone && h.ToneMapper == ToneMapperVulkan {
 			// As Jellyfin's: VAAPI and Vulkan opened on the one DRM device, so frames map between
 			// them, and Vulkan the filters' device, as libplacebo needs.
 			init = []string{"-init_hw_device", "drm=dr:" + h.Device, "-init_hw_device", "vaapi=hw@dr", "-init_hw_device", "vulkan=vk@dr", "-filter_hw_device", "vk"}
@@ -314,7 +314,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		if ten {
 			filter += "10le"
 		}
-		if e.ToneMap {
+		if e.ToneMap != domain.ToneMapNone {
 			filter = deinterlace + "scale=" + w + ":" + ht + "," + media.ToneMap + ":format=yuv420p"
 		}
 		if h.Accel == domain.AccelAMF {
@@ -340,13 +340,13 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		return filter, append(encoder, keyframes...)
 	case domain.AccelVideoToolbox:
 		filter = deinterlace + upload + "scale_vt=w=" + w + ":h=" + ht + ":format=" + format
-		if e.ToneMap {
+		if e.ToneMap != domain.ToneMapNone {
 			filter = deinterlace + upload + "scale_vt=w=" + w + ":h=" + ht + ",tonemap_videotoolbox=tonemap=bt2390:t=bt709:m=bt709:p=bt709:format=nv12"
 		}
 		encoder = append(encoder, "-prio_speed", "1")
 	case domain.AccelVAAPI:
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
-		if e.ToneMap {
+		if e.ToneMap != domain.ToneMapNone {
 			filter = upload + deinterlace + h.toneMapVAAPI(w, ht)
 			// Left in Vulkan for a subtitle laid over there (see burnArgs).
 			if h.ToneMapper == ToneMapperVulkan && !h.burnsThroughVulkan(e) {
@@ -363,13 +363,13 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		if e.Deinterlace {
 			filter += ":deinterlace=2"
 		}
-		if e.ToneMap {
+		if e.ToneMap != domain.ToneMapNone {
 			filter += ":tonemap=1"
 		}
 		encoder = append(encoder, "-preset", "veryfast", "-forced_idr", "1")
 	case domain.AccelNVENC:
 		filter = upload + deinterlace + "scale_cuda=w=" + w + ":h=" + ht + ":format=" + format
-		if e.ToneMap {
+		if e.ToneMap != domain.ToneMapNone {
 			filter = upload + deinterlace + "scale_cuda=w=" + w + ":h=" + ht + ",tonemap_cuda=format=nv12:p=bt709:t=bt709:m=bt709:tonemap=bt2390:peak=100:desat=0"
 		}
 		encoder = append(encoder, "-preset", "p1", "-forced-idr", "1")
@@ -406,7 +406,7 @@ var (
 // is missing, a driver without a filter, or one that cannot encode the codec is found at start
 // rather than at the first play.
 func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCodec) error {
-	cases := []domain.VideoEncode{{Range: domain.RangeSDR, Deinterlace: true}, {Range: domain.RangeSDR, ToneMap: true}}
+	cases := []domain.VideoEncode{{Range: domain.RangeSDR, Deinterlace: true}, {Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR}}
 	if codec == domain.VideoHEVC {
 		cases = append(cases, domain.VideoEncode{Range: domain.RangeHDR10})
 	}
@@ -418,7 +418,7 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 // HEVC, HDR kept in 10 bits. An overlay the driver lacks or fails to run beside its tone mapper is
 // found at start rather than at the first play.
 func (h Hardware) CheckBurn(ctx context.Context, ffmpeg string) error {
-	err := h.check(ctx, ffmpeg, domain.VideoH264, errBurn, []domain.VideoEncode{{Range: domain.RangeSDR, Burn: new(1)}, {Range: domain.RangeSDR, ToneMap: true, Burn: new(1)}})
+	err := h.check(ctx, ffmpeg, domain.VideoH264, errBurn, []domain.VideoEncode{{Range: domain.RangeSDR, Burn: new(1)}, {Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR, Burn: new(1)}})
 	if err != nil || h.HEVC != domain.HEVCAllow {
 		return err
 	}
@@ -435,7 +435,7 @@ func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 	for _, e := range cases {
 		e.Codec, e.Width, e.Height, e.BitrateKbps = codec, 640, 360, 2000
 		source := sdr
-		if e.ToneMap || e.Range != domain.RangeSDR {
+		if e.ToneMap != domain.ToneMapNone || e.Range != domain.RangeSDR {
 			source = hdr
 		}
 		if e.Burn != nil {
@@ -449,7 +449,7 @@ func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 		a = append(a, streamArgs(h, 0, domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
 		a = append(a, "-f", "null", "-")
 		if err := encodeTest(ctx, ffmpeg, a); err != nil {
-			return fmt.Errorf("%w: %s %s (%s, tone mapped %t): %w", failed, h.Accel, codec, e.Range, e.ToneMap, err)
+			return fmt.Errorf("%w: %s %s (%s, tone mapping %q): %w", failed, h.Accel, codec, e.Range, e.ToneMap, err)
 		}
 	}
 	return nil

@@ -43,11 +43,11 @@ func TestAConversionIsATranscodeWithinTheQuality(t *testing.T) {
 		plays   []VideoSupport
 		codec   domain.VideoCodec
 		r       domain.Range
-		toneMap bool
+		toneMap domain.ToneMapping
 	}{
-		{[]VideoSupport{{Codec: "h264"}}, domain.VideoH264, domain.RangeSDR, true},
-		{[]VideoSupport{{Codec: "h264"}, {Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10}}}, domain.VideoHEVC, domain.RangeHDR10, false},
-		{Converted(domain.Quality{Codec: domain.VideoHEVC, Range: domain.RangeHDR10}), domain.VideoHEVC, domain.RangeHDR10, false},
+		{[]VideoSupport{{Codec: "h264"}}, domain.VideoH264, domain.RangeSDR, domain.ToneMapHDR},
+		{[]VideoSupport{{Codec: "h264"}, {Codec: "hevc", Ranges: []domain.Range{domain.RangeSDR, domain.RangeHDR10}}}, domain.VideoHEVC, domain.RangeHDR10, domain.ToneMapNone},
+		{Converted(domain.Quality{Codec: domain.VideoHEVC, Range: domain.RangeHDR10}), domain.VideoHEVC, domain.RangeHDR10, domain.ToneMapNone},
 	} {
 		d, err := Conversion(c, q, tc.plays, domain.HEVCAllow)
 		if err != nil {

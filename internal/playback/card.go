@@ -37,7 +37,7 @@ func Card(s domain.Session, address string, t domain.PlaybackTitle, c store.Play
 		if e := v.Encode; e != nil {
 			card.Video.Encode = &domain.PlaybackEncode{
 				Codec: string(e.Codec), Width: e.Width, Height: e.Height, Range: e.Range, BitrateKbps: e.BitrateKbps,
-				ToneMapped: e.ToneMap,
+				ToneMapped: e.ToneMap != domain.ToneMapNone,
 			}
 		}
 	}

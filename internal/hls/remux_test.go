@@ -319,7 +319,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 		},
 		{
 			"encoded video is H.264 with a keyframe every segment, tone mapped",
-			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 8000, ToneMap: true}},
+			domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 8000, ToneMap: domain.ToneMapHDR}},
 			nil,
 			nil,
 			[]string{"-vf scale=1280:720,tonemapx=", "-c:v libx264", "-maxrate 8000k -bufsize 16000k", "-force_key_frames expr:gte(t,n_forced*6)"},
@@ -442,7 +442,7 @@ func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
 	styled := hd
 	styled.Burn, styled.BurnFile = nil, new(uuid.New())
 	toneMapped := hd
-	toneMapped.ToneMap = true
+	toneMapped.ToneMap = domain.ToneMapHDR
 	kept := hd
 	kept.Range = domain.RangeHDR10
 	layer := &styledLayer{file: "/cache/part/2.ass", rate: 24}

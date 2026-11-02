@@ -290,7 +290,7 @@ func (a *API) opened(p playback.Profile, c store.PlayVersion, d playback.Decisio
 		if e := v.Encode; e != nil {
 			answer.Video = &videoJSON{
 				Stream: v.Stream, Decision: decisionTranscode, Codec: e.Codec, Width: e.Width, Height: e.Height,
-				BitrateKbps: e.BitrateKbps, Range: e.Range, ToneMapped: e.ToneMap, BurnedSubtitle: e.Burn,
+				BitrateKbps: e.BitrateKbps, Range: e.Range, ToneMapped: e.ToneMap != domain.ToneMapNone, BurnedSubtitle: e.Burn,
 				BurnedSubtitleFile: e.BurnFile,
 			}
 		}
