@@ -195,6 +195,8 @@ func TestLogin(t *testing.T) {
 		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
 		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
 		{"not json", `name=Oliver`, http.StatusBadRequest, codeInvalidBody},
+		{"more after the body", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c"} {"admin":true}`, http.StatusBadRequest, codeInvalidBody},
+		{"a name twice", `{"method":"password","name":"Oliver","name":"Sam","password":"correct horse","device":"d","client":"c"}`, http.StatusBadRequest, codeInvalidBody},
 		{"no method", `{"name":"Oliver","password":"correct horse","device":"d","client":"c"}`, http.StatusBadRequest, codeInvalidBody},
 		{"an unknown method", `{"method":"magic","name":"Oliver"}`, http.StatusBadRequest, codeInvalidBody},
 		{"a pairing with no code", `{"method":"pairing"}`, http.StatusBadRequest, codeInvalidBody},
