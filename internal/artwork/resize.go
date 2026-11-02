@@ -85,15 +85,13 @@ func (c *Cache) original(ctx context.Context, id uuid.UUID, p domain.Picture) (b
 // picture's own file, on a context that outlives the callers, as everyone asking for the size at
 // once shares it. Each size is made once and kept.
 func (c *Cache) Resized(ctx context.Context, key string, width, height int, open func(context.Context) (blob.Object, error)) (blob.Object, error) {
-	name := key
 	if width > 0 {
 		width = roundUp(width)
-		name += fmt.Sprintf("-w%d", width)
 	}
 	if height > 0 {
 		height = roundUp(height)
-		name += fmt.Sprintf("-h%d", height)
 	}
+	name := copyName(key, width, height)
 	if o, err := c.blobs.Open(ctx, name); !errors.Is(err, fs.ErrNotExist) {
 		return o, err
 	}
@@ -112,6 +110,22 @@ func (c *Cache) Resized(ctx context.Context, key string, width, height int, open
 		}
 	}
 	return c.blobs.Open(ctx, name)
+}
+
+// copyMark begins the name of every copy, after its picture's: a copy is in sRGB, where one made
+// before pictures were brought into it was named without the mark, and is swept so it is made again.
+const copyMark = "-srgb"
+
+// copyName names the copy of the picture with key made within width×height.
+func copyName(key string, width, height int) string {
+	name := key + copyMark
+	if width > 0 {
+		name += fmt.Sprintf("-w%d", width)
+	}
+	if height > 0 {
+		name += fmt.Sprintf("-h%d", height)
+	}
+	return name
 }
 
 func roundUp(n int) int {
@@ -195,7 +209,7 @@ func fit(dx, dy, width, height int) (w, h int) {
 	return max(w, 1), max(h, 1)
 }
 
-// decode reads a picture of at most maxPixels.
+// decode reads a picture of at most maxPixels, in sRGB.
 func decode(f io.ReadSeeker) (image.Image, error) {
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
@@ -207,6 +221,12 @@ func decode(f io.ReadSeeker) (image.Image, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	src, _, err := image.Decode(f)
-	return src, err
+	src, format, err := image.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return inSRGB(src, format, f), nil
 }
