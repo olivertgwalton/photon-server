@@ -238,7 +238,7 @@ func TestASweepClearsReplacedPicturesAndCopiesNotInSRGB(t *testing.T) {
 	for _, key := range []string{
 		kept.String(), copyName(kept.String(), 320, 0), kept.String() + "-w480",
 		gone.String(), copyName(gone.String(), 320, 0), gone.String() + "-w640.as-is",
-		"README",
+		"README", "0190f1b2c3d44e5f8a9b0c1d2e3f4a5b",
 	} {
 		if err := c.blobs.Put(t.Context(), key, strings.NewReader("x")); err != nil {
 			t.Fatal(err)
@@ -257,8 +257,8 @@ func TestASweepClearsReplacedPicturesAndCopiesNotInSRGB(t *testing.T) {
 		}
 		left = append(left, e.Key)
 	}
-	if len(left) != 3 {
-		t.Errorf("%q left, want the kept picture's two and the stranger", left)
+	if len(left) != 4 {
+		t.Errorf("%q left, want the kept picture's two and the strangers", left)
 	}
 }
 

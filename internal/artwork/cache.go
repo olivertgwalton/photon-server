@@ -262,7 +262,12 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 			return 0, err
 		}
 		name := e.Key
-		id, err := uuid.Parse(name[:min(len(name), 36)])
+		// A picture's objects begin with its id as a key spells it; uuid.Parse also reads
+		// thirty-two bare hex digits, which name no picture here.
+		if len(name) < 36 {
+			continue
+		}
+		id, err := uuid.Parse(name[:36])
 		if err != nil {
 			continue
 		}
