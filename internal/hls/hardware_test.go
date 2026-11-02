@@ -3,6 +3,7 @@ package hls
 import (
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -27,9 +28,13 @@ func TestADeviceThatWillNotEncodeIsFoundAtStart(t *testing.T) {
 // before the upload.
 func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 720, Height: 576, BitrateKbps: 4000, Range: domain.RangeSDR, Deinterlace: true}
+	qsv := "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2"
+	if runtime.GOOS == "windows" {
+		qsv = "vpp_qsv=w=720:h=576:format=nv12:passthrough=0:deinterlace=2"
+	}
 	for accel, filter := range map[domain.Acceleration]string{
 		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le|videotoolbox_vld,hwupload,scale_vt",
-		domain.AccelVAAPI: "hwupload=derive_device=vaapi,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
+		domain.AccelVAAPI: "hwupload=derive_device=vaapi,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: qsv,
 		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda", domain.AccelAMF: "yadif=0:-1:0,scale=",
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
@@ -52,11 +57,16 @@ func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 // as a codec or bit depth it has no decoder for, is uploaded. AMF is given what FFmpeg decodes.
 func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR, ToneMap: true}
+	// QSV decodes through VAAPI on Linux and D3D11 on Windows.
+	qsv := "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi:extra_hw_frames=64,hwmap=derive_device=qsv,"
+	if runtime.GOOS == "windows" {
+		qsv = "format=nv12|p010le|d3d11,hwupload=derive_device=d3d11va:extra_hw_frames=64,hwmap=derive_device=qsv,"
+	}
 	for accel, want := range map[domain.Acceleration][2]string{
 		domain.AccelSoftware: {"libx264"}, domain.AccelAMF: {"h264_amf"},
 		domain.AccelVideoToolbox: {"h264_videotoolbox", "format=nv12|p010le|videotoolbox_vld,hwupload,"},
 		domain.AccelVAAPI:        {"h264_vaapi", "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,"},
-		domain.AccelQSV:          {"h264_qsv", "|vaapi,hwupload=derive_device=vaapi:extra_hw_frames=64,hwmap=derive_device=qsv,"},
+		domain.AccelQSV:          {"h264_qsv", qsv},
 		domain.AccelNVENC:        {"h264_nvenc", "format=nv12|p010le|cuda,hwupload,"},
 	} {
 		hw := Hardware{Accel: accel, Device: "d"}
