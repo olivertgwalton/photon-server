@@ -46,4 +46,4 @@ If an HDR film looks washed out or too dark, the app has said the screen shows a
 
 - Dolby Vision profile 5 has no ordinary picture underneath it, so on a screen without Dolby Vision it is always converted.
 - Dolby Vision from a Blu-ray (profile 7) can be changed to the kind streaming devices play (profile 8.1) without converting the picture, where the app asks for it.
-- Each server checks at start that its graphics hardware can tone map before it uses it.
+- Each server checks at start that its graphics hardware can tone map. Where it can't, the server still converts on it, and the processor tone maps instead, more slowly.

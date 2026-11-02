@@ -17,8 +17,8 @@ import (
 )
 
 // ToneMap maps an HDR picture to SDR in software: jellyfin-ffmpeg's tonemapx, as Jellyfin's
-// software transcode does.
-const ToneMap = "tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=yuv420p"
+// software transcode does. Its output's pixel format follows as ":format=".
+const ToneMap = "tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709"
 
 // Grid is how trickplay thumbnails are taken and laid out: one every Interval, Width pixels wide,
 // Columns by Rows to a sheet.
@@ -42,7 +42,7 @@ const jpegQuality = "3"
 func fitted(width int, source domain.Range) string {
 	f := "scale=" + strconv.Itoa(width) + ":trunc(ow/dar/2)*2,setsar=1"
 	if source.HDR() {
-		f += "," + ToneMap
+		f += "," + ToneMap + ":format=yuv420p"
 	}
 	// JPEG is full range. Stated, an encoder opened with no frame (a time past the last one)
 	// fails as having none instead of with mjpeg's misleading complaint about limited range.

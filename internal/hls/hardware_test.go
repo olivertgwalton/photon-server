@@ -165,7 +165,7 @@ func TestADeviceThatWillNotOpenOverlaysOnTheCPU(t *testing.T) {
 }
 
 // A subtitle is burned into the test picture through each device's own overlay, the subtitle the
-// source's second output: SDR in H.264, and HDR kept in 10-bit HEVC where the device encodes HEVC,
+// source's second output: SDR in H.264, as it is and tone mapped, and HDR kept in 10-bit HEVC where the device encodes HEVC,
 // which Vulkan's lays over on the CPU.
 func TestEachDeviceBurnsASubtitleInAtStart(t *testing.T) {
 	for _, tc := range []struct {
@@ -181,7 +181,7 @@ func TestEachDeviceBurnsASubtitleInAtStart(t *testing.T) {
 		{Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayVulkan}, "[main][sub]overlay_vulkan=", "[main][sub]overlay="},
 		{Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayCPU}, "[main][sub]overlay=", ""},
 	} {
-		for hevc, runs := range map[domain.HEVCEncoding]int{domain.HEVCAllow: 2, domain.HEVCDeny: 1} {
+		for hevc, runs := range map[domain.HEVCEncoding]int{domain.HEVCAllow: 3, domain.HEVCDeny: 2} {
 			dir := t.TempDir()
 			ffmpeg := testtool.Script(t, dir, "ffmpeg", `echo "$*" >> "`+dir+`/runs"`+"\n")
 			hw := tc.hw
@@ -199,7 +199,7 @@ func TestEachDeviceBurnsASubtitleInAtStart(t *testing.T) {
 			}
 			for i, l := range lines {
 				overlay := tc.overlay
-				if i == 1 && tc.hdr != "" {
+				if i == 2 && tc.hdr != "" {
 					overlay = tc.hdr
 				}
 				for _, w := range []string{"[out0];color=c=white@0.5:size=320x60:rate=24,format=yuva420p[out1]", "[0:1]scale=640:360", overlay} {
@@ -208,9 +208,54 @@ func TestEachDeviceBurnsASubtitleInAtStart(t *testing.T) {
 					}
 				}
 			}
-			if hevc == domain.HEVCAllow && !strings.Contains(lines[1], "p010") && !strings.Contains(lines[1], "yuv420p10") {
-				t.Errorf("%s %s: HDR kept is not burned in 10 bits: %q", hw.Accel, hw.Overlay, lines[1])
+			if hevc == domain.HEVCAllow && !strings.Contains(lines[2], "p010") && !strings.Contains(lines[2], "yuv420p10") {
+				t.Errorf("%s %s: HDR kept is not burned in 10 bits: %q", hw.Accel, hw.Overlay, lines[2])
 			}
+		}
+	}
+}
+
+// A driver's tone mapper is decided as its overlay is: Intel's iHD maps on the device, AMD's
+// through Vulkan where Vulkan imports its frames, and anything else on the CPU.
+func TestAVAAPIDevicesToneMapperIsChosenByItsDriver(t *testing.T) {
+	for overlay, want := range map[Overlay]ToneMapper{
+		OverlayVAAPI: ToneMapperVAAPI, OverlayVulkan: ToneMapperVulkan, OverlayCPU: ToneMapperCPU,
+	} {
+		if got := ToneMapperOf(overlay); got != want {
+			t.Errorf("%s: %s, want %s", overlay, got, want)
+		}
+	}
+}
+
+// Each VAAPI tone mapper maps HDR to 8-bit SDR at the size encoded and hands the encoder a VAAPI
+// picture: Vulkan's with VAAPI and Vulkan opened on one DRM device, the CPU's scaling on the device
+// before it maps.
+func TestEachVAAPIToneMapperMapsTheWholeChain(t *testing.T) {
+	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: true}
+	const dev = "-init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw "
+	const vk = "-init_hw_device drm=dr:/dev/dri/renderD128 -init_hw_device vaapi=hw@dr -init_hw_device vulkan=vk@dr -filter_hw_device vk "
+	for _, tc := range []struct {
+		mapper       ToneMapper
+		init, filter string
+	}{
+		{ToneMapperVAAPI, dev, "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=1920:h=1080"},
+		{ToneMapperVulkan, vk, "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,hwmap=derive_device=drm,format=drm_prime," +
+			"libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc:w=1920:h=1080:tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709," +
+			"format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"},
+		{ToneMapperCPU, dev, "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1080:format=p010,hwdownload,format=p010le," +
+			"tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=nv12,hwupload=derive_device=vaapi"},
+	} {
+		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayCPU, ToneMapper: tc.mapper}
+		if init := strings.Join(hw.inputArgs(e), " "); !strings.HasPrefix(init, tc.init) {
+			t.Errorf("%s: opens %q, want %q", tc.mapper, init, tc.init)
+		}
+		if filter, _ := hw.videoArgs(e); filter != tc.filter {
+			t.Errorf("%s: %q, want %q", tc.mapper, filter, tc.filter)
+		}
+		kept := e
+		kept.ToneMap, kept.Range, kept.Codec = false, domain.RangeHDR10, domain.VideoHEVC
+		if init := strings.Join(hw.inputArgs(kept), " "); !strings.HasPrefix(init, dev) {
+			t.Errorf("%s: HDR kept opens %q", tc.mapper, init)
 		}
 	}
 }

@@ -88,10 +88,12 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 					width, height = width*vaapiDrawnHeight/height/2*2, vaapiDrawnHeight
 				}
 			case OverlayVulkan:
-				// As Jellyfin's: the picture mapped to libplacebo, made the subtitle's BGRA, which
-				// overlay_vulkan needs, and mapped back to VAAPI's NV12 for the encoder.
-				filter += ",hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc,format=vulkan"
-				after = ",hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+				// Mapped to libplacebo for overlay_vulkan, unless it is there already, tone mapped,
+				// and back to VAAPI for the encoder.
+				if !e.ToneMap || hw.ToneMapper != ToneMapperVulkan {
+					filter += "," + toVulkan + ",format=vulkan"
+				}
+				after = fromVulkan
 			case OverlayCPU:
 			}
 		}
@@ -121,7 +123,9 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 		if ten {
 			format = "p010"
 		}
-		down, up = ",hwdownload,format="+format, ",hwupload"
+		// Uploaded to VAAPI by name, the filters' device being Vulkan where the picture is tone
+		// mapped through it.
+		down, up = ",hwdownload,format="+format, ",hwupload=derive_device=vaapi"
 	}
 	if layer != nil {
 		return []string{"-map", in, "-vf", filter + down + "," + layer.filter("") + up}

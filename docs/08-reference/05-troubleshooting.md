@@ -68,6 +68,7 @@ Look at the dashboard's **Server** card, under **Encoder**. If it says **Softwar
 | `the encoder set encodes no test picture: encoding on the first that does` | The encoder you chose doesn't work. In Docker, check the graphics card is passed into the container; see [Hardware transcoding](../01-get-started/02-install-docker.md#hardware-transcoding). |
 | `transcoding will fail: ffmpeg would not encode a test picture` | Even the processor can't convert. FFmpeg is broken; reinstall it. |
 | `encoding H.264 alone` | The hardware can't make HEVC, so everything is converted to H.264. It still works. |
+| `tone mapping on vaapi through the cpu instead` | The graphics card can't tone map HDR, so the processor does, more slowly. |
 | `burning subtitles in on vaapi through the cpu instead` | The graphics card can't draw subtitles into the picture, so the processor does, more slowly. |
 | `burning subtitles in will fail` | Picture or styled subtitles can't be drawn into a converted film. |
 | `styled subtitles play only on clients that draw them: ffmpeg has no libass` | Your FFmpeg can't draw styled subtitles. Apps that draw them themselves still show them. |
