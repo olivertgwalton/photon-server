@@ -3,7 +3,7 @@ package jellyfin
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net"
 	"net/http"
@@ -46,7 +46,7 @@ func heard(t *testing.T, c *websockettest.Client) map[string]any {
 		t.Fatalf("not a message: %#x %q %v", head, payload, err)
 	}
 	var m map[string]any
-	if err := json.Unmarshal(payload, &m); err != nil {
+	if err := json.Unmarshal(payload, &m, anyCase); err != nil {
 		t.Fatal(err)
 	}
 	if id, _ := m["MessageId"].(string); !hexID.MatchString(id) {

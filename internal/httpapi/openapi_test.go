@@ -1,7 +1,8 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -34,10 +35,10 @@ type described struct {
 		Tags       []string             `json:"tags"`
 		Parameters []describedParameter `json:"parameters"`
 		Responses  map[string]struct {
-			Ref     string                     `json:"$ref"`
-			Content map[string]json.RawMessage `json:"content"`
+			Ref     string                    `json:"$ref"`
+			Content map[string]jsontext.Value `json:"content"`
 			// Messages are a socket's, by feed and event.
-			Messages map[string]map[string]json.RawMessage `json:"x-messages"`
+			Messages map[string]map[string]jsontext.Value `json:"x-messages"`
 		} `json:"responses"`
 	} `json:"paths"`
 }
@@ -190,7 +191,7 @@ func TestASchemaHasTheFieldsEncodingJSONWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var written map[string]json.RawMessage
+	var written map[string]jsontext.Value
 	if err := json.Unmarshal(b, &written); err != nil {
 		t.Fatal(err)
 	}
@@ -209,8 +210,8 @@ func TestAddressesAreDescribedAsURIs(t *testing.T) {
 		Components struct {
 			Schemas map[string]struct {
 				Properties map[string]struct {
-					Type   json.RawMessage `json:"type"`
-					Format string          `json:"format"`
+					Type   jsontext.Value `json:"type"`
+					Format string         `json:"format"`
 				} `json:"properties"`
 			} `json:"schemas"`
 		} `json:"components"`
@@ -235,9 +236,9 @@ func TestEveryChoiceIsOfAType(t *testing.T) {
 		Components struct {
 			Schemas map[string]struct {
 				AnyOf []struct {
-					Ref  string          `json:"$ref"`
-					Type json.RawMessage `json:"type"`
-					Enum []string        `json:"enum"`
+					Ref  string         `json:"$ref"`
+					Type jsontext.Value `json:"type"`
+					Enum []string       `json:"enum"`
 				} `json:"anyOf"`
 			} `json:"schemas"`
 		} `json:"components"`
@@ -302,9 +303,9 @@ func TestEveryProblemCodeIsListed(t *testing.T) {
 // send en-GB and GB rather than English and Britain.
 func TestLanguagesAndCountriesAreDescribedByTheirStandard(t *testing.T) {
 	type typed struct {
-		Type    json.RawMessage `json:"type"`
-		Pattern string          `json:"pattern"`
-		Items   *typed          `json:"items"`
+		Type    jsontext.Value `json:"type"`
+		Pattern string         `json:"pattern"`
+		Items   *typed         `json:"items"`
 	}
 	var doc struct {
 		Components struct {
@@ -344,8 +345,8 @@ func TestTheOfflineDescriptionIsTheServedOne(t *testing.T) {
 // date, an id or a number rather than any string.
 func TestTypedValuesAreDescribedByTheirType(t *testing.T) {
 	type typed struct {
-		Type   json.RawMessage `json:"type"`
-		Format string          `json:"format"`
+		Type   jsontext.Value `json:"type"`
+		Format string         `json:"format"`
 	}
 	var doc struct {
 		Paths map[string]map[string]struct {

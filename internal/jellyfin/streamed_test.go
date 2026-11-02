@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -111,7 +111,7 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 		}
 	}
 	w := serve(api, http.MethodGet, "/Items?ParentId="+guid(lib.ID)+"&Fields=MediaSources", infuse, "")
-	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Items) != 2 {
+	if err := json.Unmarshal(w.Body.Bytes(), &page, anyCase); err != nil || len(page.Items) != 2 {
 		t.Fatalf("the library: %d %s", w.Code, w.Body)
 	}
 	for _, it := range page.Items {
@@ -120,14 +120,14 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 		}
 	}
 	w = serve(api, http.MethodGet, "/Items?searchTerm=Inception&Recursive=true&Fields=MediaSources", infuse, "")
-	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Items) != 1 || len(page.Items[0].MediaSources) != 1 ||
+	if err := json.Unmarshal(w.Body.Bytes(), &page, anyCase); err != nil || len(page.Items) != 1 || len(page.Items[0].MediaSources) != 1 ||
 		page.Items[0].MediaSources[0].ID != guid(found[0].ID) {
 		t.Errorf("Inception, which a search found: %d %s, want it with its placeholder", w.Code, w.Body)
 	}
 
 	var info struct{ MediaSources []source }
 	w = serve(api, http.MethodPost, "/Items/"+guid(ids["Heat"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Heat"])+`"}`)
-	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 || info.MediaSources[0].ID == guid(ids["Heat"]) {
+	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 || info.MediaSources[0].ID == guid(ids["Heat"]) {
 		t.Errorf("Heat played by its placeholder: %d %s, want its version, fetched", w.Code, w.Body)
 	}
 	if w := serve(api, http.MethodPost, "/Items/"+guid(ids["Avatar"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Avatar"])+`"}`); w.Code != http.StatusNotFound {
@@ -135,7 +135,7 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 	}
 	var avatar struct{ MediaSources []source }
 	w = serve(api, http.MethodGet, "/Items/"+guid(ids["Avatar"]), infuse, "")
-	if err := json.Unmarshal(w.Body.Bytes(), &avatar); err != nil || len(avatar.MediaSources) != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &avatar, anyCase); err != nil || len(avatar.MediaSources) != 1 {
 		t.Errorf("Avatar's page: %d %s, want it with its placeholder", w.Code, w.Body)
 	}
 }

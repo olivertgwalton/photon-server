@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -64,7 +64,7 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
 		if w.Code == http.StatusOK {
-			if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+			if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
 				t.Fatal(err)
 			}
 		}

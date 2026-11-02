@@ -2,7 +2,7 @@ package sonarr
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +24,7 @@ func (f *fakeSonarr) serve(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.key = r.Header.Get("X-Api-Key")
 		answer := func(v any) {
-			if err := json.NewEncoder(w).Encode(v); err != nil {
+			if err := json.MarshalWrite(w, v); err != nil {
 				t.Error(err)
 			}
 		}
@@ -48,7 +48,7 @@ func (f *fakeSonarr) serve(t *testing.T) *httptest.Server {
 			answer([]map[string]any{{"path": "/tv/"}})
 		case "POST /api/v3/series":
 			f.added = &series{}
-			if err := json.NewDecoder(r.Body).Decode(f.added); err != nil {
+			if err := json.UnmarshalRead(r.Body, f.added); err != nil {
 				t.Error(err)
 			}
 			w.WriteHeader(http.StatusCreated)

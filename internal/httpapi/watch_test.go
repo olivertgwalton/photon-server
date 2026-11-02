@@ -104,7 +104,7 @@ func TestWatching(t *testing.T) {
 		if rec.Code != tc.want {
 			t.Errorf("%s %s: %d, want %d", tc.method, tc.target, rec.Code, tc.want)
 		}
-		if tc.wantBody != "" && rec.Body.String() != tc.wantBody+"\n" {
+		if tc.wantBody != "" && rec.Body.String() != tc.wantBody {
 			t.Errorf("%s %s: body %q, want %q", tc.method, tc.target, rec.Body.String(), tc.wantBody)
 		}
 	}

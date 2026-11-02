@@ -7,7 +7,8 @@ package stremio
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,7 +46,7 @@ type Manifest struct {
 	Types    []string  `json:"types"`
 	Catalogs []Catalog `json:"catalogs"`
 	// Resources are what the addon answers: a name, or an object naming one.
-	Resources []json.RawMessage `json:"resources"`
+	Resources []jsontext.Value `json:"resources"`
 }
 
 type Catalog struct {
@@ -67,13 +68,13 @@ func (m Manifest) Kinds() []domain.ItemKind {
 
 // Streams reports whether the addon answers streams.
 func (m Manifest) Streams() bool {
-	return slices.ContainsFunc(m.Resources, func(raw json.RawMessage) bool {
+	return slices.ContainsFunc(m.Resources, func(raw jsontext.Value) bool {
 		var name string
-		if json.Unmarshal(raw, &name) != nil {
+		if json.Unmarshal(raw, &name, provider.Foreign) != nil {
 			var named struct {
 				Name string `json:"name"`
 			}
-			if json.Unmarshal(raw, &named) != nil {
+			if json.Unmarshal(raw, &named, provider.Foreign) != nil {
 				return false
 			}
 			name = named.Name
@@ -166,7 +167,7 @@ type stream struct {
 		Filename  string `json:"filename"`
 		VideoSize int64  `json:"videoSize"`
 		// ProxyHeaders are headers its URL is fetched with, which the server does not send.
-		ProxyHeaders json.RawMessage `json:"proxyHeaders"`
+		ProxyHeaders jsontext.Value `json:"proxyHeaders"`
 	} `json:"behaviorHints"`
 }
 

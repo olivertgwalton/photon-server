@@ -1,7 +1,7 @@
 package stremio
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -54,7 +54,7 @@ func addon(t *testing.T, catalogs map[string][][]meta) *Addon {
 		if page < len(pages) {
 			metas = pages[page]
 		}
-		if err := json.NewEncoder(w).Encode(map[string][]meta{"metas": metas}); err != nil {
+		if err := json.MarshalWrite(w, map[string][]meta{"metas": metas}); err != nil {
 			t.Error(err)
 		}
 	}))

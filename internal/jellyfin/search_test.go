@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -71,7 +71,7 @@ func TestAnAppSearchesByHints(t *testing.T) {
 			SearchHints      []hint
 			TotalRecordCount int
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &result, anyCase); err != nil {
 			t.Fatal(err)
 		}
 		return result.SearchHints, result.TotalRecordCount
@@ -154,7 +154,7 @@ func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
 			}
 			TotalRecordCount int
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &result, anyCase); err != nil {
 			t.Fatal(err)
 		}
 		var names []string

@@ -2,7 +2,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"time"
@@ -129,7 +129,7 @@ func (a *API) listen(ctx context.Context, c *websocket.Conn, heard chan<- messag
 			return
 		}
 		var in message
-		if json.Unmarshal(m, &in) != nil {
+		if json.Unmarshal(m, &in, anyCase) != nil {
 			continue
 		}
 		select {

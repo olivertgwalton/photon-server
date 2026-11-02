@@ -7,7 +7,7 @@ package pushrelay
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -128,7 +128,7 @@ func (r *Relay) post(ctx context.Context, path, credential string, body, answer 
 	case res.StatusCode/100 != 2:
 		return fmt.Errorf("the push relay answered %s", res.Status)
 	case answer != nil:
-		return json.NewDecoder(res.Body).Decode(answer)
+		return json.UnmarshalRead(res.Body, answer)
 	}
 	return nil
 }

@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -108,7 +108,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
 			t.Fatal(err)
 		}
 	}

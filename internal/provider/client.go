@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,14 @@ import (
 // MaxAnswer bounds what a provider may answer to one request rather than holding whatever it sends
 // in memory; a long show described whole is the largest.
 const MaxAnswer = 8 << 20
+
+// Foreign reads JSON photon did not write as leniently as encoding/json v1 always has: names in
+// any case, a name twice, and bytes that are not UTF-8, which a provider may send and v2 refuses.
+var Foreign = json.JoinOptions(
+	json.MatchCaseInsensitiveNames(true),
+	jsontext.AllowDuplicateNames(true),
+	jsontext.AllowInvalidUTF8(true),
+)
 
 // builtinHTTP is the built-in providers' HTTP client.
 var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
@@ -80,7 +89,7 @@ func (c Client) Do(ctx context.Context, r Request, out any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, out); err != nil {
+	if err := json.Unmarshal(data, out, Foreign); err != nil {
 		return fmt.Errorf("%s %s: %w", c.Name, r.Path, err)
 	}
 	return nil

@@ -1,7 +1,7 @@
 package historyimport
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +15,7 @@ type object = map[string]any
 func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		t.Error(err)
 	}
 }
@@ -103,7 +103,7 @@ func (f *fakeJellyfin) serve(t *testing.T) string {
 		}
 		if r.URL.Path == "/Users/AuthenticateByName" && r.Method == http.MethodPost {
 			var body struct{ Username, Pw string }
-			if json.NewDecoder(r.Body).Decode(&body) != nil || body.Username != f.user || body.Pw != f.password {
+			if json.UnmarshalRead(r.Body, &body) != nil || body.Username != f.user || body.Pw != f.password {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}

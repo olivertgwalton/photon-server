@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -70,7 +70,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 		t.Errorf("a member: %d, want 403", rec.Code)
 	}
 	var got serverJSON
-	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &got) != nil {
 		t.Fatalf("an admin: %d %s", rec.Code, rec.Body)
 	}
 	if got.Name != "den" || got.NodeID != node || got.Encoder.Acceleration != domain.AccelVAAPI || got.Transcodes != 1 || got.TranscodeLimit != 4 ||
@@ -89,7 +89,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	}
 	svc.Releases = fakeReleases{&domain.Release{Version: "v0.7.0", URL: "https://github.com/o/p/releases/tag/v0.7.0"}}
 	got = serverJSON{}
-	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &got) != nil {
 		t.Fatalf("with a newer release: %d %s", rec.Code, rec.Body)
 	}
 	if got.NewerRelease == nil || *got.NewerRelease != (releaseJSON{"v0.7.0", "https://github.com/o/p/releases/tag/v0.7.0"}) {
@@ -97,7 +97,7 @@ func TestAnAdminSeesHowTheServerIsSetUp(t *testing.T) {
 	}
 	svc.Valkey = fakeBackend{}
 	got = serverJSON{}
-	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+	if rec := get(svc, goodToken); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &got) != nil {
 		t.Fatalf("with Valkey down: %d %s", rec.Code, rec.Body)
 	}
 	if got.Valkey.Reachable || !got.Postgres.Reachable {

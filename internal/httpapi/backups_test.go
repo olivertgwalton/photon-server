@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +52,7 @@ func TestAnAdminListsAndDownloadsThisNodesDumps(t *testing.T) {
 		t.Errorf("a member listing: %d, want 403", rec.Code)
 	}
 	var list backupsJSON
-	if rec := get("/api/v1/admin/backups", goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&list) != nil {
+	if rec := get("/api/v1/admin/backups", goodToken); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &list) != nil {
 		t.Fatalf("listing: %d %s", rec.Code, rec.Body)
 	}
 	if list.NodeID != node || list.NodeName != "nas" || len(list.Items) != 2 ||
@@ -138,7 +138,7 @@ func TestARestoreIsRefusedForADumpThisNodeLacksOrANewerOne(t *testing.T) {
 		t.Errorf("a newer dump: %d %s, want 409 saying why", rec.Code, rec.Body)
 	}
 	var list backupsJSON
-	if rec := do(http.MethodGet, "/api/v1/admin/backups", goodToken); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&list) != nil {
+	if rec := do(http.MethodGet, "/api/v1/admin/backups", goodToken); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &list) != nil {
 		t.Fatalf("listing: %d %s", rec.Code, rec.Body)
 	}
 	if list.Restoring == nil || list.Restoring.Phase != domain.RestoreRestoring || list.Restoring.Dump != name {

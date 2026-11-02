@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -82,7 +82,7 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	get := func(target string, v any) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
-		if err := json.Unmarshal(w.Body.Bytes(), v); w.Code != http.StatusOK || err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), v, anyCase); w.Code != http.StatusOK || err != nil {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}

@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -78,7 +78,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d", target, w.Code)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &got, anyCase); err != nil {
 			t.Fatal(err)
 		}
 		out := []string{}
@@ -126,7 +126,7 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 			ParentIndexNumber *int
 		}
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.Items) != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &got, anyCase); err != nil || len(got.Items) != 1 {
 		t.Fatal(w.Body, err)
 	}
 	if it := got.Items[0]; it.Type != "Season" || it.SeriesName != "Severance" || it.SeriesID != it.ParentID || it.SeriesID == "" ||

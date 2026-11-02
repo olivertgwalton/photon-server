@@ -1,7 +1,8 @@
 package domain
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"slices"
 	"time"
 	"uuid"
@@ -152,7 +153,7 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	type plain Event
 	var read struct {
 		plain
-		Details json.RawMessage
+		Details jsontext.Value
 	}
 	if err := json.Unmarshal(b, &read); err != nil {
 		return err

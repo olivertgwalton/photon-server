@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"net/http"
 	"net/url"
@@ -82,8 +82,8 @@ func (c *Client) rated(ctx context.Context, key, path string) (domain.Rated, err
 			Score  *float64 `json:"score"`
 			Votes  *int     `json:"votes"`
 		} `json:"ratings"`
-		CommonSense json.RawMessage `json:"commonsense"`
-		AgeRating   int             `json:"age_rating"`
+		CommonSense jsontext.Value `json:"commonsense"`
+		AgeRating   int            `json:"age_rating"`
 	}
 	if err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: url.Values{"apikey": {key}}}, &body); err != nil {
 		return domain.Rated{}, err

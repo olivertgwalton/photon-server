@@ -3,7 +3,7 @@ package httpapi
 import (
 	"cmp"
 	"encoding"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"

@@ -6,7 +6,7 @@ package plugin
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -335,7 +335,7 @@ func call[Req, Reply any](ctx context.Context, hc *http.Client, name, method, ba
 // said is a plugin's error: its status, and the title and detail of the problem it answered.
 func said(r *provider.Refusal, secrets []string) string {
 	var p pluginv1.Problem
-	if json.Unmarshal(r.Body, &p) != nil || p.Title == "" {
+	if json.Unmarshal(r.Body, &p, provider.Foreign) != nil || p.Title == "" {
 		return r.Status
 	}
 	s := r.Status + ": " + p.Title

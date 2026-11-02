@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"slices"
@@ -369,7 +369,7 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	var o playback.Opening
 	if err == nil {
-		err = json.NewDecoder(r.Body).Decode(&o)
+		err = json.UnmarshalRead(r.Body, &o)
 	}
 	if err != nil {
 		writeProblem(w, a.logger, codeInvalidBody, err.Error())

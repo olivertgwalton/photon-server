@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 	"uuid"
 
@@ -60,11 +60,11 @@ func TestEventDetailsAreWrittenAsTheyWere(t *testing.T) {
 		},
 		{EventJobsProgress, BacklogDetails{JobKind: JobPreviews}, map[string]any{"job_kind": JobPreviews, "left": 0, "done": 0}},
 	} {
-		was, err := json.Marshal(c.was)
+		was, err := json.Marshal(c.was, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got, err := json.Marshal(c.details); err != nil || string(got) != string(was) {
+		if got, err := json.Marshal(c.details, json.Deterministic(true)); err != nil || string(got) != string(was) {
 			t.Errorf("%s written as %s, %v; want %s", c.kind, got, err, was)
 		}
 		if got, err := DetailsOf(c.kind, was); err != nil || !cmp.Equal(got, c.details) {

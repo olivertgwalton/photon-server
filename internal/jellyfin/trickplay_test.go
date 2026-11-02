@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"path"
@@ -58,14 +58,14 @@ func TestAnAppReadsAFilmsTrickplay(t *testing.T) {
 			Items     []item
 			Trickplay map[string]map[string]trickplayInfo
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &it); w.Code != http.StatusOK || err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &it, anyCase); w.Code != http.StatusOK || err != nil {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 		if it.Items == nil {
 			return it.Trickplay
 		}
 		var got map[string]map[string]trickplayInfo
-		if b, err := json.Marshal(it.Items[0].Trickplay); err != nil || json.Unmarshal(b, &got) != nil {
+		if b, err := json.Marshal(it.Items[0].Trickplay); err != nil || json.Unmarshal(b, &got, anyCase) != nil {
 			t.Fatal(err)
 		}
 		return got

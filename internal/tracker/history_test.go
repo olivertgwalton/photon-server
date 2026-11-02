@@ -4,7 +4,7 @@ package tracker
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"testing"
 	"time"

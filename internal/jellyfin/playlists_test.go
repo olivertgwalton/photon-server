@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -76,7 +76,7 @@ func (h household) send(t *testing.T, method, token, target, body string, into a
 	t.Helper()
 	w := serve(h.api, method, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, body)
 	if w.Code == http.StatusOK && into != nil {
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
 			t.Fatalf("%s %s: %v", method, target, err)
 		}
 	}

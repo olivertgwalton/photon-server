@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"log/slog"
 	"maps"
@@ -170,7 +170,7 @@ func transcodeOn(t *testing.T, n *peerNode) (uuid.UUID, string) {
 		Method     string    `json:"method"`
 		Playlist   string    `json:"playlist"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil || resp.StatusCode != http.StatusOK || answer.Method != "transcode" {
+	if err := json.UnmarshalRead(resp.Body, &answer); err != nil || resp.StatusCode != http.StatusOK || answer.Method != "transcode" {
 		t.Fatalf("a transcode: %s, %+v, %v", resp.Status, answer, err)
 	}
 	return answer.PlaybackID, answer.Playlist
@@ -260,7 +260,7 @@ func playAsItIsOn(t *testing.T, n *peerNode) played {
 	}
 	defer resp.Body.Close()
 	p := played{status: resp.StatusCode}
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &p); err != nil {
 		t.Fatal(err)
 	}
 	return p
@@ -468,7 +468,7 @@ func TestWithNoNodeTranscodingAVersionThatNeedsItIsRefused(t *testing.T) {
 			Method     string    `json:"method"`
 			Code       string    `json:"code"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &answer); err != nil {
 			t.Fatal(err)
 		}
 		if resp.StatusCode == http.StatusOK && answer.PlaybackID == (uuid.UUID{}) {

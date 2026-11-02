@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -105,7 +105,7 @@ func TestABrowserSignsInAtItsProvider(t *testing.T) {
 		t.Fatalf("start: %d %s", rec.Code, rec.Body)
 	}
 	var left signInRedirectJSON
-	if err := json.NewDecoder(rec.Body).Decode(&left); err != nil || !strings.HasPrefix(string(left.URL), "https://id.example.com/") {
+	if err := json.UnmarshalRead(rec.Body, &left); err != nil || !strings.HasPrefix(string(left.URL), "https://id.example.com/") {
 		t.Fatalf("sent to %q, %v", left.URL, err)
 	}
 	cookies := rec.Result().Cookies()

@@ -2,7 +2,7 @@ package riven
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +34,7 @@ func serve(t *testing.T, a *asked) *Client {
 			Query     string           `json:"query"`
 			Variables map[string]input `json:"variables"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		if err := json.UnmarshalRead(r.Body, &q); err != nil {
 			t.Error(err)
 		}
 		a.key, a.query, a.input = r.Header.Get("X-Api-Key"), q.Query, q.Variables["input"]

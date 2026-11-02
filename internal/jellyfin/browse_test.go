@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -134,7 +134,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 		var v any
-		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &v, anyCase); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 		return v
@@ -368,7 +368,7 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), v); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), v, anyCase); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 	}

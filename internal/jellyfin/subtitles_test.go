@@ -5,7 +5,7 @@ package jellyfin
 import (
 	"bytes"
 	"cmp"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -213,7 +213,7 @@ func TestAnAppIsSentASubtitleFileInTheFormatItAsks(t *testing.T) {
 		t.Errorf("the SubRip as WebVTT = %q", got)
 	}
 	var track struct{ TrackEvents []trackEvent }
-	if err := json.Unmarshal(get(srtFile, "Stream.js", http.StatusOK), &track); err != nil ||
+	if err := json.Unmarshal(get(srtFile, "Stream.js", http.StatusOK), &track, anyCase); err != nil ||
 		len(track.TrackEvents) != 1 || track.TrackEvents[0] != (trackEvent{ID: "1", Text: "<i>Café</i>", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
 		t.Errorf("the SubRip as JSON = %+v, %v", track, err)
 	}
@@ -259,7 +259,7 @@ func playbackInfo(t *testing.T, api http.Handler, film uuid.UUID, subtitle int, 
 	w := serve(api, http.MethodPost, "/Items/"+guid(film)+"/PlaybackInfo", jellyfinWeb,
 		`{"SubtitleStreamIndex":`+strconv.Itoa(subtitle)+`,"DeviceProfile":`+profile+`}`)
 	var info struct{ MediaSources []map[string]any }
-	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 {
+	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 {
 		t.Fatalf("PlaybackInfo: %d %s", w.Code, w.Body)
 	}
 	return info.MediaSources[0]
@@ -358,7 +358,7 @@ func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
 		return serve(api, http.MethodGet, strings.Replace(address, "Stream.vtt", "Stream."+format, 1), "", "")
 	}
 	var track struct{ TrackEvents []trackEvent }
-	if w := other("js"); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil || len(track.TrackEvents) != 1 ||
+	if w := other("js"); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track, anyCase) != nil || len(track.TrackEvents) != 1 ||
 		track.TrackEvents[0] != (trackEvent{ID: "1", Text: "Hello.", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
 		t.Errorf("the SubRip stream as JSON: %d %s", w.Code, w.Body)
 	}
@@ -395,7 +395,7 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 	}
 	srt := subtitleStream(t, src, srtFile)["DeliveryUrl"].(string)
 	var track struct{ TrackEvents []trackEvent }
-	if w := serve(api, http.MethodGet, strings.Replace(srt, ".vtt", ".js", 1), "", ""); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil ||
+	if w := serve(api, http.MethodGet, strings.Replace(srt, ".vtt", ".js", 1), "", ""); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track, anyCase) != nil ||
 		len(track.TrackEvents) != 1 || track.TrackEvents[0].Text != "<i>Café</i>" {
 		t.Errorf("the SubRip's cues: %d %s", w.Code, w.Body)
 	}

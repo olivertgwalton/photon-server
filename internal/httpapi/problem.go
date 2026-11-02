@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"io/fs"
@@ -233,7 +233,8 @@ func writeProblem(w http.ResponseWriter, logger *slog.Logger, code problemCode, 
 func writeJSON(w http.ResponseWriter, logger *slog.Logger, contentType string, status int, v any) {
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	// A map's keys go in order, so the same answer is the same bytes and revalidate's ETag holds.
+	if err := json.MarshalWrite(w, v, json.Deterministic(true)); err != nil {
 		logger.Warn("response not written", slog.Any("err", err))
 	}
 }

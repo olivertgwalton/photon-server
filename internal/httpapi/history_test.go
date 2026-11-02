@@ -3,7 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -151,7 +151,9 @@ func TestHistoryIsPagedOnFromThePageBefore(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec
 	}
-	var first struct{ Next string }
+	var first struct {
+		Next string `json:"next"`
+	}
 	if rec := get("/api/v1/history"); rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &first) != nil || first.Next == "" {
 		t.Fatalf("first page: %d %s, want a next", rec.Code, rec.Body)
 	}

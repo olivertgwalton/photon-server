@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +48,7 @@ func TestAnAdminKeepsTheWebhooks(t *testing.T) {
 	}
 	rec := do(goodToken, http.MethodPost, "/api/v1/admin/webhooks", `{"url": "https://hooks.example/photon", "events": ["playback.started", "playback.paused"]}`)
 	var added addedWebhookJSON
-	if err := json.NewDecoder(rec.Body).Decode(&added); err != nil || rec.Code != http.StatusCreated || len(added.Secret) < 20 {
+	if err := json.UnmarshalRead(rec.Body, &added); err != nil || rec.Code != http.StatusCreated || len(added.Secret) < 20 {
 		t.Fatalf("adding: %d %+v %v; want it with its secret", rec.Code, added, err)
 	}
 	told.webhooks = []uuid.UUID{added.ID}

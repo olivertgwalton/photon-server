@@ -2,7 +2,8 @@ package anilist
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -74,17 +75,17 @@ func serve(t *testing.T) (*Client, *[][]int) {
 				IDs []int `json:"ids"`
 			} `json:"variables"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
 			t.Error(err)
 		}
 		asked = append(asked, req.Variables.IDs)
-		var found []json.RawMessage
+		var found []jsontext.Value
 		for _, id := range req.Variables.IDs {
 			if e, ok := entries[id]; ok {
-				found = append(found, json.RawMessage(e))
+				found = append(found, jsontext.Value(e))
 			}
 		}
-		if err := json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"Page": map[string]any{"media": found}}}); err != nil {
+		if err := json.MarshalWrite(w, map[string]any{"data": map[string]any{"Page": map[string]any{"media": found}}}); err != nil {
 			t.Error(err)
 		}
 	}))

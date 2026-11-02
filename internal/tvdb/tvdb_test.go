@@ -2,7 +2,7 @@ package tvdb
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +55,7 @@ func fake(t *testing.T) (*Client, *int) {
 			var body struct {
 				Key string `json:"apikey"`
 			}
-			if json.NewDecoder(r.Body).Decode(&body) != nil || body.Key != "key" {
+			if json.UnmarshalRead(r.Body, &body) != nil || body.Key != "key" {
 				http.Error(w, "", http.StatusUnauthorized)
 				return
 			}

@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -70,7 +70,7 @@ func TestAnAdminImportsWatchHistory(t *testing.T) {
 	}
 	rec := do(goodToken, http.MethodPost, "/api/v1/admin/imports", start("plex", "good"))
 	var created createdJSON
-	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil || rec.Code != http.StatusCreated {
+	if err := json.UnmarshalRead(rec.Body, &created); err != nil || rec.Code != http.StatusCreated {
 		t.Fatalf("starting: %d %v; want its id", rec.Code, err)
 	}
 	got := do(goodToken, http.MethodGet, "/api/v1/admin/imports/"+created.ID.String(), "")

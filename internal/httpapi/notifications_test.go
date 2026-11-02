@@ -2,7 +2,8 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -192,8 +193,8 @@ func TestTheInboxTellsEachKindInItsShape(t *testing.T) {
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	var got struct {
-		Items  []map[string]json.RawMessage `json:"items"`
-		Unread int                          `json:"unread"`
+		Items  []map[string]jsontext.Value `json:"items"`
+		Unread int                         `json:"unread"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); rec.Code != http.StatusOK || err != nil {
 		t.Fatalf("inbox: %d %s %v", rec.Code, rec.Body, err)
@@ -201,7 +202,7 @@ func TestTheInboxTellsEachKindInItsShape(t *testing.T) {
 	if got.Unread != 2 || len(got.Items) != 2 {
 		t.Fatalf("inbox %s; want the request and the film, the request that has gone left out", rec.Body)
 	}
-	keys := func(m map[string]json.RawMessage) []string { return slices.Sorted(maps.Keys(m)) }
+	keys := func(m map[string]jsontext.Value) []string { return slices.Sorted(maps.Keys(m)) }
 	request, title := got.Items[0], got.Items[1]
 	if want := []string{"added_at", "id", "kind", "message", "request"}; !slices.Equal(keys(request), want) {
 		t.Errorf("a request's notification has %v, want %v", keys(request), want)

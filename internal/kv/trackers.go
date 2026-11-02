@@ -2,7 +2,7 @@ package kv
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"strconv"
 	"time"
 	"uuid"
@@ -27,7 +27,7 @@ type TrackerLink struct {
 	UserCode                string         `json:"user_code"`
 	VerificationURI         string         `json:"verification_uri"`
 	VerificationURIComplete string         `json:"verification_uri_complete"`
-	Interval                time.Duration  `json:"interval"`
+	Interval                time.Duration  `json:"interval,format:nano"`
 	Expires                 time.Time      `json:"expires"`
 	// Asked is when the tracker was last asked after it, in Valkey's clock's milliseconds.
 	Asked int64 `json:"asked"`

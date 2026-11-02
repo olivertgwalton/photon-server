@@ -3,7 +3,7 @@ package kv
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 	"uuid"
 

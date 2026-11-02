@@ -1,7 +1,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"time"
@@ -99,7 +99,7 @@ func (a *API) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Reques
 		Secret string `json:"Secret"`
 	}
 	a.readWithin(w)
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSignIn)).Decode(&req); err != nil {
+	if err := json.UnmarshalRead(http.MaxBytesReader(w, r.Body, maxSignIn), &req, anyCase); err != nil {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}

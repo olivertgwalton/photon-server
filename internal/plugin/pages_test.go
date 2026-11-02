@@ -3,7 +3,7 @@
 package plugin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -42,7 +42,7 @@ func TestAPluginIsToldWhoVisitsItsPage(t *testing.T) {
 	p := New(st, k)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if err := json.NewEncoder(w).Encode(pluginv1.Manifest{
+		if err := json.MarshalWrite(w, pluginv1.Manifest{
 			Protocol: pluginv1.Version, ID: "requests", Name: "Requests", Kinds: []string{"movie"},
 			Capabilities: []pluginv1.Capability{{Name: "pages", Version: 1, Pages: []pluginv1.Page{
 				{ID: "ask", Name: "Ask for a film", URL: "/ui", Access: "everyone"},

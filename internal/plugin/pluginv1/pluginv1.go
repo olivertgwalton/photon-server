@@ -6,7 +6,7 @@
 package pluginv1
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"time"
 )
 
@@ -319,8 +319,8 @@ type FetchResponse struct {
 // EventRequest is an event the plugin hears, as a webhook is sent it, with its settings as they
 // are when it is sent.
 type EventRequest struct {
-	Settings Settings        `json:"settings"`
-	Event    json.RawMessage `json:"event"`
+	Settings Settings       `json:"settings"`
+	Event    jsontext.Value `json:"event"`
 }
 
 // RequestRequest asks the plugin to fetch a film, or a show's seasons, every one where none are

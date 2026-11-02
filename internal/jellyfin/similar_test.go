@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -75,7 +75,7 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Swiftfin iOS", Token="pst_ada"`, "")
 		var out result
 		if w.Code == http.StatusOK {
-			if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			if err := json.Unmarshal(w.Body.Bytes(), &out, anyCase); err != nil {
 				t.Fatal(err)
 			}
 		}

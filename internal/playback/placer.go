@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -257,8 +257,10 @@ func (p *Placer) Open(ctx context.Context, node domain.Node, playback uuid.UUID,
 		return nil
 	case http.StatusServiceUnavailable:
 		// The node says which of its limits it is at, by the problem's code.
-		var refusal struct{ Code string }
-		if json.NewDecoder(resp.Body).Decode(&refusal) == nil && refusal.Code == streamLimitCode {
+		var refusal struct {
+			Code string `json:"code"`
+		}
+		if json.UnmarshalRead(resp.Body, &refusal) == nil && refusal.Code == streamLimitCode {
 			return ErrStreamLimit
 		}
 		return hls.ErrTranscodeLimit

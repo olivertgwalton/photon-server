@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 	"os/exec"
 	"path/filepath"

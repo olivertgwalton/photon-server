@@ -7,7 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"maps"
@@ -215,7 +215,7 @@ func (f *fakeProvider) token(w http.ResponseWriter, r *http.Request) {
 func (f *fakeProvider) reply(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
+	if err := json.MarshalWrite(w, body); err != nil {
 		f.t.Error(err)
 	}
 }

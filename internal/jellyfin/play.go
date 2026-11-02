@@ -3,7 +3,7 @@ package jellyfin
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"hash/fnv"
 	"io"
@@ -54,11 +54,17 @@ type watching interface {
 // maxReport is the most a playback's report or request may be; a device profile is the largest.
 const maxReport = 1 << 20
 
+// anyCase reads an app's JSON as Jellyfin does, its names in any case.
+var anyCase = json.MatchCaseInsensitiveNames(true)
+
 // readJSON reads a body an app may leave empty, its keys in any case, within bodyWithin.
 func (a *API) readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	a.readWithin(w)
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxReport)).Decode(v)
-	if err != nil && !errors.Is(err, io.EOF) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxReport))
+	if err == nil && len(body) > 0 {
+		err = json.Unmarshal(body, v, anyCase)
+	}
+	if err != nil {
 		a.refuse(w, http.StatusBadRequest)
 		return false
 	}

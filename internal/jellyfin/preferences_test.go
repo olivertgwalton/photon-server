@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -25,7 +25,7 @@ func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 	var info, it struct{ MediaSources []map[string]any }
 	for target, into := range map[string]any{"/Items/" + guid(item) + "/PlaybackInfo": &info, "/Items/" + guid(item): &it} {
 		w := serve(api, http.MethodGet, target, header, "")
-		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}
@@ -84,7 +84,7 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 		t.Helper()
 		var u struct{ Configuration map[string]any }
 		w := serve(api, http.MethodGet, "/Users/Me", web, "")
-		if err := json.Unmarshal(w.Body.Bytes(), &u); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &u, anyCase); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("/Users/Me: %d %s", w.Code, w.Body)
 		}
 		return u.Configuration
@@ -166,7 +166,7 @@ func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
 	const web = `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="10.11.0", Token="pst_ada"`
 	w := serve(api, http.MethodGet, "/Localization/cultures", web, "")
 	var cultures []map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &cultures); err != nil || w.Code != http.StatusOK {
+	if err := json.Unmarshal(w.Body.Bytes(), &cultures, anyCase); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("/Localization/cultures: %d %s", w.Code, w.Body)
 	}
 	names := map[string]bool{}
@@ -186,7 +186,7 @@ func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
 			t.Fatalf("saving %v: %d %s", code, w.Code, w.Body)
 		}
 		var u struct{ Configuration map[string]any }
-		if err := json.Unmarshal(serve(api, http.MethodGet, "/Users/Me", web, "").Body.Bytes(), &u); err != nil {
+		if err := json.Unmarshal(serve(api, http.MethodGet, "/Users/Me", web, "").Body.Bytes(), &u, anyCase); err != nil {
 			t.Fatal(err)
 		}
 		if a, s := u.Configuration["AudioLanguagePreference"], u.Configuration["SubtitleLanguagePreference"]; a != code || s != code {

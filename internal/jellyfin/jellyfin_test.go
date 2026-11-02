@@ -2,7 +2,8 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -185,16 +186,16 @@ func (newPreferences) Preferences(context.Context, uuid.UUID) (domain.Preference
 
 // fakeDisplays keeps display preferences by profile, client and view, but none of the view "overflow",
 // as if the profile's apps kept as many as they may.
-type fakeDisplays map[[3]string]json.RawMessage
+type fakeDisplays map[[3]string]jsontext.Value
 
-func (f fakeDisplays) DisplayPreferences(_ context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error) {
+func (f fakeDisplays) DisplayPreferences(_ context.Context, profile uuid.UUID, client, view string) (jsontext.Value, error) {
 	if p, ok := f[[3]string{profile.String(), client, view}]; ok {
 		return p, nil
 	}
 	return nil, store.ErrNotFound
 }
 
-func (f fakeDisplays) SetDisplayPreferences(_ context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error {
+func (f fakeDisplays) SetDisplayPreferences(_ context.Context, profile uuid.UUID, client, view string, prefs jsontext.Value) error {
 	if view == "overflow" {
 		return store.ErrTooManyViews
 	}
@@ -231,7 +232,7 @@ func serve(api http.Handler, method, target, header, body string) *httptest.Resp
 func object(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var m map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &m, anyCase); err != nil {
 		t.Fatalf("%d %q: %v", w.Code, w.Body, err)
 	}
 	return m

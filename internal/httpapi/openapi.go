@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -175,7 +175,7 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 				},
 			},
 		},
-	})
+	}, json.Deterministic(true))
 }
 
 func operation(s *schemas, r route, path string) (apiOperation, error) {

@@ -4,7 +4,8 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,7 @@ func node(t *testing.T, st *store.Store) *events.Hub {
 type heard struct {
 	feed feed
 	name string
-	data json.RawMessage
+	data jsontext.Value
 }
 
 // listen opens the events socket at target as token, and reads its messages until it closes.
@@ -69,9 +70,9 @@ func listen(t *testing.T, target, token string) <-chan heard {
 				continue
 			}
 			var m struct {
-				Feed  feed            `json:"feed"`
-				Event string          `json:"event"`
-				Data  json.RawMessage `json:"data"`
+				Feed  feed           `json:"feed"`
+				Event string         `json:"event"`
+				Data  jsontext.Value `json:"data"`
 			}
 			if json.Unmarshal(payload, &m) != nil {
 				return

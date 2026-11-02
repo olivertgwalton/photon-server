@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
@@ -46,7 +46,7 @@ func TestServer(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
 	var got domain.Info
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if diff := cmp.Diff(domain.Info{ID: "0199b3c0-0000-7000-8000-000000000000", Name: "den", Version: "v0.1.0"}, got); diff != "" {
