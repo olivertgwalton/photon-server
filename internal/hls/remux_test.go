@@ -404,8 +404,8 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 			canvas + "yuva420p" + styled + "hwupload[sub];[0:0]format=nv12|p010le|cuda,hwupload,scale_cuda=w=1920:h=1040:format=nv12[main];[main][sub]overlay_cuda=eof_action=pass:repeatlast=0:alpha_format=premultiplied[v]",
 		},
 		domain.AccelVAAPI: {
-			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
-			"-vf format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts,hwupload ",
+			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload=derive_device=vaapi[v]",
+			"-vf format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1040:format=nv12,hwdownload,format=nv12,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts,hwupload=derive_device=vaapi ",
 		},
 		domain.AccelAMF: {
 			"[0:0]scale=1920:1040,format=yuv420p[main];[0:2]scale=1920:1040[sub];[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=yuv420p[v]",
@@ -475,20 +475,21 @@ func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
 		}},
 		{"radeonsi, tone mapped", OverlayVulkan, "hevc", toneMapped, nil, []string{
 			vulkan,
-			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=1920:h=800" + toVulkan + fromVulkan,
+			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:w=1920:h=800:format=bgra:tonemapping=bt.2390:" +
+				"peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=pc,format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv" + toVulkan + fromVulkan,
 		}},
 		{"radeonsi, HDR kept", OverlayVulkan, "hevc", kept, nil, []string{
 			vaapi,
 			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=800:format=p010,hwdownload,format=p010[main];[0:2]scale=1920:800[sub];" +
-				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload[v]",
+				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload=derive_device=vaapi[v]",
 		}},
 		{"i965", OverlayCPU, "hevc", hd, nil, []string{
 			vaapi,
 			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=800:format=nv12,hwdownload,format=nv12[main];[0:2]scale=1920:800[sub];" +
-				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
+				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload=derive_device=vaapi[v]",
 		}},
 	} {
-		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay}
+		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay, ToneMapper: ToneMapperOf(tc.overlay)}
 		video := domain.VideoPlan{Codec: tc.codec, Encode: &tc.e}
 		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range append(tc.want, "-c:v hevc_vaapi") {
@@ -504,7 +505,7 @@ func TestASubtitleLaidOverOnTheCPUKeepsHDRInTenBits(t *testing.T) {
 	for accel, want := range map[domain.Acceleration]string{
 		domain.AccelSoftware: "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=yuv420p10le[v]",
 		domain.AccelAMF:      "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=yuv420p10le[v]",
-		domain.AccelVAAPI:    "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload[v]",
+		domain.AccelVAAPI:    "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload=derive_device=vaapi[v]",
 	} {
 		video := domain.VideoPlan{Codec: "hevc", Encode: &e}
 		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: accel}, 0, video, nil, nil, domain.SegmentsFMP4, nil), " ")

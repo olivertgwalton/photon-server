@@ -121,7 +121,9 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 		if ten {
 			format = "p010"
 		}
-		down, up = ",hwdownload,format="+format, ",hwupload"
+		// Uploaded to VAAPI by name, the filters' device being Vulkan where the picture is tone
+		// mapped through it.
+		down, up = ",hwdownload,format="+format, ",hwupload=derive_device=vaapi"
 	}
 	if layer != nil {
 		return []string{"-map", in, "-vf", filter + down + "," + layer.filter("") + up}

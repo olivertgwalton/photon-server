@@ -25,6 +25,8 @@ type Hardware struct {
 	HEVC domain.HEVCEncoding
 	// Overlay is how VAAPI lays a burned-in subtitle over the picture.
 	Overlay Overlay
+	// ToneMapper is how VAAPI maps HDR to SDR.
+	ToneMapper ToneMapper
 }
 
 // Overlay is how a VAAPI device lays a subtitle drawn on the CPU over the picture, chosen by its
@@ -41,6 +43,33 @@ const (
 	// i965, and AMD without that import.
 	OverlayCPU Overlay = "cpu"
 )
+
+// ToneMapper is how a VAAPI device maps an HDR picture to SDR, chosen by its driver as Jellyfin's
+// pipelines are (see ToneMapperOf).
+type ToneMapper string
+
+const (
+	// ToneMapperVAAPI is the driver's own tonemap_vaapi: Intel's iHD. Mesa's refuses it.
+	ToneMapperVAAPI ToneMapper = "vaapi"
+	// ToneMapperVulkan maps the picture to Vulkan for libplacebo and back: AMD's Mesa driver, where
+	// Vulkan imports its frames.
+	ToneMapperVulkan ToneMapper = "vulkan"
+	// ToneMapperCPU scales the picture on the device and takes it off for tonemapx: any driver.
+	ToneMapperCPU ToneMapper = "cpu"
+)
+
+// ToneMapperOf is the tone mapper of a device ProbeOverlay found overlays so: what decides one
+// decides the other, the driver and, for Mesa's, Vulkan's import of its frames.
+func ToneMapperOf(overlay Overlay) ToneMapper {
+	switch overlay {
+	case OverlayVAAPI:
+		return ToneMapperVAAPI
+	case OverlayVulkan:
+		return ToneMapperVulkan
+	case OverlayCPU:
+	}
+	return ToneMapperCPU
+}
 
 // ProbeOverlay is how the VAAPI device at device lays a subtitle over the picture, learnt as
 // Jellyfin's is from what FFmpeg says opening it: the driver's name, and for Mesa's the extensions
@@ -191,7 +220,7 @@ func (h Hardware) inputArgs(e domain.VideoEncode) []string {
 		decode = []string{"-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"}
 	case domain.AccelVAAPI:
 		init = []string{"-init_hw_device", "vaapi=hw:" + h.Device, "-filter_hw_device", "hw"}
-		if (e.Burn != nil || e.BurnFile != nil) && h.burnOverlay(e) == OverlayVulkan {
+		if (e.Burn != nil || e.BurnFile != nil) && h.burnOverlay(e) == OverlayVulkan || e.ToneMap && h.ToneMapper == ToneMapperVulkan {
 			// As Jellyfin's: VAAPI and Vulkan opened on the one DRM device, so frames map between
 			// them, and Vulkan the filters' device, as libplacebo needs.
 			init = []string{"-init_hw_device", "drm=dr:" + h.Device, "-init_hw_device", "vaapi=hw@dr", "-init_hw_device", "vulkan=vk@dr", "-filter_hw_device", "vk"}
@@ -305,7 +334,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 	case domain.AccelVAAPI:
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
 		if e.ToneMap {
-			filter = upload + deinterlace + "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
+			filter = upload + deinterlace + h.toneMapVAAPI(w, ht)
 		}
 		encoder = append(encoder, "-rc_mode", "VBR")
 	case domain.AccelQSV:
@@ -333,6 +362,24 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 	return filter, append(encoder, keyframes...)
 }
 
+// toneMapVAAPI scales a VAAPI picture to w by h and maps it to 8-bit SDR on the device's tone mapper.
+func (h Hardware) toneMapVAAPI(w, ht string) string {
+	switch h.ToneMapper {
+	case ToneMapperVAAPI:
+		return "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
+	case ToneMapperVulkan:
+		// As Jellyfin's: libplacebo's output BGRA, which VAAPI maps back, and scale_vaapi makes the
+		// encoder's NV12.
+		return "hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:w=" + w + ":h=" + ht +
+			":format=bgra:tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=pc," +
+			"format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+	case ToneMapperCPU:
+	}
+	// Scaled on the device first, so the CPU maps only the picture encoded. Uploaded to VAAPI by
+	// name, the filters' device being Vulkan where a subtitle is laid over through it.
+	return "scale_vaapi=w=" + w + ":h=" + ht + ":format=p010,hwdownload,format=p010le," + media.ToneMap + ":format=nv12,hwupload=derive_device=vaapi"
+}
+
 var (
 	// errHardware is a device that would not encode.
 	errHardware = errors.New("hls: the hardware would not encode")
@@ -353,10 +400,11 @@ func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 }
 
 // CheckBurn encodes a second of test picture with a picture subtitle burned in, through the graph
-// a title's goes through: SDR to H.264, and where the device encodes HEVC, HDR kept in 10 bits. An
-// overlay the driver lacks or fails to run is found at start rather than at the first play.
+// a title's goes through: SDR to H.264, as it is and tone mapped, and where the device encodes
+// HEVC, HDR kept in 10 bits. An overlay the driver lacks or fails to run beside its tone mapper is
+// found at start rather than at the first play.
 func (h Hardware) CheckBurn(ctx context.Context, ffmpeg string) error {
-	err := h.check(ctx, ffmpeg, domain.VideoH264, errBurn, []domain.VideoEncode{{Range: domain.RangeSDR, Burn: new(1)}})
+	err := h.check(ctx, ffmpeg, domain.VideoH264, errBurn, []domain.VideoEncode{{Range: domain.RangeSDR, Burn: new(1)}, {Range: domain.RangeSDR, ToneMap: true, Burn: new(1)}})
 	if err != nil || h.HEVC != domain.HEVCAllow {
 		return err
 	}
