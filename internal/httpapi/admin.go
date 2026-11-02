@@ -126,11 +126,11 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 func librarySettings(l domain.Library) librarySettingsJSON {
 	j := librarySettingsJSON{
 		Sources:      []kindSourcesJSON{},
-		RemoteExtras: nonNil(l.RemoteExtras), Monitor: l.Monitor, RefreshDays: l.RefreshDays,
+		RemoteExtras: l.RemoteExtras, Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 		MissingVersions:  l.MissingVersions,
 		MetadataLanguage: domain.LanguageTag(l.Locale.Language), CertificationCountry: domain.CountryCode(l.Locale.Country), ArtworkLanguage: l.Locale.Artwork,
-		TitleLanguage: l.Titles, BoxSets: l.BoxSets, SubtitleLanguages: nonNil(each(l.SubtitleLanguages, domain.TagOf)),
+		TitleLanguage: l.Titles, BoxSets: l.BoxSets, SubtitleLanguages: each(l.SubtitleLanguages, domain.TagOf),
 		SubtitleMatch: l.SubtitleMatch,
 	}
 	for _, k := range l.Sources {

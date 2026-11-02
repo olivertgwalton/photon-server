@@ -222,7 +222,11 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 			if err != nil {
 				return eventJSON{}, false, err
 			}
-			e.Details = domain.UserDataDetails{TitleIDs: nonNil(same)}
+			if same == nil {
+				// None is still said, as an empty list: omitted, the event would be of no title.
+				same = []uuid.UUID{}
+			}
+			e.Details = domain.UserDataDetails{TitleIDs: same}
 		}
 		return eventOf(e), true, nil
 	case domain.EventTitleUpdated:
@@ -257,7 +261,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 					return eventJSON{}, false, err
 				}
 			}
-			details[change] = nonNil(ids)
+			details[change] = ids
 			told = told || len(ids) > 0
 		}
 		e.Details = details

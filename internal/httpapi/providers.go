@@ -187,8 +187,8 @@ func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
 		for _, k := range domain.DefaultSources(lib) {
 			j.Fetchable = append(j.Fetchable, fetchableJSON{
 				Kind:     k.Kind,
-				Metadata: nonNil(domain.Fetchable(domain.FetcherMetadata, k.Kind)),
-				Images:   nonNil(domain.Fetchable(domain.FetcherImages, k.Kind)),
+				Metadata: domain.Fetchable(domain.FetcherMetadata, k.Kind),
+				Images:   domain.Fetchable(domain.FetcherImages, k.Kind),
 			})
 		}
 		out = append(out, j)

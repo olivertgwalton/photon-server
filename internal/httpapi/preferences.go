@@ -98,7 +98,7 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 		MaxBitrateKbps: p.MaxBitrateKbps, NextEpisode: p.NextEpisode, StillWatching: p.StillWatching,
 		IntroAction: p.IntroAction, CreditsAction: p.CreditsAction, ThemeMusic: p.ThemeMusic,
 		CardArt: p.CardArt, EpisodeSpoilers: p.Spoilers, Notify: p.Notify,
-		QuietLibraries: nonNil(p.QuietLibraries),
+		QuietLibraries: p.QuietLibraries,
 		Home:           make([]homeSectionJSON, len(p.Home)),
 	}
 	for i, h := range p.Home {

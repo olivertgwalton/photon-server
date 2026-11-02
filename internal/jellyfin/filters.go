@@ -126,7 +126,7 @@ func (a *API) filters(w http.ResponseWriter, r *http.Request) {
 		Tags            []string `json:"Tags"`
 		OfficialRatings []string `json:"OfficialRatings"`
 		Years           []int    `json:"Years"`
-	}{nonNil(f.Genres), []string{}, slices.Compact(ratings), nonNil(f.Years)})
+	}{f.Genres, []string{}, slices.Compact(ratings), f.Years})
 }
 
 // filters2 answers Jellyfin's QueryFilters: the genres, by name and id, and no tags.
@@ -190,11 +190,4 @@ func (a *API) narrow(r *http.Request, libs []*store.SeenLibrary, wall domain.Wal
 		f.Certificates = append(f.Certificates, matching(have.Certificates, func(c string) bool { return has(ratings, domain.Bare(c)) })...)
 	}
 	return nil
-}
-
-func nonNil[T any](s []T) []T {
-	if s == nil {
-		return []T{}
-	}
-	return s
 }
