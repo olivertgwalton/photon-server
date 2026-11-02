@@ -45,8 +45,29 @@ type Manifest struct {
 	Name     string    `json:"name"`
 	Types    []string  `json:"types"`
 	Catalogs []Catalog `json:"catalogs"`
-	// Resources are what the addon answers: a name, or an object naming one.
-	Resources []jsontext.Value `json:"resources"`
+	// Resources are what the addon answers.
+	Resources []resource `json:"resources"`
+}
+
+// resource is a resource an addon answers, which its manifest gives as a name or as an object
+// naming one. Any other value is skipped, as no resource.
+type resource string
+
+func (r *resource) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
+		tok, err := dec.ReadToken()
+		*r = resource(tok.String())
+		return err
+	}
+	if dec.PeekKind() == jsontext.KindBeginObject {
+		var named struct {
+			Name string `json:"name"`
+		}
+		err := json.UnmarshalDecode(dec, &named)
+		*r = resource(named.Name)
+		return err
+	}
+	return dec.SkipValue()
 }
 
 type Catalog struct {
@@ -68,19 +89,7 @@ func (m Manifest) Kinds() []domain.ItemKind {
 
 // Streams reports whether the addon answers streams.
 func (m Manifest) Streams() bool {
-	return slices.ContainsFunc(m.Resources, func(raw jsontext.Value) bool {
-		var name string
-		if json.Unmarshal(raw, &name, provider.Foreign) != nil {
-			var named struct {
-				Name string `json:"name"`
-			}
-			if json.Unmarshal(raw, &named, provider.Foreign) != nil {
-				return false
-			}
-			name = named.Name
-		}
-		return name == "stream"
-	})
+	return slices.Contains(m.Resources, "stream")
 }
 
 // Lists reports whether the addon has a catalog of films or shows.

@@ -1,10 +1,11 @@
 package jellyfin
 
 import (
-	"bytes"
 	"cmp"
-	"encoding/json/v2"
+	"encoding/json/jsontext"
+	"fmt"
 	"path"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -110,8 +111,19 @@ func textual(codec string) bool {
 // Jellyfin reads either way.
 type streamIndex int
 
-func (i *streamIndex) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(bytes.Trim(b, `"`), (*int)(i))
+func (i *streamIndex) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	tok, err := dec.ReadToken()
+	switch {
+	case err != nil:
+		return err
+	case tok.Kind() == jsontext.KindNull:
+		return nil
+	case tok.Kind() != jsontext.KindNumber && tok.Kind() != jsontext.KindString:
+		return fmt.Errorf("a stream index is a number, not %v", tok.Kind())
+	}
+	n, err := strconv.Atoi(tok.String())
+	*i = streamIndex(n)
+	return err
 }
 
 // sourceOf is a version as a media source. Its Path is its file's name alone, as Infuse reads one,

@@ -148,18 +148,18 @@ type Event struct {
 	Details EventDetails
 }
 
-// UnmarshalJSON reads an event told by another node, its details as its kind has them.
-func (e *Event) UnmarshalJSON(b []byte) error {
+// UnmarshalJSONFrom reads an event told by another node, its details as its kind has them.
+func (e *Event) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	type plain Event
 	var read struct {
 		plain
 		Details jsontext.Value
 	}
-	if err := json.Unmarshal(b, &read); err != nil {
+	if err := json.UnmarshalDecode(dec, &read); err != nil {
 		return err
 	}
 	*e = Event(read.plain)
-	if string(read.Details) == "null" {
+	if read.Details.Kind() == jsontext.KindNull {
 		return nil
 	}
 	var err error
