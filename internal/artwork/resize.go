@@ -195,7 +195,7 @@ func fit(dx, dy, width, height int) (w, h int) {
 	return max(w, 1), max(h, 1)
 }
 
-// decode reads a picture of at most maxPixels.
+// decode reads a picture of at most maxPixels, in sRGB.
 func decode(f io.ReadSeeker) (image.Image, error) {
 	cfg, _, err := image.DecodeConfig(f)
 	if err != nil {
@@ -207,6 +207,12 @@ func decode(f io.ReadSeeker) (image.Image, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	src, _, err := image.Decode(f)
-	return src, err
+	src, format, err := image.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return inSRGB(src, format, f), nil
 }

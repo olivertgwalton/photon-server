@@ -395,7 +395,7 @@ func (c *Cache) Keep(ctx context.Context, id uuid.UUID, r io.Reader) (KeptPictur
 	case <-ctx.Done():
 		return KeptPicture{}, ctx.Err()
 	}
-	src, _, err := image.Decode(bytes.NewReader(data))
+	src, err := decode(bytes.NewReader(data))
 	if err != nil {
 		return KeptPicture{}, unreadable
 	}
