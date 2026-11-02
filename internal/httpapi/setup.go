@@ -54,11 +54,9 @@ func (a *API) setupState(r *http.Request) (setupState, error) {
 	return setupOpen, nil
 }
 
-func (a *API) setup(w http.ResponseWriter, r *http.Request) {
+func (a *API) setup(r *http.Request, _ none) (setupJSON, error) {
 	state, err := a.setupState(r)
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, setupJSON{State: state})
-	}
+	return setupJSON{State: state}, err
 }
 
 func (a *API) setUp(w http.ResponseWriter, r *http.Request) {
@@ -98,11 +96,11 @@ func (a *API) setUp(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) setupRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/setup", access: public,
 			summary: "Say whether the server is still to be set up, and whether this client may set it up",
-			status:  http.StatusOK, reply: setupJSON{}, handle: a.setup,
-		},
+			status:  http.StatusOK,
+		}, a.setup),
 		{
 			pattern: "POST /api/v1/setup", access: public,
 			summary: "Set a new server up from its local network: add its first admin and sign this device in as it",

@@ -38,20 +38,18 @@ type foundSubtitlesJSON struct {
 // subtitleCandidates answers the subtitles providers have in a language for a version of a film or an
 // episode, the one asked for else its longest, as Plex's and Jellyfin's subtitle search: those
 // made for its very file first, found by its hash, then the most fetched.
-func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
+func (a *API) subtitleCandidates(r *http.Request, _ none) (foundSubtitlesJSON, error) {
 	lang, err := language.Parse(r.URL.Query().Get("language"))
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, "language is a BCP 47 tag")
-		return
+		return foundSubtitlesJSON{}, refuse(codeInvalidParameter, "language is a BCP 47 tag")
 	}
 	version, err := queryID(r, "version_id")
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return foundSubtitlesJSON{}, err
 	}
-	searched, found, err := a.svc.Subtitles.Search(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version, lang)
-	if a.answered(w, r, err) {
-		return
+	searched, found, err := a.svc.Subtitles.Search(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"), version, lang)
+	if err != nil {
+		return foundSubtitlesJSON{}, err
 	}
 	out := foundSubtitlesJSON{VersionID: searched, Items: make([]foundSubtitleJSON, len(found))}
 	for i, f := range found {
@@ -60,7 +58,7 @@ func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
 			Forced: f.Forced, ForRelease: f.ForRelease, Downloads: f.Downloads,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // fetchSubtitleJSON is a subtitle search found, fetched for the version it was searched for.
@@ -71,53 +69,41 @@ type fetchSubtitleJSON struct {
 
 // fetchSubtitle fetches a subtitle a search found and keeps it beside the version, for every profile
 // to choose, as Jellyfin's subtitle download does.
-func (a *API) fetchSubtitle(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req fetchSubtitleJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) fetchSubtitle(r *http.Request, req fetchSubtitleJSON) (createdJSON, error) {
 	lang, err := language.Parse(string(req.Language))
 	if req.Language != "" && err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "language is a BCP 47 tag")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "language is a BCP 47 tag")
 	}
-	made, err := a.svc.Subtitles.Fetch(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.VersionID, domain.FoundSubtitle{
+	made, err := a.svc.Subtitles.Fetch(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"), req.VersionID, domain.FoundSubtitle{
 		Source: req.Source, ID: req.ID, Language: lang, Release: req.Release, HearingImpaired: req.HearingImpaired, Forced: req.Forced,
 	})
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: made})
+	return createdJSON{ID: made}, err
 }
 
 // removeFetchedSubtitle forgets a fetched subtitle; one in a library is the library's.
-func (a *API) removeFetchedSubtitle(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if !a.answered(w, r, a.svc.Subtitles.RemoveFetchedSubtitle(r.Context(), id)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) removeFetchedSubtitle(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Subtitles.RemoveFetchedSubtitle(r.Context(), pathUUID(r, "id"))
 }
 
 func (a *API) subtitlesRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/subtitles/candidates", access: signedIn,
 			summary: "Find the subtitles providers have in a language for a version of a film or episode, those made for its very file first",
 			query: []param{
 				{"language", domain.LanguageTag(""), "The language, a BCP 47 tag."},
 				{"version_id", uuid.UUID{}, "The version; the title's longest where none is named."},
 			},
-			status: http.StatusOK, reply: foundSubtitlesJSON{}, handle: a.subtitleCandidates,
-		},
-		{
+			status: http.StatusOK,
+		}, a.subtitleCandidates),
+		a.handles(route{
 			pattern: "POST /api/v1/titles/{id}/subtitles", access: signedIn,
 			summary: "Fetch a subtitle a search found and keep it beside the version, for every profile",
-			body:    fetchSubtitleJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.fetchSubtitle,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.fetchSubtitle),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/subtitles/{id}", access: admin, summary: "Forget a fetched subtitle",
-			status: http.StatusNoContent, handle: a.removeFetchedSubtitle,
-		},
+			status: http.StatusNoContent,
+		}, a.removeFetchedSubtitle),
 	}
 }

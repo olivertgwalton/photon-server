@@ -39,26 +39,22 @@ type folderListJSON struct {
 
 // adminFolders lists the folders on the server, for choosing a library's, as Jellyfin's
 // library dialog browses them. Only an admin may: it shows the server's filesystem.
-func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+func (a *API) adminFolders(r *http.Request, _ none) (folderListJSON, error) {
 	hidden, err := queryEnum(r, "hidden", hideHidden, hiddenFolderModes())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return folderListJSON{}, err
 	}
-	path := q.Get("path")
+	path := r.URL.Query().Get("path")
 	if path == "" {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, folderListJSON{Items: folderRoots()})
-		return
+		return folderListJSON{Items: folderRoots()}, nil
 	}
 	if !filepath.IsAbs(path) {
-		writeProblem(w, a.logger, codeInvalidParameter, "path is an absolute path")
-		return
+		return folderListJSON{}, refuse(codeInvalidParameter, "path is an absolute path")
 	}
 	path = filepath.Clean(path)
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, "path is not a folder the server can read")
-		return
+		return folderListJSON{}, refuse(codeInvalidParameter, "path is not a folder the server can read")
 	}
 	out := folderListJSON{Path: path}
 	if parent := filepath.Dir(path); parent != path {
@@ -82,7 +78,7 @@ func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
 		}
 		out.Items = append(out.Items, browsedFolderJSON{Name: e.Name(), Path: full})
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // isFolder is whether an entry is a folder, or a link to one, as media is often mounted.
@@ -123,14 +119,14 @@ func folderRoots() []browsedFolderJSON {
 
 func (a *API) foldersRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/folders", access: admin,
 			summary: "List a folder's subfolders on the server, or the folders to start from, for choosing a library's",
 			query: []param{
 				{"path", "", "An absolute path; without one, the folders to start from."},
 				{"hidden", hideHidden, "show lists hidden folders: those whose names start with a dot, and on Windows those marked hidden. They are hidden by default."},
 			},
-			status: http.StatusOK, reply: folderListJSON{}, handle: a.adminFolders,
-		},
+			status: http.StatusOK,
+		}, a.adminFolders),
 	}
 }

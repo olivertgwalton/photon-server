@@ -68,44 +68,35 @@ type networkStatusJSON struct {
 	JellyfinError string `json:"jellyfin_error,omitzero"`
 }
 
-func (a *API) adminNetwork(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminNetwork(r *http.Request, _ none) (networkStatusJSON, error) {
 	n, err := a.svc.Network.Network(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return networkStatusJSON{}, err
 	}
 	out := networkStatusJSON{networkJSON: showNetwork(n)}
 	if err := a.svc.Jellyfin.Err(); err != nil {
 		out.JellyfinError = err.Error()
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // setNetwork replaces how the server is reached, once this node reads the certificate, and tells
 // every node, which serves it at once.
-func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
-	var req networkJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setNetwork(r *http.Request, req networkJSON) (networkJSON, error) {
 	local, err := peer.Prefixes(req.LocalNetworks)
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "local_networks: "+err.Error())
-		return
+		return networkJSON{}, refuse(codeInvalidBody, "local_networks: "+err.Error())
 	}
 	proxies, err := peer.Prefixes(req.TrustedProxies)
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "trusted_proxies: "+err.Error())
-		return
+		return networkJSON{}, refuse(codeInvalidBody, "trusted_proxies: "+err.Error())
 	}
 	public, err := parsePublicURL(string(req.PublicURL))
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return
+		return networkJSON{}, refuse(codeInvalidBody, err.Error())
 	}
 	if req.Discovery == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "discovery is broadcast or off")
-		return
+		return networkJSON{}, refuse(codeInvalidBody, "discovery is broadcast or off")
 	}
 	n := domain.Network{
 		Secure: req.SecureConnections, Certificate: req.Certificate, Key: req.Key,
@@ -116,41 +107,36 @@ func (a *API) setNetwork(w http.ResponseWriter, r *http.Request) {
 		n.PublicURL = public.String()
 	}
 	if n.RemoteMaxBitrateKbps < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "remote_max_bitrate_kbps is 0, for no limit, or more")
-		return
+		return networkJSON{}, refuse(codeInvalidBody, "remote_max_bitrate_kbps is 0, for no limit, or more")
 	}
 	if _, err := secure.Load(n); err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return
+		return networkJSON{}, refuse(codeInvalidBody, err.Error())
 	}
 	_, own, err := net.SplitHostPort(a.svc.Setup.Listen)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return networkJSON{}, err
 	}
 	if n.JellyfinPort < 1 || n.JellyfinPort > 65535 || own == strconv.Itoa(n.JellyfinPort) {
-		writeProblem(w, a.logger, codeInvalidBody, "the Jellyfin port is 1 to 65535, and not the one photon's own API is served on")
-		return
+		return networkJSON{}, refuse(codeInvalidBody, "the Jellyfin port is 1 to 65535, and not the one photon's own API is served on")
 	}
 	if err := a.svc.Network.SetNetwork(r.Context(), n); err != nil {
-		a.internal(w, r, err)
-		return
+		return networkJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNetworkChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, showNetwork(n))
+	return showNetwork(n), nil
 }
 
 func (a *API) networkRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/network", access: admin,
 			summary: "Whether the server's port answers HTTPS, the certificate it serves, and whether Jellyfin's apps reach it",
-			status:  http.StatusOK, reply: networkStatusJSON{}, handle: a.adminNetwork,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminNetwork),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/network", access: admin,
 			summary: "Replace whether the port answers HTTPS, its certificate, and Jellyfin's; every node serves it at once",
-			body:    networkJSON{}, status: http.StatusOK, reply: networkJSON{}, handle: a.setNetwork,
-		},
+			status:  http.StatusOK,
+		}, a.setNetwork),
 	}
 }

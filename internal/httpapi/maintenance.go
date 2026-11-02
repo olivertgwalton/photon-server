@@ -29,49 +29,42 @@ func showMaintenance(m domain.Maintenance) maintenanceJSON {
 }
 
 // adminMaintenance answers the maintenance window, as Plex's Scheduled Tasks settings show it.
-func (a *API) adminMaintenance(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminMaintenance(r *http.Request, _ none) (maintenanceJSON, error) {
 	m, err := a.svc.Maintenance.Maintenance(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return maintenanceJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, showMaintenance(m))
+	return showMaintenance(m), nil
 }
 
 // setMaintenance replaces the maintenance window, and tells every node, which keeps to it at once.
-func (a *API) setMaintenance(w http.ResponseWriter, r *http.Request) {
-	var req maintenanceJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setMaintenance(r *http.Request, req maintenanceJSON) (maintenanceJSON, error) {
 	zone, err := domain.ParseZone(req.TimeZone)
 	m := domain.Maintenance{StartHour: req.StartHour, EndHour: req.EndHour, Zone: zone, Previews: req.Previews, Markers: req.Markers}
 	if err == nil {
 		err = m.Check()
 	}
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return
+		return maintenanceJSON{}, refuse(codeInvalidBody, err.Error())
 	}
 	if err := a.svc.Maintenance.SetMaintenance(r.Context(), m); err != nil {
-		a.internal(w, r, err)
-		return
+		return maintenanceJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventMaintenanceChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, showMaintenance(m))
+	return showMaintenance(m), nil
 }
 
 func (a *API) maintenanceRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/maintenance", access: admin,
 			summary: "Say when the server reads its media for previews and markers",
-			status:  http.StatusOK, reply: maintenanceJSON{}, handle: a.adminMaintenance,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminMaintenance),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/maintenance", access: admin,
 			summary: "Replace the maintenance window and when previews and markers wait for it",
-			body:    maintenanceJSON{}, status: http.StatusOK, reply: maintenanceJSON{}, handle: a.setMaintenance,
-		},
+			status:  http.StatusOK,
+		}, a.setMaintenance),
 	}
 }

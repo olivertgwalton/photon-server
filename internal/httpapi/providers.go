@@ -48,22 +48,20 @@ type metadataProviderJSON struct {
 
 // adminProviders lists the metadata providers the server has, what each can do, and what is set of
 // what each needs, as Jellyfin's plugin settings show them.
-func (a *API) adminProviders(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminProviders(r *http.Request, _ none) (listJSON[metadataProviderJSON], error) {
 	all, err := a.svc.Providers.All(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[metadataProviderJSON]{}, err
 	}
 	out := make([]metadataProviderJSON, 0, len(all))
 	for _, p := range all {
 		j, err := a.provider(r.Context(), p)
 		if err != nil {
-			a.internal(w, r, err)
-			return
+			return listJSON[metadataProviderJSON]{}, err
 		}
 		out = append(out, j)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[metadataProviderJSON]{Items: out})
+	return listJSON[metadataProviderJSON]{Items: out}, nil
 }
 
 type providerChangeJSON struct {
@@ -72,36 +70,23 @@ type providerChangeJSON struct {
 
 // setProvider changes a provider's settings: each value given replaces what was set, and "" clears
 // it. Only the settings it declares are taken.
-func (a *API) setProvider(w http.ResponseWriter, r *http.Request) {
+func (a *API) setProvider(r *http.Request, req providerChangeJSON) (metadataProviderJSON, error) {
 	p, ok, err := a.svc.Providers.Get(r.Context(), domain.FieldSource(r.PathValue("id")))
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return metadataProviderJSON{}, err
 	}
 	if !ok {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
-	}
-	var req providerChangeJSON
-	if !a.decode(w, r, &req) {
-		return
+		return metadataProviderJSON{}, refuse(codeNotFound, "")
 	}
 	for key := range req.Settings {
 		if !slices.ContainsFunc(p.Info().Settings, func(s provider.Setting) bool { return s.Key == key }) {
-			writeProblem(w, a.logger, codeInvalidBody, key+" is not one of "+string(p.Info().ID)+"'s settings")
-			return
+			return metadataProviderJSON{}, refuse(codeInvalidBody, key+" is not one of "+string(p.Info().ID)+"'s settings")
 		}
 	}
 	if err := a.svc.ProviderSettings.SetProviderSettings(r.Context(), p.Info().ID, req.Settings); err != nil {
-		a.internal(w, r, err)
-		return
+		return metadataProviderJSON{}, err
 	}
-	j, err := a.provider(r.Context(), p)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, j)
+	return a.provider(r.Context(), p)
 }
 
 func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProviderJSON, error) {
@@ -177,7 +162,7 @@ type fetchableJSON struct {
 
 // libraryKinds lists the kinds of library and the options of each, as Jellyfin's library options
 // list each type's metadata and image fetchers.
-func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
+func (a *API) libraryKinds(_ *http.Request, _ none) (listJSON[libraryKindOptionsJSON], error) {
 	var out []libraryKindOptionsJSON
 	for _, lib := range domain.LibraryKinds() {
 		j := libraryKindOptionsJSON{Kind: lib}
@@ -193,25 +178,25 @@ func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
 		}
 		out = append(out, j)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryKindOptionsJSON]{Items: out})
+	return listJSON[libraryKindOptionsJSON]{Items: out}, nil
 }
 
 func (a *API) providersRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/providers", access: admin,
 			summary: "List the metadata providers, what each can do and needs set",
-			status:  http.StatusOK, reply: listJSON[metadataProviderJSON]{}, handle: a.adminProviders,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminProviders),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/library-kinds", access: admin,
 			summary: "List the kinds of library, how a new one of each is kept, and the sources it may rank",
-			status:  http.StatusOK, reply: listJSON[libraryKindOptionsJSON]{}, handle: a.libraryKinds,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.libraryKinds),
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/providers/{id}", access: admin, summary: "Change a provider's settings",
-			path: []param{{"id", domain.FieldSource(""), "The provider."}},
-			body: providerChangeJSON{}, status: http.StatusOK, reply: metadataProviderJSON{}, handle: a.setProvider,
-		},
+			path:   []param{{"id", domain.FieldSource(""), "The provider."}},
+			status: http.StatusOK,
+		}, a.setProvider),
 	}
 }

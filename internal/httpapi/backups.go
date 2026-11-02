@@ -52,11 +52,11 @@ type backupsJSON struct {
 	LastRestore *restoreOutcomeJSON `json:"last_restore,omitzero"`
 }
 
-func (a *API) adminBackups(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminBackups(r *http.Request, _ none) (backupsJSON, error) {
 	ctx := r.Context()
 	dumps, err := backup.List(a.svc.Setup.BackupDir)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return backupsJSON{}, err
 	}
 	self := a.svc.Placer.Self()
 	out := backupsJSON{NodeID: self.ID, NodeName: self.Name, Folder: a.svc.Setup.BackupDir}
@@ -64,20 +64,17 @@ func (a *API) adminBackups(w http.ResponseWriter, r *http.Request) {
 		out.Items = append(out.Items, backupJSON{d.Name, d.Size, d.MadeAt})
 	}
 	underway, ok, err := a.svc.Backups.Underway(ctx)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return backupsJSON{}, err
 	}
 	if ok {
 		out.Restoring = &restoreJSON{underway.Dump, underway.Node, underway.Started, underway.Phase}
 	}
 	last, ok, err := a.svc.Backups.Last(ctx)
-	if a.answered(w, r, err) {
-		return
-	}
 	if ok {
 		out.LastRestore = &restoreOutcomeJSON{last.Dump, last.At, last.Result, last.Reason}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, err
 }
 
 func (a *API) downloadBackup(w http.ResponseWriter, r *http.Request) {
@@ -98,11 +95,8 @@ func (a *API) downloadBackup(w http.ResponseWriter, r *http.Request) {
 
 // restoreBackup asks every node to stop so this one may restore the dump, as Jellyfin schedules
 // a restore and restarts; what can be refused is refused first, changing nothing.
-func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
-	if a.answered(w, r, a.svc.Backups.Begin(r.Context(), r.PathValue("name"))) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+func (a *API) restoreBackup(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Backups.Begin(r.Context(), r.PathValue("name"))
 }
 
 // restoringPage is what a browser is shown by a node waiting for a restore to finish; it asks
@@ -131,19 +125,19 @@ func Restoring(logger *slog.Logger) http.Handler {
 
 func (a *API) backupsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/backups", access: admin,
 			summary: "List the database dumps this node keeps; the backup_database task makes them on the node running it",
-			status:  http.StatusOK, reply: backupsJSON{}, handle: a.adminBackups,
-		},
+			status:  http.StatusOK,
+		}, a.adminBackups),
 		{
 			pattern: "GET /api/v1/admin/backups/{name}", access: admin, summary: "Download a database dump this node keeps",
 			path: []param{backupNameParam}, status: http.StatusOK, reply: asFile{"application/octet-stream"}, handle: a.downloadBackup,
 		},
-		{
+		a.handles(route{
 			pattern: "POST /api/v1/admin/backups/{name}/restore", access: admin,
 			summary: "Restore a database dump this node keeps: every node stops, and every stream with it, and starts again once it is restored",
-			path:    []param{backupNameParam}, status: http.StatusAccepted, handle: a.restoreBackup,
-		},
+			path:    []param{backupNameParam}, status: http.StatusAccepted,
+		}, a.restoreBackup),
 	}
 }

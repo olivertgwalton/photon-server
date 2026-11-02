@@ -68,58 +68,43 @@ func importOf(h domain.HistoryImport) importJSON {
 
 // startImport signs in to the source, so a wrong address or credentials are refused at once, and
 // queues the import.
-func (a *API) startImport(w http.ResponseWriter, r *http.Request) {
-	var req startImportJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) startImport(r *http.Request, req startImportJSON) (createdJSON, error) {
 	if req.Source == "" || req.Profile == (uuid.UUID{}) {
-		writeProblem(w, a.logger, codeInvalidBody, "source and profile_id are set")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "source and profile_id are set")
 	}
 	c := historyimport.Credentials(req.Credentials)
 	id, err := a.svc.Importer.Start(r.Context(), req.Source, string(req.URL), req.Profile, c)
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{id})
+	return createdJSON{id}, err
 }
 
-func (a *API) adminImports(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminImports(r *http.Request, _ none) (listJSON[importJSON], error) {
 	all, err := a.svc.HistoryImports.Imports(r.Context())
-	if a.answered(w, r, err) {
-		return
-	}
 	out := make([]importJSON, len(all))
 	for i, h := range all {
 		out[i] = importOf(h)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[importJSON]{out})
+	return listJSON[importJSON]{out}, err
 }
 
-func (a *API) adminImport(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	h, err := a.svc.HistoryImports.Import(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, importOf(h))
+func (a *API) adminImport(r *http.Request, _ none) (importJSON, error) {
+	h, err := a.svc.HistoryImports.Import(r.Context(), pathUUID(r, "id"))
+	return importOf(h), err
 }
 
 func (a *API) importsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/imports", access: admin, summary: "List the imports of watch history, the newest first",
-			status: http.StatusOK, reply: listJSON[importJSON]{}, handle: a.adminImports,
-		},
-		{
+			status: http.StatusOK,
+		}, a.adminImports),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/imports", access: admin,
 			summary: "Import a Plex, Jellyfin or Emby user's watch history into a profile, once the source takes its credentials",
-			body:    startImportJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.startImport,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.startImport),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/imports/{id}", access: admin, summary: "How an import of watch history went",
-			status: http.StatusOK, reply: importJSON{}, handle: a.adminImport,
-		},
+			status: http.StatusOK,
+		}, a.adminImport),
 	}
 }

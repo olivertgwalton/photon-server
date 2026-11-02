@@ -45,25 +45,21 @@ type watchedJSON struct {
 }
 
 // progress records where the profile stopped a film or episode, and answers how far that got.
-func (a *API) progress(w http.ResponseWriter, r *http.Request) {
-	var req progressJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) progress(r *http.Request, req progressJSON) (reachedJSON, error) {
 	if req.PositionMS < 0 || !atValid(req.At) {
-		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and "+atRule)
-		return
+		return reachedJSON{}, refuse(codeInvalidBody, "position_ms is not negative and "+atRule)
 	}
 	id := pathUUID(r, "id")
 	length, err := a.svc.Watching.Length(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return reachedJSON{}, err
 	}
 	reach, err := a.svc.Watching.SaveProgress(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, time.Duration(req.PositionMS)*time.Millisecond, length, domain.ReachStart, req.At)
-	if !a.answered(w, r, err) {
-		a.titleStateChanged(r, id)
-		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
+	if err != nil {
+		return reachedJSON{}, err
 	}
+	a.titleStateChanged(r, id)
+	return reachedJSON{Reach: reach}, nil
 }
 
 // watched marks a title watched, at the time the body says or now for no body.
@@ -76,9 +72,12 @@ func (a *API) watched(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, atRule)
 		return
 	}
-	a.mark(func(s watching, ctx context.Context, profile, item uuid.UUID) error {
+	_, err := a.mark(func(s watching, ctx context.Context, profile, item uuid.UUID) error {
 		return s.MarkWatched(ctx, profile, item, req.At)
-	})(w, r)
+	})(r, none{})
+	if !a.answered(w, r, err) {
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // titleStateChanged tells the profile's other devices its own state of a title changed.
@@ -102,54 +101,55 @@ func (a *API) titleUpdated(r *http.Request, id uuid.UUID) {
 
 // mark answers a route that sets or clears a profile's mark on a title, by one of watching's
 // methods.
-func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.UUID) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.UUID) error) func(*http.Request, none) (none, error) {
+	return func(r *http.Request, _ none) (none, error) {
 		id := pathUUID(r, "id")
-		if !a.answered(w, r, set(a.svc.Watching, r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
-			a.titleStateChanged(r, id)
-			w.WriteHeader(http.StatusNoContent)
+		if err := set(a.svc.Watching, r.Context(), auth.SessionOf(r.Context()).Profile.ID, id); err != nil {
+			return none{}, err
 		}
+		a.titleStateChanged(r, id)
+		return none{}, nil
 	}
 }
 
 func (a *API) watchRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "PUT /api/v1/titles/{id}/progress", access: signedIn,
 			summary: "Record where the profile stopped a film or episode it watched outside a playback, a download's say, and when: progress from before the title's state last changed is refused as a conflict",
-			body:    progressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.progress,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.progress),
+		a.handles(route{
 			pattern: "DELETE /api/v1/titles/{id}/progress", access: signedIn,
 			summary: "Remove a title, or a show's or season's episodes, from Continue Watching, keeping what was watched",
-			status:  http.StatusNoContent, handle: a.mark(watching.ClearProgress),
-		},
+			status:  http.StatusNoContent,
+		}, a.mark(watching.ClearProgress)),
 		{
 			pattern: "PUT /api/v1/titles/{id}/watched", access: signedIn,
 			summary: "Mark a title watched, and when: each film or episode whose state changed since is left as it is",
 			body:    optionalBody{watchedJSON{}}, status: http.StatusNoContent, handle: a.watched,
 		},
-		{
+		a.handles(route{
 			pattern: "DELETE /api/v1/titles/{id}/watched", access: signedIn, summary: "Mark a title unwatched",
-			status: http.StatusNoContent, handle: a.mark(watching.MarkUnwatched),
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.mark(watching.MarkUnwatched)),
+		a.handles(route{
 			pattern: "PUT /api/v1/titles/{id}/favourite", access: signedIn, summary: "Make a title a favourite",
-			status: http.StatusNoContent, handle: a.mark(watching.Favourite),
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.mark(watching.Favourite)),
+		a.handles(route{
 			pattern: "DELETE /api/v1/titles/{id}/favourite", access: signedIn, summary: "Take a title from the favourites",
-			status: http.StatusNoContent, handle: a.mark(watching.Unfavourite),
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.mark(watching.Unfavourite)),
+		a.handles(route{
 			pattern: "PUT /api/v1/titles/{id}/watchlist", access: signedIn,
 			summary: "Put a film or show on the watchlist, a season or episode its show; watching a film, or every episode of a show, takes it off",
-			status:  http.StatusNoContent, handle: a.mark(watching.Watchlist),
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.mark(watching.Watchlist)),
+		a.handles(route{
 			pattern: "DELETE /api/v1/titles/{id}/watchlist", access: signedIn,
 			summary: "Take a film or show from the watchlist, a season or episode its show",
-			status:  http.StatusNoContent, handle: a.mark(watching.Unwatchlist),
-		},
+			status:  http.StatusNoContent,
+		}, a.mark(watching.Unwatchlist)),
 	}
 }

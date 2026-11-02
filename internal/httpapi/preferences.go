@@ -111,23 +111,17 @@ func preferencesOf(p domain.Preferences) preferencesJSON {
 }
 
 // ownPreferences answers how the profile plays, as Jellyfin's user configuration.
-func (a *API) ownPreferences(w http.ResponseWriter, r *http.Request) {
+func (a *API) ownPreferences(r *http.Request, _ none) (preferencesJSON, error) {
 	p, err := a.svc.Preferences.Preferences(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, preferencesOf(p))
-	}
+	return preferencesOf(p), err
 }
 
 // setOwnPreferences changes how the profile plays, on every device it plays on.
-func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
-	var req preferencesChangeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setOwnPreferences(r *http.Request, req preferencesChangeJSON) (preferencesJSON, error) {
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	p, err := a.svc.Preferences.Preferences(r.Context(), profile)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return preferencesJSON{}, err
 	}
 	for _, l := range []struct {
 		set  *string
@@ -137,14 +131,12 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if *l.into, err = language.Parse(*l.set); *l.set != "" && err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, "audio_language and subtitle_language are BCP 47 tags, or empty for any")
-			return
+			return preferencesJSON{}, refuse(codeInvalidBody, "audio_language and subtitle_language are BCP 47 tags, or empty for any")
 		}
 	}
 	if req.MaxBitrateKbps != nil {
 		if *req.MaxBitrateKbps < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "max_bitrate_kbps is not negative; 0 is the file as it is")
-			return
+			return preferencesJSON{}, refuse(codeInvalidBody, "max_bitrate_kbps is not negative; 0 is the file as it is")
 		}
 		p.MaxBitrateKbps = *req.MaxBitrateKbps
 	}
@@ -166,17 +158,14 @@ func (a *API) setOwnPreferences(w http.ResponseWriter, r *http.Request) {
 		p.Home = make([]domain.HomeSection, len(req.Home))
 		for i, h := range req.Home {
 			if h.Row == "" || h.Visibility == "" || seen[h.Row] {
-				writeProblem(w, a.logger, codeInvalidBody, "home is rows, each once, with their visibility")
-				return
+				return preferencesJSON{}, refuse(codeInvalidBody, "home is rows, each once, with their visibility")
 			}
 			seen[h.Row] = true
 			p.Home[i] = domain.HomeSection(h)
 		}
 	}
 	p, err = a.svc.Preferences.SetPreferences(r.Context(), profile, p)
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, preferencesOf(p))
-	}
+	return preferencesOf(p), err
 }
 
 // playingAs answers a profile's preferences and the tracks it last chose for a title, to choose the
@@ -205,15 +194,15 @@ func (a *API) chooseTracks(ctx context.Context, profile uuid.UUID, page *store.T
 
 func (a *API) preferencesRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/profile/preferences", access: signedIn,
 			summary: "How the profile plays on every device: the server's defaults until it changes them",
-			status:  http.StatusOK, reply: preferencesJSON{}, handle: a.ownPreferences,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.ownPreferences),
+		a.handles(route{
 			pattern: "PATCH /api/v1/profile/preferences", access: signedIn,
 			summary: "Change how the profile plays on every device; what is left out stays",
-			body:    preferencesChangeJSON{}, status: http.StatusOK, reply: preferencesJSON{}, handle: a.setOwnPreferences,
-		},
+			status:  http.StatusOK,
+		}, a.setOwnPreferences),
 	}
 }
