@@ -48,8 +48,8 @@ func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, "language is a BCP 47 tag")
 		return
 	}
-	version, ok := a.queryID(w, r, "version_id")
-	if !ok {
+	version, err := queryID(r, "version_id")
+	if a.answered(w, r, err) {
 		return
 	}
 	searched, found, err := a.svc.Subtitles.Search(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, version, lang)

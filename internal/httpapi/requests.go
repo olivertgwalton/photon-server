@@ -97,8 +97,8 @@ func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
 
 // ownRequests answers a page of the signed-in profile's requests, newest first.
 func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	rs, extent, err := a.svc.Requests.Requests(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
@@ -134,12 +134,12 @@ func (a *API) raiseCleared(ctx context.Context, cleared []store.Cleared) {
 // keptRequests answers a page of the requests of the profiles an admin or manager keeps, newest
 // first.
 func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
-	state, ok := queryEnum(a, w, r, "state", "", domain.RequestStates())
-	if !ok {
+	state, err := queryEnum(r, "state", "", domain.RequestStates())
+	if a.answered(w, r, err) {
 		return
 	}
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	rs, extent, err := a.svc.Requests.RequestsKept(r.Context(), keeper(r), state, page)

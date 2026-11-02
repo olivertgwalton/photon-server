@@ -24,17 +24,16 @@ var cursorParams = []param{
 }
 
 // cursorPaging reads where a page of a list read newest first starts and how long it is.
-func (a *API) cursorPaging(w http.ResponseWriter, r *http.Request, defaultLimit int) (store.Before, int, bool) {
+func cursorPaging(r *http.Request, defaultLimit int) (store.Before, int, error) {
 	before := store.Newest
 	if s := r.URL.Query().Get("after"); s != "" {
 		var ok bool
 		if before, ok = beforeOf(s); !ok {
-			writeProblem(w, a.logger, codeInvalidParameter, "after is not a page's next")
-			return store.Before{}, 0, false
+			return store.Before{}, 0, refuse(codeInvalidParameter, "after is not a page's next")
 		}
 	}
-	limit, ok := a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit)
-	return before, limit, ok
+	limit, err := queryNumber(r, "limit", defaultLimit, 1, maxWallLimit)
+	return before, limit, err
 }
 
 // nextOf is where the page after one ending at last starts, for a client to give back as it is:

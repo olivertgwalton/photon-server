@@ -55,8 +55,8 @@ func (a *API) calendar(w http.ResponseWriter, r *http.Request) {
 		}
 		days[n] = d
 	}
-	filter, ok := queryEnum(a, w, r, "filter", domain.CalendarAll, domain.CalendarFilters())
-	if !ok {
+	filter, err := queryEnum(r, "filter", domain.CalendarAll, domain.CalendarFilters())
+	if a.answered(w, r, err) {
 		return
 	}
 	start, end := days[0], days[1]

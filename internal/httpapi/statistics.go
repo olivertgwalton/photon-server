@@ -57,12 +57,12 @@ type statisticsJSON struct {
 // adminStatistics answers what was watched over the last so many days, by everyone or by one
 // profile, as Tautulli's and Emby's reports do.
 func (a *API) adminStatistics(w http.ResponseWriter, r *http.Request) {
-	days, ok := a.queryNumber(w, r, "days", defaultStatisticsDays, 1, mostStatisticsDays)
-	if !ok {
+	days, err := queryNumber(r, "days", defaultStatisticsDays, 1, mostStatisticsDays)
+	if a.answered(w, r, err) {
 		return
 	}
-	profile, ok := a.queryID(w, r, "profile")
-	if !ok {
+	profile, err := queryID(r, "profile")
+	if a.answered(w, r, err) {
 		return
 	}
 	zone := time.UTC

@@ -37,16 +37,16 @@ func (a *API) ownHistory(w http.ResponseWriter, r *http.Request) {
 // adminHistory answers everyone's plays, or one profile's, the latest first, as Plex's dashboard
 // lists them.
 func (a *API) adminHistory(w http.ResponseWriter, r *http.Request) {
-	profile, ok := a.queryID(w, r, "profile")
-	if !ok {
+	profile, err := queryID(r, "profile")
+	if a.answered(w, r, err) {
 		return
 	}
 	a.history(w, r, profile)
 }
 
 func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
-	before, limit, ok := a.cursorPaging(w, r, defaultWallLimit)
-	if !ok {
+	before, limit, err := cursorPaging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	plays, more, err := a.svc.History.History(r.Context(), profile, before, limit)
@@ -85,8 +85,8 @@ func (a *API) ownHistoryFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) adminHistoryFile(w http.ResponseWriter, r *http.Request) {
-	profile, ok := a.queryID(w, r, "profile")
-	if !ok {
+	profile, err := queryID(r, "profile")
+	if a.answered(w, r, err) {
 		return
 	}
 	a.historyFile(w, r, profile)

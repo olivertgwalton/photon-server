@@ -173,8 +173,8 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 // ownDownloads answers the downloads this device asked for, or the profile's on every device, the
 // newest first.
 func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
-	scope, ok := queryEnum(a, w, r, "scope", scopeDevice, downloadScopes())
-	if !ok {
+	scope, err := queryEnum(r, "scope", scopeDevice, downloadScopes())
+	if a.answered(w, r, err) {
 		return
 	}
 	session := auth.SessionOf(r.Context())

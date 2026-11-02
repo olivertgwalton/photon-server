@@ -78,8 +78,8 @@ func subtitleFormats() []subtitleFormat {
 // converted to WebVTT, as Jellyfin's subtitle route converts, for a player that draws nothing else,
 // or a VobSub, its .idx and .sub, in one Matroska file.
 func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
-	format, ok := queryEnum(a, w, r, "format", subtitleOriginal, subtitleFormats())
-	if !ok {
+	format, err := queryEnum(r, "format", subtitleOriginal, subtitleFormats())
+	if a.answered(w, r, err) {
 		return
 	}
 	switch format {

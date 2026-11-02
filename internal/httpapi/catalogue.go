@@ -122,23 +122,23 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	page := store.WallPage{Profile: auth.SessionOf(r.Context()).Profile.ID}
-	if page.Kind, ok = queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds()); !ok {
-		return
-	}
-	if page.Sort, ok = queryEnum(a, w, r, "sort", domain.SortTitle, domain.WallSorts()); !ok {
-		return
-	}
-	if page.Order, ok = queryEnum(a, w, r, "order", page.Sort.DefaultOrder(), domain.Orders()); !ok {
-		return
-	}
 	var err error
+	if page.Kind, err = queryEnum(r, "kind", domain.WallTitles, domain.WallKinds()); a.answered(w, r, err) {
+		return
+	}
+	if page.Sort, err = queryEnum(r, "sort", domain.SortTitle, domain.WallSorts()); a.answered(w, r, err) {
+		return
+	}
+	if page.Order, err = queryEnum(r, "order", page.Sort.DefaultOrder(), domain.Orders()); a.answered(w, r, err) {
+		return
+	}
 	if page.Filter, err = wallFilter(q); err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
 	page.RatingSite = cmp.Or(page.Filter.RatingSite, domain.SiteIMDb)
-	paged, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	paged, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	page.Offset, page.Limit, page.Count = paged.Offset, paged.Limit, paged.Count
@@ -160,8 +160,8 @@ func (a *API) letters(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	kind, ok := queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds())
-	if !ok {
+	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
+	if a.answered(w, r, err) {
 		return
 	}
 	f, err := wallFilter(r.URL.Query())
@@ -232,8 +232,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
 		return
 	}
-	var ok bool
-	if query.Library, ok = a.queryID(w, r, "library"); !ok {
+	var err error
+	if query.Library, err = queryID(r, "library"); a.answered(w, r, err) {
 		return
 	}
 	kinds, err := parseAll(list(q, "kind"), enum("kind", domain.SearchKinds()))
@@ -241,8 +241,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
 		return
 	}
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	query.Offset, query.Limit, query.Count = page.Offset, page.Limit, page.Count
@@ -419,8 +419,8 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	kind, ok := queryEnum(a, w, r, "kind", domain.WallTitles, domain.WallKinds())
-	if !ok {
+	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
+	if a.answered(w, r, err) {
 		return
 	}
 	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID, kind)

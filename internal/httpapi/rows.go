@@ -17,8 +17,8 @@ const defaultRowLimit = 20
 
 // profileRow answers a page of one of the profile's own rows, in the row's order.
 func (a *API) profileRow(w http.ResponseWriter, r *http.Request) {
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	profile, row := auth.SessionOf(r.Context()).Profile.ID, domain.HomeRow(r.PathValue("row"))
@@ -39,8 +39,8 @@ func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, ok := a.queryNumber(w, r, "limit", defaultRowLimit, 1, maxWallLimit)
-	if !ok {
+	limit, err := queryNumber(r, "limit", defaultRowLimit, 1, maxWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID

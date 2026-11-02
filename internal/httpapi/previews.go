@@ -49,8 +49,8 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, ok := a.pathNumber(w, r, "sheet")
-	if !ok {
+	n, err := pathNumber(r, "sheet")
+	if a.answered(w, r, err) {
 		return
 	}
 	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
@@ -71,8 +71,8 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	chapter, ok := a.pathNumber(w, r, "chapter")
-	if !ok {
+	chapter, err := pathNumber(r, "chapter")
+	if a.answered(w, r, err) {
 		return
 	}
 	a.servePreview(w, r, func(ctx context.Context) (blob.Object, error) {

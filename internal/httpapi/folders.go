@@ -41,8 +41,8 @@ type folderListJSON struct {
 // library dialog browses them. Only an admin may: it shows the server's filesystem.
 func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	hidden, ok := queryEnum(a, w, r, "hidden", hideHidden, hiddenFolderModes())
-	if !ok {
+	hidden, err := queryEnum(r, "hidden", hideHidden, hiddenFolderModes())
+	if a.answered(w, r, err) {
 		return
 	}
 	path := q.Get("path")

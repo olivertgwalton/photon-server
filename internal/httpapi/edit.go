@@ -146,7 +146,7 @@ func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
 	if s := q.Get("title"); s != "" {
 		title, year = s, 0
 	}
-	if year, ok = a.queryNumber(w, r, "year", year, 0, math.MaxInt); !ok {
+	if year, err = queryNumber(r, "year", year, 0, math.MaxInt); a.answered(w, r, err) {
 		return
 	}
 	offered, err := searcher.Candidates(r.Context(), sub.Locale.Or(a.svc.Identity.Locale()), sub.Kind, title, year)
