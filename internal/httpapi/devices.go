@@ -19,13 +19,9 @@ type deviceListingJSON struct {
 	ThisDevice bool      `json:"this_device"`
 }
 
-func (a *API) devices(w http.ResponseWriter, r *http.Request) {
+func (a *API) devices(r *http.Request, _ none) (listJSON[deviceListingJSON], error) {
 	session := auth.SessionOf(r.Context())
 	list, err := a.svc.Auth.Devices(r.Context(), session)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	out := make([]deviceListingJSON, len(list))
 	for i, d := range list {
 		out[i] = deviceListingJSON{
@@ -33,26 +29,23 @@ func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 			SignedInAt: d.CreatedAt, LastSeenAt: d.LastSeenAt, ThisDevice: d.ID == session.ID,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[deviceListingJSON]{Items: out})
+	return listJSON[deviceListingJSON]{Items: out}, err
 }
 
-func (a *API) signOutDevice(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if !a.answered(w, r, a.svc.Auth.SignOutDevice(r.Context(), auth.SessionOf(r.Context()), id)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) signOutDevice(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Auth.SignOutDevice(r.Context(), auth.SessionOf(r.Context()), pathUUID(r, "id"))
 }
 
 func (a *API) devicesRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/devices", access: signedIn,
 			summary: "List the devices signed in that the profile may sign out: its own, a manager's users' too, an admin's every one",
-			status:  http.StatusOK, reply: listJSON[deviceListingJSON]{}, handle: a.devices,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.devices),
+		a.handles(route{
 			pattern: "DELETE /api/v1/devices/{id}", access: signedIn, summary: "Sign a device out, of those the profile may",
-			status: http.StatusNoContent, handle: a.signOutDevice,
-		},
+			status: http.StatusNoContent,
+		}, a.signOutDevice),
 	}
 }

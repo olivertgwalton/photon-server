@@ -3,7 +3,6 @@ package httpapi
 import (
 	"cmp"
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"uuid"
@@ -38,42 +37,23 @@ func commonSenseAgeOK(age *int) bool {
 
 // profileAccess answers what a profile may see, as Jellyfin's parental control and library access
 // say it.
-func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	access, err := a.svc.ProfileAdmin.Access(r.Context(), id, keeper(r))
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, accessJSON(access))
+func (a *API) profileAccess(r *http.Request, _ none) (accessJSON, error) {
+	access, err := a.svc.ProfileAdmin.Access(r.Context(), pathUUID(r, "id"), keeper(r))
+	return accessJSON(access), err
 }
 
 // setProfileAccess replaces what a profile may see: titles rated for max_age and younger, unrated
 // ones allowed or blocked, and only the libraries listed, every one where none are.
-func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req accessJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setProfileAccess(r *http.Request, req accessJSON) (none, error) {
 	req.Unrated = cmp.Or(req.Unrated, domain.UnratedAllow)
 	if req.MaxAge != nil && (*req.MaxAge < 0 || *req.MaxAge > 21) {
-		writeProblem(w, a.logger, codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
-		return
+		return none{}, refuse(codeInvalidBody, "max_age is an age to 21 or null, and unrated is allow or block")
 	}
 	if !commonSenseAgeOK(req.MaxCommonSenseAge) {
-		writeProblem(w, a.logger, codeInvalidBody, "max_common_sense_age is an age from 1 to 18 or null")
-		return
+		return none{}, refuse(codeInvalidBody, "max_common_sense_age is an age from 1 to 18 or null")
 	}
-	err := a.svc.ProfileAdmin.SetAccess(r.Context(), id, store.ProfileAccess(req), keeper(r))
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, "no such profile, or one of its libraries")
-		return
-	}
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	err := a.svc.ProfileAdmin.SetAccess(r.Context(), pathUUID(r, "id"), store.ProfileAccess(req), keeper(r))
+	return none{}, notFoundAs(err, "no such profile, or one of its libraries")
 }
 
 type addProfileJSON struct {
@@ -84,27 +64,21 @@ type addProfileJSON struct {
 
 // addProfile adds a profile of the household, as Jellyfin's dashboard adds a user; a manager adds
 // one it keeps.
-func (a *API) addProfile(w http.ResponseWriter, r *http.Request) {
-	var req addProfileJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) addProfile(r *http.Request, req addProfileJSON) (profileJSON, error) {
 	name, ok := domain.ProfileName(req.Name)
 	if req.Role == "" || !ok {
-		writeProblem(w, a.logger, codeInvalidBody, badName+", and role is admin, manager or user")
-		return
+		return profileJSON{}, refuse(codeInvalidBody, badName+", and role is admin, manager or user")
 	}
-	req.Name = name
 	hash, err := a.svc.Auth.HashPassword(r.Context(), req.Password)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return profileJSON{}, err
 	}
-	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), req.Name, req.Role, hash, keeper(r))
-	if a.answered(w, r, err) {
-		return
+	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), name, req.Role, hash, keeper(r))
+	if err != nil {
+		return profileJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileAdded, Profile: p.ID, Details: domain.NameDetails{Name: p.Name}})
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, profileOf(p))
+	return profileOf(p), nil
 }
 
 // badName is what a profile's name must be.
@@ -117,66 +91,55 @@ type profileChangeJSON struct {
 }
 
 // setProfile renames a profile, changes its role, and sets its password.
-func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req profileChangeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setProfile(r *http.Request, req profileChangeJSON) (profileJSON, error) {
 	change := store.ProfileChange{Role: req.Role, Keep: auth.SessionOf(r.Context()).ID}
 	if req.Name != "" {
 		var ok bool
 		if change.Name, ok = domain.ProfileName(req.Name); !ok {
-			writeProblem(w, a.logger, codeInvalidBody, badName)
-			return
+			return profileJSON{}, refuse(codeInvalidBody, badName)
 		}
 	}
 	if req.Password != nil {
 		var err error
-		if change.PasswordHash, err = a.svc.Auth.HashPassword(r.Context(), *req.Password); a.answered(w, r, err) {
-			return
+		if change.PasswordHash, err = a.svc.Auth.HashPassword(r.Context(), *req.Password); err != nil {
+			return profileJSON{}, err
 		}
 	}
-	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), id, change, keeper(r))
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
+	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), pathUUID(r, "id"), change, keeper(r))
+	return profileOf(p), err
 }
 
 // removeProfile forgets a profile, its devices and what it has watched.
-func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, keeper(r))
-	if a.answered(w, r, err) {
-		return
+func (a *API) removeProfile(r *http.Request, _ none) (none, error) {
+	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), pathUUID(r, "id"), keeper(r))
+	if err != nil {
+		return none{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: domain.NameDetails{Name: name}})
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 func (a *API) profileAdminRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "POST /api/v1/admin/profiles", access: manages, summary: "Add a profile",
-			body: addProfileJSON{}, status: http.StatusCreated, reply: profileJSON{}, handle: a.addProfile,
-		},
-		{
+			status: http.StatusCreated,
+		}, a.addProfile),
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/profiles/{id}", access: manages, summary: "Change a profile",
-			body: profileChangeJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.setProfile,
-		},
-		{
+			status: http.StatusOK,
+		}, a.setProfile),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/profiles/{id}", access: manages,
 			summary: "Remove a profile, its devices and what it has watched", status: http.StatusNoContent,
-			handle: a.removeProfile,
-		},
-		{
+		}, a.removeProfile),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/profiles/{id}/access", access: manages, summary: "What a profile may see",
-			status: http.StatusOK, reply: accessJSON{}, handle: a.profileAccess,
-		},
-		{
+			status: http.StatusOK,
+		}, a.profileAccess),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/profiles/{id}/access", access: manages, summary: "Replace what a profile may see",
-			body: accessJSON{}, status: http.StatusNoContent, handle: a.setProfileAccess,
-		},
+			status: http.StatusNoContent,
+		}, a.setProfileAccess),
 	}
 }

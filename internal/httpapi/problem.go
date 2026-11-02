@@ -219,15 +219,6 @@ func (e *refusal) Error() string { return string(e.code) + ": " + e.detail }
 
 func refuse(code problemCode, detail string) error { return &refusal{code, detail} }
 
-// answeredAs is answered, naming the missing resource notFound.
-func (a *API) answeredAs(w http.ResponseWriter, r *http.Request, err error, notFound string) bool {
-	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeNotFound, notFound)
-		return true
-	}
-	return a.answered(w, r, err)
-}
-
 type problem struct {
 	Title  string      `json:"title"`
 	Status int         `json:"status"`

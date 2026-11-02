@@ -70,52 +70,45 @@ type declineJSON struct {
 }
 
 // askFor asks for a title a library of files' search found, as the profile signed in.
-func (a *API) askFor(w http.ResponseWriter, r *http.Request) {
-	var req askJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) askFor(r *http.Request, req askJSON) (requestJSON, error) {
 	if req.RequestableID == (uuid.UUID{}) {
-		writeProblem(w, a.logger, codeInvalidBody, "requestable_id is a title a search answered as requestable")
-		return
+		return requestJSON{}, refuse(codeInvalidBody, "requestable_id is a title a search answered as requestable")
 	}
 	if slices.ContainsFunc(req.Seasons, func(n int) bool { return n < 0 }) {
-		writeProblem(w, a.logger, codeInvalidBody, "seasons are numbers from 0, a show's specials")
-		return
+		return requestJSON{}, refuse(codeInvalidBody, "seasons are numbers from 0, a show's specials")
 	}
 	asked, told, err := a.svc.Requests.AskFor(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.RequestableID, req.Seasons)
-	if a.answeredAs(w, r, err, "requestable_id is a title a search answered as requestable, found in the last day") {
-		return
+	if err != nil {
+		return requestJSON{}, notFoundAs(err, "requestable_id is a title a search answered as requestable, found in the last day")
 	}
 	for _, t := range told {
 		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: t.ProfileID, Details: domain.NotificationsDetails{
 			Change: domain.NotificationsAdded, IDs: t.IDs,
 		}})
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, requestOf(asked))
+	return requestOf(asked), nil
 }
 
 // ownRequests answers a page of the signed-in profile's requests, newest first.
-func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
+func (a *API) ownRequests(r *http.Request, _ none) (pageJSON[requestJSON], error) {
 	page, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[requestJSON]{}, err
 	}
 	rs, extent, err := a.svc.Requests.Requests(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[requestJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(each(rs, requestOf), page.Offset, extent))
+	return pageAt(each(rs, requestOf), page.Offset, extent), nil
 }
 
-func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	cleared, err := a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+func (a *API) withdrawRequest(r *http.Request, _ none) (none, error) {
+	cleared, err := a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"))
+	if err != nil {
+		return none{}, err
 	}
 	a.raiseCleared(r.Context(), cleared)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 // raiseCleared tells each profile's devices that the notifications of a request that no longer
@@ -130,72 +123,67 @@ func (a *API) raiseCleared(ctx context.Context, cleared []store.Cleared) {
 
 // keptRequests answers a page of the requests of the profiles an admin or manager keeps, newest
 // first.
-func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
+func (a *API) keptRequests(r *http.Request, _ none) (pageJSON[requestJSON], error) {
 	state, err := queryEnum(r, "state", "", domain.RequestStates())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[requestJSON]{}, err
 	}
 	page, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[requestJSON]{}, err
 	}
 	rs, extent, err := a.svc.Requests.RequestsKept(r.Context(), keeper(r), state, page)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[requestJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(each(rs, requestOf), page.Offset, extent))
+	return pageAt(each(rs, requestOf), page.Offset, extent), nil
 }
 
-func (a *API) approveRequest(w http.ResponseWriter, r *http.Request) {
-	a.decideRequest(w, r, domain.RequestApproved, "")
+func (a *API) approveRequest(r *http.Request, _ none) (requestJSON, error) {
+	return a.decideRequest(r, domain.RequestApproved, "")
 }
 
-func (a *API) declineRequest(w http.ResponseWriter, r *http.Request) {
-	var req declineJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	a.decideRequest(w, r, domain.RequestDeclined, req.Reason)
+func (a *API) declineRequest(r *http.Request, req declineJSON) (requestJSON, error) {
+	return a.decideRequest(r, domain.RequestDeclined, req.Reason)
 }
 
-func (a *API) decideRequest(w http.ResponseWriter, r *http.Request, state domain.RequestState, reason string) {
-	id := pathUUID(r, "id")
-	decided, cleared, err := a.svc.Requests.DecideRequest(r.Context(), id, keeper(r), auth.SessionOf(r.Context()).Profile.ID, state, reason)
-	if a.answered(w, r, err) {
-		return
+func (a *API) decideRequest(r *http.Request, state domain.RequestState, reason string) (requestJSON, error) {
+	decided, cleared, err := a.svc.Requests.DecideRequest(r.Context(), pathUUID(r, "id"), keeper(r), auth.SessionOf(r.Context()).Profile.ID, state, reason)
+	if err != nil {
+		return requestJSON{}, err
 	}
 	a.raiseCleared(r.Context(), cleared)
-	writeJSON(w, a.logger, "application/json", http.StatusOK, requestOf(decided))
+	return requestOf(decided), nil
 }
 
 func (a *API) requestsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "POST /api/v1/requests", access: signedIn,
 			summary: "Ask for a title a search answered as requestable; an admin's is approved at once",
-			body:    askJSON{}, status: http.StatusCreated, reply: requestJSON{}, handle: a.askFor,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.askFor),
+		a.handles(route{
 			pattern: "GET /api/v1/requests", access: signedIn, summary: "Page the profile's requests, newest first",
-			query: pageParams, status: http.StatusOK, reply: pageJSON[requestJSON]{}, handle: a.ownRequests,
-		},
-		{
+			query: pageParams, status: http.StatusOK,
+		}, a.ownRequests),
+		a.handles(route{
 			pattern: "DELETE /api/v1/requests/{id}", access: signedIn, summary: "Take back one of the profile's requests while it waits",
-			status: http.StatusNoContent, handle: a.withdrawRequest,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.withdrawRequest),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/requests", access: manages,
 			summary: "Page the requests of the profiles one keeps, newest first: every profile's for an admin",
 			query:   append([]param{{"state", domain.RequestState(""), "Only requests in this state."}}, pageParams...),
-			status:  http.StatusOK, reply: pageJSON[requestJSON]{}, handle: a.keptRequests,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.keptRequests),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/requests/{id}/approve", access: manages, summary: "Approve a request while it waits",
-			status: http.StatusOK, reply: requestJSON{}, handle: a.approveRequest,
-		},
-		{
+			status: http.StatusOK,
+		}, a.approveRequest),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/requests/{id}/decline", access: manages, summary: "Decline a request while it waits, saying why",
-			body: declineJSON{}, status: http.StatusOK, reply: requestJSON{}, handle: a.declineRequest,
-		},
+			status: http.StatusOK,
+		}, a.declineRequest),
 	}
 }

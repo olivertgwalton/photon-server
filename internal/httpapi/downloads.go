@@ -172,10 +172,10 @@ func (a *API) addDownload(w http.ResponseWriter, r *http.Request) {
 
 // ownDownloads answers the downloads this device asked for, or the profile's on every device, the
 // newest first.
-func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
+func (a *API) ownDownloads(r *http.Request, _ none) (listJSON[downloadJSON], error) {
 	scope, err := queryEnum(r, "scope", scopeDevice, downloadScopes())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[downloadJSON]{}, err
 	}
 	session := auth.SessionOf(r.Context())
 	var device *uuid.UUID
@@ -186,34 +186,28 @@ func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
 	}
 	all, err := a.svc.Downloads.Downloads(r.Context(), session.Profile.ID, device)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[downloadJSON]{}, err
 	}
 	out := make([]downloadJSON, len(all))
 	for i, d := range all {
 		out[i] = a.downloadJSON(d)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[downloadJSON]{Items: out})
+	return listJSON[downloadJSON]{Items: out}, nil
 }
 
 // download answers one of the profile's downloads, as far as its conversion has got.
-func (a *API) download(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	d, err := a.svc.Downloads.Download(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+func (a *API) download(r *http.Request, _ none) (downloadJSON, error) {
+	d, err := a.svc.Downloads.Download(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"))
+	if err != nil {
+		return downloadJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.downloadJSON(d))
+	return a.downloadJSON(d), nil
 }
 
 // removeDownload forgets one of the profile's downloads; a conversion no other download needs is
 // stopped and its file removed.
-func (a *API) removeDownload(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if a.answered(w, r, a.svc.Conversions.Remove(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+func (a *API) removeDownload(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Conversions.Remove(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"))
 }
 
 // downloadFile serves a ready conversion in byte ranges, so a download manager resumes it, from
@@ -243,21 +237,21 @@ func (a *API) downloadsRoutes() []route {
 			summary: "Download a film or episode no larger than a bitrate: its file as it is, else converted to the video the device plays; asked again, the same download",
 			body:    downloadRequestJSON{}, status: http.StatusCreated, reply: downloadJSON{}, again: http.StatusOK, handle: a.addDownload,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/downloads", access: signedIn,
 			summary: "List this device's downloads, or the profile's on every device, the newest first",
 			query:   []param{{"scope", scopeDevice, "device, the default, is this device's; profile is the profile's on every device."}},
-			status:  http.StatusOK, reply: listJSON[downloadJSON]{}, handle: a.ownDownloads,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.ownDownloads),
+		a.handles(route{
 			pattern: "GET /api/v1/downloads/{id}", access: signedIn, summary: "A download, as far as its conversion has got",
-			status: http.StatusOK, reply: downloadJSON{}, handle: a.download,
-		},
-		{
+			status: http.StatusOK,
+		}, a.download),
+		a.handles(route{
 			pattern: "DELETE /api/v1/downloads/{id}", access: signedIn,
 			summary: "Remove a download, and its conversion where no other download needs it",
-			status:  http.StatusNoContent, handle: a.removeDownload,
-		},
+			status:  http.StatusNoContent,
+		}, a.removeDownload),
 		{
 			pattern: "GET /api/v1/downloads/{id}/file", access: signedAddress,
 			summary: "A download's conversion, in byte ranges, at the address the download answered",

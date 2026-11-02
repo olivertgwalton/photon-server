@@ -32,58 +32,42 @@ type createdKeyJSON struct {
 	Token string    `json:"token"`
 }
 
-func (a *API) keys(w http.ResponseWriter, r *http.Request) {
+func (a *API) keys(r *http.Request, _ none) (listJSON[keyListingJSON], error) {
 	list, err := a.svc.Auth.Keys(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	out := make([]keyListingJSON, len(list))
 	for i, k := range list {
 		out[i] = keyListingJSON{ID: k.ID, Name: k.Name, Profile: k.Profile, CreatedAt: k.CreatedAt, LastSeenAt: k.LastSeenAt}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[keyListingJSON]{Items: out})
+	return listJSON[keyListingJSON]{Items: out}, err
 }
 
-func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
-	var req newKeyJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) createKey(r *http.Request, req newKeyJSON) (createdKeyJSON, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" || utf8.RuneCountInString(name) > maxKeyName {
-		writeProblem(w, a.logger, codeInvalidBody, "name is 1 to 64 characters")
-		return
+		return createdKeyJSON{}, refuse(codeInvalidBody, "name is 1 to 64 characters")
 	}
 	id, token, err := a.svc.Auth.CreateKey(r.Context(), auth.SessionOf(r.Context()), name)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdKeyJSON{ID: id, Token: token})
+	return createdKeyJSON{ID: id, Token: token}, err
 }
 
-func (a *API) revokeKey(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if !a.answered(w, r, a.svc.Auth.RevokeKey(r.Context(), id)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) revokeKey(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Auth.RevokeKey(r.Context(), pathUUID(r, "id"))
 }
 
 func (a *API) keysRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/keys", access: admin, summary: "List the API keys",
-			status: http.StatusOK, reply: listJSON[keyListingJSON]{}, handle: a.keys,
-		},
-		{
+			status: http.StatusOK,
+		}, a.keys),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/keys", access: admin,
 			summary: "Make an API key acting as this admin; its token is shown only now",
-			body:    newKeyJSON{}, status: http.StatusCreated, reply: createdKeyJSON{}, handle: a.createKey,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.createKey),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/keys/{id}", access: admin, summary: "Revoke an API key",
-			status: http.StatusNoContent, handle: a.revokeKey,
-		},
+			status: http.StatusNoContent,
+		}, a.revokeKey),
 	}
 }

@@ -48,11 +48,11 @@ type personJSON struct {
 
 // person answers someone's page: who they are, as a provider says the first time it is opened and
 // monthly after, and their films and shows here, the newest first.
-func (a *API) person(w http.ResponseWriter, r *http.Request) {
+func (a *API) person(r *http.Request, _ none) (personJSON, error) {
 	id := pathUUID(r, "id")
 	p, err := a.svc.People.Person(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return personJSON{}, err
 	}
 	if time.Since(p.DescribedAt) > describedFor && len(p.IDs) > 0 {
 		d, ok, err := a.svc.PersonDescriber.DescribePerson(r.Context(), domain.Locale{Language: p.Language}.Or(a.svc.Identity.Locale()), p.IDs)
@@ -69,8 +69,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	}
 	credits, err := a.svc.People.PersonCredits(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return personJSON{}, err
 	}
 	out := personJSON{
 		ID: p.ID, Name: p.Name, Photo: p.Photo, Blurhashes: p.Blurhashes, Biography: p.Biography, Born: p.Born,
@@ -79,14 +78,14 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	for _, c := range credits {
 		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardOf(c.Card)})
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 func (a *API) peopleRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/people/{id}", access: signedIn, summary: "Someone's page and their titles here",
-			status: http.StatusOK, reply: personJSON{}, handle: a.person,
-		},
+			status: http.StatusOK,
+		}, a.person),
 	}
 }

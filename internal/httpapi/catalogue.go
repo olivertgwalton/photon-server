@@ -84,17 +84,16 @@ type cardJSON struct {
 	Blurhashes store.Blurhashes `json:"blurhashes,omitzero"`
 }
 
-func (a *API) libraries(w http.ResponseWriter, r *http.Request) {
+func (a *API) libraries(r *http.Request, _ none) (listJSON[libraryJSON], error) {
 	libs, err := a.svc.Catalogue.LibrariesSeen(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[libraryJSON]{}, err
 	}
 	out := make([]libraryJSON, len(libs))
 	for i, l := range libs {
 		out[i] = libraryJSON{ID: l.ID, Name: l.Name, Kind: l.Kind}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[libraryJSON]{Items: out})
+	return listJSON[libraryJSON]{Items: out}, nil
 }
 
 type libraryOrderJSON struct {
@@ -102,76 +101,66 @@ type libraryOrderJSON struct {
 }
 
 // setLibraryOrder puts the profile's libraries in an order, as its sidebar lists them.
-func (a *API) setLibraryOrder(w http.ResponseWriter, r *http.Request) {
-	var req libraryOrderJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setLibraryOrder(r *http.Request, req libraryOrderJSON) (none, error) {
 	err := a.svc.Catalogue.SetLibraryOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.LibraryIDs)
-	switch {
-	case a.answeredAs(w, r, err, "a library is named twice, or is no library"):
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, notFoundAs(err, "a library is named twice, or is no library")
 }
 
-func (a *API) wall(w http.ResponseWriter, r *http.Request) {
+func (a *API) wall(r *http.Request, _ none) (pageJSON[cardJSON], error) {
 	lib := pathUUID(r, "id")
 	q := r.URL.Query()
 	page := store.WallPage{Profile: auth.SessionOf(r.Context()).Profile.ID}
 	var err error
-	if page.Kind, err = queryEnum(r, "kind", domain.WallTitles, domain.WallKinds()); a.answered(w, r, err) {
-		return
+	if page.Kind, err = queryEnum(r, "kind", domain.WallTitles, domain.WallKinds()); err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
-	if page.Sort, err = queryEnum(r, "sort", domain.SortTitle, domain.WallSorts()); a.answered(w, r, err) {
-		return
+	if page.Sort, err = queryEnum(r, "sort", domain.SortTitle, domain.WallSorts()); err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
-	if page.Order, err = queryEnum(r, "order", page.Sort.DefaultOrder(), domain.Orders()); a.answered(w, r, err) {
-		return
+	if page.Order, err = queryEnum(r, "order", page.Sort.DefaultOrder(), domain.Orders()); err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
 	if page.Filter, err = wallFilter(q); err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
+		return pageJSON[cardJSON]{}, refuse(codeInvalidParameter, err.Error())
 	}
 	page.RatingSite = cmp.Or(page.Filter.RatingSite, domain.SiteIMDb)
 	paged, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
 	page.Offset, page.Limit, page.Count = paged.Offset, paged.Limit, paged.Count
 	ids, extent, err := a.svc.Catalogue.Wall(r.Context(), []uuid.UUID{lib}, page)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
 	cards, err := a.svc.Catalogue.Cards(r.Context(), page.Profile, ids)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
+	return pageAt(cardsJSON(cards), page.Offset, extent), nil
 }
 
 // letters answers how many of a library's titles sort under each letter, in title order, so a
 // client jumps to a letter at the sum of those before it.
-func (a *API) letters(w http.ResponseWriter, r *http.Request) {
+func (a *API) letters(r *http.Request, _ none) (listJSON[letterJSON], error) {
 	lib := pathUUID(r, "id")
 	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[letterJSON]{}, err
 	}
 	f, err := wallFilter(r.URL.Query())
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
+		return listJSON[letterJSON]{}, refuse(codeInvalidParameter, err.Error())
 	}
 	letters, err := a.svc.Catalogue.Letters(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, kind, f)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[letterJSON]{}, err
 	}
 	out := make([]letterJSON, len(letters))
 	for i, l := range letters {
 		out[i] = letterJSON(l)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[letterJSON]{Items: out})
+	return listJSON[letterJSON]{Items: out}, nil
 }
 
 type letterJSON struct {
@@ -219,25 +208,23 @@ type searchJSON struct {
 	Requestable listJSON[cardJSON]      `json:"requestable"`
 }
 
-func (a *API) search(w http.ResponseWriter, r *http.Request) {
+func (a *API) search(r *http.Request, _ none) (searchJSON, error) {
 	q := r.URL.Query()
 	query := store.SearchQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Text: q.Get("q")}
 	if query.Text == "" {
-		writeProblem(w, a.logger, codeInvalidParameter, "q is what to search for")
-		return
+		return searchJSON{}, refuse(codeInvalidParameter, "q is what to search for")
 	}
 	var err error
-	if query.Library, err = queryID(r, "library"); a.answered(w, r, err) {
-		return
+	if query.Library, err = queryID(r, "library"); err != nil {
+		return searchJSON{}, err
 	}
 	kinds, err := parseAll(list(q, "kind"), enum("kind", domain.SearchKinds()))
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return
+		return searchJSON{}, refuse(codeInvalidParameter, err.Error())
 	}
 	page, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return searchJSON{}, err
 	}
 	query.Offset, query.Limit, query.Count = page.Offset, page.Limit, page.Count
 	findPeople := len(kinds) == 0
@@ -296,10 +283,9 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	}
 	wg.Wait()
 	if err := errors.Join(titlesErr, peopleErr, requestableErr); err != nil {
-		a.internal(w, r, err)
-		return
+		return searchJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
@@ -405,112 +391,112 @@ type certificateFacetJSON struct {
 }
 
 // facets answers the values a library's titles have, which its wall can be narrowed to.
-func (a *API) facets(w http.ResponseWriter, r *http.Request) {
+func (a *API) facets(r *http.Request, _ none) (facetsJSON, error) {
 	lib := pathUUID(r, "id")
 	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return facetsJSON{}, err
 	}
 	f, err := a.svc.Catalogue.Facets(r.Context(), []uuid.UUID{lib}, auth.SessionOf(r.Context()).Profile.ID, kind)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return facetsJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, facetsJSON{
+	return facetsJSON{
 		f.Genres, f.Years,
 		each(f.Certificates, func(c string) certificateFacetJSON { return certificateFacetJSON{domain.Bare(c), c} }),
 		f.Studios, f.Resolutions,
 		f.Ranges, f.RatingSites, domain.Marks(),
-	})
+	}, nil
 }
 
 // similar answers the titles most like one, for "More like this".
-func (a *API) similar(w http.ResponseWriter, r *http.Request) {
+func (a *API) similar(r *http.Request, _ none) (listJSON[cardJSON], error) {
 	id := pathUUID(r, "id")
 	cards, err := a.svc.Catalogue.Similar(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+	return listJSON[cardJSON]{Items: cardsJSON(cards)}, nil
 }
 
 // next answers the episode to play after a title: after an episode the one that follows it, and
 // of a show or season the one the profile is at, as Jellyfin's NextUp and Plex's onDeck.
-func (a *API) next(w http.ResponseWriter, r *http.Request) {
+func (a *API) next(r *http.Request, _ none) (cardJSON, error) {
 	id := pathUUID(r, "id")
 	card, err := a.svc.Catalogue.Next(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return cardJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, cardOf(card))
+	return cardOf(card), nil
 }
 
 // playable answers the films and episodes a title stands for, in the order they play, for a client
 // to shuffle a show, season or collection.
-func (a *API) playable(w http.ResponseWriter, r *http.Request) {
+func (a *API) playable(r *http.Request, _ none) (listJSON[cardJSON], error) {
 	id := pathUUID(r, "id")
 	cards, err := a.svc.Catalogue.PlayOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+	return listJSON[cardJSON]{Items: cardsJSON(cards)}, nil
 }
 
 func (a *API) catalogueRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "PUT /api/v1/profile/library-order", access: signedIn,
 			summary: "Put the profile's libraries in an order; those left out follow, by name",
-			body:    libraryOrderJSON{}, status: http.StatusNoContent, handle: a.setLibraryOrder,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.setLibraryOrder),
+		a.handles(route{
 			pattern: "GET /api/v1/libraries", access: signedIn, summary: "List the libraries the profile sees",
-			status: http.StatusOK, reply: listJSON[libraryJSON]{}, handle: a.libraries,
-		},
-		{
+			status: http.StatusOK,
+		}, a.libraries),
+		a.handles(route{
 			pattern: "GET /api/v1/libraries/{id}/titles", access: signedIn, summary: "Page a library's titles",
 			query: slices.Concat([]param{
 				wallKindParameter,
 				{"sort", domain.SortTitle, "The order, title by default; of episodes, by show."},
 				{"order", domain.Ascending, "Its direction; titles from A, anything else the newest first, by default."},
 			}, pageParams, wallFilterParameters),
-			status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.wall,
-		},
-		{
+			status: http.StatusOK,
+		}, a.wall),
+		a.handles(route{
 			pattern: "GET /api/v1/libraries/{id}/letters", access: signedIn,
 			summary: "Count a library's titles under each letter, in title order",
-			query:   append([]param{wallKindParameter}, wallFilterParameters...), status: http.StatusOK, reply: listJSON[letterJSON]{}, handle: a.letters,
-		},
-		{
+			query:   append([]param{wallKindParameter}, wallFilterParameters...), status: http.StatusOK,
+		}, a.letters),
+		a.handles(route{
 			pattern: "GET /api/v1/libraries/{id}/facets", access: signedIn,
 			summary: "The values a library's titles can be narrowed to",
-			query:   []param{wallKindParameter}, status: http.StatusOK, reply: facetsJSON{}, handle: a.facets,
-		},
-		{
+			query:   []param{wallKindParameter}, status: http.StatusOK,
+		}, a.facets),
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/next", access: signedIn,
 			summary: "The episode to play next: after an episode, or where the profile is in a show or season",
-			status:  http.StatusOK, reply: cardJSON{}, handle: a.next,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.next),
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/playable", access: signedIn,
 			summary: "The films and episodes a title stands for, in the order they play",
-			status:  http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.playable,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.playable),
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, summary: "The titles most like one",
-			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.similar,
-		},
+			status: http.StatusOK,
+		}, a.similar),
 		{
 			pattern: "GET /api/v1/titles/{id}", access: signedIn, summary: "A title's page, or one a search found for the profile to ask for",
 			status: http.StatusOK, reply: titlePageJSON{}, handle: a.title,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/search", access: signedIn, summary: "Page the titles, episodes among them, and the people a search finds",
 			query: append([]param{
 				{"q", "", "What to search for; required."},
 				{"library", uuid.UUID{}, "Only this library's titles."},
 				{"kind", []domain.SearchKind{}, "Only these kinds of title, or people; repeated or comma-separated, everything by default."},
 			}, pageParams...),
-			status: http.StatusOK, reply: searchJSON{}, handle: a.search,
-		},
+			status: http.StatusOK,
+		}, a.search),
 	}
 }

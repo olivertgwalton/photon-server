@@ -71,43 +71,38 @@ func trackerCodeOf(l kv.TrackerLink) trackerCodeJSON {
 // maxClientID is the longest client id taken: Trakt's and Simkl's are 64 characters, MDBList's 40.
 const maxClientID = 200
 
-func (a *API) adminTrackers(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminTrackers(r *http.Request, _ none) (listJSON[trackerClientJSON], error) {
 	clients, err := a.svc.TrackerClients.TrackerClients(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[trackerClientJSON]{}, err
 	}
 	out := make([]trackerClientJSON, len(domain.Trackers()))
 	for i, t := range domain.Trackers() {
 		out[i] = trackerClientJSON{Tracker: t, ClientID: clients[t]}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[trackerClientJSON]{out})
+	return listJSON[trackerClientJSON]{out}, nil
 }
 
-func (a *API) setTrackerClient(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.pathTracker(w, r)
-	if !ok {
-		return
-	}
-	var req trackerClientChangeJSON
-	if !a.decode(w, r, &req) {
-		return
+func (a *API) setTrackerClient(r *http.Request, req trackerClientChangeJSON) (trackerClientJSON, error) {
+	t, err := pathTracker(r)
+	if err != nil {
+		return trackerClientJSON{}, err
 	}
 	req.ClientID = strings.TrimSpace(req.ClientID)
 	if len(req.ClientID) > maxClientID || strings.ContainsFunc(req.ClientID, unicode.IsSpace) {
-		writeProblem(w, a.logger, codeInvalidBody, "client_id is the client id of the app registered on the tracker, with no spaces")
-		return
+		return trackerClientJSON{}, refuse(codeInvalidBody, "client_id is the client id of the app registered on the tracker, with no spaces")
 	}
-	if a.answered(w, r, a.svc.TrackerClients.SetTrackerClient(r.Context(), t, req.ClientID)) {
-		return
+	if err := a.svc.TrackerClients.SetTrackerClient(r.Context(), t, req.ClientID); err != nil {
+		return trackerClientJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, trackerClientJSON{Tracker: t, ClientID: req.ClientID})
+	return trackerClientJSON{Tracker: t, ClientID: req.ClientID}, nil
 }
 
 // ownTrackers answers how far the profile is from an account on each tracker.
-func (a *API) ownTrackers(w http.ResponseWriter, r *http.Request) {
+func (a *API) ownTrackers(r *http.Request, _ none) (listJSON[profileTrackerJSON], error) {
 	all, err := a.svc.Trackers.Trackers(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[profileTrackerJSON]{}, err
 	}
 	out := make([]profileTrackerJSON, len(all))
 	for i, s := range all {
@@ -121,19 +116,19 @@ func (a *API) ownTrackers(w http.ResponseWriter, r *http.Request) {
 		case tracker.StateUnavailable, tracker.StateUnlinked:
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[profileTrackerJSON]{out})
+	return listJSON[profileTrackerJSON]{out}, nil
 }
 
-func (a *API) linkTracker(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.pathTracker(w, r)
-	if !ok {
-		return
+func (a *API) linkTracker(r *http.Request, _ none) (trackerCodeJSON, error) {
+	t, err := pathTracker(r)
+	if err != nil {
+		return trackerCodeJSON{}, err
 	}
 	link, err := a.svc.Trackers.Link(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return trackerCodeJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, trackerCodeOf(link))
+	return trackerCodeOf(link), nil
 }
 
 type trackerTokenJSON struct {
@@ -145,81 +140,68 @@ const maxToken = 4096
 
 // grantTracker links the profile's account on a tracker linked by token, by the token its site
 // showed the profile.
-func (a *API) grantTracker(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.pathTracker(w, r)
-	if !ok {
-		return
-	}
-	var req trackerTokenJSON
-	if !a.decode(w, r, &req) {
-		return
+func (a *API) grantTracker(r *http.Request, req trackerTokenJSON) (none, error) {
+	t, err := pathTracker(r)
+	if err != nil {
+		return none{}, err
 	}
 	req.Token = strings.TrimSpace(req.Token)
 	if req.Token == "" || len(req.Token) > maxToken {
-		writeProblem(w, a.logger, codeInvalidBody, "token is the token the tracker's site showed")
-		return
+		return none{}, refuse(codeInvalidBody, "token is the token the tracker's site showed")
 	}
-	if a.answered(w, r, a.svc.Trackers.Grant(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t, req.Token)) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.svc.Trackers.Grant(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t, req.Token)
 }
 
-func (a *API) unlinkTracker(w http.ResponseWriter, r *http.Request) {
-	t, ok := a.pathTracker(w, r)
-	if !ok {
-		return
+func (a *API) unlinkTracker(r *http.Request, _ none) (none, error) {
+	t, err := pathTracker(r)
+	if err != nil {
+		return none{}, err
 	}
-	if a.answeredAs(w, r, a.svc.Trackers.Unlink(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t), "the profile has linked no account there") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(a.svc.Trackers.Unlink(r.Context(), auth.SessionOf(r.Context()).Profile.ID, t), "the profile has linked no account there")
 }
 
 // pathTracker reads the tracker a path names; any other is a path to nothing.
-func (a *API) pathTracker(w http.ResponseWriter, r *http.Request) (domain.Tracker, bool) {
+func pathTracker(r *http.Request) (domain.Tracker, error) {
 	t := domain.Tracker(r.PathValue("tracker"))
 	if !slices.Contains(domain.Trackers(), t) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return "", false
+		return "", refuse(codeNotFound, "")
 	}
-	return t, true
+	return t, nil
 }
 
 var trackerParam = param{"tracker", domain.Tracker(""), "The tracker."}
 
 func (a *API) trackersRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/trackers", access: admin,
 			summary: "List the trackers profiles may link accounts on, and the client id of the app registered on each",
-			status:  http.StatusOK, reply: listJSON[trackerClientJSON]{}, handle: a.adminTrackers,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminTrackers),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/trackers/{tracker}", access: admin,
 			summary: "Set the client id of the app registered on a tracker, which profiles link their accounts through; empty, none can",
-			path:    []param{trackerParam}, body: trackerClientChangeJSON{}, status: http.StatusOK, reply: trackerClientJSON{},
-			handle: a.setTrackerClient,
-		},
-		{
+			path:    []param{trackerParam}, status: http.StatusOK,
+		}, a.setTrackerClient),
+		a.handles(route{
 			pattern: "GET /api/v1/profile/trackers", access: signedIn,
 			summary: "The profile's account on each tracker, or the code it is entering to link one",
-			status:  http.StatusOK, reply: listJSON[profileTrackerJSON]{}, handle: a.ownTrackers,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.ownTrackers),
+		a.handles(route{
 			pattern: "POST /api/v1/profile/trackers/{tracker}/link", access: signedIn,
 			summary: "Ask a tracker for a code for the profile to enter there, in place of any before; tracker.changed says when it is linked or expires",
-			path:    []param{trackerParam}, status: http.StatusOK, reply: trackerCodeJSON{}, handle: a.linkTracker,
-		},
-		{
+			path:    []param{trackerParam}, status: http.StatusOK,
+		}, a.linkTracker),
+		a.handles(route{
 			pattern: "PUT /api/v1/profile/trackers/{tracker}/token", access: signedIn,
 			summary: "Link the profile's account on a tracker linked by token, by the token its site showed",
-			path:    []param{trackerParam}, body: trackerTokenJSON{}, status: http.StatusNoContent, handle: a.grantTracker,
-		},
-		{
+			path:    []param{trackerParam}, status: http.StatusNoContent,
+		}, a.grantTracker),
+		a.handles(route{
 			pattern: "DELETE /api/v1/profile/trackers/{tracker}", access: signedIn,
 			summary: "Unlink the profile's account on a tracker, or stop linking one, and have the tracker forget what it granted",
-			path:    []param{trackerParam}, status: http.StatusNoContent, handle: a.unlinkTracker,
-		},
+			path:    []param{trackerParam}, status: http.StatusNoContent,
+		}, a.unlinkTracker),
 	}
 }

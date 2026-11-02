@@ -56,29 +56,27 @@ type statisticsJSON struct {
 
 // adminStatistics answers what was watched over the last so many days, by everyone or by one
 // profile, as Tautulli's and Emby's reports do.
-func (a *API) adminStatistics(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminStatistics(r *http.Request, _ none) (statisticsJSON, error) {
 	days, err := queryNumber(r, "days", defaultStatisticsDays, 1, mostStatisticsDays)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return statisticsJSON{}, err
 	}
 	profile, err := queryID(r, "profile")
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return statisticsJSON{}, err
 	}
 	zone := time.UTC
 	if name := r.URL.Query().Get("zone"); name != "" {
 		where, err := time.LoadLocation(name)
 		// "Local" is this server's own zone to Go, and no zone's name to the database.
 		if err != nil || name == "Local" {
-			writeProblem(w, a.logger, codeInvalidParameter, "zone is a time zone's name, such as Europe/London")
-			return
+			return statisticsJSON{}, refuse(codeInvalidParameter, "zone is a time zone's name, such as Europe/London")
 		}
 		zone = where
 	}
 	stats, err := a.svc.Statistics.Statistics(r.Context(), days, zone, profile)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return statisticsJSON{}, err
 	}
 	out := statisticsJSON{
 		Days: days, Zone: zone.String(), watchTotalJSON: watchTotalOf(stats.Watched),
@@ -95,7 +93,7 @@ func (a *API) adminStatistics(w http.ResponseWriter, r *http.Request) {
 	for i, d := range stats.Days {
 		out.Daily[i] = dayWatchedJSON{Day: d.Day, watchTotalJSON: watchTotalOf(d.Watched)}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 func watchTotalOf(w store.Watched) watchTotalJSON {
@@ -104,7 +102,7 @@ func watchTotalOf(w store.Watched) watchTotalJSON {
 
 func (a *API) statisticsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/statistics", access: admin,
 			summary: "What was watched over the last so many days: altogether, by profile, by title, and day by day",
 			query: []param{
@@ -112,7 +110,7 @@ func (a *API) statisticsRoutes() []route {
 				{"zone", "", "The time zone its days are counted in, such as Europe/London; UTC by default."},
 				{"profile", uuid.UUID{}, "Only this profile's plays."},
 			},
-			status: http.StatusOK, reply: statisticsJSON{}, handle: a.adminStatistics,
-		},
+			status: http.StatusOK,
+		}, a.adminStatistics),
 	}
 }

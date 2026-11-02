@@ -89,26 +89,23 @@ func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 
 // partFonts lists the fonts a part's file carries for its styled subtitles, each at an address
 // signed until the list's own lapses.
-func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
-	part := pathUUID(r, "id")
-	src, err := a.partSubtitles(r.Context(), part)
-	if a.answered(w, r, err) {
-		return
+func (a *API) partFonts(r *http.Request, _ none) (fontsJSON, error) {
+	src, err := a.partSubtitles(r.Context(), pathUUID(r, "id"))
+	if err != nil {
+		return fontsJSON{}, err
 	}
 	dir, err := a.svc.HLS.Extracted(r.Context(), src, hls.FontsDir)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return fontsJSON{}, err
 	}
 	entries, err := os.ReadDir(filepath.Join(dir, hls.FontsDir))
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return fontsJSON{}, err
 	}
 	// requireSignature has read exp already.
 	exp, err := strconv.ParseInt(r.URL.Query().Get("exp"), 10, 64)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return fontsJSON{}, err
 	}
 	var answer fontsJSON
 	for _, e := range entries {
@@ -120,7 +117,7 @@ func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
 		u := url.URL{Path: at, RawQuery: url.Values{"exp": {expires}, "sig": {sig}}.Encode()}
 		answer.Fonts = append(answer.Fonts, fontJSON{Name: e.Name(), URL: uriReference(u.String())})
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, answer)
+	return answer, nil
 }
 
 // partFont serves a font a part's file carries, as partFonts listed it.
@@ -162,11 +159,11 @@ func (a *API) styledRoutes() []route {
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa", "text/vtt", "application/octet-stream"},
 			handle: a.readOutStream,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/parts/{id}/fonts", access: signedAddress,
 			summary: "List the fonts a part's file carries for its styled subtitles, at the address play answered",
-			query:   signatureParams, status: http.StatusOK, reply: fontsJSON{}, handle: a.partFonts,
-		},
+			query:   signatureParams, status: http.StatusOK,
+		}, a.partFonts),
 		{
 			pattern: "GET /api/v1/parts/{id}/fonts/{name}", access: signedAddress,
 			summary: "A font a part's file carries, at the address its list answered",

@@ -30,29 +30,28 @@ type historyEntryJSON struct {
 }
 
 // ownHistory answers the profile's plays, the latest first.
-func (a *API) ownHistory(w http.ResponseWriter, r *http.Request) {
-	a.history(w, r, auth.SessionOf(r.Context()).Profile.ID)
+func (a *API) ownHistory(r *http.Request, _ none) (cursorPageJSON[historyEntryJSON], error) {
+	return a.history(r, auth.SessionOf(r.Context()).Profile.ID)
 }
 
 // adminHistory answers everyone's plays, or one profile's, the latest first, as Plex's dashboard
 // lists them.
-func (a *API) adminHistory(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminHistory(r *http.Request, _ none) (cursorPageJSON[historyEntryJSON], error) {
 	profile, err := queryID(r, "profile")
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return cursorPageJSON[historyEntryJSON]{}, err
 	}
-	a.history(w, r, profile)
+	return a.history(r, profile)
 }
 
-func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID) {
+func (a *API) history(r *http.Request, profile uuid.UUID) (cursorPageJSON[historyEntryJSON], error) {
 	before, limit, err := cursorPaging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return cursorPageJSON[historyEntryJSON]{}, err
 	}
 	plays, more, err := a.svc.History.History(r.Context(), profile, before, limit)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return cursorPageJSON[historyEntryJSON]{}, err
 	}
 	out := make([]historyEntryJSON, len(plays))
 	for i, p := range plays {
@@ -66,7 +65,7 @@ func (a *API) history(w http.ResponseWriter, r *http.Request, profile uuid.UUID)
 		last := plays[len(plays)-1]
 		page.Next = nextOf(last.StoppedAt, last.ID)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, page)
+	return page, nil
 }
 
 // historyFileBatch is how many plays a file of the history reads at a time: the file is written
@@ -137,15 +136,15 @@ func csvNumber(n *int) string {
 
 func (a *API) historyRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/history", access: signedIn, summary: "Page the profile's plays, the latest first",
-			query: cursorParams, status: http.StatusOK, reply: cursorPageJSON[historyEntryJSON]{}, handle: a.ownHistory,
-		},
-		{
+			query: cursorParams, status: http.StatusOK,
+		}, a.ownHistory),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/history", access: admin, summary: "Page everyone's plays, or one profile's",
 			query:  append([]param{{"profile", uuid.UUID{}, "Only this profile's plays."}}, cursorParams...),
-			status: http.StatusOK, reply: cursorPageJSON[historyEntryJSON]{}, handle: a.adminHistory,
-		},
+			status: http.StatusOK,
+		}, a.adminHistory),
 		{
 			pattern: "GET /api/v1/history/file", access: signedIn, summary: "Download the profile's plays as CSV, the latest first",
 			status: http.StatusOK, reply: asFile{"text/csv"}, handle: a.ownHistoryFile,

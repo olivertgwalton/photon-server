@@ -60,15 +60,10 @@ type editJSON struct {
 }
 
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
-func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
+func (a *API) editTitle(r *http.Request, req editJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req editJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	if req.AirsBeforeSeason < 0 || req.AirsBeforeEpisode < 0 || req.AirsAfterSeason < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "a season or episode a special aired by is a number from 1")
-		return
+		return none{}, refuse(codeInvalidBody, "a season or episode a special aired by is a number from 1")
 	}
 	m := domain.Metadata{
 		Title: req.Title, SortTitle: req.SortTitle, OriginalTitle: req.OriginalTitle, Overview: req.Overview,
@@ -76,28 +71,24 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 		ReleaseDate: time.Time(req.ReleaseDate), AirsBeforeSeason: req.AirsBeforeSeason, AirsBeforeEpisode: req.AirsBeforeEpisode,
 		AirsAfterSeason: req.AirsAfterSeason, Locked: req.Locked,
 	}
-	if a.answered(w, r, a.svc.Editing.EditMetadata(r.Context(), id, m)) {
-		return
+	if err := a.svc.Editing.EditMetadata(r.Context(), id, m); err != nil {
+		return none{}, err
 	}
 	a.titleUpdated(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 // resetEdits gives the fields named, or every one, back to the sources.
-func (a *API) resetEdits(w http.ResponseWriter, r *http.Request) {
+func (a *API) resetEdits(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	var fields []domain.Field
 	for _, f := range r.URL.Query()["field"] {
 		if !slices.Contains(domain.Fields(), domain.Field(f)) {
-			writeProblem(w, a.logger, codeInvalidParameter, f+" is not a field")
-			return
+			return none{}, refuse(codeInvalidParameter, f+" is not a field")
 		}
 		fields = append(fields, domain.Field(f))
 	}
-	if a.answered(w, r, a.svc.Editing.ResetEdits(r.Context(), id, fields)) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, a.svc.Editing.ResetEdits(r.Context(), id, fields)
 }
 
 type candidateJSON struct {
@@ -111,44 +102,40 @@ type candidateJSON struct {
 
 // candidates lists what a provider has by a name, the title's own unless another is asked for, for
 // an admin choosing its match, as Plex's Fix Match and Jellyfin's Identify do.
-func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
+func (a *API) candidates(r *http.Request, _ none) (listJSON[candidateJSON], error) {
 	id := pathUUID(r, "id")
 	q := r.URL.Query()
 	p, found, err := a.svc.Providers.Get(r.Context(), domain.FieldSource(q.Get("provider")))
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[candidateJSON]{}, err
 	}
 	searcher, searches := provider.As[provider.Searcher](p, domain.CapabilitySearch)
 	if !found || !searches {
-		writeProblem(w, a.logger, codeInvalidParameter, "provider is one that searches")
-		return
+		return listJSON[candidateJSON]{}, refuse(codeInvalidParameter, "provider is one that searches")
 	}
 	sub, ok, err := a.svc.Editing.IdentifySubject(r.Context(), id)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[candidateJSON]{}, err
 	}
 	if !ok || !slices.Contains(p.Info().Kinds, sub.Kind) {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return
+		return listJSON[candidateJSON]{}, refuse(codeNotFound, "")
 	}
 	title, year := sub.Title, sub.Year
 	if s := q.Get("title"); s != "" {
 		title, year = s, 0
 	}
-	if year, err = queryNumber(r, "year", year, 0, math.MaxInt); a.answered(w, r, err) {
-		return
+	if year, err = queryNumber(r, "year", year, 0, math.MaxInt); err != nil {
+		return listJSON[candidateJSON]{}, err
 	}
 	offered, err := searcher.Candidates(r.Context(), sub.Locale.Or(a.svc.Identity.Locale()), sub.Kind, title, year)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[candidateJSON]{}, err
 	}
 	out := make([]candidateJSON, len(offered))
 	for i, c := range offered {
 		out[i] = candidateJSON{ID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Year: c.Year, Overview: c.Overview, Poster: uri(c.Poster)}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[candidateJSON]{Items: out})
+	return listJSON[candidateJSON]{Items: out}, nil
 }
 
 type pinMatchJSON struct {
@@ -157,29 +144,20 @@ type pinMatchJSON struct {
 }
 
 // pinMatch fixes a film or show to the title a provider has by the id given, and matches it again.
-func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
+func (a *API) pinMatch(r *http.Request, req pinMatchJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req pinMatchJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	known := req.Provider != ""
 	if _, plugin := domain.FieldSource(req.Provider).Plugin(); plugin {
 		var err error
 		if _, known, err = a.svc.Providers.Get(r.Context(), domain.FieldSource(req.Provider)); err != nil {
-			a.internal(w, r, err)
-			return
+			return none{}, err
 		}
 	}
 	if !known || req.ID == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "provider is one a title carries ids of, and id is set")
-		return
+		return none{}, refuse(codeInvalidBody, "provider is one a title carries ids of, and id is set")
 	}
 	err := a.svc.Editing.PinMatch(r.Context(), id, req.Provider, req.ID)
-	if a.answeredAs(w, r, err, "no film or show has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, notFoundAs(err, "no film or show has that id")
 }
 
 type setEpisodeOrderJSON struct {
@@ -190,21 +168,13 @@ type setEpisodeOrderJSON struct {
 
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
 // per-show episode ordering does, and matches its episodes again in it.
-func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
+func (a *API) setEpisodeOrder(r *http.Request, req setEpisodeOrderJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req setEpisodeOrderJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	if req.Order == "" || (req.Order == domain.OrderGroup) != (req.Group != "") {
-		writeProblem(w, a.logger, codeInvalidBody, "order is aired, dvd, absolute or group, and group names a TMDB episode group with group alone")
-		return
+		return none{}, refuse(codeInvalidBody, "order is aired, dvd, absolute or group, and group names a TMDB episode group with group alone")
 	}
 	err := a.svc.Editing.SetEpisodeOrder(r.Context(), id, req.Order, req.Group)
-	if a.answeredAs(w, r, err, "no show has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, notFoundAs(err, "no show has that id")
 }
 
 type episodeGroupJSON struct {
@@ -222,37 +192,33 @@ type episodeGrouper interface {
 
 // episodeGroups lists the episode groups TMDB has a show in, for an admin choosing the one its
 // files are numbered by.
-func (a *API) episodeGroups(w http.ResponseWriter, r *http.Request) {
+func (a *API) episodeGroups(r *http.Request, _ none) (listJSON[episodeGroupJSON], error) {
 	id := pathUUID(r, "id")
 	sub, ok, err := a.svc.Editing.IdentifySubject(r.Context(), id)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[episodeGroupJSON]{}, err
 	}
 	if !ok || sub.Kind != domain.ItemShow {
-		writeProblem(w, a.logger, codeNotFound, "no show has that id")
-		return
+		return listJSON[episodeGroupJSON]{}, refuse(codeNotFound, "no show has that id")
 	}
 	show, err := strconv.Atoi(sub.IDs[domain.ProviderTMDB])
 	if err != nil {
-		writeProblem(w, a.logger, codeConflict, "the show has no TMDB id to find its episode groups by")
-		return
+		return listJSON[episodeGroupJSON]{}, refuse(codeConflict, "the show has no TMDB id to find its episode groups by")
 	}
 	p, _, err := a.svc.Providers.Get(r.Context(), domain.SourceTMDB)
 	grouper, ok := p.(episodeGrouper)
 	if err != nil || !ok {
-		a.internal(w, r, cmp.Or(err, errors.New("tmdb has no episode groups")))
-		return
+		return listJSON[episodeGroupJSON]{}, cmp.Or(err, errors.New("tmdb has no episode groups"))
 	}
 	groups, err := grouper.EpisodeGroups(r.Context(), sub.Locale.Or(a.svc.Identity.Locale()), show)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[episodeGroupJSON]{}, err
 	}
 	out := make([]episodeGroupJSON, len(groups))
 	for i, g := range groups {
 		out[i] = episodeGroupJSON(g)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[episodeGroupJSON]{Items: out})
+	return listJSON[episodeGroupJSON]{Items: out}, nil
 }
 
 type refreshJSON struct {
@@ -262,35 +228,28 @@ type refreshJSON struct {
 // deleteTitle deletes a title's files from the disk, then the title, as Plex's and Jellyfin's
 // Delete do, where its library allows it. The files go first: should one not, the title stays, and
 // those deleted before it are missing at the next scan, as a file deleted by hand would be.
-func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
+func (a *API) deleteTitle(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	files, err := a.svc.Editing.TitleFiles(r.Context(), id)
-	if a.answeredAs(w, r, err, "no film, show, season, episode or extra has that id") {
-		return
+	if err != nil {
+		return none{}, notFoundAs(err, "no film, show, season, episode or extra has that id")
 	}
 	for i, f := range files {
 		err := library.Remove(f.Root, f.Rel)
 		if err == nil || errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
-		writeProblem(w, a.logger, codeConflict, fmt.Sprintf("%d of its %d files were deleted before %s could not be: %v",
+		return none{}, refuse(codeConflict, fmt.Sprintf("%d of its %d files were deleted before %s could not be: %v",
 			i, len(files), f.Rel, errors.Unwrap(err)))
-		return
 	}
-	if a.answered(w, r, a.svc.Editing.ForgetTitle(r.Context(), id)) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.svc.Editing.ForgetTitle(r.Context(), id)
 }
 
 // split splits a film's versions apart, each other than the one that plays first a film of its own.
-func (a *API) split(w http.ResponseWriter, r *http.Request) {
+func (a *API) split(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	err := a.svc.Editing.SplitTitle(r.Context(), id)
-	if a.answeredAs(w, r, err, "no film has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(err, "no film has that id")
 }
 
 type mergeJSON struct {
@@ -299,17 +258,10 @@ type mergeJSON struct {
 }
 
 // merge merges another film into a film, as Plex's Merge does: its versions become the film's.
-func (a *API) merge(w http.ResponseWriter, r *http.Request) {
+func (a *API) merge(r *http.Request, req mergeJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req mergeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	err := a.svc.Editing.MergeTitle(r.Context(), id, req.TitleID)
-	if a.answeredAs(w, r, err, "no film has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(err, "no film has that id")
 }
 
 type titleLocaleJSON struct {
@@ -324,78 +276,56 @@ type titleLocaleJSON struct {
 
 // setTitleLocale gives a film or show a locale of its own over its library's, as Jellyfin's item
 // settings do, and describes it again in it.
-func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
+func (a *API) setTitleLocale(r *http.Request, req titleLocaleJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req titleLocaleJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	lang, refusal := metadataLanguage(string(req.MetadataLanguage))
 	country, countryRefusal := certificationCountry(string(req.CertificationCountry))
 	if refusal = cmp.Or(refusal, countryRefusal); refusal != "" {
-		writeProblem(w, a.logger, codeInvalidBody, refusal)
-		return
+		return none{}, refuse(codeInvalidBody, refusal)
 	}
 	err := a.svc.Editing.SetTitleLocale(r.Context(), id, domain.Locale{Language: lang, Country: country}, req.TitleLanguage)
-	if a.answeredAs(w, r, err, "no film or show has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, notFoundAs(err, "no film or show has that id")
 }
 
 // unmatch takes a film or show off its providers and holds it so, until its match is fixed or it
 // is refreshed: the match PUT sets, gone.
-func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {
+func (a *API) unmatch(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	err := a.svc.Editing.Unmatch(r.Context(), id)
-	if a.answeredAs(w, r, err, "no film or show has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(err, "no film or show has that id")
 }
 
 // analyse asks for a title's files to be read again, as Plex's Analyze does, with what is made
 // from them after: its keyframes, previews and markers.
-func (a *API) analyse(w http.ResponseWriter, r *http.Request) {
+func (a *API) analyse(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
-	if a.answered(w, r, a.svc.Editing.AnalyseTitle(r.Context(), id)) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, a.svc.Editing.AnalyseTitle(r.Context(), id)
 }
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
-func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
+func (a *API) refresh(r *http.Request, req refreshJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req refreshJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	if req.Mode == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "mode is missing or all")
-		return
+		return none{}, refuse(codeInvalidBody, "mode is missing or all")
 	}
 	err := a.svc.Editing.Refresh(r.Context(), id, req.Mode)
-	if a.answeredAs(w, r, err, "no film or show, or season or episode of one, has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, notFoundAs(err, "no film or show, or season or episode of one, has that id")
 }
 
 func (a *API) editRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/titles/{id}", access: admin,
 			summary: "Edit a title's fields, locking those named against its sources",
-			body:    editJSON{}, status: http.StatusNoContent, handle: a.editTitle,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.editTitle),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/titles/{id}/edits", access: admin,
 			summary: "Give a title's edited fields back to its sources",
 			query:   []param{{"field", []domain.Field{}, "The fields to give back; every one where none are named."}},
-			status:  http.StatusAccepted, handle: a.resetEdits,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.resetEdits),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/titles/{id}/candidates", access: admin,
 			summary: "List what a provider has by a title's name, to match it to",
 			query: []param{
@@ -403,57 +333,57 @@ func (a *API) editRoutes() []route {
 				{"title", "", "The name to search for, the title's own by default."},
 				{"year", 0, "The year to search in, the title's own by default."},
 			},
-			status: http.StatusOK, reply: listJSON[candidateJSON]{}, handle: a.candidates,
-		},
-		{
+			status: http.StatusOK,
+		}, a.candidates),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/titles/{id}/match", access: admin,
 			summary: "Match a film or show to a provider's title by its id",
-			body:    pinMatchJSON{}, status: http.StatusAccepted, handle: a.pinMatch,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.pinMatch),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/titles/{id}/match", access: admin,
 			summary: "Take a film or show off its providers, and keep it so until its match is fixed or it is refreshed",
-			status:  http.StatusNoContent, handle: a.unmatch,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.unmatch),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/titles/{id}/locale", access: admin,
 			summary: "Give a film or show a metadata language, certification country and title language of its own, and describe it again in them",
-			body:    titleLocaleJSON{}, status: http.StatusAccepted, handle: a.setTitleLocale,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.setTitleLocale),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/titles/{id}/split", access: admin,
 			summary: "Split a film's versions apart: each but the one that plays first becomes a film of its own, and stays so",
-			status:  http.StatusNoContent, handle: a.split,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.split),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/titles/{id}/merge", access: admin,
 			summary: "Merge another film into a film: its versions become the film's, and stay so, its watch state, favourites and lists move with them, and it goes",
-			body:    mergeJSON{}, status: http.StatusNoContent, handle: a.merge,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.merge),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/titles/{id}", access: admin,
 			summary: "Delete a title's files from the disk, then the title, where its library allows it",
-			status:  http.StatusNoContent, handle: a.deleteTitle,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.deleteTitle),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/titles/{id}/episode-order", access: admin,
 			summary: "Say the order a show's episode files are numbered in",
-			body:    setEpisodeOrderJSON{}, status: http.StatusAccepted, handle: a.setEpisodeOrder,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.setEpisodeOrder),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/titles/{id}/episode-groups", access: admin,
 			summary: "List the episode groups TMDB has a show in, to number its files by",
-			status:  http.StatusOK, reply: listJSON[episodeGroupJSON]{}, handle: a.episodeGroups,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.episodeGroups),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/titles/{id}/refresh", access: admin,
 			summary: "Ask a title's providers about it again now: a season or episode as its show",
-			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refresh,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.refresh),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/titles/{id}/analysis", access: admin,
 			summary: "Read a title's files again, a show's or season's episodes', and remake what is made from them",
-			status:  http.StatusAccepted, handle: a.analyse,
-		},
+			status:  http.StatusAccepted,
+		}, a.analyse),
 	}
 }

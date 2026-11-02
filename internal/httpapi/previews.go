@@ -32,13 +32,9 @@ type trickplayJSON struct {
 
 // trickplay answers how a part's thumbnail sheets are laid out, so a client can find the
 // thumbnail for any time: sheet floor(t / interval / (columns × rows)), counted from zero.
-func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, trickplayJSON(t))
+func (a *API) trickplay(r *http.Request, _ none) (trickplayJSON, error) {
+	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"))
+	return trickplayJSON(t), err
 }
 
 func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
@@ -104,11 +100,11 @@ func (a *API) serveObject(w http.ResponseWriter, r *http.Request, o blob.Object,
 
 func (a *API) previewsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/parts/{id}/trickplay", access: signedIn,
 			summary: "How a part's trickplay sheets are laid out, to find the thumbnail for a time",
-			status:  http.StatusOK, reply: trickplayJSON{}, handle: a.trickplay,
-		},
+			status:  http.StatusOK,
+		}, a.trickplay),
 		{
 			pattern: "GET /api/v1/parts/{id}/trickplay/{sheet}", access: signedIn, summary: "A part's trickplay sheet",
 			path:   []param{{"sheet", 0, "The sheet, counted from 0."}},

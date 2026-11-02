@@ -55,57 +55,43 @@ func pluginOf(r plugin.Registered) pluginJSON {
 	}
 }
 
-func (a *API) adminPlugins(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminPlugins(r *http.Request, _ none) (listJSON[pluginJSON], error) {
 	all, err := a.svc.Plugins.List(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[pluginJSON]{}, err
 	}
 	out := make([]pluginJSON, len(all))
 	for n, p := range all {
 		out[n] = pluginOf(p)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[pluginJSON]{Items: out})
+	return listJSON[pluginJSON]{Items: out}, nil
 }
 
 // addPlugin registers the plugin at an address, once its manifest is read and is one this server
 // speaks. It is then a provider an admin sets and a library takes.
-func (a *API) addPlugin(w http.ResponseWriter, r *http.Request) {
-	var req addPluginJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) addPlugin(r *http.Request, req addPluginJSON) (pluginJSON, error) {
 	p, err := a.svc.Plugins.Register(r.Context(), string(req.URL), cmp.Or(req.Protocol, domain.PluginPhoton), req.ID)
-	if a.answeredPlugin(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, pluginOf(p))
+	return pluginOf(p), a.pluginChangedBy(err)
 }
 
 // refreshPlugin reads a plugin's manifest again.
-func (a *API) refreshPlugin(w http.ResponseWriter, r *http.Request) {
+func (a *API) refreshPlugin(r *http.Request, _ none) (pluginJSON, error) {
 	p, err := a.svc.Plugins.Refresh(r.Context(), r.PathValue("slug"))
-	if a.answeredPlugin(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pluginOf(p))
+	return pluginOf(p), a.pluginChangedBy(err)
 }
 
 // removePlugin forgets a plugin. What it said about titles stands until another source says
 // otherwise.
-func (a *API) removePlugin(w http.ResponseWriter, r *http.Request) {
-	if a.answeredPlugin(w, r, a.svc.Plugins.Remove(r.Context(), r.PathValue("slug"))) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+func (a *API) removePlugin(r *http.Request, _ none) (none, error) {
+	return none{}, a.pluginChangedBy(a.svc.Plugins.Remove(r.Context(), r.PathValue("slug")))
 }
 
-// answeredPlugin answers a plugin's change, and has the providers read again after one.
-func (a *API) answeredPlugin(w http.ResponseWriter, r *http.Request, err error) bool {
+// pluginChangedBy has the providers read again after a plugin's change, where err says it was made.
+func (a *API) pluginChangedBy(err error) error {
 	if err == nil {
 		a.svc.Providers.Forget()
 	}
-	return a.answered(w, r, err)
+	return err
 }
 
 type pluginPageJSON struct {
@@ -130,77 +116,69 @@ type visitorJSON struct {
 }
 
 // pluginPages lists the plugins' pages the profile may visit, for the menus.
-func (a *API) pluginPages(w http.ResponseWriter, r *http.Request) {
+func (a *API) pluginPages(r *http.Request, _ none) (listJSON[pluginPageJSON], error) {
 	all, err := a.svc.Plugins.Pages(r.Context(), auth.SessionOf(r.Context()).Profile)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[pluginPageJSON]{}, err
 	}
 	out := make([]pluginPageJSON, len(all))
 	for n, p := range all {
 		out[n] = pluginPageJSON{Plugin: p.Plugin, ID: p.ID, Name: p.Name, Access: p.Access}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[pluginPageJSON]{Items: out})
+	return listJSON[pluginPageJSON]{Items: out}, nil
 }
 
 // visitPage starts the profile's visit to a plugin's page, as the plugin is told who visits by
 // claiming its code: the page is on the plugin's own origin, which no token of the server's
 // reaches.
-func (a *API) visitPage(w http.ResponseWriter, r *http.Request) {
+func (a *API) visitPage(r *http.Request, _ none) (visitJSON, error) {
 	at, err := a.svc.Plugins.Visit(r.Context(), auth.SessionOf(r.Context()).Profile, r.PathValue("slug"), r.PathValue("page"))
-	if a.answered(w, r, err) {
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, visitJSON{URL: uri(at)})
+	return visitJSON{URL: uri(at)}, err
 }
 
 // claimVisit answers a plugin who visits its page, by the code the visit gave it, once.
-func (a *API) claimVisit(w http.ResponseWriter, r *http.Request) {
-	var req claimJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) claimVisit(r *http.Request, req claimJSON) (visitorJSON, error) {
 	profile, page, err := a.svc.Plugins.Claim(r.Context(), r.PathValue("slug"), req.Code)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return visitorJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, visitorJSON{Page: page, Profile: profileOf(profile)})
+	return visitorJSON{Page: page, Profile: profileOf(profile)}, nil
 }
 
 func (a *API) pluginsRoutes() []route {
 	pageParam := param{"page", "", "The page's id, as the plugin's manifest gives it."}
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/plugin-pages", access: signedIn, summary: "List the plugins' pages the profile may visit",
-			status: http.StatusOK, reply: listJSON[pluginPageJSON]{}, handle: a.pluginPages,
-		},
-		{
+			status: http.StatusOK,
+		}, a.pluginPages),
+		a.handles(route{
 			pattern: "POST /api/v1/plugins/{slug}/pages/{page}/visits", access: signedIn,
 			summary: "Visit a plugin's page: the address to open it at, with a code the plugin claims",
-			path:    []param{slugParam, pageParam}, status: http.StatusCreated, reply: visitJSON{}, handle: a.visitPage,
-		},
-		{
+			path:    []param{slugParam, pageParam}, status: http.StatusCreated,
+		}, a.visitPage),
+		a.handles(route{
 			pattern: "POST /api/v1/plugins/{slug}/visits/claim", access: public,
 			summary: "Claim a visit to a plugin's page by its code, once, for who visits",
-			path:    []param{slugParam}, body: claimJSON{}, status: http.StatusOK, reply: visitorJSON{}, handle: a.claimVisit,
-		},
-		{
+			path:    []param{slugParam}, status: http.StatusOK,
+		}, a.claimVisit),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/plugins", access: admin, summary: "List the registered plugins",
-			status: http.StatusOK, reply: listJSON[pluginJSON]{}, handle: a.adminPlugins,
-		},
-		{
+			status: http.StatusOK,
+		}, a.adminPlugins),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/plugins", access: admin,
 			summary: "Register the plugin or Stremio addon at an address, once its manifest is read",
-			body:    addPluginJSON{}, status: http.StatusCreated, reply: pluginJSON{}, handle: a.addPlugin,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.addPlugin),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/plugins/{slug}", access: admin,
 			summary: "Forget a plugin; what it said about titles stays",
-			path:    []param{slugParam}, status: http.StatusNoContent, handle: a.removePlugin,
-		},
-		{
+			path:    []param{slugParam}, status: http.StatusNoContent,
+		}, a.removePlugin),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/plugins/{slug}/refresh", access: admin, summary: "Read a plugin's manifest again",
-			path: []param{slugParam}, status: http.StatusOK, reply: pluginJSON{}, handle: a.refreshPlugin,
-		},
+			path: []param{slugParam}, status: http.StatusOK,
+		}, a.refreshPlugin),
 	}
 }

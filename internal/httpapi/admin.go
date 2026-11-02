@@ -150,23 +150,21 @@ func rankedJSON(list []domain.RankedSource) []rankedSourceJSON {
 	return out
 }
 
-func (a *API) adminLibraries(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminLibraries(r *http.Request, _ none) (listJSON[adminLibraryListingJSON], error) {
 	libs, err := a.svc.Libraries.Libraries(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[adminLibraryListingJSON]{}, err
 	}
 	// Counted as the server holds them, whatever the admin's own profile may see.
 	counts, err := a.svc.Libraries.LibraryCounts(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[adminLibraryListingJSON]{}, err
 	}
 	out := make([]adminLibraryListingJSON, len(libs))
 	for i, l := range libs {
 		out[i] = adminLibraryListingJSON{adminLibrary(l), countsJSON(counts[l.ID])}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[adminLibraryListingJSON]{Items: out})
+	return listJSON[adminLibraryListingJSON]{Items: out}, nil
 }
 
 type addLibraryJSON struct {
@@ -189,22 +187,16 @@ type addLibraryJSON struct {
 
 // addLibrary adds a library of a folder on the server, or of a list's titles a provider streams,
 // and scans it at once.
-func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
-	var req addLibraryJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) addLibrary(r *http.Request, req addLibraryJSON) (adminLibraryJSON, error) {
 	if req.Kind == "" || req.Name == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "name and kind are set")
-		return
+		return adminLibraryJSON{}, refuse(codeInvalidBody, "name and kind are set")
 	}
 	var lib domain.Library
 	var err error
 	switch req.Media {
 	case domain.MediaRemote:
 		if why := a.remoteRefused(r.Context(), req); why != "" {
-			writeProblem(w, a.logger, codeInvalidBody, why)
-			return
+			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 		remote := store.Remote{DiscoverSource: req.Discover, StreamSource: req.Streams}
 		if req.List != nil {
@@ -213,31 +205,27 @@ func (a *API) addLibrary(w http.ResponseWriter, r *http.Request) {
 		lib, err = a.svc.Libraries.AddRemoteLibrary(r.Context(), req.Name, req.Kind, remote)
 	case domain.MediaFolder, "":
 		if !filepath.IsAbs(req.Root) {
-			writeProblem(w, a.logger, codeInvalidBody, "root is an absolute path")
-			return
+			return adminLibraryJSON{}, refuse(codeInvalidBody, "root is an absolute path")
 		}
 		root := filepath.Clean(req.Root)
 		if info, err := os.Stat(root); err != nil || !info.IsDir() {
-			writeProblem(w, a.logger, codeInvalidBody, "root is not a folder the server can read")
-			return
+			return adminLibraryJSON{}, refuse(codeInvalidBody, "root is not a folder the server can read")
 		}
 		if req.Discover != "" {
 			if why := a.discoverRefused(r.Context(), req.Discover); why != "" {
-				writeProblem(w, a.logger, codeInvalidBody, why)
-				return
+				return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 			}
 		}
 		lib, err = a.svc.Libraries.AddLibrary(r.Context(), req.Name, req.Kind, root, req.Discover)
 	}
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return adminLibraryJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryAdded, Library: lib.ID, Details: domain.NameDetails{Name: lib.Name}})
 	if err := a.svc.Libraries.ScanFolders(r.Context(), lib.ID, []string{"."}, 0); err != nil {
-		a.internal(w, r, err)
-		return
+		return adminLibraryJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, adminLibrary(lib))
+	return adminLibrary(lib), nil
 }
 
 // remoteRefused is why a remote library cannot be made as asked, or "" where it can: it holds the
@@ -358,15 +346,11 @@ type kindSourcesChangeJSON struct {
 // setLibrary changes what is sent of a library: its name, whether it is watched, where each kind
 // of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes,
 // how it finds markers and keyframes, and where it finds theme tunes.
-func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
+func (a *API) setLibrary(r *http.Request, req libraryChangeJSON) (adminLibraryJSON, error) {
 	id := pathUUID(r, "id")
-	var req libraryChangeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return adminLibraryJSON{}, err
 	}
 	change := store.LibraryChange{
 		Name: req.Name, RemoteExtras: req.RemoteExtras, Monitor: req.Monitor, RefreshDays: req.RefreshDays,
@@ -378,8 +362,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		for _, s := range req.SubtitleLanguages {
 			t, err := language.Parse(string(s))
 			if err != nil || t == language.Und {
-				writeProblem(w, a.logger, codeInvalidBody, "subtitle_languages are BCP 47 tags, such as fr or pt-BR")
-				return
+				return adminLibraryJSON{}, refuse(codeInvalidBody, "subtitle_languages are BCP 47 tags, such as fr or pt-BR")
 			}
 			if !slices.Contains(change.SubtitleLanguages, t) {
 				change.SubtitleLanguages = append(change.SubtitleLanguages, t)
@@ -387,8 +370,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d := req.RefreshDays; d != nil && (*d < 0 || *d > 365) {
-		writeProblem(w, a.logger, codeInvalidBody, "refresh_days is from 0, never, to 365")
-		return
+		return adminLibraryJSON{}, refuse(codeInvalidBody, "refresh_days is from 0, never, to 365")
 	}
 	for _, field := range []struct {
 		value *string
@@ -397,10 +379,9 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		if field.value == nil {
 			continue
 		}
-		canonical, refusal := field.check(*field.value)
-		if refusal != "" {
-			writeProblem(w, a.logger, codeInvalidBody, refusal)
-			return
+		canonical, why := field.check(*field.value)
+		if why != "" {
+			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 		*field.value = canonical
 	}
@@ -408,21 +389,18 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 	change.ArtworkLanguage, change.TitleLanguage = req.ArtworkLanguage, req.TitleLanguage
 	if d := req.Discover; d != nil && *d != "" {
 		if why := a.discoverRefused(r.Context(), *d); why != "" {
-			writeProblem(w, a.logger, codeInvalidBody, why)
-			return
+			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 	}
 	change.Discover = req.Discover
 	if to := req.Requests; to != nil && *to != "" {
 		if why := a.fetcherRefused(r.Context(), *to, lib.Kind); why != "" {
-			writeProblem(w, a.logger, codeInvalidBody, why)
-			return
+			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 	}
 	change.Requests = req.Requests
 	if req.Themes == domain.ThemesThemerr && a.svc.Setup.Tools.YTDLP.Path == "" {
-		writeProblem(w, a.logger, codeConflict, "themerr needs yt-dlp, which this server does not have")
-		return
+		return adminLibraryJSON{}, refuse(codeConflict, "themerr needs yt-dlp, which this server does not have")
 	}
 	ranked := func(list []rankedSourceJSON) []domain.RankedSource {
 		if list == nil {
@@ -438,107 +416,94 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 		change.Sources = append(change.Sources, domain.KindSources{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images)})
 	}
 	if err := domain.CheckSources(lib.Kind, change.Sources); err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return
+		return adminLibraryJSON{}, refuse(codeInvalidBody, err.Error())
 	}
-	if a.answered(w, r, a.svc.Libraries.SetLibrary(r.Context(), id, change)) {
-		return
+	if err := a.svc.Libraries.SetLibrary(r.Context(), id, change); err != nil {
+		return adminLibraryJSON{}, err
 	}
 	lib, err = a.svc.Libraries.Library(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return adminLibraryJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, adminLibrary(lib))
+	return adminLibrary(lib), nil
 }
 
-func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
+func (a *API) removeLibrary(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
-	if a.answered(w, r, err) || a.answered(w, r, a.svc.Libraries.RemoveLibrary(r.Context(), id)) {
-		return
+	if err != nil {
+		return none{}, err
+	}
+	if err := a.svc.Libraries.RemoveLibrary(r.Context(), id); err != nil {
+		return none{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventLibraryRemoved, Details: domain.NameDetails{Name: lib.Name}})
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 // scanLibrary queues a scan of a library now, or with path, of the folder of it a path is in, as
 // Plex's refresh?path= scans one after a download lands.
-func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
+func (a *API) scanLibrary(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return none{}, err
 	}
 	folder := "."
 	if p := r.URL.Query().Get("path"); p != "" {
 		if !filepath.IsAbs(p) {
-			writeProblem(w, a.logger, codeInvalidParameter, "path is an absolute path")
-			return
+			return none{}, refuse(codeInvalidParameter, "path is an absolute path")
 		}
 		var ok bool
 		if folder, ok = library.Changed(lib.Root, filepath.Clean(p)); !ok {
-			writeProblem(w, a.logger, codeInvalidParameter, "path is not inside the library")
-			return
+			return none{}, refuse(codeInvalidParameter, "path is not inside the library")
 		}
 	}
-	if err := a.svc.Libraries.ScanFolders(r.Context(), id, []string{folder}, 0); err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, a.svc.Libraries.ScanFolders(r.Context(), id, []string{folder}, 0)
 }
 
 // refreshLibrary asks a library's providers about its films and shows again, behind what a scan
 // has just found.
-func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req refreshJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) refreshLibrary(r *http.Request, req refreshJSON) (none, error) {
 	if req.Mode == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "mode is missing or all")
-		return
+		return none{}, refuse(codeInvalidBody, "mode is missing or all")
 	}
-	if a.answered(w, r, a.svc.Libraries.RefreshLibrary(r.Context(), id, req.Mode)) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+	return none{}, a.svc.Libraries.RefreshLibrary(r.Context(), pathUUID(r, "id"), req.Mode)
 }
 
 func (a *API) adminRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/libraries", access: admin, summary: "List the libraries as an admin keeps them, with everything each holds",
-			status: http.StatusOK, reply: listJSON[adminLibraryListingJSON]{}, handle: a.adminLibraries,
-		},
+			status: http.StatusOK,
+		}, a.adminLibraries),
 		{
 			pattern: "GET /api/v1/admin/locales", access: admin,
 			summary: "List the languages a library may ask its metadata in, and the countries it may take certificates from",
 			status:  http.StatusOK, reply: localesJSON{}, handle: a.locales,
 		},
-		{
+		a.handles(route{
 			pattern: "POST /api/v1/admin/libraries", access: admin, summary: "Add a library of a folder and scan it",
-			body: addLibraryJSON{}, status: http.StatusCreated, reply: adminLibraryJSON{}, handle: a.addLibrary,
-		},
-		{
+			status: http.StatusCreated,
+		}, a.addLibrary),
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/libraries/{id}", access: admin, summary: "Change how a library is kept",
-			body: libraryChangeJSON{}, status: http.StatusOK, reply: adminLibraryJSON{}, handle: a.setLibrary,
-		},
-		{
+			status: http.StatusOK,
+		}, a.setLibrary),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/libraries/{id}", access: admin, summary: "Remove a library",
-			status: http.StatusNoContent, handle: a.removeLibrary,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.removeLibrary),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/libraries/{id}/scan", access: admin,
 			summary: "Scan a library now, or only the folder of it a path is in",
 			query:   []param{{"path", "", "An absolute path inside the library: the folder it is, or the nearest folder above it that is there, is scanned with everything under it."}},
-			status:  http.StatusAccepted, handle: a.scanLibrary,
-		},
-		{
+			status:  http.StatusAccepted,
+		}, a.scanLibrary),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/libraries/{id}/refresh", access: admin,
 			summary: "Ask the providers about a library's films and shows again: those not yet described, or all",
-			body:    refreshJSON{}, status: http.StatusAccepted, handle: a.refreshLibrary,
-		},
+			status:  http.StatusAccepted,
+		}, a.refreshLibrary),
 	}
 }

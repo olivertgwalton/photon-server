@@ -22,17 +22,16 @@ type pinJSON struct {
 	PIN string `json:"pin"`
 }
 
-func (a *API) profiles(w http.ResponseWriter, r *http.Request) {
+func (a *API) profiles(r *http.Request, _ none) (listJSON[profileListingJSON], error) {
 	list, err := a.svc.Profiles.Profiles(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return listJSON[profileListingJSON]{}, err
 	}
 	out := make([]profileListingJSON, len(list))
 	for i, p := range list {
 		out[i] = profileListingJSON{profileJSON: profileOf(p.Profile), Lock: p.Lock}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[profileListingJSON]{Items: out})
+	return listJSON[profileListingJSON]{Items: out}, nil
 }
 
 func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
@@ -55,26 +54,15 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *API) setPIN(w http.ResponseWriter, r *http.Request) {
-	var req pinJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setPIN(r *http.Request, req pinJSON) (none, error) {
 	if req.PIN == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "pin is required; DELETE clears it")
-		return
+		return none{}, refuse(codeInvalidBody, "pin is required; DELETE clears it")
 	}
-	a.writePIN(w, r, req.PIN)
+	return none{}, a.svc.Auth.SetPIN(r.Context(), auth.SessionOf(r.Context()).Profile.ID, req.PIN)
 }
 
-func (a *API) clearPIN(w http.ResponseWriter, r *http.Request) {
-	a.writePIN(w, r, "")
-}
-
-func (a *API) writePIN(w http.ResponseWriter, r *http.Request, pin string) {
-	if !a.answered(w, r, a.svc.Auth.SetPIN(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pin)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) clearPIN(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Auth.SetPIN(r.Context(), auth.SessionOf(r.Context()).Profile.ID, "")
 }
 
 // passwordChangeJSON has no current password for a profile with none yet: one a sign-in provider's
@@ -102,45 +90,41 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // renameSelf is a profile changing its own name, as a Jellyfin user may. Names are unique.
-func (a *API) renameSelf(w http.ResponseWriter, r *http.Request) {
-	var req nameJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) renameSelf(r *http.Request, req nameJSON) (profileJSON, error) {
 	name, ok := domain.ProfileName(req.Name)
 	if !ok {
-		writeProblem(w, a.logger, codeInvalidBody, badName)
-		return
+		return profileJSON{}, refuse(codeInvalidBody, badName)
 	}
 	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), auth.SessionOf(r.Context()).Profile.ID, store.ProfileChange{Name: name}, nil)
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(p))
+	if err != nil {
+		return profileJSON{}, err
 	}
+	return profileOf(p), nil
 }
 
 func (a *API) profilesRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/profiles", access: signedIn, summary: "List the household's profiles and their locks",
-			status: http.StatusOK, reply: listJSON[profileListingJSON]{}, handle: a.profiles,
-		},
+			status: http.StatusOK,
+		}, a.profiles),
 		{
 			pattern: "POST /api/v1/profiles/{id}/switch", access: signedIn, summary: "Switch the profile this device watches as",
 			body: optionalBody{switchJSON{}}, status: http.StatusOK, reply: profileJSON{}, handle: a.switchProfile,
 		},
-		{
+		a.handles(route{
 			pattern: "PATCH /api/v1/profile", access: signedIn,
 			summary: "Rename the profile; names are unique, and every device shows the new one at once",
-			body:    nameJSON{}, status: http.StatusOK, reply: profileJSON{}, handle: a.renameSelf,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.renameSelf),
+		a.handles(route{
 			pattern: "PUT /api/v1/profile/pin", access: signedIn, summary: "Set the profile's PIN",
-			body: pinJSON{}, status: http.StatusNoContent, handle: a.setPIN,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.setPIN),
+		a.handles(route{
 			pattern: "DELETE /api/v1/profile/pin", access: signedIn, summary: "Clear the profile's PIN",
-			status: http.StatusNoContent, handle: a.clearPIN,
-		},
+			status: http.StatusNoContent,
+		}, a.clearPIN),
 		{
 			pattern: "PUT /api/v1/profile/password", access: signedIn,
 			summary: "Change the profile's password, or set its first, signing out its other devices",

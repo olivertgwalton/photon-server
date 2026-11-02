@@ -279,8 +279,8 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(auth.SessionOf(r.Context()).Profile))
+func (a *API) me(r *http.Request, _ none) (profileJSON, error) {
+	return profileOf(auth.SessionOf(r.Context()).Profile), nil
 }
 
 func (a *API) sessionRoutes() []route {
@@ -293,9 +293,9 @@ func (a *API) sessionRoutes() []route {
 			pattern: "POST /api/v1/auth/logout", access: signedIn, summary: "Sign this device out",
 			status: http.StatusNoContent, handle: a.logout,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/profile", access: signedIn, summary: "The profile this device is watching as",
-			status: http.StatusOK, reply: profileJSON{}, handle: a.me,
-		},
+			status: http.StatusOK,
+		}, a.me),
 	}
 }

@@ -30,41 +30,41 @@ type collections interface {
 
 // allCollections answers a page of every collection the profile is shown, by title: what the
 // Collections view lists.
-func (a *API) allCollections(w http.ResponseWriter, r *http.Request) {
+func (a *API) allCollections(r *http.Request, _ none) (pageJSON[cardJSON], error) {
 	page, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
 	cards, extent, err := a.svc.Collections.AllCollections(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
+	return pageAt(cardsJSON(cards), page.Offset, extent), nil
 }
 
 // libraryCollections answers a page of the collections holding a library's titles, by title, as
 // walls page.
-func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
+func (a *API) libraryCollections(r *http.Request, _ none) (pageJSON[cardJSON], error) {
 	lib := pathUUID(r, "id")
 	page, err := paging(r, defaultWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
 	cards, extent, err := a.svc.Collections.Collections(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, page)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(cardsJSON(cards), page.Offset, extent))
+	return pageAt(cardsJSON(cards), page.Offset, extent), nil
 }
 
 // members answers a collection's titles.
-func (a *API) members(w http.ResponseWriter, r *http.Request) {
+func (a *API) members(r *http.Request, _ none) (listJSON[cardJSON], error) {
 	id := pathUUID(r, "id")
 	cards, err := a.svc.Collections.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[cardJSON]{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[cardJSON]{Items: cardsJSON(cards)})
+	return listJSON[cardJSON]{Items: cardsJSON(cards)}, nil
 }
 
 // addCollectionJSON is an admin's collection, in no library: titles of any put in it by hand;
@@ -78,25 +78,20 @@ type addCollectionJSON struct {
 }
 
 // addCollection makes an admin's collection.
-func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
-	var req addCollectionJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) addCollection(r *http.Request, req addCollectionJSON) (createdJSON, error) {
 	if req.Title == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "title is set")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "title is set")
 	}
 	if req.Rule != nil && req.List != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "a collection is made by a rule or a list, not both")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "a collection is made by a rule or a list, not both")
 	}
 	if (req.Rule != nil || req.List != nil) != (len(req.LibraryIDs) > 0) {
-		writeProblem(w, a.logger, codeInvalidBody, "library_ids names the libraries a rule or a list reads, and a collection made by hand none")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "library_ids names the libraries a rule or a list reads, and a collection made by hand none")
 	}
-	if req.Rule != nil && !a.checkedRule(w, req.Rule.rule().CheckShared()) {
-		return
+	if req.Rule != nil {
+		if err := req.Rule.rule().CheckShared(); err != nil {
+			return createdJSON{}, refuse(codeInvalidBody, err.Error())
+		}
 	}
 	var id uuid.UUID
 	var err error
@@ -104,60 +99,40 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 	case req.Rule != nil:
 		id, err = a.svc.Collections.AddSmartCollection(r.Context(), req.LibraryIDs, req.Title, req.Rule.rule())
 	case req.List != nil:
-		listed, ok := a.readList(w, r, req.List.ref())
-		if !ok {
-			return
+		var listed []domain.Listed
+		if listed, err = a.readList(r, req.List.ref()); err != nil {
+			return createdJSON{}, err
 		}
 		id, err = a.svc.Collections.AddListCollection(r.Context(), req.LibraryIDs, req.Title, req.List.ref(), listed)
 	default:
 		id, err = a.svc.Collections.AddCollection(r.Context(), req.Title)
 	}
 	if errors.Is(err, store.ErrNotFound) {
-		writeProblem(w, a.logger, codeInvalidBody, "library_ids names one library or more, each once")
-		return
+		return createdJSON{}, refuse(codeInvalidBody, "library_ids names one library or more, each once")
 	}
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return createdJSON{}, err
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})
+	return createdJSON{ID: id}, nil
 }
 
 // setMembers replaces an admin's collection's titles, in the order given.
-func (a *API) addMembers(w http.ResponseWriter, r *http.Request) {
+func (a *API) addMembers(r *http.Request, req itemIDsJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req itemIDsJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	err := a.svc.Collections.AddMembers(r.Context(), id, req.ItemIDs)
-	switch {
-	case a.answeredAs(w, r, err, "the collection, or one of its titles, is not in its library"):
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, notFoundAs(err, "the collection, or one of its titles, is not in its library")
 }
 
-func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
+func (a *API) setMembers(r *http.Request, req itemIDsJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req itemIDsJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	err := a.svc.Collections.SetMembers(r.Context(), id, req.ItemIDs)
-	switch {
-	case a.answeredAs(w, r, err, "the collection, or one of its titles, is not in its library"):
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, notFoundAs(err, "the collection, or one of its titles, is not in its library")
 }
 
 // removeCollection removes an admin's collection, leaving its titles.
-func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
+func (a *API) removeCollection(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
-	if !a.answered(w, r, a.svc.Collections.RemoveCollection(r.Context(), id)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, a.svc.Collections.RemoveCollection(r.Context(), id)
 }
 
 type collectionChangeJSON struct {
@@ -168,60 +143,36 @@ type collectionChangeJSON struct {
 }
 
 // setCollection changes how a library's wall shows a collection, whoever made it.
-func (a *API) setCollection(w http.ResponseWriter, r *http.Request) {
+func (a *API) setCollection(r *http.Request, req collectionChangeJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req collectionChangeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	if req.BoxSet == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "box_set is missing")
-		return
+		return none{}, refuse(codeInvalidBody, "box_set is missing")
 	}
-	if !a.answered(w, r, a.svc.Collections.SetBoxSet(r.Context(), id, req.BoxSet)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-// checkedRule refuses a rule whose check, as a smart collection's or a smart playlist's, says it
-// cannot be kept.
-func (a *API) checkedRule(w http.ResponseWriter, err error) bool {
-	if err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return false
-	}
-	return true
+	return none{}, a.svc.Collections.SetBoxSet(r.Context(), id, req.BoxSet)
 }
 
 // setRule replaces a smart collection's rule, and its titles with what it finds.
-func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req smartRuleJSON
-	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckShared()) {
-		return
+func (a *API) setRule(r *http.Request, req smartRuleJSON) (none, error) {
+	if err := req.rule().CheckShared(); err != nil {
+		return none{}, refuse(codeInvalidBody, err.Error())
 	}
-	if !a.answered(w, r, a.svc.Collections.SetRule(r.Context(), id, req.rule())) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, a.svc.Collections.SetRule(r.Context(), pathUUID(r, "id"), req.rule())
 }
 
 // readList reads a list kept on a provider, saying why it cannot be: a list named as none is, a
 // provider that keeps none or is not set up, or one that did not answer.
-func (a *API) readList(w http.ResponseWriter, r *http.Request, list store.ListRef) ([]domain.Listed, bool) {
+func (a *API) readList(r *http.Request, list store.ListRef) ([]domain.Listed, error) {
 	if err := list.Check(); err != nil {
-		writeProblem(w, a.logger, codeInvalidBody, err.Error())
-		return nil, false
+		return nil, refuse(codeInvalidBody, err.Error())
 	}
 	listed, err := a.svc.Providers.List(r.Context(), list.Source, list.ID)
 	switch {
 	case errors.Is(err, provider.ErrNoLister), errors.Is(err, provider.ErrNotConfigured), errors.Is(err, provider.ErrNotFound):
-		writeProblem(w, a.logger, codeInvalidBody, "the list cannot be read: "+err.Error())
-		return nil, false
+		return nil, refuse(codeInvalidBody, "the list cannot be read: "+err.Error())
 	case err != nil:
-		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
-		return nil, false
+		return nil, refuse(codeProviderUnavailable, err.Error())
 	}
-	return listed, true
+	return listed, nil
 }
 
 // keptListJSON is a list kept on a provider, which a list collection could follow by its source
@@ -237,95 +188,90 @@ type keptListJSON struct {
 
 // keptLists answers the lists a provider keeps that a collection could follow, read from it now,
 // as Silo's collection templates offer them.
-func (a *API) keptLists(w http.ResponseWriter, r *http.Request) {
+func (a *API) keptLists(r *http.Request, _ none) (listJSON[keptListJSON], error) {
 	source := domain.FieldSource(r.URL.Query().Get("source"))
 	lists, err := a.svc.Providers.Lists(r.Context(), source, r.URL.Query().Get("query"))
 	switch {
 	case errors.Is(err, provider.ErrNoLister), errors.Is(err, provider.ErrNotConfigured):
-		writeProblem(w, a.logger, codeInvalidParameter, "source cannot offer its lists: "+err.Error())
-		return
+		return listJSON[keptListJSON]{}, refuse(codeInvalidParameter, "source cannot offer its lists: "+err.Error())
 	case err != nil:
-		writeProblem(w, a.logger, codeProviderUnavailable, err.Error())
-		return
+		return listJSON[keptListJSON]{}, refuse(codeProviderUnavailable, err.Error())
 	}
 	out := make([]keptListJSON, len(lists))
 	for i, l := range lists {
 		out[i] = keptListJSON{Source: source, ID: l.ID, Title: l.Title, About: l.About, Holds: l.Holds, Size: l.Size}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[keptListJSON]{Items: out})
+	return listJSON[keptListJSON]{Items: out}, nil
 }
 
 // syncList reads a list collection's list again now, and keeps what it holds.
-func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
+func (a *API) syncList(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	list, err := a.svc.Collections.CollectionList(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return none{}, err
 	}
-	listed, ok := a.readList(w, r, list)
-	if !ok {
-		return
+	listed, err := a.readList(r, list)
+	if err != nil {
+		return none{}, err
 	}
-	if !a.answered(w, r, a.svc.Collections.SetListMembers(r.Context(), id, listed)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return none{}, a.svc.Collections.SetListMembers(r.Context(), id, listed)
 }
 
 func (a *API) collectionsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/collections", access: signedIn, summary: "Page every collection, in the Collections view",
-			query: pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.allCollections,
-		},
-		{
+			query: pageParams, status: http.StatusOK,
+		}, a.allCollections),
+		a.handles(route{
 			pattern: "GET /api/v1/libraries/{id}/collections", access: signedIn, summary: "Page the collections holding a library's titles",
-			query: pageParams, status: http.StatusOK, reply: pageJSON[cardJSON]{}, handle: a.libraryCollections,
-		},
-		{
+			query: pageParams, status: http.StatusOK,
+		}, a.libraryCollections),
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/members", access: signedIn, summary: "A collection's titles",
-			status: http.StatusOK, reply: listJSON[cardJSON]{}, handle: a.members,
-		},
-		{
+			status: http.StatusOK,
+		}, a.members),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/lists", access: admin, summary: "The lists a provider keeps that a collection could follow",
 			query: []param{
 				{"source", domain.FieldSource(""), "The provider: tmdb, mdblist, or a plugin that keeps lists; required."},
 				{"query", "", "Lists named like this; by default the provider's own choice, as its best liked."},
 			},
-			status: http.StatusOK, reply: listJSON[keptListJSON]{}, handle: a.keptLists,
-		},
-		{
+			status: http.StatusOK,
+		}, a.keptLists),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/collections", access: admin, summary: "Make a collection, of the titles of any library",
-			body: addCollectionJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addCollection,
-		},
-		{
+			status: http.StatusCreated,
+		}, a.addCollection),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/collections/{id}/members", access: admin,
 			summary: "Put titles at the end of an admin's collection: films, or shows, seasons and episodes",
-			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.addMembers,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.addMembers),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/collections/{id}/members", access: admin,
 			summary: "Replace an admin's collection's titles, in order",
-			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.setMembers,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.setMembers),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/collections/{id}/rule", access: admin,
 			summary: "Replace a smart collection's rule, and its titles with what it finds",
-			body:    smartRuleJSON{}, status: http.StatusNoContent, handle: a.setRule,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.setRule),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/collections/{id}/sync", access: admin,
 			summary: "Read a list collection's list again now, and keep the titles of it the library has",
-			status:  http.StatusNoContent, handle: a.syncList,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.syncList),
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/collections/{id}", access: admin,
 			summary: "Change how a library's wall shows a collection, whoever made it",
-			body:    collectionChangeJSON{}, status: http.StatusNoContent, handle: a.setCollection,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.setCollection),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/collections/{id}", access: admin,
 			summary: "Remove an admin's collection, leaving its titles", status: http.StatusNoContent,
-			handle: a.removeCollection,
-		},
+		}, a.removeCollection),
 	}
 }
