@@ -23,7 +23,7 @@ func quiet() []string {
 func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
 	a := quiet()
 	if video.Encode != nil {
-		a = append(a, hw.inputArgs(video.Codec, *video.Encode)...)
+		a = append(a, hw.inputArgs(video, *video.Encode)...)
 	} else {
 		// Copied video starts at the keyframe before start, and audio encoded beside it must too.
 		// Trimmed to start, it has nothing yet at the next keyframe, and the MP4 muxer, holding
@@ -138,10 +138,10 @@ func streamArgs(hw Hardware, start time.Duration, video domain.VideoPlan, audio 
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
 	case video.Burns():
-		filter, encoder := hw.videoArgs(*e, video.Codec)
+		filter, encoder := hw.videoArgs(*e, video)
 		a = append(append(a, burnArgs(hw, start, in, filter, *e, layer)...), encoder...)
 	case e != nil:
-		filter, encoder := hw.videoArgs(*e, video.Codec)
+		filter, encoder := hw.videoArgs(*e, video)
 		a = append(append(a, "-map", in, "-vf", filter), encoder...)
 	// Apple's players take HEVC only as hvc1, and Dolby Vision as dvh1.
 	case video.Codec == "hevc" && (video.DolbyVision == domain.DolbyVisionKeep || video.DolbyVision == domain.DolbyVisionConvert):

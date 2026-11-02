@@ -186,6 +186,10 @@ func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, l
 	if hw.Accel == domain.AccelVAAPI {
 		hw.Overlay = hls.ProbeOverlay(ctx, ffmpeg, hw.Device)
 	}
+	if hw.Decoders, err = hw.ProbeDecoders(ctx, ffmpeg); err != nil {
+		logger.WarnContext(ctx, "decoding video in software alone", slog.Any("err", err))
+	}
+	logger.InfoContext(ctx, "decoding video", slog.String("on", string(hw.Accel)), slog.Any("decoders", hw.Decoders))
 	return burning(ctx, ffmpeg, hw, logger), nil
 }
 
