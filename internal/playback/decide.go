@@ -174,7 +174,7 @@ func Decide(p Profile, c Version, tracks domain.ChosenTracks, enc Encoding) (Dec
 	var d Decision
 	var videoReasons, audioReasons []domain.TranscodeReason
 	if video != nil {
-		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec, BitDepth: video.BitDepth, Profile: video.Profile}
+		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
 		videoReasons = p.videoReasons(*video)
 		if p.EncodeVideo {
 			videoReasons = append(videoReasons, domain.DirectPlayError)

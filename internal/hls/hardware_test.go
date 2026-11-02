@@ -3,7 +3,6 @@ package hls
 import (
 	"errors"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
@@ -29,103 +28,48 @@ func TestADeviceThatWillNotEncodeIsFoundAtStart(t *testing.T) {
 func TestEachDeviceDeinterlacesAnInterlacedPicture(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 720, Height: 576, BitrateKbps: 4000, Range: domain.RangeSDR, Deinterlace: true}
 	for accel, filter := range map[domain.Acceleration]string{
-		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le,hwupload,scale_vt",
+		domain.AccelSoftware: "yadif=0:-1:0,scale=", domain.AccelVideoToolbox: "yadif=0:-1:0,format=nv12|p010le|videotoolbox_vld,hwupload,scale_vt",
 		domain.AccelVAAPI: "hwupload=derive_device=vaapi,deinterlace_vaapi=rate=frame,scale_vaapi", domain.AccelQSV: "vpp_qsv=w=720:h=576:format=nv12:deinterlace=2",
 		domain.AccelNVENC: "hwupload,yadif_cuda=0:-1:0,scale_cuda", domain.AccelAMF: "yadif=0:-1:0,scale=",
 	} {
-		hw := Hardware{Accel: accel, Device: "d", Decoders: []Decoder{{"h264", 8}}}
-		if got, _ := hw.videoArgs(e, domain.VideoPlan{Codec: "mpeg2video", BitDepth: 8}); !strings.Contains(got, filter) {
+		hw := Hardware{Accel: accel, Device: "d"}
+		if got, _ := hw.videoArgs(e); !strings.Contains(got, filter) {
 			t.Errorf("%s: %q lacks %q", accel, got, filter)
 		}
-		if decoded := strings.Contains(strings.Join(hw.inputArgs(domain.VideoPlan{Codec: "h264", BitDepth: 8, Profile: "High"}, e), " "), "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelVideoToolbox || accel == domain.AccelAMF) {
+		if decoded := strings.Contains(strings.Join(hw.inputArgs(e), " "), "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelVideoToolbox || accel == domain.AccelAMF) {
 			t.Errorf("%s: interlaced H.264 decoded on the device %t", accel, decoded)
 		}
 		progressive := e
 		progressive.Deinterlace = false
-		if got, _ := hw.videoArgs(progressive, domain.VideoPlan{Codec: "mpeg2video", BitDepth: 8}); strings.Contains(got, "yadif") || strings.Contains(got, "deinterlace") {
+		if got, _ := hw.videoArgs(progressive); strings.Contains(got, "yadif") || strings.Contains(got, "deinterlace") {
 			t.Errorf("%s: a progressive picture is deinterlaced: %q", accel, got)
 		}
 	}
 }
 
-// Every device encodes H.264 with a keyframe each segment, decodes what it was found to decode at
-// start, and has anything else uploaded to it; AMF is given what FFmpeg decodes.
+// Every device encodes H.264 with a keyframe each segment, and is asked to decode the source too:
+// what it decodes stays on it, in the format its frames are, and what FFmpeg decodes in its stead,
+// as a codec or bit depth it has no decoder for, is uploaded. AMF is given what FFmpeg decodes.
 func TestEachDeviceEncodesTheWholeChain(t *testing.T) {
 	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR, ToneMap: true}
-	for accel, encoder := range map[domain.Acceleration]string{
-		domain.AccelSoftware: "libx264", domain.AccelVideoToolbox: "h264_videotoolbox",
-		domain.AccelVAAPI: "h264_vaapi", domain.AccelQSV: "h264_qsv", domain.AccelNVENC: "h264_nvenc",
-		domain.AccelAMF: "h264_amf",
+	for accel, want := range map[domain.Acceleration][2]string{
+		domain.AccelSoftware: {"libx264"}, domain.AccelAMF: {"h264_amf"},
+		domain.AccelVideoToolbox: {"h264_videotoolbox", "format=nv12|p010le|videotoolbox_vld,hwupload,"},
+		domain.AccelVAAPI:        {"h264_vaapi", "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,"},
+		domain.AccelQSV:          {"h264_qsv", "|vaapi,hwupload=derive_device=vaapi:extra_hw_frames=64,hwmap=derive_device=qsv,"},
+		domain.AccelNVENC:        {"h264_nvenc", "format=nv12|p010le|cuda,hwupload,"},
 	} {
-		hw := Hardware{Accel: accel, Device: "d", Decoders: []Decoder{{"hevc", 10}}}
-		line := func(v domain.VideoPlan) string {
-			filter, encoder := hw.videoArgs(e, v)
-			return strings.Join(append(append(hw.inputArgs(v, e), "-vf", filter), encoder...), " ")
-		}
-		hevc := line(domain.VideoPlan{Codec: "hevc", BitDepth: 10, Profile: "Main 10"})
-		av1 := line(domain.VideoPlan{Codec: "av1", BitDepth: 10, Profile: "Main"})
-		for _, want := range []string{"-c:v " + encoder, "expr:gte(t,n_forced*6)", "1280", "tonemap"} {
-			if !strings.Contains(hevc, want) {
-				t.Errorf("%s: %q lacks %q", accel, hevc, want)
+		hw := Hardware{Accel: accel, Device: "d"}
+		filter, encoder := hw.videoArgs(e)
+		line := strings.Join(append(append(hw.inputArgs(e), "-vf", filter), encoder...), " ")
+		for _, w := range []string{"-c:v " + want[0], "expr:gte(t,n_forced*6)", "1280", "tonemap", want[1]} {
+			if !strings.Contains(line, w) {
+				t.Errorf("%s: %q lacks %q", accel, line, w)
 			}
 		}
-		if accel == domain.AccelSoftware || accel == domain.AccelAMF {
-			continue
+		if decoded := strings.Contains(line, "-hwaccel "); decoded == (accel == domain.AccelSoftware || accel == domain.AccelAMF) {
+			t.Errorf("%s: asked to decode %t: %q", accel, decoded, line)
 		}
-		if !strings.Contains(hevc, "-hwaccel ") || strings.Contains(hevc, "hwupload") {
-			t.Errorf("%s: HEVC is not decoded on the device: %q", accel, hevc)
-		}
-		if strings.Contains(av1, "-hwaccel ") || !strings.Contains(av1, "hwupload") {
-			t.Errorf("%s: AV1 is not decoded by FFmpeg and uploaded: %q", accel, av1)
-		}
-	}
-}
-
-// A source the device has no decoder for, or in 4:2:2 or 4:4:4, is decoded by FFmpeg and uploaded,
-// as the device would hand FFmpeg back frames of its own software decode that its filters refuse.
-// VideoToolbox decodes those itself, so is given them.
-func TestASourceTheDeviceCannotDecodeIsUploaded(t *testing.T) {
-	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1280, Height: 720, BitrateKbps: 4000, Range: domain.RangeSDR}
-	decoders := []Decoder{{"h264", 8}, {"hevc", 10}}
-	for _, tc := range []struct {
-		accel   domain.Acceleration
-		source  domain.VideoPlan
-		decoded bool
-	}{
-		{domain.AccelVAAPI, domain.VideoPlan{Codec: "h264", BitDepth: 8, Profile: "High"}, true},
-		{domain.AccelVAAPI, domain.VideoPlan{Codec: "h264", BitDepth: 10, Profile: "High 10"}, false},
-		{domain.AccelNVENC, domain.VideoPlan{Codec: "h264", BitDepth: 8, Profile: "High 4:2:2"}, false},
-		{domain.AccelQSV, domain.VideoPlan{Codec: "hevc", BitDepth: 10, Profile: "Rext"}, false},
-		{domain.AccelVideoToolbox, domain.VideoPlan{Codec: "hevc", BitDepth: 10, Profile: "Rext"}, true},
-		{domain.AccelVideoToolbox, domain.VideoPlan{Codec: "vp9", BitDepth: 8, Profile: "Profile 0"}, false},
-	} {
-		hw := Hardware{Accel: tc.accel, Device: "d", Decoders: decoders}
-		filter, _ := hw.videoArgs(e, tc.source)
-		decoded := strings.Contains(strings.Join(hw.inputArgs(tc.source, e), " "), "-hwaccel ")
-		if decoded != tc.decoded || strings.Contains(filter, "hwupload") == tc.decoded {
-			t.Errorf("%s %s %d %s: decoded on the device %t, filter %q", tc.accel, tc.source.Codec, tc.source.BitDepth, tc.source.Profile, decoded, filter)
-		}
-	}
-}
-
-// What a device decodes is found at start: a test picture of each codec FFmpeg decodes on it and
-// downloads from it. FFmpeg decoding one in software instead is the download failing.
-func TestTheDecodersADeviceHasAreFoundAtStart(t *testing.T) {
-	// The fake ffmpeg writes a test picture as the arguments making it, and fails to download one
-	// made by SVT-AV1.
-	ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", `prev=; for a; do [ "$prev" = -i ] && in=$a; prev=$a; last=$a; done
-case "$*" in *hwdownload*) ! grep -q libsvtav1 "$in";; *) echo "$*" > "$last";; esac
-`)
-	got, err := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128"}.ProbeDecoders(t.Context(), ffmpeg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []Decoder{{"h264", 8}, {"h264", 10}, {"hevc", 8}, {"hevc", 10}, {"vp9", 8}, {"vp9", 10}, {"mpeg2video", 8}}
-	if !slices.Equal(got, want) {
-		t.Errorf("decoders %v, want %v", got, want)
-	}
-	if got, err := (Hardware{Accel: domain.AccelSoftware}).ProbeDecoders(t.Context(), ffmpeg); got != nil || err != nil {
-		t.Errorf("software decoders %v, %v, want none", got, err)
 	}
 }
 
@@ -140,8 +84,8 @@ func TestEachDeviceKeepsHDRInHEVC(t *testing.T) {
 		domain.AccelVAAPI: {"hevc_vaapi", "scale_vaapi=w=1920:h=1080:format=p010"}, domain.AccelQSV: {"hevc_qsv", "vpp_qsv=w=1920:h=1080:format=p010"},
 		domain.AccelNVENC: {"hevc_nvenc", "scale_cuda=w=1920:h=1080:format=p010"}, domain.AccelAMF: {"hevc_amf", "format=yuv420p10le"},
 	} {
-		hw := Hardware{Accel: accel, Device: "d", Decoders: []Decoder{{"h264", 8}, {"hevc", 10}}}
-		filter, encoder := hw.videoArgs(hdr, domain.VideoPlan{Codec: "hevc", BitDepth: 10})
+		hw := Hardware{Accel: accel, Device: "d"}
+		filter, encoder := hw.videoArgs(hdr)
 		line := filter + " " + strings.Join(encoder, " ")
 		for _, w := range []string{"-c:v " + want[0], want[1], "-profile:v main10", "-tag:v hvc1", "expr:gte(t,n_forced*6)"} {
 			if !strings.Contains(line, w) {
@@ -151,8 +95,8 @@ func TestEachDeviceKeepsHDRInHEVC(t *testing.T) {
 		if strings.Contains(line, "tonemap") {
 			t.Errorf("%s: HDR kept is tone mapped: %q", accel, line)
 		}
-		filter, encoder = hw.videoArgs(sdr, domain.VideoPlan{Codec: "h264", BitDepth: 8})
-		if line := filter + " " + strings.Join(encoder, " "); !strings.Contains(line, "-profile:v main ") || strings.Contains(line, "p010") {
+		filter, encoder = hw.videoArgs(sdr)
+		if line := filter + " " + strings.Join(encoder, " "); !strings.Contains(line, "-profile:v main ") || strings.Contains(line, ":format=p010") {
 			t.Errorf("%s: SDR in HEVC is not Main in 8 bits: %q", accel, line)
 		}
 	}
