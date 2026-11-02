@@ -199,8 +199,12 @@ type PlaybackSubtitle struct {
 // VideoPlan is the video stream played, by its index in the file, what becomes of its Dolby
 // Vision, and what it is encoded to where it is not copied.
 type VideoPlan struct {
-	Stream      int
+	Stream int
+	// Codec, BitDepth and Profile are the stream's, as ffprobe gives them: what a device must
+	// decode to encode it again.
 	Codec       string
+	BitDepth    int
+	Profile     string
 	DolbyVision DolbyVisionHandling
 	// Encode is the video encoded again; nil copies it.
 	Encode *VideoEncode

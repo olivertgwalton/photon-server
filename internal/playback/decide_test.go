@@ -89,7 +89,7 @@ func TestDecide(t *testing.T) {
 	takesTS.Segments = domain.SegmentsMPEGTS
 
 	hevc := func(dv domain.DolbyVisionHandling) *domain.VideoPlan {
-		return &domain.VideoPlan{Stream: 0, Codec: "hevc", DolbyVision: dv}
+		return &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", DolbyVision: dv}
 	}
 	for _, tc := range []struct {
 		name     string
@@ -142,7 +142,7 @@ func TestDecide(t *testing.T) {
 			name: "HDR to an SDR client of HEVC alone is tone mapped into HEVC", profile: sdrOnly, audio: new(2),
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
@@ -158,7 +158,7 @@ func TestDecide(t *testing.T) {
 			profile: capped,
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, Range: domain.RangeHDR10,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
@@ -169,7 +169,7 @@ func TestDecide(t *testing.T) {
 			name: "a server that encodes no HEVC tone maps into H.264", profile: capped, hevc: domain.HEVCDeny,
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, Range: domain.RangeSDR, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
@@ -187,7 +187,7 @@ func TestDecide(t *testing.T) {
 			name: "HDR to an SDR client is tone mapped into HEVC, which it would rather have", profile: sdrH264, audio: new(2),
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
@@ -198,7 +198,7 @@ func TestDecide(t *testing.T) {
 			name: "HDR to an SDR client is tone mapped into H.264 its size", profile: sdrH264, audio: new(2), hevc: domain.HEVCDeny,
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
@@ -235,7 +235,7 @@ func TestDecide(t *testing.T) {
 			name: "a picture subtitle the client cannot draw is drawn in", profile: everything, subtitle: new(4),
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, Burn: new(4),
 				}},
 				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
@@ -291,7 +291,7 @@ func TestDecide(t *testing.T) {
 			name: "styled text the client cannot draw is drawn in, never made plain", profile: everything, subtitle: new(5),
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, Burn: new(5),
 				}},
 				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},
@@ -309,7 +309,7 @@ func TestDecide(t *testing.T) {
 			name: "a styled file the client cannot draw is drawn in", profile: drawsASS, file: &signsFile,
 			want: Decision{
 				Method: domain.PlayTranscode,
-				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
+				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", BitDepth: 10, Profile: "Main 10", Encode: &domain.VideoEncode{
 					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeHDR10, BurnFile: &signsFile,
 				}},
 				Audio: &domain.AudioPlan{Stream: 1}, Reasons: []domain.TranscodeReason{domain.SubtitleCodecNotSupported},

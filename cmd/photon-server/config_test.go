@@ -2,8 +2,9 @@ package main
 
 import (
 	"log/slog"
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
@@ -30,8 +31,8 @@ func TestAnEncoderSetIsTheOneTried(t *testing.T) {
 		{domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: domain.AccelQSV}, all[1:3]},
 		{domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: domain.AccelSoftware}, nil},
 	} {
-		if got := chosen(all, tc.choice); !slices.Equal(got, tc.want) {
-			t.Errorf("%+v: tried %v, want %v", tc.choice, got, tc.want)
+		if diff := cmp.Diff(tc.want, chosen(all, tc.choice)); diff != "" {
+			t.Errorf("%+v: tried (-want +got):\n%s", tc.choice, diff)
 		}
 	}
 }
@@ -71,8 +72,8 @@ func TestAnOverlayThatWillNotBurnInIsFoundAtStart(t *testing.T) {
 		},
 	} {
 		ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", tc.script+"\n")
-		if got := burning(t.Context(), ffmpeg, tc.hw, slog.New(slog.DiscardHandler)); got != tc.want {
-			t.Errorf("%s: %+v, want %+v", tc.name, got, tc.want)
+		if diff := cmp.Diff(tc.want, burning(t.Context(), ffmpeg, tc.hw, slog.New(slog.DiscardHandler))); diff != "" {
+			t.Errorf("%s (-want +got):\n%s", tc.name, diff)
 		}
 	}
 }

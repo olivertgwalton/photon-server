@@ -462,7 +462,7 @@ func (a *API) startDirect(r *http.Request, id uuid.UUID, rep report) error {
 	d := playback.Decision{Method: domain.PlayDirect}
 	video, sound := direct(c, (*int)(rep.AudioStreamIndex))
 	if video != nil {
-		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec}
+		d.Video = &domain.VideoPlan{Stream: video.Index, Codec: video.Codec, BitDepth: video.BitDepth, Profile: video.Profile}
 	}
 	if sound != nil {
 		d.Audio = &domain.AudioPlan{Stream: sound.Index}

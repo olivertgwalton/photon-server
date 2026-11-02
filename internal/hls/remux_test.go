@@ -412,12 +412,12 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 			"-vf scale=1920:1040,format=yuv420p,subtitles=f=/cache/part/2.ass:fontsdir=/cache/part/fonts ",
 		},
 	} {
-		hw := Hardware{Accel: accel, Device: "/dev/dri/renderD128"}
+		hw := Hardware{Accel: accel, Device: "/dev/dri/renderD128", Decoders: []Decoder{{"hevc", 8}}}
 		for i, tc := range []struct {
 			e     domain.VideoEncode
 			layer *styledLayer
 		}{{picture, nil}, {file, layer}} {
-			video := domain.VideoPlan{Codec: "hevc", Encode: &tc.e}
+			video := domain.VideoPlan{Codec: "hevc", BitDepth: 8, Encode: &tc.e}
 			got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
 			for _, w := range []string{want[i], "-c:v " + hw.encoder(domain.VideoHEVC)} {
 				if !strings.Contains(got, w) {
@@ -488,8 +488,8 @@ func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
 				"[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420,format=nv12,hwupload[v]",
 		}},
 	} {
-		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay}
-		video := domain.VideoPlan{Codec: tc.codec, Encode: &tc.e}
+		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay, Decoders: []Decoder{{"h264", 8}, {"hevc", 8}}}
+		video := domain.VideoPlan{Codec: tc.codec, BitDepth: 8, Encode: &tc.e}
 		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range append(tc.want, "-c:v hevc_vaapi") {
 			if !strings.Contains(got, w) {

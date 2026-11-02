@@ -26,7 +26,7 @@ func (h Hardware) Convert(ctx context.Context, ffmpeg string, src media.Input, v
 	defer cancel(nil)
 	a := quiet()
 	if video.Encode != nil {
-		a = append(a, h.inputArgs(video.Codec, *video.Encode)...)
+		a = append(a, h.inputArgs(video, *video.Encode)...)
 	}
 	a = append(a, src.Args()...)
 	a = append(a, streamArgs(h, 0, video, audio, nil)...)
