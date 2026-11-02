@@ -77,11 +77,11 @@ func srgbCurve() []byte {
 }
 
 // taggedPNG is a PNG of img carrying icc in an iCCP chunk, or none where icc is nil.
-func taggedPNG(t testing.TB, img image.Image, icc []byte) []byte {
-	t.Helper()
+func taggedPNG(tb testing.TB, img image.Image, icc []byte) []byte {
+	tb.Helper()
 	var out bytes.Buffer
 	if err := png.Encode(&out, img); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if icc == nil {
 		return out.Bytes()
@@ -89,10 +89,10 @@ func taggedPNG(t testing.TB, img image.Image, icc []byte) []byte {
 	var z bytes.Buffer
 	w := zlib.NewWriter(&z)
 	if _, err := w.Write(icc); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := w.Close(); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	body := append([]byte("iCCP"), append([]byte("test\x00\x00"), z.Bytes()...)...)
 	chunk := binary.BigEndian.AppendUint32(nil, uint32(len(body)-4))
@@ -104,11 +104,11 @@ func taggedPNG(t testing.TB, img image.Image, icc []byte) []byte {
 }
 
 // taggedJPEG is a JPEG of img carrying icc in an APP2 segment.
-func taggedJPEG(t testing.TB, img image.Image, icc []byte) []byte {
-	t.Helper()
+func taggedJPEG(tb testing.TB, img image.Image, icc []byte) []byte {
+	tb.Helper()
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 100}); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	body := append([]byte("ICC_PROFILE\x00\x01\x01"), icc...)
 	seg := append([]byte{0xff, 0xe2}, binary.BigEndian.AppendUint16(nil, uint16(len(body)+2))...)
@@ -193,6 +193,8 @@ func FuzzDecode(f *testing.F) {
 	f.Add(taggedPNG(f, small, iccProfile(paraCurve(4, 2.4, 1, 0, 1, 0.5, 0, 0))))
 	f.Add(taggedJPEG(f, small, iccProfile(srgbCurve())))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		_, _ = decode(bytes.NewReader(data))
+		if img, err := decode(bytes.NewReader(data)); err == nil && img == nil {
+			t.Error("decoded to nothing, with no error")
+		}
 	})
 }
