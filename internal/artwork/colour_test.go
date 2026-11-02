@@ -11,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,8 +19,14 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/blob"
 )
 
-// iccProfile is a profile of sRGB's primaries whose three channels share one tone curve.
-func iccProfile(curve []byte) []byte {
+type iccTag struct {
+	sig  string
+	data []byte
+}
+
+// iccProfile is a profile of sRGB's primaries whose three channels share one tone curve, and any
+// other tags.
+func iccProfile(curve []byte, others ...iccTag) []byte {
 	xyz := func(x, y, z float64) []byte {
 		b := []byte("XYZ \x00\x00\x00\x00")
 		for _, v := range []float64{x, y, z} {
@@ -27,17 +34,14 @@ func iccProfile(curve []byte) []byte {
 		}
 		return b
 	}
-	tags := []struct {
-		sig  string
-		data []byte
-	}{
+	tags := append([]iccTag{
 		{"rXYZ", xyz(0.4360747, 0.2225045, 0.0139322)},
 		{"gXYZ", xyz(0.3850649, 0.7168786, 0.0971045)},
 		{"bXYZ", xyz(0.1430804, 0.0606169, 0.7141733)},
 		{"rTRC", curve},
 		{"gTRC", curve},
 		{"bTRC", curve},
-	}
+	}, others...)
 	head := make([]byte, 128)
 	copy(head[16:], "RGB XYZ ")
 	table := binary.BigEndian.AppendUint32(nil, uint32(len(tags)))
@@ -57,13 +61,19 @@ func iccProfile(curve []byte) []byte {
 // gamma18 is a plain power of 1.8, as Apple's Generic RGB has.
 var gamma18 = []byte("curv\x00\x00\x00\x00\x00\x00\x00\x01\x01\xcc")
 
-// srgbCurve is sRGB's own curve, as ICC's fourth parametric family.
-func srgbCurve() []byte {
-	b := []byte("para\x00\x00\x00\x00\x00\x03\x00\x00")
-	for _, v := range []float64{2.4, 1 / 1.055, 0.055 / 1.055, 1 / 12.92, 0.04045} {
-		b = binary.BigEndian.AppendUint32(b, uint32(int32(v*65536+0.5)))
+// paraCurve is a curve of ICC's parametric family kind, of params.
+func paraCurve(kind byte, params ...float64) []byte {
+	b := []byte("para\x00\x00\x00\x00\x00\x00\x00\x00")
+	b[9] = kind
+	for _, v := range params {
+		b = binary.BigEndian.AppendUint32(b, uint32(int32(math.Round(v*65536))))
 	}
 	return b
+}
+
+// srgbCurve is sRGB's own curve, as ICC's fourth parametric family.
+func srgbCurve() []byte {
+	return paraCurve(3, 2.4, 1/1.055, 0.055/1.055, 1/12.92, 0.04045)
 }
 
 // taggedPNG is a PNG of img carrying icc in an iCCP chunk, or none where icc is nil.
@@ -155,6 +165,14 @@ func TestACopyKeepsThePictureColoursItsProfileGives(t *testing.T) {
 		{"tagged sRGB", taggedPNG(t, uniform(grey), iccProfile(srgbCurve())), grey, 0},
 		{"a PNG in gamma 1.8", taggedPNG(t, uniform(grey), iccProfile(gamma18)), lighter, 1},
 		{"a JPEG in gamma 1.8", taggedJPEG(t, uniform(grey), iccProfile(gamma18)), lighter, 2},
+		{
+			// Every browser draws such a profile by its tables, which are not read here.
+			"a PNG with lookup tables as well",
+			taggedPNG(t, uniform(grey), iccProfile(gamma18, iccTag{"A2B0", []byte("mft2\x00\x00\x00\x00")})),
+			grey,
+			0,
+		},
+		{"a PNG whose curve is infinite at black", taggedPNG(t, uniform(grey), iccProfile(paraCurve(0, -1))), grey, 0},
 		{
 			"a half-clear logo in gamma 1.8",
 			taggedPNG(t, uniform(color.NRGBA{R: 128, G: 128, B: 128, A: 128}), iccProfile(gamma18)),

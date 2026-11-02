@@ -118,6 +118,7 @@ func jpegProfile(r *bufio.Reader) []byte {
 	}
 	parts := map[byte][]byte{}
 	var count byte
+	size := 0
 	for {
 		var m [4]byte
 		if _, err := io.ReadFull(r, m[:2]); err != nil || m[0] != 0xff {
@@ -151,13 +152,16 @@ func jpegProfile(r *bufio.Reader) []byte {
 			return nil
 		}
 		if rest, ok := bytes.CutPrefix(seg, []byte("ICC_PROFILE\x00")); ok && len(rest) >= 2 {
+			if size += len(rest) - 2; size > maxProfile {
+				return nil
+			}
 			parts[rest[0]], count = rest[2:], rest[1]
 		}
 	}
 	var icc []byte
 	for i := 1; i <= int(count); i++ {
 		part, ok := parts[byte(i)]
-		if !ok || len(icc)+len(part) > maxProfile {
+		if !ok {
 			return nil
 		}
 		icc = append(icc, part...)
@@ -210,7 +214,8 @@ var srgbFromD50 = [3][3]float64{
 }
 
 // transformOf reads a profile of primaries and curves, false for any other, and for one that is
-// sRGB's own already, as most pictures' are, which has nothing to change.
+// sRGB's own already, as most pictures' are, which has nothing to change. A profile with lookup
+// tables as well is one of tables: every browser draws by them before its primaries.
 func transformOf(icc []byte) (transform, bool) {
 	var t transform
 	if len(icc) < 132 || string(icc[16:20]) != "RGB " || string(icc[20:24]) != "XYZ " {
@@ -229,6 +234,9 @@ func transformOf(icc []byte) (transform, bool) {
 		}
 		tags[string(icc[e:e+4])] = icc[at : at+size]
 	}
+	if tags["A2B0"] != nil || tags["A2B1"] != nil {
+		return t, false
+	}
 	for k, c := range []string{"r", "g", "b"} {
 		xyz, ok := xyzOf(tags[c+"XYZ"])
 		if !ok {
@@ -244,7 +252,10 @@ func transformOf(icc []byte) (transform, bool) {
 			}
 		}
 		for v := range 256 {
-			t.linear[k][v] = curve(float64(v) / 255)
+			// A curve of a negative power, say, is infinite at black; no matrix makes sense of it.
+			if t.linear[k][v] = curve(float64(v) / 255); math.IsNaN(t.linear[k][v]) || math.IsInf(t.linear[k][v], 0) {
+				return t, false
+			}
 		}
 	}
 	return t, !t.isSRGB()
@@ -326,6 +337,9 @@ func curveOf(tag []byte) (func(float64) float64, bool) {
 			p[i] = s15f16(tag[12+4*i:])
 		}
 		g, a, b, c, d, e, f := p[0], p[1], p[2], p[3], p[4], p[5], p[6]
+		if a == 0 {
+			return nil, false
+		}
 		switch kind {
 		case 1:
 			d = -b / a
