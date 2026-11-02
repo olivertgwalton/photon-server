@@ -347,7 +347,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 	case domain.AccelVAAPI:
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
 		if e.ToneMap != domain.ToneMapNone {
-			filter = upload + deinterlace + h.toneMapVAAPI(w, ht)
+			filter = upload + deinterlace + h.toneMapVAAPI(w, ht, e.ToneMap)
 			// Left in Vulkan for a subtitle laid over there (see burnArgs).
 			if h.ToneMapper == ToneMapperVulkan && !h.burnsThroughVulkan(e) {
 				filter += fromVulkan
@@ -355,6 +355,9 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		}
 		encoder = append(encoder, "-rc_mode", "VBR")
 	case domain.AccelQSV:
+		if e.ToneMap == domain.ToneMapDolbyVision {
+			format = "p010"
+		}
 		filter = upload + "vpp_qsv=w=" + w + ":h=" + ht + ":format=" + format
 		if runtime.GOOS == "windows" {
 			// D3D11's frame pool cannot grow, so the encoder must not hold the decoder's frames.
@@ -363,8 +366,13 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		if e.Deinterlace {
 			filter += ":deinterlace=2"
 		}
-		if e.ToneMap != domain.ToneMapNone {
+		switch e.ToneMap {
+		case domain.ToneMapNone:
+		case domain.ToneMapHDR:
 			filter += ":tonemap=1"
+		case domain.ToneMapDolbyVision:
+			// QSV's tone mapper would map it without its RPU: the CPU's does, as VAAPI's on Intel.
+			filter += ",hwdownload," + toneMapCPU + ",hwupload=extra_hw_frames=64"
 		}
 		encoder = append(encoder, "-preset", "veryfast", "-forced_idr", "1")
 	case domain.AccelNVENC:
@@ -379,9 +387,19 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 	return filter, append(encoder, keyframes...)
 }
 
-// toneMapVAAPI scales a VAAPI picture to w by h and maps it to 8-bit SDR on the device's tone mapper.
-func (h Hardware) toneMapVAAPI(w, ht string) string {
-	switch h.ToneMapper {
+// toneMapCPU maps a P010 picture taken off a device to 8-bit NV12 SDR on the CPU. tonemapx applies
+// a Dolby Vision RPU only writing planar YUV, as Jellyfin's pipelines have it, and stops FFmpeg
+// otherwise.
+const toneMapCPU = "format=p010le," + media.ToneMap + ":format=yuv420p,format=nv12"
+
+// toneMapVAAPI scales a VAAPI picture to w by h and maps it to 8-bit SDR on the device's tone
+// mapper, or on the CPU's for Dolby Vision the driver's would map without its RPU.
+func (h Hardware) toneMapVAAPI(w, ht string, m domain.ToneMapping) string {
+	mapper := h.ToneMapper
+	if mapper == ToneMapperVAAPI && m == domain.ToneMapDolbyVision {
+		mapper = ToneMapperCPU
+	}
+	switch mapper {
 	case ToneMapperVAAPI:
 		return "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
 	case ToneMapperVulkan:
@@ -391,7 +409,7 @@ func (h Hardware) toneMapVAAPI(w, ht string) string {
 	}
 	// Scaled on the device first, so the CPU maps only the picture encoded. Uploaded to VAAPI by
 	// name, the filters' device being Vulkan where a subtitle is laid over through it.
-	return "scale_vaapi=w=" + w + ":h=" + ht + ":format=p010,hwdownload,format=p010le," + media.ToneMap + ":format=nv12,hwupload=derive_device=vaapi"
+	return "scale_vaapi=w=" + w + ":h=" + ht + ":format=p010,hwdownload," + toneMapCPU + ",hwupload=derive_device=vaapi"
 }
 
 var (
@@ -407,6 +425,10 @@ var (
 // rather than at the first play.
 func (h Hardware) Check(ctx context.Context, ffmpeg string, codec domain.VideoCodec) error {
 	cases := []domain.VideoEncode{{Range: domain.RangeSDR, Deinterlace: true}, {Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR}}
+	// Intel's devices map Dolby Vision through a chain of its own.
+	if h.Accel == domain.AccelQSV || h.Accel == domain.AccelVAAPI && h.ToneMapper == ToneMapperVAAPI {
+		cases = append(cases, domain.VideoEncode{Range: domain.RangeSDR, ToneMap: domain.ToneMapDolbyVision})
+	}
 	if codec == domain.VideoHEVC {
 		cases = append(cases, domain.VideoEncode{Range: domain.RangeHDR10})
 	}

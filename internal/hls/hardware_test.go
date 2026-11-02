@@ -243,7 +243,7 @@ func TestEachVAAPIToneMapperMapsTheWholeChain(t *testing.T) {
 			"libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc:w=1920:h=1080:tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709," +
 			"format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"},
 		{ToneMapperCPU, dev, "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,scale_vaapi=w=1920:h=1080:format=p010,hwdownload,format=p010le," +
-			"tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=nv12,hwupload=derive_device=vaapi"},
+			"tonemapx=tonemap=bt2390:desat=0:peak=100:t=bt709:m=bt709:p=bt709:format=yuv420p,format=nv12,hwupload=derive_device=vaapi"},
 	} {
 		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: OverlayCPU, ToneMapper: tc.mapper}
 		if init := strings.Join(hw.inputArgs(e), " "); !strings.HasPrefix(init, tc.init) {
@@ -256,6 +256,58 @@ func TestEachVAAPIToneMapperMapsTheWholeChain(t *testing.T) {
 		kept.ToneMap, kept.Range, kept.Codec = domain.ToneMapNone, domain.RangeHDR10, domain.VideoHEVC
 		if init := strings.Join(hw.inputArgs(kept), " "); !strings.HasPrefix(init, dev) {
 			t.Errorf("%s: HDR kept opens %q", tc.mapper, init)
+		}
+	}
+}
+
+// Dolby Vision 5 is nothing without its RPU, which Intel's tone mappers ignore: on Intel it is
+// mapped on the CPU, by tonemapx writing the planar YUV it applies an RPU in, and its chain is
+// tried at start. Vulkan's libplacebo and the other devices' tone mappers apply it themselves.
+func TestDolbyVisionIsMappedWhereItsRPUIsApplied(t *testing.T) {
+	e := domain.VideoEncode{Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 8000, Range: domain.RangeSDR, ToneMap: domain.ToneMapDolbyVision}
+	const onCPU = "hwdownload,format=p010le,tonemapx="
+	for _, tc := range []struct {
+		hw    Hardware
+		onCPU bool
+	}{
+		{Hardware{Accel: domain.AccelVAAPI, Device: "d", ToneMapper: ToneMapperVAAPI}, true},
+		{Hardware{Accel: domain.AccelQSV, Device: "d"}, true},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "d", ToneMapper: ToneMapperCPU}, true},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "d", ToneMapper: ToneMapperVulkan}, false},
+		{Hardware{Accel: domain.AccelNVENC, Device: "d"}, false},
+		{Hardware{Accel: domain.AccelVideoToolbox}, false},
+	} {
+		filter, _ := tc.hw.videoArgs(e)
+		if strings.Contains(filter, onCPU) != tc.onCPU {
+			t.Errorf("%s %s: mapped on the CPU %t: %q", tc.hw.Accel, tc.hw.ToneMapper, !tc.onCPU, filter)
+		}
+		if tc.hw.Accel == domain.AccelQSV && (strings.Contains(filter, "tonemap=1") || !strings.Contains(filter, "vpp_qsv=w=1920:h=1080:format=p010")) {
+			t.Errorf("qsv: %q maps on the device, or downloads no P010", filter)
+		}
+		if tc.hw.ToneMapper == ToneMapperVAAPI && strings.Contains(filter, "tonemap_vaapi") {
+			t.Errorf("vaapi: %q maps on the device", filter)
+		}
+	}
+	for _, tc := range []struct {
+		hw    Hardware
+		tried bool
+	}{
+		{Hardware{Accel: domain.AccelVAAPI, Device: "d", ToneMapper: ToneMapperVAAPI}, true},
+		{Hardware{Accel: domain.AccelQSV, Device: "d"}, true},
+		{Hardware{Accel: domain.AccelVAAPI, Device: "d", ToneMapper: ToneMapperVulkan}, false},
+		{Hardware{Accel: domain.AccelNVENC, Device: "d"}, false},
+	} {
+		dir := t.TempDir()
+		ffmpeg := testtool.Script(t, dir, "ffmpeg", `echo "$*" >> "`+dir+`/args"`+"\n")
+		if err := tc.hw.Check(t.Context(), ffmpeg, domain.VideoH264); err != nil {
+			t.Fatal(err)
+		}
+		args, err := os.ReadFile(dir + "/args")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tried := strings.Contains(string(args), "hwdownload,format=p010le,tonemapx="); tried != tc.tried {
+			t.Errorf("%s %s: Dolby Vision's chain tried at start %t", tc.hw.Accel, tc.hw.ToneMapper, tried)
 		}
 	}
 }
