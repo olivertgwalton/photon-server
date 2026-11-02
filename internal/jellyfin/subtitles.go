@@ -14,6 +14,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -104,7 +105,9 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request, f store.Subti
 			return
 		}
 		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-		a.write(w, []byte(vtt))
+		if err := gzipped.Reply(w, r, http.StatusOK, []byte(vtt)); err != nil {
+			a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+		}
 	case text && format == "js":
 		cues, err := a.svc.HLS.Cues(ctx, open, language)
 		if failed(err) {

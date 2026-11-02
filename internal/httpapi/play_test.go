@@ -254,6 +254,20 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		rec.Body.String() != "WEBVTT en\n\n1\n" || rec.Header().Get("Content-Type") != "text/vtt; charset=utf-8" {
 		t.Errorf("the subtitle file as WebVTT: %d %q %q, want it converted as English", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
+	// A whole film's WebVTT is gzipped for a player that takes gzip.
+	cues := strings.Repeat("1\n00:00:01,000 --> 00:00:03,000\nHello.\n\n", 100)
+	if err := os.WriteFile(filepath.Join(root, "Lawrence", "Lawrence.en.srt"), []byte(cues), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	zipped := httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL+"&format=webvtt", nil)
+	zipped.Header.Set("Accept-Encoding", "gzip")
+	if rec := do(zipped); rec.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("a long subtitle as WebVTT: encoded %q, want gzip", rec.Header().Get("Content-Encoding"))
+	} else if zr, err := gzip.NewReader(rec.Body); err != nil {
+		t.Error(err)
+	} else if text, err := io.ReadAll(zr); err != nil || string(text) != "WEBVTT en\n\n"+cues {
+		t.Errorf("a long subtitle as WebVTT decodes to %.40q, %v", text, err)
+	}
 	if rec := do(httptest.NewRequest(http.MethodGet, got.Subtitles[0].URL+"&format=ass", nil)); rec.Code != http.StatusBadRequest {
 		t.Errorf("as a format there is not: %d, want 400", rec.Code)
 	}
