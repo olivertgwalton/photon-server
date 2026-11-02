@@ -184,7 +184,7 @@ func hardware(ctx context.Context, ffmpeg string, choice domain.EncoderChoice, l
 	}
 	logger.InfoContext(ctx, "encoding video", slog.String("on", string(hw.Accel)), slog.String("device", hw.Device), slog.String("hevc", string(hw.HEVC)))
 	if hw.Accel == domain.AccelVAAPI {
-		hw.Overlay = hls.ProbeOverlay(ctx, ffmpeg, hw.Device)
+		logger.InfoContext(ctx, "tone mapping on vaapi", slog.String("tone_mapper", string(hw.ToneMapper)))
 	}
 	return burning(ctx, ffmpeg, hw, logger), nil
 }
@@ -228,15 +228,38 @@ func chosen(all []hls.Hardware, choice domain.EncoderChoice) []hls.Hardware {
 }
 
 // first is the first of tried that encodes a test picture, or software, false, where none does.
+// A VAAPI device is tried with the overlay and tone mapper its driver is found to have.
 func first(ctx context.Context, ffmpeg string, tried []hls.Hardware, logger *slog.Logger) (hls.Hardware, bool) {
 	for _, e := range tried {
-		if err := e.Check(ctx, ffmpeg, domain.VideoH264); err != nil {
+		if e.Accel == domain.AccelVAAPI {
+			e.Overlay = hls.ProbeOverlay(ctx, ffmpeg, e.Device)
+			e.ToneMapper = hls.ToneMapperOf(e.Overlay)
+		}
+		e, err := toneMapping(ctx, ffmpeg, e, logger)
+		if err != nil {
 			logger.DebugContext(ctx, "not encoding on", slog.String("acceleration", string(e.Accel)), slog.String("device", e.Device), slog.Any("err", err))
 			continue
 		}
 		return e, true
 	}
 	return hls.Hardware{Accel: domain.AccelSoftware}, false
+}
+
+// toneMapping is hw where it encodes a test picture. A VAAPI device whose driver's own tone
+// mapper, or Vulkan's, will not is tried with the CPU's, and kept where that does, as it still
+// encodes on the device.
+func toneMapping(ctx context.Context, ffmpeg string, hw hls.Hardware, logger *slog.Logger) (hls.Hardware, error) {
+	err := hw.Check(ctx, ffmpeg, domain.VideoH264)
+	if err == nil || hw.Accel != domain.AccelVAAPI || hw.ToneMapper == hls.ToneMapperCPU {
+		return hw, err
+	}
+	cpu := hw
+	cpu.ToneMapper = hls.ToneMapperCPU
+	if cpu.Check(ctx, ffmpeg, domain.VideoH264) != nil {
+		return hw, err
+	}
+	logger.WarnContext(ctx, "tone mapping on vaapi through the cpu instead", slog.String("device", hw.Device), slog.String("tone_mapper", string(hw.ToneMapper)), slog.Any("err", err))
+	return cpu, nil
 }
 
 const (

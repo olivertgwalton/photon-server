@@ -76,3 +76,45 @@ func TestAnOverlayThatWillNotBurnInIsFoundAtStart(t *testing.T) {
 		}
 	}
 }
+
+// A VAAPI device whose driver's tone mapper, or Vulkan's, will not map a test picture is kept
+// mapping on the CPU; one that will not encode at all is passed over.
+func TestAToneMapperThatWillNotMapIsFoundAtStart(t *testing.T) {
+	const vaapi = "/dev/dri/renderD128"
+	for _, tc := range []struct {
+		name, script string
+		hw, want     hls.Hardware
+		err          bool
+	}{
+		{
+			"tonemap_vaapi refused", `case "$*" in *tonemap_vaapi*) exit 1;; esac`,
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVAAPI},
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperCPU},
+			false,
+		},
+		{
+			"libplacebo fails", `case "$*" in *libplacebo*) exit 1;; esac`,
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVulkan},
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperCPU},
+			false,
+		},
+		{
+			"libplacebo maps", "exit 0",
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVulkan},
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVulkan},
+			false,
+		},
+		{
+			"nothing encodes", "exit 1",
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVulkan},
+			hls.Hardware{Accel: domain.AccelVAAPI, Device: vaapi, ToneMapper: hls.ToneMapperVulkan},
+			true,
+		},
+	} {
+		ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", tc.script+"\n")
+		got, err := toneMapping(t.Context(), ffmpeg, tc.hw, slog.New(slog.DiscardHandler))
+		if got != tc.want || (err != nil) != tc.err {
+			t.Errorf("%s: %+v, %v, want %+v, failed %t", tc.name, got, err, tc.want, tc.err)
+		}
+	}
+}
