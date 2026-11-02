@@ -77,7 +77,7 @@ func srgbCurve() []byte {
 }
 
 // taggedPNG is a PNG of img carrying icc in an iCCP chunk, or none where icc is nil.
-func taggedPNG(t *testing.T, img image.Image, icc []byte) []byte {
+func taggedPNG(t testing.TB, img image.Image, icc []byte) []byte {
 	t.Helper()
 	var out bytes.Buffer
 	if err := png.Encode(&out, img); err != nil {
@@ -104,7 +104,7 @@ func taggedPNG(t *testing.T, img image.Image, icc []byte) []byte {
 }
 
 // taggedJPEG is a JPEG of img carrying icc in an APP2 segment.
-func taggedJPEG(t *testing.T, img image.Image, icc []byte) []byte {
+func taggedJPEG(t testing.TB, img image.Image, icc []byte) []byte {
 	t.Helper()
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 100}); err != nil {
@@ -184,4 +184,15 @@ func TestACopyKeepsThePictureColoursItsProfileGives(t *testing.T) {
 			t.Errorf("%s: copy is %v, want %v", c.name, got, c.want)
 		}
 	}
+}
+
+// No picture, whatever its profile says, stops the server reading it.
+func FuzzDecode(f *testing.F) {
+	small := uniform(color.NRGBA{R: 128, G: 64, B: 32, A: 200})
+	f.Add(taggedPNG(f, small, iccProfile(gamma18)))
+	f.Add(taggedPNG(f, small, iccProfile(paraCurve(4, 2.4, 1, 0, 1, 0.5, 0, 0))))
+	f.Add(taggedJPEG(f, small, iccProfile(srgbCurve())))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		_, _ = decode(bytes.NewReader(data))
+	})
 }

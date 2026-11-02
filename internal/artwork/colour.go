@@ -35,6 +35,10 @@ func inSRGB(img image.Image, format string, r io.Reader) image.Image {
 	case "webp":
 		icc = webpProfile(br)
 	}
+	// An RGB profile on a CMYK JPEG is not the JPEG's; every browser ignores it.
+	if _, cmyk := img.(*image.CMYK); cmyk {
+		return img
+	}
 	t, ok := transformOf(icc)
 	if !ok {
 		return img
@@ -378,5 +382,10 @@ var srgbTable = func() (t [srgbSteps + 1]uint8) {
 }()
 
 func encodeSRGB(l float64) uint8 {
-	return srgbTable[int(min(max(l, 0), 1)*srgbSteps+0.5)]
+	// Huge curves times huge primaries overflow, and infinities cancel to NaN, which min and max
+	// pass on: none of it is light.
+	if !(l > 0) {
+		return 0
+	}
+	return srgbTable[int(min(l, 1)*srgbSteps+0.5)]
 }
