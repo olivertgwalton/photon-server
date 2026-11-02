@@ -70,6 +70,7 @@ func (heldBatch) Exec() (pgconn.CommandTag, error) { return pgconn.CommandTag{},
 func (heldBatch) Query() (pgx.Rows, error)         { return nil, pgx.ErrTxClosed }
 func (heldBatch) QueryRow() pgx.Row                { return firstRow{err: pgx.ErrTxClosed} }
 func (heldBatch) Close() error                     { return nil }
+func (heldBatch) Tx() pgx.Tx                       { return nil }
 
 // batchRows are the rows of a batch's last statement, which close the batch with them.
 type batchRows struct {
