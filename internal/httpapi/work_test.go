@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -112,7 +112,7 @@ func TestAnAdminSeesTheServersWork(t *testing.T) {
 			} `json:"title"`
 		} `json:"items"`
 	}
-	if err := json.NewDecoder(do(goodToken, http.MethodGet, "/api/v1/admin/playbacks").Body).Decode(&playing); err != nil ||
+	if err := json.UnmarshalRead(do(goodToken, http.MethodGet, "/api/v1/admin/playbacks").Body, &playing); err != nil ||
 		len(playing.Items) != 1 || playing.Items[0].Title.ID != films {
 		t.Errorf("playbacks = %+v, %v; want the film", playing, err)
 	}

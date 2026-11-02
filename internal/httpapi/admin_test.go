@@ -3,7 +3,7 @@ package httpapi
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -169,7 +169,7 @@ func TestAnAdminAddsARemoteLibrary(t *testing.T) {
 	rec := do(http.MethodPost, "/api/v1/admin/libraries",
 		`{"name": "Popular", "kind": "movies", "media": "remote", "list": {"source": "plugin:aio", "id": "movie/top"}, "streams": "plugin:aio"}`)
 	var added adminLibraryJSON
-	if err := json.NewDecoder(rec.Body).Decode(&added); err != nil || rec.Code != http.StatusCreated ||
+	if err := json.UnmarshalRead(rec.Body, &added); err != nil || rec.Code != http.StatusCreated ||
 		added.Media != domain.MediaRemote || added.List == nil || added.List.ID != "movie/top" || added.Streams != domain.PluginSource("aio") {
 		t.Fatalf("adding: %d %+v %v", rec.Code, added, err)
 	}
@@ -192,7 +192,7 @@ func TestAnAdminAddsARemoteLibrary(t *testing.T) {
 	}
 	rec = do(http.MethodPost, "/api/v1/admin/libraries", `{"name": "Found", "kind": "movies", "media": "remote", "discover": "plugin:aio", "streams": "plugin:aio"}`)
 	var found adminLibraryJSON
-	if err := json.NewDecoder(rec.Body).Decode(&found); err != nil || rec.Code != http.StatusCreated || found.List != nil || found.Discover != domain.PluginSource("aio") {
+	if err := json.UnmarshalRead(rec.Body, &found); err != nil || rec.Code != http.StatusCreated || found.List != nil || found.Discover != domain.PluginSource("aio") {
 		t.Errorf("adding one of what a search finds alone: %d %+v %v", rec.Code, found, err)
 	}
 	if rec := do(http.MethodPost, "/api/v1/admin/libraries/"+added.ID.String()+"/check", ""); rec.Code != http.StatusConflict {
@@ -218,7 +218,7 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 	}
 	rec := do(goodToken, http.MethodPost, "/api/v1/admin/libraries", `{"name": "Films", "kind": "movies", "root": `+quoted+`}`)
 	var added adminLibraryJSON
-	if err := json.NewDecoder(rec.Body).Decode(&added); err != nil || rec.Code != http.StatusCreated || added.Root != root {
+	if err := json.UnmarshalRead(rec.Body, &added); err != nil || rec.Code != http.StatusCreated || added.Root != root {
 		t.Fatalf("adding: %d %+v %v", rec.Code, added, err)
 	}
 	if !slices.Equal(libs.scanned, []uuid.UUID{added.ID}) {
@@ -392,7 +392,7 @@ func TestAnAdminNamesWhereALibrarysRequestsGo(t *testing.T) {
 	set := func(body string) *httptest.ResponseRecorder { return setOn(films, body) }
 	var got adminLibraryJSON
 	rec := set(`{"requests": "plugin:riven"}`)
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK || got.Requests != domain.PluginSource("riven") {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil || rec.Code != http.StatusOK || got.Requests != domain.PluginSource("riven") {
 		t.Errorf("sent to riven: %d %+v %v", rec.Code, got, err)
 	}
 	if rec := set(`{"requests": "plugin:aio"}`); rec.Code != http.StatusBadRequest {

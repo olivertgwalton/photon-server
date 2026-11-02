@@ -3,7 +3,8 @@ package jellyfin
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"math"
 	"net/http"
@@ -32,16 +33,16 @@ func guid(id uuid.UUID) string {
 // user is Jellyfin's UserDto. The Has*Password fields are obsolete in Jellyfin 12, which always
 // sends them so, but the Kotlin SDK the Android apps ship refuses a user without them.
 type user struct {
-	Name                      string          `json:"Name"`
-	ServerID                  string          `json:"ServerId"`
-	ID                        string          `json:"Id"`
-	PrimaryImageTag           string          `json:"PrimaryImageTag,omitempty"`
-	HasPassword               bool            `json:"HasPassword"`
-	HasConfiguredPassword     bool            `json:"HasConfiguredPassword"`
-	HasConfiguredEasyPassword bool            `json:"HasConfiguredEasyPassword"`
-	EnableAutoLogin           bool            `json:"EnableAutoLogin"`
-	Configuration             configuration   `json:"Configuration"`
-	Policy                    json.RawMessage `json:"Policy"`
+	Name                      string         `json:"Name"`
+	ServerID                  string         `json:"ServerId"`
+	ID                        string         `json:"Id"`
+	PrimaryImageTag           string         `json:"PrimaryImageTag,omitempty"`
+	HasPassword               bool           `json:"HasPassword"`
+	HasConfiguredPassword     bool           `json:"HasConfiguredPassword"`
+	HasConfiguredEasyPassword bool           `json:"HasConfiguredEasyPassword"`
+	EnableAutoLogin           bool           `json:"EnableAutoLogin"`
+	Configuration             configuration  `json:"Configuration"`
+	Policy                    jsontext.Value `json:"Policy"`
 }
 
 // policy is Jellyfin's UserPolicy, complete for the same reason. No profile is an administrator
@@ -49,7 +50,7 @@ type user struct {
 // the server is run from photon's own app. What photon has no part of, Live TV, SyncPlay, sharing
 // and deleting through this API, is turned off so apps do not offer it. Downloading is on: a
 // profile downloads a title's file as it is, of what it may play.
-var policy = json.RawMessage(`{"IsAdministrator":false,"IsHidden":true,"EnableCollectionManagement":false,` +
+var policy = jsontext.Value(`{"IsAdministrator":false,"IsHidden":true,"EnableCollectionManagement":false,` +
 	`"EnableSubtitleManagement":false,"EnableLyricManagement":false,"IsDisabled":false,"BlockedTags":[],` +
 	`"AllowedTags":[],"EnableUserPreferenceAccess":true,"AccessSchedules":[],"BlockUnratedItems":[],` +
 	`"EnableRemoteControlOfOtherUsers":false,"EnableSharedDeviceControl":false,"EnableRemoteAccess":true,` +
@@ -89,7 +90,7 @@ func (a *API) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		Pw       string `json:"Pw"`
 	}
 	a.readWithin(w)
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSignIn)).Decode(&req); err != nil {
+	if err := json.UnmarshalRead(http.MaxBytesReader(w, r.Body, maxSignIn), &req, anyCase); err != nil {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}
@@ -176,8 +177,8 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type displays interface {
-	DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error)
-	SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error
+	DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (jsontext.Value, error)
+	SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs jsontext.Value) error
 }
 
 // maxDisplayPreferences is the most a view's display preferences may be. Jellyfin's web app keeps
@@ -232,7 +233,7 @@ func (a *API) setDisplayPreferences(w http.ResponseWriter, r *http.Request) {
 	client := query(r, "client")
 	var prefs displayPreferences
 	a.readWithin(w)
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDisplayPreferences)).Decode(&prefs); err != nil || client == "" {
+	if err := json.UnmarshalRead(http.MaxBytesReader(w, r.Body, maxDisplayPreferences), &prefs, anyCase); err != nil || client == "" {
 		a.refuse(w, http.StatusBadRequest)
 		return
 	}

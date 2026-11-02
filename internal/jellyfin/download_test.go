@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -175,8 +175,10 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 	}
 	w = serve(api, http.MethodGet, "/Items/"+guid(cards[0])+"?ApiKey=pst_ada&fields=MediaSources,Path", "", "")
 	var item struct {
-		Path         string
-		MediaSources []struct{ Path string }
+		Path         string `json:"Path"`
+		MediaSources []struct {
+			Path string `json:"Path"`
+		} `json:"MediaSources"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil || len(item.MediaSources) != 1 ||
 		item.Path != "Heat (1995).mkv" || item.MediaSources[0].Path != "Heat (1995).mkv" {

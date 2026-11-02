@@ -4,7 +4,8 @@ package tvdb
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -64,8 +65,8 @@ func languageOf(loc domain.Locale) string {
 // the body of a sign-in.
 type login struct{ key, pin string }
 
-func (l login) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
+func (l login) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return json.MarshalEncode(enc, struct {
 		Key string `json:"apikey"`
 		PIN string `json:"pin,omitzero"`
 	}{l.key, l.pin})

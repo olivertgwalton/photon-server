@@ -3,7 +3,7 @@ package httpapi
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"net/http"
@@ -101,7 +101,7 @@ type knownNodeJSON struct {
 	PublicURL    uri                     `json:"public_url"`
 	LocalURL     uri                     `json:"local_url"`
 	Encoding     nodeEncodingJSON        `json:"encoding"`
-	Online       *nodeJSON               `json:"online,omitempty"`
+	Online       *nodeJSON               `json:"online,omitzero"`
 }
 
 // nodeChangeJSON is what to change of a node: its role, its limit on transcodes at once, whether it
@@ -222,7 +222,7 @@ func askNode[T any](ctx context.Context, a *API, n domain.Node, path string, wit
 	if resp.StatusCode != http.StatusOK {
 		return answer, fmt.Errorf("%s answered %s", n.Name, resp.Status)
 	}
-	return answer, json.NewDecoder(resp.Body).Decode(&answer)
+	return answer, json.UnmarshalRead(resp.Body, &answer)
 }
 
 // adminNodes lists every node there is or has been, the first to start first, and how busy each

@@ -1,7 +1,7 @@
 package animelist
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"encoding/xml"
 	"io"
 	"strconv"
@@ -52,7 +52,7 @@ func Read(places, ids io.Reader) ([]Entry, error) {
 		AniDB   int `json:"anidb_id"`
 		AniList int `json:"anilist_id"`
 	}
-	if err := json.NewDecoder(ids).Decode(&joined); err != nil {
+	if err := json.UnmarshalRead(ids, &joined); err != nil {
 		return nil, err
 	}
 	aniList := make(map[int]int, len(joined))

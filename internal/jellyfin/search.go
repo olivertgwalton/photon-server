@@ -16,9 +16,9 @@ type searchHint struct {
 	ItemID                  string   `json:"ItemId"`
 	ID                      string   `json:"Id"`
 	Name                    string   `json:"Name"`
-	IndexNumber             *int     `json:"IndexNumber,omitempty"`
-	ParentIndexNumber       *int     `json:"ParentIndexNumber,omitempty"`
-	ProductionYear          int      `json:"ProductionYear,omitempty"`
+	IndexNumber             *int     `json:"IndexNumber,omitzero"`
+	ParentIndexNumber       *int     `json:"ParentIndexNumber,omitzero"`
+	ProductionYear          int      `json:"ProductionYear,omitzero"`
 	PrimaryImageTag         string   `json:"PrimaryImageTag,omitempty"`
 	ThumbImageTag           string   `json:"ThumbImageTag,omitempty"`
 	ThumbImageItemID        string   `json:"ThumbImageItemId,omitempty"`
@@ -26,11 +26,11 @@ type searchHint struct {
 	BackdropImageItemID     string   `json:"BackdropImageItemId,omitempty"`
 	Type                    string   `json:"Type"`
 	IsFolder                bool     `json:"IsFolder"`
-	RunTimeTicks            int64    `json:"RunTimeTicks,omitempty"`
+	RunTimeTicks            int64    `json:"RunTimeTicks,omitzero"`
 	MediaType               string   `json:"MediaType"`
 	Series                  string   `json:"Series,omitempty"`
 	Artists                 []string `json:"Artists"`
-	PrimaryImageAspectRatio float64  `json:"PrimaryImageAspectRatio,omitempty"`
+	PrimaryImageAspectRatio float64  `json:"PrimaryImageAspectRatio,omitzero"`
 }
 
 // hintOf is an item as a search hint: an episode's backdrop is its show's.
@@ -38,7 +38,7 @@ func hintOf(it item) searchHint {
 	h := searchHint{
 		ItemID: it.ID, ID: it.ID, Name: it.Name, IndexNumber: it.IndexNumber, ParentIndexNumber: it.ParentIndexNumber,
 		ProductionYear: it.ProductionYear, PrimaryImageTag: it.ImageTags["Primary"], Type: it.Type, IsFolder: it.IsFolder,
-		RunTimeTicks: it.RunTimeTicks, MediaType: it.MediaType, Series: it.SeriesName, Artists: []string{},
+		RunTimeTicks: it.RunTimeTicks, MediaType: it.MediaType, Series: it.SeriesName,
 		PrimaryImageAspectRatio: it.PrimaryImageAspectRatio,
 	}
 	if tag, ok := it.ImageTags["Thumb"]; ok {
@@ -66,7 +66,7 @@ func (a *API) searchHints(w http.ResponseWriter, r *http.Request) {
 		SearchHints      []searchHint `json:"SearchHints"`
 		TotalRecordCount int          `json:"TotalRecordCount"`
 	}
-	out := result{SearchHints: []searchHint{}}
+	var out result
 	q, ok := searchQuery(r, text, parent, values(r, "includeItemTypes"), l)
 	if !ok {
 		a.writeJSON(w, out)
@@ -122,7 +122,7 @@ func searchQuery(r *http.Request, text string, library uuid.UUID, types []string
 func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
 	q, ok := searchQuery(r, text, library, types, l)
 	if !ok {
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{StartIndex: l.start})
 		return
 	}
 	cards, total, err := a.searched(r.Context(), q)

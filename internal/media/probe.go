@@ -3,7 +3,8 @@ package media
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math"
@@ -96,9 +97,12 @@ type probeSideData struct {
 // duration, and the version that would make plays as nothing.
 const guessedFormat = 25
 
+// probed reads ffprobe's JSON, which passes a file's tags through byte for byte, UTF-8 or not.
+var probed = jsontext.AllowInvalidUTF8(true)
+
 func parseProbe(out []byte) (domain.Facts, error) {
 	var p probeOutput
-	if err := json.Unmarshal(out, &p); err != nil {
+	if err := json.Unmarshal(out, &p, probed); err != nil {
 		return domain.Facts{}, fmt.Errorf("ffprobe output: %w", err)
 	}
 	if p.Format.Score <= guessedFormat {

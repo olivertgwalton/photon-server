@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -75,7 +75,7 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 		}, nil, nil, nodecall.Key{}),
 	})
 	var listed listJSON[knownNodeJSON]
-	if rec := ask(api, http.MethodGet, "/api/v1/admin/nodes", ""); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&listed) != nil {
+	if rec := ask(api, http.MethodGet, "/api/v1/admin/nodes", ""); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &listed) != nil {
 		t.Fatalf("listing: %d %s", rec.Code, rec.Body)
 	}
 	up := map[uuid.UUID]*nodeJSON{}

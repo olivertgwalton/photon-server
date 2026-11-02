@@ -2,7 +2,7 @@ package store
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"uuid"
@@ -117,8 +117,8 @@ func languageText(t language.Tag) string {
 
 // DisplayPreferences answers how a profile's app, its client, last said it lays out a view: as the
 // app sent it, or ErrNotFound for one it never said.
-func (s *Store) DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (json.RawMessage, error) {
-	var out json.RawMessage
+func (s *Store) DisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string) (jsontext.Value, error) {
+	var out jsontext.Value
 	err := s.pool.QueryRow(ctx, `
 		SELECT preferences FROM display_preferences WHERE profile_id = $1 AND client = $2 AND view = $3`,
 		profile, client, view).Scan(&out)
@@ -136,7 +136,7 @@ var ErrTooManyViews = fmt.Errorf("a profile's apps keep the layout of at most %d
 // SetDisplayPreferences keeps how a profile's app lays out a view. ErrNotFound for no profile, and
 // ErrTooManyViews for a view beyond maxDisplayViews. Two views saved at once may both take the last
 // place: the limit bounds what is kept, not to the row.
-func (s *Store) SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs json.RawMessage) error {
+func (s *Store) SetDisplayPreferences(ctx context.Context, profile uuid.UUID, client, view string, prefs jsontext.Value) error {
 	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO display_preferences (profile_id, client, view, preferences)
 		SELECT $1, $2, $3, $4

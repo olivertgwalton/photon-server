@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"path"
@@ -45,8 +45,8 @@ func TestAnAppReadsAFilmsChapters(t *testing.T) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
 		var it struct {
-			Items    []map[string]any
-			Chapters []map[string]any
+			Items    []map[string]any `json:"Items"`
+			Chapters []map[string]any `json:"Chapters"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &it); w.Code != http.StatusOK || err != nil {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)

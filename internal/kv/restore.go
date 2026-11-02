@@ -2,7 +2,7 @@ package kv
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/valkey-io/valkey-go"

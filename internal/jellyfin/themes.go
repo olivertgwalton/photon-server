@@ -43,7 +43,7 @@ func (a *API) themeSongs(w http.ResponseWriter, r *http.Request) (uuid.UUID, the
 	}
 	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if isNotFound(err) {
-		return id, themesOf(guid(id), []item{}), true
+		return id, themesOf(guid(id), nil), true
 	}
 	if err != nil {
 		a.internal(w, r, err)
@@ -53,7 +53,7 @@ func (a *API) themeSongs(w http.ResponseWriter, r *http.Request) (uuid.UUID, the
 	switch p.Kind {
 	case domain.ItemSeason, domain.ItemEpisode:
 		if !strings.EqualFold(query(r, "inheritFromParent"), "true") || p.Show == nil {
-			return id, themesOf(guid(id), []item{}), true
+			return id, themesOf(guid(id), nil), true
 		}
 		owner, name = p.Show.ID, p.Show.Title
 	case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra:
@@ -82,7 +82,7 @@ func (a *API) themeSongsResult(w http.ResponseWriter, r *http.Request) {
 // themeVideos are none: photon's themes are tunes alone.
 func (a *API) themeVideos(w http.ResponseWriter, r *http.Request) {
 	if id, ok := a.itemID(w, r); ok {
-		a.writeJSON(w, themesOf(guid(id), []item{}))
+		a.writeJSON(w, themesOf(guid(id), nil))
 	}
 }
 
@@ -93,7 +93,7 @@ func (a *API) themeMedia(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	none := themesOf(guid(id), []item{})
+	none := themesOf(guid(id), nil)
 	a.writeJSON(w, struct {
 		ThemeVideosResult     themeMediaResult `json:"ThemeVideosResult"`
 		ThemeSongsResult      themeMediaResult `json:"ThemeSongsResult"`

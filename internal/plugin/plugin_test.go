@@ -2,7 +2,7 @@ package plugin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -99,7 +99,7 @@ func TestAPluginListsTitlesAndStreamsThem(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /list/v1/list", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.ListRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID != "best" {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil || req.ID != "best" {
 			http.NotFound(w, r)
 			return
 		}
@@ -110,7 +110,7 @@ func TestAPluginListsTitlesAndStreamsThem(t *testing.T) {
 	})
 	mux.HandleFunc("POST /stream/v1/streams", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.StreamsRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IDs["imdb"] != "tt0113277" {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil || req.IDs["imdb"] != "tt0113277" {
 			writeJSON(t, w, pluginv1.StreamsResponse{})
 			return
 		}
@@ -145,7 +145,7 @@ func TestAPluginListsTitlesAndStreamsThem(t *testing.T) {
 func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		t.Error(err)
 	}
 }
@@ -156,7 +156,7 @@ func TestAPluginFindsAndFetchesSubtitles(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /subtitles/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.SubtitlesRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Language != "pt-BR" || req.IDs["imdb"] != "tt0113277" {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil || req.Language != "pt-BR" || req.IDs["imdb"] != "tt0113277" {
 			writeJSON(t, w, pluginv1.SubtitlesResponse{})
 			return
 		}
@@ -167,7 +167,7 @@ func TestAPluginFindsAndFetchesSubtitles(t *testing.T) {
 	})
 	mux.HandleFunc("POST /subtitles/v1/fetch", func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.FetchRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID != "7" {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil || req.ID != "7" {
 			writeJSON(t, w, pluginv1.FetchResponse{})
 			return
 		}
@@ -213,7 +213,7 @@ func TestAPluginHearsTheEventsItNames(t *testing.T) {
 func TestAPluginTimesAVersionsIntroAndCredits(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req pluginv1.MarkersRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || r.URL.Path != "/segments/v1/markers" || req.DurationMS != 2_640_000 || req.Episode != 3 {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil || r.URL.Path != "/segments/v1/markers" || req.DurationMS != 2_640_000 || req.Episode != 3 {
 			writeJSON(t, w, pluginv1.MarkersResponse{})
 			return
 		}
@@ -242,7 +242,7 @@ func TestAPluginIsAskedForATitleALibraryLacks(t *testing.T) {
 		if r.URL.Path != "/request/v1/request" {
 			t.Errorf("asked at %s", r.URL.Path)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(r.Body, &got); err != nil {
 			t.Error(err)
 		}
 		if refuse {

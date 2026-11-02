@@ -5,7 +5,7 @@ package radarr
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"net/url"
@@ -35,7 +35,7 @@ func (c *Client) Info() provider.Info {
 type movie struct {
 	Title               string     `json:"title"`
 	TMDBID              int        `json:"tmdbId"`
-	Year                int        `json:"year,omitempty"`
+	Year                int        `json:"year,omitzero"`
 	QualityProfileID    int        `json:"qualityProfileId"`
 	RootFolderPath      string     `json:"rootFolderPath"`
 	Monitored           bool       `json:"monitored"`
@@ -62,7 +62,7 @@ func (c *Client) Request(ctx context.Context, w domain.Wanted) error {
 	if err != nil {
 		return err
 	}
-	var had []json.RawMessage
+	var had []jsontext.Value
 	if err := api.Get(ctx, "/api/v3/movie", url.Values{"tmdbId": {strconv.Itoa(tmdb)}}, &had); err != nil || len(had) > 0 {
 		return err
 	}

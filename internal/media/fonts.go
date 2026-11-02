@@ -2,7 +2,7 @@ package media
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"path"
 	"slices"
@@ -39,7 +39,7 @@ func parseFonts(out []byte) ([]Font, error) {
 			Tags      map[string]string `json:"tags"`
 		} `json:"streams"`
 	}
-	if err := json.Unmarshal(out, &p); err != nil {
+	if err := json.Unmarshal(out, &p, probed); err != nil {
 		return nil, fmt.Errorf("ffprobe output: %w", err)
 	}
 	var fonts []Font

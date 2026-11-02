@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -117,7 +117,7 @@ func adminMetrics(t *testing.T, api *API) metricsJSON {
 	t.Helper()
 	rec := metricsAs(api, goodToken)
 	var got metricsJSON
-	if rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+	if rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &got) != nil {
 		t.Fatalf("metrics: %d %s", rec.Code, rec.Body)
 	}
 	return got

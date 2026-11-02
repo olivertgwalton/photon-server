@@ -4,7 +4,7 @@ package events
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"sync"
 	"time"

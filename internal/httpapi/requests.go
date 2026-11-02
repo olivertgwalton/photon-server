@@ -105,7 +105,7 @@ func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(nonNil(each(rs, requestOf)), page.Offset, extent))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(each(rs, requestOf), page.Offset, extent))
 }
 
 func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func (a *API) keptRequests(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(nonNil(each(rs, requestOf)), page.Offset, extent))
+	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(each(rs, requestOf), page.Offset, extent))
 }
 
 func (a *API) approveRequest(w http.ResponseWriter, r *http.Request) {

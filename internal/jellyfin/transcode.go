@@ -3,7 +3,7 @@ package jellyfin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
@@ -70,11 +70,11 @@ type transcode struct {
 	Version  uuid.UUID                `json:"version"`
 	Method   domain.PlayMethod        `json:"method"`
 	Video    domain.VideoPlan         `json:"video"`
-	Audio    *domain.AudioPlan        `json:"audio,omitempty"`
-	Subtitle *int                     `json:"subtitle,omitempty"`
+	Audio    *domain.AudioPlan        `json:"audio,omitzero"`
+	Subtitle *int                     `json:"subtitle,omitzero"`
 	Segments domain.SegmentFormat     `json:"segments"`
 	Reasons  []domain.TranscodeReason `json:"reasons,omitempty"`
-	StartMS  int64                    `json:"start_ms,omitempty"`
+	StartMS  int64                    `json:"start_ms,omitzero"`
 	// Renditions leave out of the HLS the subtitle files the app fetches itself.
 	Renditions playback.Renditions `json:"renditions"`
 }

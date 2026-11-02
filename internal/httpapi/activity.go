@@ -127,7 +127,7 @@ type scanJSON struct {
 // snapshot is what is going on across the cluster now: tasks and jobs running, how far each kind of
 // job's backlog has got, libraries being scanned, and who is playing what.
 func (a *API) snapshot(ctx context.Context) (snapshotJSON, error) {
-	out := snapshotJSON{Tasks: []runningTaskJSON{}, Jobs: []runningJobJSON{}, Backlogs: []backlogJSON{}, Scans: []scanJSON{}}
+	var out snapshotJSON
 	statuses, err := a.svc.Tasks.Statuses(ctx)
 	if err != nil {
 		return out, err

@@ -44,7 +44,7 @@ type addedWebhookJSON struct {
 }
 
 func webhookOf(w store.Webhook) webhookJSON {
-	return webhookJSON{ID: w.ID, URL: uri(w.URL), Format: w.Format, Events: nonNil(w.Events), CreatedAt: w.CreatedAt.UTC()}
+	return webhookJSON{ID: w.ID, URL: uri(w.URL), Format: w.Format, Events: w.Events, CreatedAt: w.CreatedAt.UTC()}
 }
 
 // adminWebhooks lists the webhooks, never their secrets.

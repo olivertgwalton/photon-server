@@ -3,7 +3,7 @@ package auth
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"testing"
 	"uuid"
@@ -23,9 +23,9 @@ func TestALogLineSaysWhoWasSignedIn(t *testing.T) {
 	logger.ErrorContext(context.Background(), "scan failed")
 
 	var lines []map[string]any
-	for dec := json.NewDecoder(&out); dec.More(); {
+	for l := range bytes.Lines(out.Bytes()) {
 		var line map[string]any
-		if err := dec.Decode(&line); err != nil {
+		if err := json.Unmarshal(l, &line); err != nil {
 			t.Fatal(err)
 		}
 		delete(line, "time")

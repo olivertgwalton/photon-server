@@ -2,7 +2,7 @@ package tracker
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"maps"
 	"net/http"
@@ -64,7 +64,7 @@ func (f *fakeAniList) serve(t *testing.T) aniList {
 			Query     string         `json:"query"`
 			Variables map[string]any `json:"variables"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
 			t.Error(err)
 		}
 		f.mu.Lock()
@@ -87,7 +87,7 @@ func (f *fakeAniList) serve(t *testing.T) aniList {
 		default:
 			data = map[string]any{"Viewer": map[string]any{"id": 42, "name": "Levi"}}
 		}
-		if err := json.NewEncoder(w).Encode(map[string]any{"data": data}); err != nil {
+		if err := json.MarshalWrite(w, map[string]any{"data": data}); err != nil {
 			t.Error(err)
 		}
 	}))

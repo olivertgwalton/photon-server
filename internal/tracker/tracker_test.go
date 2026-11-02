@@ -4,7 +4,7 @@ package tracker
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -66,7 +66,7 @@ func (f *fakeTracker) serve() string {
 		answer := func(code int, v any) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(code)
-			if err := json.NewEncoder(w).Encode(v); err != nil {
+			if err := json.MarshalWrite(w, v); err != nil {
 				f.t.Error(err)
 			}
 		}
@@ -84,7 +84,7 @@ func (f *fakeTracker) serve() string {
 				body[k] = r.PostForm.Get(k)
 			}
 		case r.Method == http.MethodPost:
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			if err := json.UnmarshalRead(r.Body, &body); err != nil {
 				f.t.Errorf("%s %s: %v", f.tracker, r.URL.Path, err)
 			}
 		}

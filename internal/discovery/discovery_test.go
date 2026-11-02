@@ -2,7 +2,7 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net"
@@ -55,7 +55,10 @@ func TestServeAnswersTheQuestion(t *testing.T) {
 		t.Fatal(err)
 	}
 	var a struct {
-		ID, Name, Version, Address string
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Address string `json:"address"`
 	}
 	if err := json.Unmarshal(got, &a); err != nil {
 		t.Fatalf("%v in %s", err, got)

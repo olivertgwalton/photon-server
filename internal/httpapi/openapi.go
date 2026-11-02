@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -91,7 +91,7 @@ type (
 	apiOperation struct {
 		Description string                 `json:"description,omitempty"`
 		Parameters  []apiParameter         `json:"parameters,omitempty"`
-		RequestBody *requestBody           `json:"requestBody,omitempty"`
+		RequestBody *requestBody           `json:"requestBody,omitzero"`
 		Responses   map[string]apiResponse `json:"responses"`
 		// Security is the schemes any one of which admits a request; none is a public route.
 		Security []map[string][]string `json:"security"`
@@ -103,12 +103,12 @@ type (
 		Description string     `json:"description,omitempty"`
 		In          string     `json:"in"`
 		Name        string     `json:"name"`
-		Required    bool       `json:"required,omitempty"`
+		Required    bool       `json:"required,omitzero"`
 		Schema      jsonSchema `json:"schema"`
 	}
 	requestBody struct {
 		Content  map[string]mediaType `json:"content"`
-		Required bool                 `json:"required,omitempty"`
+		Required bool                 `json:"required,omitzero"`
 	}
 	apiResponse struct {
 		Ref         string               `json:"$ref,omitempty"`
@@ -118,7 +118,7 @@ type (
 		Messages map[feed]map[string]jsonSchema `json:"x-messages,omitempty"`
 	}
 	mediaType struct {
-		Schema *jsonSchema `json:"schema,omitempty"`
+		Schema *jsonSchema `json:"schema,omitzero"`
 	}
 )
 
@@ -175,7 +175,7 @@ func describe(info domain.Info, routes []route) ([]byte, error) {
 				},
 			},
 		},
-	})
+	}, json.Deterministic(true))
 }
 
 func operation(s *schemas, r route, path string) (apiOperation, error) {

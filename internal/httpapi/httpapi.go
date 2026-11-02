@@ -462,10 +462,3 @@ func each[S, T any](in []S, convert func(S) T) []T {
 	}
 	return out
 }
-
-func nonNil[T any](s []T) []T {
-	if s == nil {
-		return []T{}
-	}
-	return s
-}

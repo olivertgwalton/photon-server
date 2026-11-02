@@ -2,7 +2,7 @@ package tracker
 
 import (
 	"cmp"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/kv"
@@ -56,7 +56,7 @@ func oauthError(r *provider.Refusal) string {
 	var body struct {
 		Error string `json:"error"`
 	}
-	if json.Unmarshal(r.Body, &body) != nil {
+	if json.Unmarshal(r.Body, &body, provider.Foreign) != nil {
 		return ""
 	}
 	return body.Error

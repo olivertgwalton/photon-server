@@ -3,7 +3,7 @@ package jellyfin
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net"
 	"net/http"

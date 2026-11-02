@@ -3,7 +3,8 @@ package httpapi
 import (
 	"cmp"
 	"encoding"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"
@@ -232,15 +233,15 @@ func values[T ~string](list []T) []string {
 // jsonSchema is a JSON Schema, its fields in the order of their names.
 type jsonSchema struct {
 	Ref                  string                `json:"$ref,omitempty"`
-	AdditionalProperties *jsonSchema           `json:"additionalProperties,omitempty"`
+	AdditionalProperties *jsonSchema           `json:"additionalProperties,omitzero"`
 	AnyOf                []jsonSchema          `json:"anyOf,omitempty"`
 	ContentMediaType     string                `json:"contentMediaType,omitempty"`
 	Enum                 []string              `json:"enum,omitempty"`
 	Format               string                `json:"format,omitempty"`
-	Items                *jsonSchema           `json:"items,omitempty"`
+	Items                *jsonSchema           `json:"items,omitzero"`
 	Pattern              string                `json:"pattern,omitempty"`
 	Properties           map[string]jsonSchema `json:"properties,omitzero"`
-	PropertyNames        *jsonSchema           `json:"propertyNames,omitempty"`
+	PropertyNames        *jsonSchema           `json:"propertyNames,omitzero"`
 	Required             []string              `json:"required,omitempty"`
 	Type                 schemaType            `json:"type,omitzero"`
 }
@@ -251,11 +252,11 @@ type schemaType struct {
 	nullable bool
 }
 
-func (t schemaType) MarshalJSON() ([]byte, error) {
+func (t schemaType) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if t.nullable {
-		return json.Marshal([]string{t.name, "null"})
+		return json.MarshalEncode(enc, []string{t.name, "null"})
 	}
-	return json.Marshal(t.name)
+	return enc.WriteToken(jsontext.String(t.name))
 }
 
 // uri is an absolute address; uriReference is one that may instead be a path on the server that
@@ -284,10 +285,12 @@ var renamed = map[reflect.Type]string{
 	reflect.TypeFor[tracker.LinkFlow](): "TrackerLinkFlow",
 }
 
-var (
-	marshaler     = reflect.TypeFor[json.Marshaler]()
-	textMarshaler = reflect.TypeFor[encoding.TextMarshaler]()
-)
+// marshalers are the ways a type writes itself; v2 calls a pointer receiver's too.
+var marshalers = []reflect.Type{
+	reflect.TypeFor[json.Marshaler](),
+	reflect.TypeFor[json.MarshalerTo](),
+	reflect.TypeFor[encoding.TextMarshaler](),
+}
 
 // schemas builds JSON Schemas of types as encoding/json writes them, each named type once, by
 // name, among defs. A field tagged omitempty or omitzero may be left out, and request types are
@@ -309,7 +312,7 @@ func (s *schemas) of(t reflect.Type) jsonSchema {
 	if t.Kind() == reflect.Pointer {
 		return nullable(s.of(t.Elem()))
 	}
-	if t.Implements(marshaler) || t.Implements(textMarshaler) || reflect.PointerTo(t).Implements(marshaler) {
+	if slices.ContainsFunc(marshalers, reflect.PointerTo(t).Implements) {
 		s.fail(fmt.Errorf("%v writes itself and has no format", t))
 		return jsonSchema{}
 	}
@@ -384,7 +387,8 @@ func (s *schemas) ref(t reflect.Type, describe func() jsonSchema) jsonSchema {
 func (s *schemas) object(t reflect.Type) jsonSchema {
 	var all []jsonField
 	collect(t, 0, &all)
-	props, required := map[string]jsonSchema{}, []string{}
+	props := map[string]jsonSchema{}
+	var required []string
 	for _, f := range all {
 		if !dominant(f, all) {
 			continue

@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -70,10 +70,12 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
 		var got struct {
 			Items []struct {
-				Name, Type, SeriesName string
-				IndexNumber            int
-			}
-			TotalRecordCount int
+				Name        string `json:"Name"`
+				Type        string `json:"Type"`
+				SeriesName  string `json:"SeriesName"`
+				IndexNumber int    `json:"IndexNumber"`
+			} `json:"Items"`
+			TotalRecordCount int `json:"TotalRecordCount"`
 		}
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d", target, w.Code)
@@ -119,12 +121,13 @@ func TestAnAppPagesALibrarysEpisodes(t *testing.T) {
 	w := serve(api, http.MethodGet, "/Items?Ids="+seasons[0].ID.String(), `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
 	var got struct {
 		Items []struct {
-			Type, SeriesName  string
+			Type              string `json:"Type"`
+			SeriesName        string `json:"SeriesName"`
 			SeriesID          string `json:"SeriesId"`
 			ParentID          string `json:"ParentId"`
-			IndexNumber       int
-			ParentIndexNumber *int
-		}
+			IndexNumber       int    `json:"IndexNumber"`
+			ParentIndexNumber *int   `json:"ParentIndexNumber"`
+		} `json:"Items"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.Items) != 1 {
 		t.Fatal(w.Body, err)

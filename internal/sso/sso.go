@@ -11,7 +11,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -316,13 +317,13 @@ type claims struct {
 // groups are an account's groups, which a provider with one sends as a string.
 type groups []string
 
-func (g *groups) UnmarshalJSON(b []byte) error {
-	var one string
-	if json.Unmarshal(b, &one) == nil {
-		*g = groups{one}
-		return nil
+func (g *groups) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	if dec.PeekKind() == jsontext.KindString {
+		tok, err := dec.ReadToken()
+		*g = groups{tok.String()}
+		return err
 	}
-	return json.Unmarshal(b, (*[]string)(g))
+	return json.UnmarshalDecode(dec, (*[]string)(g))
 }
 
 // account is what the provider calls the account, for a profile to show it by.

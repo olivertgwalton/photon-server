@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"log/slog"
 	"net/http"
@@ -100,7 +100,7 @@ func TestADirectPlaysRangeIsCountedSent(t *testing.T) {
 			URL string `json:"url"`
 		} `json:"parts"`
 	}
-	if err := json.NewDecoder(rec.Body).Decode(&played); err != nil || len(played.Parts) == 0 {
+	if err := json.UnmarshalRead(rec.Body, &played); err != nil || len(played.Parts) == 0 {
 		t.Fatalf("play: %s, %v", rec.Body, err)
 	}
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+played.Parts[0].URL, nil)

@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"time"
@@ -180,7 +180,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 
 // hello is what the profile feed begins with: the scans going on in the libraries the profile sees.
 func (a *API) hello(ctx context.Context, profile uuid.UUID) (helloJSON, error) {
-	out := helloJSON{Scans: []scanJSON{}}
+	var out helloJSON
 	scans, err := a.svc.Events.Scans(ctx)
 	if err != nil {
 		return out, err
@@ -222,7 +222,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 			if err != nil {
 				return eventJSON{}, false, err
 			}
-			e.Details = domain.UserDataDetails{TitleIDs: nonNil(same)}
+			e.Details = domain.UserDataDetails{TitleIDs: same}
 		}
 		return eventOf(e), true, nil
 	case domain.EventTitleUpdated:
@@ -257,7 +257,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 					return eventJSON{}, false, err
 				}
 			}
-			details[change] = nonNil(ids)
+			details[change] = ids
 			told = told || len(ids) > 0
 		}
 		e.Details = details

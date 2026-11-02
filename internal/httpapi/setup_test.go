@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -51,7 +51,7 @@ func TestANewServerIsSetUpOnceFromItsLocalNetwork(t *testing.T) {
 	} {
 		api := setupAPI(tc.profiles)
 		var got setupJSON
-		if err := json.NewDecoder(askSetup(t, api, http.MethodGet, tc.from, "").Body).Decode(&got); err != nil || got.State != tc.state {
+		if err := json.UnmarshalRead(askSetup(t, api, http.MethodGet, tc.from, "").Body, &got); err != nil || got.State != tc.state {
 			t.Errorf("%s: state %q (%v), want %q", tc.name, got.State, err, tc.state)
 		}
 		if rec := askSetup(t, api, http.MethodPost, tc.from, setupBody); rec.Code != tc.status {
@@ -64,7 +64,7 @@ func TestANewServerIsSetUpOnceFromItsLocalNetwork(t *testing.T) {
 func TestSettingUpSignsInAsTheAdmin(t *testing.T) {
 	rec := askSetup(t, setupAPI(nil), http.MethodPost, "192.168.1.20", setupBody)
 	var got loginResponse
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Profile.Role != domain.RoleAdmin || got.Token != "" || !strings.Contains(rec.Header().Get("Set-Cookie"), sessionCookie+"="+goodToken) {

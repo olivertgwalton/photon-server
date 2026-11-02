@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -83,7 +83,7 @@ func TestAnAdminChecksEveryNodeCanReadALibrarysRoot(t *testing.T) {
 	} {
 		rec := check(goodToken, tc.lib)
 		var got libraryCheckJSON
-		if rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&got) != nil {
+		if rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &got) != nil {
 			t.Fatalf("%s: %d %s", tc.lib.Root, rec.Code, rec.Body)
 		}
 		if got.Root != tc.lib.Root || len(got.Nodes) != 3 {

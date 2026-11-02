@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -103,12 +103,14 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 		Parts: library.Parts{Places: st}, Playbacks: newFakePlaybacks(), Watching: st, Preferences: st, Placer: alone(nil),
 	})
 	const infuse = `MediaBrowser Client="Infuse-Direct", Device="iPhone", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
-	type source struct{ ID string }
+	type source struct {
+		ID string `json:"Id"`
+	}
 	var page struct {
 		Items []struct {
-			Name         string
-			MediaSources []source
-		}
+			Name         string   `json:"Name"`
+			MediaSources []source `json:"MediaSources"`
+		} `json:"Items"`
 	}
 	w := serve(api, http.MethodGet, "/Items?ParentId="+guid(lib.ID)+"&Fields=MediaSources", infuse, "")
 	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Items) != 2 {
@@ -125,7 +127,9 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 		t.Errorf("Inception, which a search found: %d %s, want it with its placeholder", w.Code, w.Body)
 	}
 
-	var info struct{ MediaSources []source }
+	var info struct {
+		MediaSources []source `json:"MediaSources"`
+	}
 	w = serve(api, http.MethodPost, "/Items/"+guid(ids["Heat"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Heat"])+`"}`)
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 || info.MediaSources[0].ID == guid(ids["Heat"]) {
 		t.Errorf("Heat played by its placeholder: %d %s, want its version, fetched", w.Code, w.Body)
@@ -133,7 +137,9 @@ func TestARemoteFilmIsListedWithAVersionToBeFetchedAsItIsPlayed(t *testing.T) {
 	if w := serve(api, http.MethodPost, "/Items/"+guid(ids["Avatar"])+"/PlaybackInfo", infuse, `{"MediaSourceId": "`+guid(ids["Avatar"])+`"}`); w.Code != http.StatusNotFound {
 		t.Errorf("Avatar, which its provider has nothing of: %d, want 404", w.Code)
 	}
-	var avatar struct{ MediaSources []source }
+	var avatar struct {
+		MediaSources []source `json:"MediaSources"`
+	}
 	w = serve(api, http.MethodGet, "/Items/"+guid(ids["Avatar"]), infuse, "")
 	if err := json.Unmarshal(w.Body.Bytes(), &avatar); err != nil || len(avatar.MediaSources) != 1 {
 		t.Errorf("Avatar's page: %d %s, want it with its placeholder", w.Code, w.Body)

@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +37,7 @@ func TestAFolderMarkedHiddenIsHidden(t *testing.T) {
 		rec := httptest.NewRecorder()
 		api.ServeHTTP(rec, req)
 		var got folderListJSON
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 			t.Fatalf("%d %s: %v", rec.Code, rec.Body, err)
 		}
 		var names []string

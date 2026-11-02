@@ -271,7 +271,7 @@ func (a *API) playlist(w http.ResponseWriter, r *http.Request) {
 		OpenAccess bool       `json:"OpenAccess"`
 		Shares     []struct{} `json:"Shares"`
 		ItemIDs    []string   `json:"ItemIds"`
-	}{Shares: []struct{}{}, ItemIDs: make([]string, len(entries))}
+	}{ItemIDs: make([]string, len(entries))}
 	for n, e := range entries {
 		out.ItemIDs[n] = guid(e.Title)
 	}

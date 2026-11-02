@@ -3,9 +3,8 @@ package httpapi
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -133,14 +132,9 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	rc := http.NewResponseController(w)
 	readWithin(rc, a.logger, time.Now().Add(bodyWithin))
 	body := http.MaxBytesReader(w, r.Body, maxBody)
-	dec := json.NewDecoder(body)
-	dec.DisallowUnknownFields()
-	err := dec.Decode(v)
-	if err == nil {
-		// What follows the value is read within the deadline too, not by the server once the
-		// handler is done.
-		_, err = io.Copy(io.Discard, body)
-	}
+	// The whole body is read within the deadline, not by the server once the handler is done, and
+	// anything after the value refused.
+	err := json.UnmarshalRead(body, v, json.RejectUnknownMembers(true))
 	if err == nil {
 		err = checkEnums(reflect.ValueOf(v), false)
 	}

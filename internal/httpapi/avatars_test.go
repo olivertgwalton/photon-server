@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"hash/crc32"
 	"image"
 	"image/png"

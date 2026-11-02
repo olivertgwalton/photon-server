@@ -31,7 +31,7 @@ func (a *API) upcoming(w http.ResponseWriter, r *http.Request) {
 	}
 	if parent, err := uuid.Parse(query(r, "parentId")); err == nil {
 		if _, ok := seen[parent]; !ok {
-			a.writeJSON(w, queryResult{Items: []item{}})
+			a.writeJSON(w, queryResult{})
 			return
 		}
 		q.Library = parent

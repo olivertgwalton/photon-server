@@ -2,8 +2,10 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"errors"
+	"log/slog"
 	"net/http"
 	"uuid"
 
@@ -98,27 +100,39 @@ func (a *API) writeChunks(w http.ResponseWriter, r *http.Request, n, total, star
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	a.write(w, []byte(`{"Items":[`))
-	written := 0
-	for from := 0; ; {
-		for i := range items {
-			// By pointer, an item encodes as it does in a slice: by its fields' pointer methods too.
-			body, err := json.Marshal(&items[i])
-			if err != nil {
-				a.abort(r, err)
+	enc := jsontext.NewEncoder(w)
+	tokens := func(ts ...jsontext.Token) error {
+		for _, t := range ts {
+			if err := enc.WriteToken(t); err != nil {
+				return err
 			}
-			if written > 0 {
-				a.write(w, []byte{','})
-			}
-			a.write(w, body)
-			written++
 		}
-		if from += listChunk; from >= n {
+		return nil
+	}
+	err = tokens(jsontext.BeginObject, jsontext.String("Items"), jsontext.BeginArray)
+	for from := 0; err == nil; {
+		for i := 0; i < len(items) && err == nil; i++ {
+			// By pointer, an item encodes as it does in a slice: by its fields' pointer methods too.
+			err = json.MarshalEncode(enc, &items[i])
+		}
+		if from += listChunk; err != nil || from >= n {
 			break
 		}
 		if items, err = read(from); err != nil {
 			a.abort(r, err)
 		}
 	}
-	a.write(w, fmt.Appendf(nil, `],"TotalRecordCount":%d,"StartIndex":%d}`+"\n", total, start))
+	if err == nil {
+		err = tokens(jsontext.EndArray,
+			jsontext.String("TotalRecordCount"), jsontext.Int(int64(total)),
+			jsontext.String("StartIndex"), jsontext.Int(int64(start)),
+			jsontext.EndObject)
+	}
+	// An item photon cannot write is its own fault; a write that fails is an app that has gone.
+	if _, ok := errors.AsType[*json.SemanticError](err); ok {
+		a.abort(r, err)
+	}
+	if err != nil {
+		a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+	}
 }

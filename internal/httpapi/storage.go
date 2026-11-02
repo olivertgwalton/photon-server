@@ -54,8 +54,8 @@ type bucketJSON struct {
 // and the move to elsewhere under way, if one is.
 type storageStatusJSON struct {
 	Kind   domain.StorageKind `json:"kind"`
-	Bucket *bucketStatusJSON  `json:"bucket,omitempty"`
-	Move   *storageMoveJSON   `json:"move,omitempty"`
+	Bucket *bucketStatusJSON  `json:"bucket,omitzero"`
+	Move   *storageMoveJSON   `json:"move,omitzero"`
 }
 
 // storageMoveJSON is a move of what is kept to another place. Every server writes to both until

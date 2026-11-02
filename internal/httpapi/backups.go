@@ -59,7 +59,7 @@ func (a *API) adminBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	self := a.svc.Placer.Self()
-	out := backupsJSON{NodeID: self.ID, NodeName: self.Name, Folder: a.svc.Setup.BackupDir, Items: []backupJSON{}}
+	out := backupsJSON{NodeID: self.ID, NodeName: self.Name, Folder: a.svc.Setup.BackupDir}
 	for _, d := range dumps {
 		out.Items = append(out.Items, backupJSON{d.Name, d.Size, d.MadeAt})
 	}

@@ -108,7 +108,7 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 	info := p.Info()
 	can := provider.Capabilities(p)
 	j := metadataProviderJSON{
-		ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: can, Settings: []settingJSON{}, Ready: true,
+		ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: can, Ready: true,
 		MetadataKinds: rankedFor(info, can, domain.FetcherMetadata), ImageKinds: rankedFor(info, can, domain.FetcherImages),
 	}
 	if len(info.Settings) == 0 {
@@ -134,7 +134,7 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 // as the server checks them, and a plugin's for the titles it knows and their seasons and episodes
 // where it describes them, or for the titles' metadata alone where it only rates them.
 func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []domain.ItemKind {
-	out := []domain.ItemKind{}
+	var out []domain.ItemKind
 	for _, kind := range domain.LibraryMixed.ItemKinds() {
 		if _, plugin := info.ID.Plugin(); !plugin {
 			if slices.Contains(domain.Fetchable(f, kind), info.ID) {
@@ -178,17 +178,17 @@ type fetchableJSON struct {
 // libraryKinds lists the kinds of library and the options of each, as Jellyfin's library options
 // list each type's metadata and image fetchers.
 func (a *API) libraryKinds(w http.ResponseWriter, _ *http.Request) {
-	out := []libraryKindOptionsJSON{}
+	var out []libraryKindOptionsJSON
 	for _, lib := range domain.LibraryKinds() {
-		j := libraryKindOptionsJSON{Kind: lib, Fetchable: []fetchableJSON{}}
+		j := libraryKindOptionsJSON{Kind: lib}
 		for _, media := range domain.LibraryMedias() {
 			j.Defaults = append(j.Defaults, newLibraryJSON{media, librarySettings(domain.NewLibrary(lib, media))})
 		}
 		for _, k := range domain.DefaultSources(lib) {
 			j.Fetchable = append(j.Fetchable, fetchableJSON{
 				Kind:     k.Kind,
-				Metadata: nonNil(domain.Fetchable(domain.FetcherMetadata, k.Kind)),
-				Images:   nonNil(domain.Fetchable(domain.FetcherImages, k.Kind)),
+				Metadata: domain.Fetchable(domain.FetcherMetadata, k.Kind),
+				Images:   domain.Fetchable(domain.FetcherImages, k.Kind),
 			})
 		}
 		out = append(out, j)

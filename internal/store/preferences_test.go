@@ -3,7 +3,8 @@
 package store
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"strconv"
 	"testing"
@@ -98,7 +99,7 @@ func TestAProfileKeepsHowEachAppLaysOutItsViews(t *testing.T) {
 		t.Fatalf("never saved: %v, want ErrNotFound", err)
 	}
 	for _, sent := range []string{`{"SortBy":"SortName","CustomPrefs":{"homesection0":"resume"}}`, `{"SortBy":"DateCreated"}`} {
-		if err := s.SetDisplayPreferences(ctx, oliver, "emby", "usersettings", json.RawMessage(sent)); err != nil {
+		if err := s.SetDisplayPreferences(ctx, oliver, "emby", "usersettings", jsontext.Value(sent)); err != nil {
 			t.Fatal(err)
 		}
 		got, err := s.DisplayPreferences(ctx, oliver, "emby", "usersettings")
@@ -115,7 +116,7 @@ func TestAProfileKeepsHowEachAppLaysOutItsViews(t *testing.T) {
 			t.Errorf("%+v: %v, want ErrNotFound", other, err)
 		}
 	}
-	if err := s.SetDisplayPreferences(ctx, uuid.NewV7(), "emby", "usersettings", json.RawMessage(`{}`)); !errors.Is(err, ErrNotFound) {
+	if err := s.SetDisplayPreferences(ctx, uuid.NewV7(), "emby", "usersettings", jsontext.Value(`{}`)); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no such profile: %v", err)
 	}
 }
@@ -127,22 +128,22 @@ func TestAProfilesAppsKeepTheLayoutOfSoManyViews(t *testing.T) {
 	ctx := t.Context()
 	oliver, ada := profiles[0], profiles[1]
 	for n := range maxDisplayViews {
-		if err := s.SetDisplayPreferences(ctx, oliver, "emby", strconv.Itoa(n), json.RawMessage(`{}`)); err != nil {
+		if err := s.SetDisplayPreferences(ctx, oliver, "emby", strconv.Itoa(n), jsontext.Value(`{}`)); err != nil {
 			t.Fatalf("view %d: %v", n, err)
 		}
 	}
 	for _, client := range []string{"emby", "Jellyfin Web"} {
-		if err := s.SetDisplayPreferences(ctx, oliver, client, "one more", json.RawMessage(`{}`)); !errors.Is(err, ErrTooManyViews) {
+		if err := s.SetDisplayPreferences(ctx, oliver, client, "one more", jsontext.Value(`{}`)); !errors.Is(err, ErrTooManyViews) {
 			t.Errorf("%s's view beyond the limit: %v, want ErrTooManyViews", client, err)
 		}
 	}
-	if err := s.SetDisplayPreferences(ctx, oliver, "emby", "0", json.RawMessage(`{"SortBy":"DateCreated"}`)); err != nil {
+	if err := s.SetDisplayPreferences(ctx, oliver, "emby", "0", jsontext.Value(`{"SortBy":"DateCreated"}`)); err != nil {
 		t.Errorf("changing a view kept: %v", err)
 	}
 	if got, err := s.DisplayPreferences(ctx, oliver, "emby", "0"); err != nil || string(got) != `{"SortBy": "DateCreated"}` {
 		t.Errorf("the view changed: %s, %v", got, err)
 	}
-	if err := s.SetDisplayPreferences(ctx, ada, "emby", "one more", json.RawMessage(`{}`)); err != nil {
+	if err := s.SetDisplayPreferences(ctx, ada, "emby", "one more", jsontext.Value(`{}`)); err != nil {
 		t.Errorf("another profile's view: %v", err)
 	}
 }

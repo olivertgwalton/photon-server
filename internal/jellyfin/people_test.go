@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -95,15 +95,20 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 		return w.Code
 	}
 	type found struct {
-		ID, Name, Type, Overview, PremiereDate string
-		ProductionLocations                    []string
-		ProviderIDs                            map[string]string
-		MovieCount, SeriesCount                int
-		ImageTags                              map[string]string
+		ID                  string            `json:"Id"`
+		Name                string            `json:"Name"`
+		Type                string            `json:"Type"`
+		Overview            string            `json:"Overview"`
+		PremiereDate        string            `json:"PremiereDate"`
+		ProductionLocations []string          `json:"ProductionLocations"`
+		ProviderIDs         map[string]string `json:"ProviderIds"`
+		MovieCount          int               `json:"MovieCount"`
+		SeriesCount         int               `json:"SeriesCount"`
+		ImageTags           map[string]string `json:"ImageTags"`
 	}
 	var people struct {
-		Items            []found
-		TotalRecordCount int
+		Items            []found `json:"Items"`
+		TotalRecordCount int     `json:"TotalRecordCount"`
 	}
 	get("pst_ada", "/Persons?searchTerm=weav&limit=10", &people)
 	if len(people.Items) != 1 || people.TotalRecordCount != 1 || people.Items[0].ID != guid(her) || people.Items[0].Type != "Person" {
@@ -124,7 +129,10 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	}
 	// Jellyfin's web app shows a title's cast by the photo tag each credit carries.
 	var film struct {
-		People []struct{ ID, PrimaryImageTag string }
+		People []struct {
+			ID              string `json:"Id"`
+			PrimaryImageTag string `json:"PrimaryImageTag"`
+		} `json:"People"`
 	}
 	get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+guid(titles[0].ID), &film)
 	if len(film.People) != 1 || film.People[0].PrimaryImageTag == "" || film.People[0].PrimaryImageTag != one.ImageTags["Primary"] {
@@ -132,7 +140,9 @@ func TestAnAppOpensSomeoneAndTheirWork(t *testing.T) {
 	}
 	work := func(token, people string) []string {
 		t.Helper()
-		var list struct{ Items []found }
+		var list struct {
+			Items []found `json:"Items"`
+		}
 		get(token, "/Items?personIds="+people+"&recursive=true&includeItemTypes=Movie,Series&sortBy=SortName", &list)
 		var names []string
 		for _, it := range list.Items {

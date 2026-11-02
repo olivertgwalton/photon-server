@@ -3,7 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"log/slog"
 	"net"
@@ -195,6 +195,8 @@ func TestLogin(t *testing.T) {
 		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
 		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
 		{"not json", `name=Oliver`, http.StatusBadRequest, codeInvalidBody},
+		{"more after the body", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c"} {"admin":true}`, http.StatusBadRequest, codeInvalidBody},
+		{"a name twice", `{"method":"password","name":"Oliver","name":"Sam","password":"correct horse","device":"d","client":"c"}`, http.StatusBadRequest, codeInvalidBody},
 		{"no method", `{"name":"Oliver","password":"correct horse","device":"d","client":"c"}`, http.StatusBadRequest, codeInvalidBody},
 		{"an unknown method", `{"method":"magic","name":"Oliver"}`, http.StatusBadRequest, codeInvalidBody},
 		{"a pairing with no code", `{"method":"pairing"}`, http.StatusBadRequest, codeInvalidBody},
@@ -207,13 +209,13 @@ func TestLogin(t *testing.T) {
 			}
 			if tt.code != "" {
 				var p problem
-				if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || p.Code != tt.code {
+				if err := json.UnmarshalRead(rec.Body, &p); err != nil || p.Code != tt.code {
 					t.Errorf("problem code %q (err %v), want %q", p.Code, err, tt.code)
 				}
 				return
 			}
 			var got loginResponse
-			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 				t.Fatal(err)
 			}
 			want := loginResponse{Token: goodToken, Profile: profileJSON{ID: oliver.ID.String(), Name: "Oliver", Role: domain.RoleAdmin}}
@@ -230,7 +232,7 @@ func TestMeIsTheSessionsProfile(t *testing.T) {
 		t.Fatalf("status %d", rec.Code)
 	}
 	var got profileJSON
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Name != "Oliver" || got.Role != domain.RoleAdmin {
@@ -242,7 +244,7 @@ func TestPollingAnswersInRFC8628Terms(t *testing.T) {
 	for code, want := range map[string]problemCode{"BCDFGHJK.secret": codeAuthorizationPending, "guessed": codeExpiredToken} {
 		rec := serve(t, http.MethodPost, "/api/v1/auth/login", "", `{"method":"pairing","device_code":"`+code+`"}`)
 		var p problem
-		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
+		if err := json.UnmarshalRead(rec.Body, &p); err != nil || rec.Code != http.StatusBadRequest || p.Code != want {
 			t.Errorf("poll %q: %d %q (err %v), want 400 %q", code, rec.Code, p.Code, err, want)
 		}
 	}
@@ -484,7 +486,7 @@ func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {
 	for _, tt := range tests {
 		rec := serve(t, http.MethodPost, tt.path, goodToken, tt.body)
 		var p problem
-		if err := json.NewDecoder(rec.Body).Decode(&p); err != nil || rec.Code != http.StatusBadRequest || p.Code != codeInvalidBody || p.Detail != tt.detail {
+		if err := json.UnmarshalRead(rec.Body, &p); err != nil || rec.Code != http.StatusBadRequest || p.Code != codeInvalidBody || p.Detail != tt.detail {
 			t.Errorf("%s: status %d, problem %+v (err %v), want invalid_body saying %q", tt.path, rec.Code, p, err, tt.detail)
 		}
 	}

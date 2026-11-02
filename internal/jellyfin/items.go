@@ -26,30 +26,30 @@ type item struct {
 	ServerID                string              `json:"ServerId"`
 	ID                      string              `json:"Id"`
 	Etag                    string              `json:"Etag,omitempty"`
-	DateCreated             *time.Time          `json:"DateCreated,omitempty"`
+	DateCreated             *time.Time          `json:"DateCreated,omitzero"`
 	CanDelete               bool                `json:"CanDelete"`
-	CanDownload             *bool               `json:"CanDownload,omitempty"`
+	CanDownload             *bool               `json:"CanDownload,omitzero"`
 	Container               string              `json:"Container,omitempty"`
 	SortName                string              `json:"SortName,omitempty"`
-	PremiereDate            *time.Time          `json:"PremiereDate,omitempty"`
-	EndDate                 *time.Time          `json:"EndDate,omitempty"`
+	PremiereDate            *time.Time          `json:"PremiereDate,omitzero"`
+	EndDate                 *time.Time          `json:"EndDate,omitzero"`
 	MediaSources            []mediaSource       `json:"MediaSources,omitempty"`
 	Path                    string              `json:"Path,omitempty"`
-	CriticRating            *float64            `json:"CriticRating,omitempty"`
+	CriticRating            *float64            `json:"CriticRating,omitzero"`
 	OfficialRating          string              `json:"OfficialRating,omitempty"`
 	Overview                string              `json:"Overview,omitempty"`
 	Taglines                []string            `json:"Taglines,omitempty"`
 	Genres                  []string            `json:"Genres,omitempty"`
-	CommunityRating         *float64            `json:"CommunityRating,omitempty"`
-	RunTimeTicks            int64               `json:"RunTimeTicks,omitempty"`
-	ProductionYear          int                 `json:"ProductionYear,omitempty"`
+	CommunityRating         *float64            `json:"CommunityRating,omitzero"`
+	RunTimeTicks            int64               `json:"RunTimeTicks,omitzero"`
+	ProductionYear          int                 `json:"ProductionYear,omitzero"`
 	ProductionLocations     []string            `json:"ProductionLocations,omitempty"`
-	IndexNumber             *int                `json:"IndexNumber,omitempty"`
-	IndexNumberEnd          *int                `json:"IndexNumberEnd,omitempty"`
-	ParentIndexNumber       *int                `json:"ParentIndexNumber,omitempty"`
-	AirsBeforeSeasonNumber  *int                `json:"AirsBeforeSeasonNumber,omitempty"`
-	AirsBeforeEpisodeNumber *int                `json:"AirsBeforeEpisodeNumber,omitempty"`
-	AirsAfterSeasonNumber   *int                `json:"AirsAfterSeasonNumber,omitempty"`
+	IndexNumber             *int                `json:"IndexNumber,omitzero"`
+	IndexNumberEnd          *int                `json:"IndexNumberEnd,omitzero"`
+	ParentIndexNumber       *int                `json:"ParentIndexNumber,omitzero"`
+	AirsBeforeSeasonNumber  *int                `json:"AirsBeforeSeasonNumber,omitzero"`
+	AirsBeforeEpisodeNumber *int                `json:"AirsBeforeEpisodeNumber,omitzero"`
+	AirsAfterSeasonNumber   *int                `json:"AirsAfterSeasonNumber,omitzero"`
 	ProviderIDs             map[string]string   `json:"ProviderIds,omitempty"`
 	IsFolder                bool                `json:"IsFolder"`
 	ParentID                string              `json:"ParentId,omitempty"`
@@ -58,15 +58,15 @@ type item struct {
 	ParentLogoItemID        string              `json:"ParentLogoItemId,omitempty"`
 	ParentBackdropItemID    string              `json:"ParentBackdropItemId,omitempty"`
 	ParentBackdropImageTags []string            `json:"ParentBackdropImageTags,omitempty"`
-	UserData                *userData           `json:"UserData,omitempty"`
-	ChildCount              *int                `json:"ChildCount,omitempty"`
-	MovieCount              int                 `json:"MovieCount,omitempty"`
-	SeriesCount             int                 `json:"SeriesCount,omitempty"`
+	UserData                *userData           `json:"UserData,omitzero"`
+	ChildCount              *int                `json:"ChildCount,omitzero"`
+	MovieCount              int                 `json:"MovieCount,omitzero"`
+	SeriesCount             int                 `json:"SeriesCount,omitzero"`
 	SeriesName              string              `json:"SeriesName,omitempty"`
 	SeriesID                string              `json:"SeriesId,omitempty"`
 	SeasonID                string              `json:"SeasonId,omitempty"`
 	DisplayPreferencesID    string              `json:"DisplayPreferencesId,omitempty"`
-	PrimaryImageAspectRatio float64             `json:"PrimaryImageAspectRatio,omitempty"`
+	PrimaryImageAspectRatio float64             `json:"PrimaryImageAspectRatio,omitzero"`
 	CollectionType          string              `json:"CollectionType,omitempty"`
 	SeriesPrimaryImageTag   string              `json:"SeriesPrimaryImageTag,omitempty"`
 	SeasonName              string              `json:"SeasonName,omitempty"`
@@ -92,12 +92,12 @@ type blurhash map[string]string
 // userData is Jellyfin's UserItemDataDto: what the profile has made of an item. The Kotlin SDK
 // refuses one short of any field it keeps, and Swift's one without a Key.
 type userData struct {
-	PlayedPercentage      *float64   `json:"PlayedPercentage,omitempty"`
-	UnplayedItemCount     *int       `json:"UnplayedItemCount,omitempty"`
+	PlayedPercentage      *float64   `json:"PlayedPercentage,omitzero"`
+	UnplayedItemCount     *int       `json:"UnplayedItemCount,omitzero"`
 	PlaybackPositionTicks int64      `json:"PlaybackPositionTicks"`
 	PlayCount             int        `json:"PlayCount"`
 	IsFavorite            bool       `json:"IsFavorite"`
-	LastPlayedDate        *time.Time `json:"LastPlayedDate,omitempty"`
+	LastPlayedDate        *time.Time `json:"LastPlayedDate,omitzero"`
 	Played                bool       `json:"Played"`
 	Key                   string     `json:"Key"`
 	ItemID                string     `json:"ItemId"`

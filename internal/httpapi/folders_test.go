@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +39,7 @@ func TestAnAdminBrowsesTheServersFolders(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		var got folderListJSON
 		if rec.Code == http.StatusOK {
-			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 				t.Fatal(err)
 			}
 		}

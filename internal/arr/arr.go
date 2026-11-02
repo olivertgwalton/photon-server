@@ -4,7 +4,7 @@ package arr
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -107,7 +107,7 @@ func (c Client) said(err error) error {
 	var wrong []struct {
 		ErrorMessage string `json:"errorMessage"`
 	}
-	if json.Unmarshal(refusal.Body, &wrong) != nil || len(wrong) == 0 || wrong[0].ErrorMessage == "" {
+	if json.Unmarshal(refusal.Body, &wrong, provider.Foreign) != nil || len(wrong) == 0 || wrong[0].ErrorMessage == "" {
 		return err
 	}
 	return fmt.Errorf("%s: %s: %w", c.api.Name, wrong[0].ErrorMessage, err)

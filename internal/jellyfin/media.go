@@ -1,10 +1,11 @@
 package jellyfin
 
 import (
-	"bytes"
 	"cmp"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"fmt"
 	"path"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
@@ -25,11 +26,11 @@ type mediaSource struct {
 	Type                       string        `json:"Type"`
 	Container                  string        `json:"Container"`
 	Path                       string        `json:"Path,omitempty"`
-	Size                       int64         `json:"Size,omitempty"`
+	Size                       int64         `json:"Size,omitzero"`
 	Name                       string        `json:"Name"`
 	IsRemote                   bool          `json:"IsRemote"`
 	ETag                       string        `json:"ETag"`
-	RunTimeTicks               int64         `json:"RunTimeTicks,omitempty"`
+	RunTimeTicks               int64         `json:"RunTimeTicks,omitzero"`
 	ReadAtNativeFramerate      bool          `json:"ReadAtNativeFramerate"`
 	IgnoreDts                  bool          `json:"IgnoreDts"`
 	IgnoreIndex                bool          `json:"IgnoreIndex"`
@@ -46,13 +47,13 @@ type mediaSource struct {
 	MediaStreams               []mediaStream `json:"MediaStreams"`
 	MediaAttachments           []struct{}    `json:"MediaAttachments"`
 	Formats                    []string      `json:"Formats"`
-	Bitrate                    int           `json:"Bitrate,omitempty"`
+	Bitrate                    int           `json:"Bitrate,omitzero"`
 	RequiredHTTPHeaders        struct{}      `json:"RequiredHttpHeaders"`
 	TranscodingURL             string        `json:"TranscodingUrl,omitempty"`
 	TranscodingSubProtocol     string        `json:"TranscodingSubProtocol"`
 	TranscodingContainer       string        `json:"TranscodingContainer,omitempty"`
-	DefaultAudioStreamIndex    *int          `json:"DefaultAudioStreamIndex,omitempty"`
-	DefaultSubtitleStreamIndex *int          `json:"DefaultSubtitleStreamIndex,omitempty"`
+	DefaultAudioStreamIndex    *int          `json:"DefaultAudioStreamIndex,omitzero"`
+	DefaultSubtitleStreamIndex *int          `json:"DefaultSubtitleStreamIndex,omitzero"`
 	HasSegments                bool          `json:"HasSegments"`
 }
 
@@ -63,20 +64,20 @@ type mediaStream struct {
 	Title                  string  `json:"Title,omitempty"`
 	VideoRange             string  `json:"VideoRange,omitempty"`
 	VideoRangeType         string  `json:"VideoRangeType,omitempty"`
-	DvProfile              int16   `json:"DvProfile,omitempty"`
+	DvProfile              int16   `json:"DvProfile,omitzero"`
 	DisplayTitle           string  `json:"DisplayTitle"`
 	IsInterlaced           bool    `json:"IsInterlaced"`
 	ChannelLayout          string  `json:"ChannelLayout,omitempty"`
-	BitRate                int     `json:"BitRate,omitempty"`
-	BitDepth               int16   `json:"BitDepth,omitempty"`
-	Channels               int     `json:"Channels,omitempty"`
-	SampleRate             int     `json:"SampleRate,omitempty"`
+	BitRate                int     `json:"BitRate,omitzero"`
+	BitDepth               int16   `json:"BitDepth,omitzero"`
+	Channels               int     `json:"Channels,omitzero"`
+	SampleRate             int     `json:"SampleRate,omitzero"`
 	IsDefault              bool    `json:"IsDefault"`
 	IsForced               bool    `json:"IsForced"`
 	IsHearingImpaired      bool    `json:"IsHearingImpaired"`
-	Height                 int     `json:"Height,omitempty"`
-	Width                  int     `json:"Width,omitempty"`
-	RealFrameRate          float64 `json:"RealFrameRate,omitempty"`
+	Height                 int     `json:"Height,omitzero"`
+	Width                  int     `json:"Width,omitzero"`
+	RealFrameRate          float64 `json:"RealFrameRate,omitzero"`
 	Profile                string  `json:"Profile,omitempty"`
 	Type                   string  `json:"Type"`
 	Index                  int     `json:"Index"`
@@ -85,7 +86,7 @@ type mediaStream struct {
 	SupportsExternalStream bool    `json:"SupportsExternalStream"`
 	DeliveryMethod         string  `json:"DeliveryMethod,omitempty"`
 	DeliveryURL            string  `json:"DeliveryUrl,omitempty"`
-	Level                  int     `json:"Level,omitempty"`
+	Level                  int     `json:"Level,omitzero"`
 }
 
 // streamTypes are Jellyfin's MediaStreamType for each kind of track.
@@ -110,8 +111,19 @@ func textual(codec string) bool {
 // Jellyfin reads either way.
 type streamIndex int
 
-func (i *streamIndex) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(bytes.Trim(b, `"`), (*int)(i))
+func (i *streamIndex) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	tok, err := dec.ReadToken()
+	switch {
+	case err != nil:
+		return err
+	case tok.Kind() == jsontext.KindNull:
+		return nil
+	case tok.Kind() != jsontext.KindNumber && tok.Kind() != jsontext.KindString:
+		return fmt.Errorf("a stream index is a number, not %v", tok.Kind())
+	}
+	n, err := strconv.Atoi(tok.String())
+	*i = streamIndex(n)
+	return err
 }
 
 // sourceOf is a version as a media source. Its Path is its file's name alone, as Infuse reads one,
@@ -126,8 +138,8 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 		Name: w.Version(v), ETag: guid(v.ID),
 		RunTimeTicks:         v.DurationMS * ticksPerMS,
 		SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
-		MediaStreams: make([]mediaStream, 0, len(v.Streams)), MediaAttachments: []struct{}{}, Formats: []string{},
-		Bitrate: v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
+		MediaStreams: make([]mediaStream, 0, len(v.Streams)),
+		Bitrate:      v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
 		DefaultAudioStreamIndex: v.DefaultAudioStream, DefaultSubtitleStreamIndex: v.DefaultSubtitleStream,
 	}
 	for _, t := range v.Streams {

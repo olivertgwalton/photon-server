@@ -256,9 +256,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out := searchJSON{
-		Titles:      pageJSON[cardJSON]{Items: []cardJSON{}, Offset: query.Offset},
-		People:      pageJSON[personRefJSON]{Items: []personRefJSON{}, Offset: query.Offset},
-		Requestable: listJSON[cardJSON]{Items: []cardJSON{}},
+		Titles: pageJSON[cardJSON]{Offset: query.Offset},
+		People: pageJSON[personRefJSON]{Offset: query.Offset},
 	}
 	ctx := r.Context()
 	var wg sync.WaitGroup
@@ -287,7 +286,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			wg.Go(func() {
 				var found []store.Discovery
 				found, requestableErr = a.svc.Discover.Find(ctx, query.Profile, domain.MediaFolder, query.Text, query.Kinds)
-				out.Requestable.Items = nonNil(each(found, func(d store.Discovery) cardJSON { return cardOf(d.Card()) }))
+				out.Requestable.Items = each(found, func(d store.Discovery) cardJSON { return cardOf(d.Card()) })
 			})
 		}
 	}
@@ -429,10 +428,10 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, a.logger, "application/json", http.StatusOK, facetsJSON{
-		nonNil(f.Genres), nonNil(f.Years),
-		nonNil(each(f.Certificates, func(c string) certificateFacetJSON { return certificateFacetJSON{domain.Bare(c), c} })),
-		nonNil(f.Studios), nonNil(f.Resolutions),
-		nonNil(f.Ranges), nonNil(f.RatingSites), domain.Marks(),
+		f.Genres, f.Years,
+		each(f.Certificates, func(c string) certificateFacetJSON { return certificateFacetJSON{domain.Bare(c), c} }),
+		f.Studios, f.Resolutions,
+		f.Ranges, f.RatingSites, domain.Marks(),
 	})
 }
 

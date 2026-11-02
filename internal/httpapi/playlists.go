@@ -162,7 +162,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 		drawn[c.ID] = c
 	}
 	// A title a playlist holds twice is drawn once and answered for both its entries.
-	out := []entryJSON{}
+	var out []entryJSON
 	for _, e := range entries {
 		if c, ok := drawn[e.Title]; ok {
 			out = append(out, entryJSON{EntryID: e.ID, cardJSON: cardOf(c)})

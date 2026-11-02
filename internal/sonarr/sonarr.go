@@ -6,7 +6,7 @@ package sonarr
 import (
 	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"net/url"
@@ -41,28 +41,28 @@ type season struct {
 
 // found is a show as Sonarr's lookup answers it: with an id where Sonarr has it already.
 type found struct {
-	ID         int             `json:"id"`
-	Title      string          `json:"title"`
-	TitleSlug  string          `json:"titleSlug"`
-	Year       int             `json:"year"`
-	SeriesType string          `json:"seriesType"`
-	Images     json.RawMessage `json:"images"`
-	Seasons    []season        `json:"seasons"`
+	ID         int            `json:"id"`
+	Title      string         `json:"title"`
+	TitleSlug  string         `json:"titleSlug"`
+	Year       int            `json:"year"`
+	SeriesType string         `json:"seriesType"`
+	Images     jsontext.Value `json:"images"`
+	Seasons    []season       `json:"seasons"`
 }
 
 type series struct {
-	Title            string          `json:"title"`
-	TitleSlug        string          `json:"titleSlug"`
-	TVDBID           int             `json:"tvdbId"`
-	Year             int             `json:"year,omitempty"`
-	SeriesType       string          `json:"seriesType"`
-	Images           json.RawMessage `json:"images,omitempty"`
-	Seasons          []season        `json:"seasons"`
-	QualityProfileID int             `json:"qualityProfileId"`
-	RootFolderPath   string          `json:"rootFolderPath"`
-	SeasonFolder     bool            `json:"seasonFolder"`
-	Monitored        bool            `json:"monitored"`
-	AddOptions       addOptions      `json:"addOptions"`
+	Title            string         `json:"title"`
+	TitleSlug        string         `json:"titleSlug"`
+	TVDBID           int            `json:"tvdbId"`
+	Year             int            `json:"year,omitzero"`
+	SeriesType       string         `json:"seriesType"`
+	Images           jsontext.Value `json:"images,omitempty"`
+	Seasons          []season       `json:"seasons"`
+	QualityProfileID int            `json:"qualityProfileId"`
+	RootFolderPath   string         `json:"rootFolderPath"`
+	SeasonFolder     bool           `json:"seasonFolder"`
+	Monitored        bool           `json:"monitored"`
+	AddOptions       addOptions     `json:"addOptions"`
 }
 
 type addOptions struct {

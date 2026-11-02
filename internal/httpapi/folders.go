@@ -60,7 +60,7 @@ func (a *API) adminFolders(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidParameter, "path is not a folder the server can read")
 		return
 	}
-	out := folderListJSON{Path: path, Items: []browsedFolderJSON{}}
+	out := folderListJSON{Path: path}
 	if parent := filepath.Dir(path); parent != path {
 		out.Parent = parent
 	}
@@ -111,7 +111,7 @@ func folderRoots() []browsedFolderJSON {
 			candidates = append(candidates, home)
 		}
 	}
-	out := []browsedFolderJSON{}
+	var out []browsedFolderJSON
 	for _, c := range candidates {
 		if info, err := os.Stat(c); err == nil && info.IsDir() &&
 			!slices.ContainsFunc(out, func(f browsedFolderJSON) bool { return f.Path == c }) {

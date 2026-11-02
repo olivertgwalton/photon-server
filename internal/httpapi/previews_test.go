@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +64,7 @@ func TestPreviewsAreServedToThoseWhoMaySeeTheTitle(t *testing.T) {
 
 	rec := get(goodToken, base+"/trickplay")
 	var got trickplayJSON
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK || got.Sheets != 2 || got.Height != 180 {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil || rec.Code != http.StatusOK || got.Sheets != 2 || got.Height != 180 {
 		t.Fatalf("geometry: %d %+v %v", rec.Code, got, err)
 	}
 	rec = get(goodToken, base+"/trickplay/1")

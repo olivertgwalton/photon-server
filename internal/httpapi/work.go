@@ -115,7 +115,7 @@ func (a *API) adminJobs(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	out := jobQueueJSON{Counts: []jobCountJSON{}, Dead: []deadJobJSON{}}
+	var out jobQueueJSON
 	for _, c := range counts {
 		out.Counts = append(out.Counts, jobCountJSON(c))
 	}

@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -65,10 +65,10 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type result struct {
 		Items []struct {
-			Name         string
-			MediaSources []any
-		}
-		TotalRecordCount int
+			Name         string `json:"Name"`
+			MediaSources []any  `json:"MediaSources"`
+		} `json:"Items"`
+		TotalRecordCount int `json:"TotalRecordCount"`
 	}
 	similar := func(target string) (int, result) {
 		t.Helper()

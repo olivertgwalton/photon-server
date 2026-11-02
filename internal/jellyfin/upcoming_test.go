@@ -3,7 +3,7 @@
 package jellyfin
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -71,13 +71,16 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 		return w.Code
 	}
 	type episode struct {
-		ID, Name, LocationType, SeriesName string
-		IndexNumber                        int
-		MediaSources                       []any
+		ID           string `json:"Id"`
+		Name         string `json:"Name"`
+		LocationType string `json:"LocationType"`
+		SeriesName   string `json:"SeriesName"`
+		IndexNumber  int    `json:"IndexNumber"`
+		MediaSources []any  `json:"MediaSources"`
 	}
 	var upcoming struct {
-		Items            []episode
-		TotalRecordCount int
+		Items            []episode `json:"Items"`
+		TotalRecordCount int       `json:"TotalRecordCount"`
 	}
 	get("/Shows/Upcoming?userId="+guid(ada.ID)+"&limit=25&fields=AirTime,MediaSources", &upcoming)
 	if len(upcoming.Items) != 2 || upcoming.TotalRecordCount != 2 {
@@ -95,7 +98,9 @@ func TestAnAppListsUpcomingEpisodes(t *testing.T) {
 		t.Errorf("opening the episode to come: %d %+v, want it, virtual", code, opened)
 	}
 	for parent, want := range map[string]int{guid(tv.ID): 2, guid(films.ID): 0, guid(show): 0} {
-		var narrowed struct{ Items []episode }
+		var narrowed struct {
+			Items []episode `json:"Items"`
+		}
 		get("/Shows/Upcoming?parentId="+parent, &narrowed)
 		if len(narrowed.Items) != want {
 			t.Errorf("upcoming under %s = %+v, want %d: a library's own alone", parent, narrowed.Items, want)

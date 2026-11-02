@@ -3,7 +3,7 @@ package release
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -83,7 +83,7 @@ func (c *Checker) check(ctx context.Context) error {
 		Tag  string `json:"tag_name"`
 		Page string `json:"html_url"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswer)).Decode(&latest); err != nil {
+	if err := json.UnmarshalRead(io.LimitReader(resp.Body, maxAnswer), &latest); err != nil {
 		return err
 	}
 	if !Is(latest.Tag) {

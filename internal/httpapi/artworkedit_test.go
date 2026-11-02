@@ -3,7 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"image"
 	_ "image/jpeg"
 	"log/slog"

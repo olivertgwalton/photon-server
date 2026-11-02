@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -256,7 +256,10 @@ func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
 	}
 	body := call(http.MethodGet, "/api/v1/profile/rows/continue_watching", "")
 	var page struct {
-		Items []struct{ Title, Thumb string }
+		Items []struct {
+			Title string `json:"title"`
+			Thumb string `json:"thumb"`
+		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(body), &page); err != nil || len(page.Items) != 2 {
 		t.Fatalf("continue watching: %v %s", err, body)
@@ -314,7 +317,7 @@ func TestSearch(t *testing.T) {
 			continue
 		}
 		var got searchJSON
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 			t.Fatal(err)
 		}
 		titles := got.Titles.Items
@@ -326,7 +329,7 @@ func TestSearch(t *testing.T) {
 		}
 	}
 	var next searchJSON
-	if err := json.NewDecoder(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1&total=exact", goodToken, "").Body).Decode(&next); err != nil {
+	if err := json.UnmarshalRead(serve(t, http.MethodGet, "/api/v1/search?q=sigourney&offset=1&limit=1&total=exact", goodToken, "").Body, &next); err != nil {
 		t.Fatal(err)
 	}
 	if next.Titles.Offset != 1 || next.Titles.Total == nil || *next.Titles.Total != 1 || next.People.Offset != 1 || next.People.Total == nil || *next.People.Total != 1 || len(next.Titles.Items) != 0 {
@@ -377,7 +380,7 @@ func TestWall(t *testing.T) {
 			} `json:"items"`
 			Total int `json:"total"`
 		}
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 			t.Fatal(err)
 		}
 		if len(got.Items) != 1 || got.Items[0].Title != tc.wantTitle || got.Items[0].ReleaseDate != "1995-12-15" || got.Total != 120 {
@@ -388,7 +391,11 @@ func TestWall(t *testing.T) {
 	if body := serve(t, http.MethodGet, "/api/v1/libraries/"+films.String()+"/titles", goodToken, "").Body.String(); !strings.Contains(body, `"more":true`) || strings.Contains(body, `"total"`) {
 		t.Errorf("uncounted page = %s, want more and no total", body)
 	}
-	var listed struct{ Items []struct{ Name string } }
+	var listed struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
 	if err := json.Unmarshal(serve(t, http.MethodGet, "/api/v1/libraries", goodToken, "").Body.Bytes(), &listed); err != nil ||
 		len(listed.Items) != 2 || listed.Items[0].Name != "Shows" {
 		t.Errorf("libraries = %+v, %v; want Shows first, as the profile put it", listed.Items, err)

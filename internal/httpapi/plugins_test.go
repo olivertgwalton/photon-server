@@ -4,7 +4,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -32,12 +32,12 @@ func filmsPlugin(t *testing.T, protocol int, id string) (*httptest.Server, func(
 	var keys []string
 	answer := func(w http.ResponseWriter, v any) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(v); err != nil {
+		if err := json.MarshalWrite(w, v); err != nil {
 			t.Error(err)
 		}
 	}
 	read := func(r *http.Request, v any) {
-		if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		if err := json.UnmarshalRead(r.Body, v); err != nil {
 			t.Error(err)
 		}
 	}

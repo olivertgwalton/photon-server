@@ -3,7 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
@@ -234,7 +235,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 		} `json:"subtitles"`
 		ExpiresAt time.Time `json:"expires_at"`
 	}
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.PlaybackID != playbackID || len(got.Parts) != 2 || got.Parts[1].OffsetMS != 3_600_000 || time.Until(got.ExpiresAt) < 23*time.Hour {
@@ -270,7 +271,7 @@ func TestAFilmPlaysFromSignedAddresses(t *testing.T) {
 	var drawn struct {
 		Subtitles []subtitleJSON `json:"subtitles"`
 	}
-	if rec := do(vobsub); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&drawn) != nil || len(drawn.Subtitles) != 1 ||
+	if rec := do(vobsub); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &drawn) != nil || len(drawn.Subtitles) != 1 ||
 		drawn.Subtitles[0].ID != pictureID || !strings.HasSuffix(string(drawn.Subtitles[0].URL), "&format=matroska") {
 		t.Errorf("a VobSub drawing client's play: %d %+v, want the VobSub beside the film, in Matroska", rec.Code, drawn)
 	}
@@ -356,7 +357,7 @@ func TestSubtitlesAreReadOutOfTheFile(t *testing.T) {
 	) {
 		body := `{"subtitle_stream": ` + strconv.Itoa(stream) + `, "profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "subtitles": ` + subtitles + `}}`
 		rec := do(httptest.NewRequest(http.MethodPost, "/api/v1/titles/"+anime.String()+"/play", strings.NewReader(body)))
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || rec.Code != http.StatusOK {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil || rec.Code != http.StatusOK {
 			t.Fatalf("play: %d, %v", rec.Code, err)
 		}
 		return got
@@ -379,7 +380,7 @@ func TestSubtitlesAreReadOutOfTheFile(t *testing.T) {
 		t.Errorf("the ASS stream: %d %q %q, want it as it was authored", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
 	}
 	var fonts fontsJSON
-	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.Fonts), nil)); rec.Code != http.StatusOK || json.NewDecoder(rec.Body).Decode(&fonts) != nil ||
+	if rec := do(httptest.NewRequest(http.MethodGet, string(stream.Fonts), nil)); rec.Code != http.StatusOK || json.UnmarshalRead(rec.Body, &fonts) != nil ||
 		len(fonts.Fonts) != 1 || fonts.Fonts[0].Name != "4.ttf" {
 		t.Fatalf("fonts: %d %+v, want the one the file carries", rec.Code, fonts)
 	}
@@ -528,7 +529,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 		Reasons  []string `json:"reasons"`
 		Playlist string   `json:"playlist"`
 	}
-	if err := json.NewDecoder(do(playRequest(`"mp4"`)).Body).Decode(&got); err != nil {
+	if err := json.UnmarshalRead(do(playRequest(`"mp4"`)).Body, &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Method != "remux" || !strings.HasSuffix(got.Playlist, "/main.m3u8") || len(got.Reasons) != 1 || got.Reasons[0] != "container_not_supported" {
@@ -540,7 +541,7 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 		Method  string   `json:"method"`
 		Reasons []string `json:"reasons"`
 	}
-	if err := json.NewDecoder(do(joined).Body).Decode(&whole); err != nil {
+	if err := json.UnmarshalRead(do(joined).Body, &whole); err != nil {
 		t.Fatal(err)
 	}
 	if whole.Method != "remux" || !slices.Equal(whole.Reasons, []string{"parts_not_supported"}) {
@@ -596,7 +597,7 @@ func TestARemoteClientIsKeptWithinTheServersLimit(t *testing.T) {
 				BitrateKbps int `json:"bitrate_kbps"`
 			} `json:"video"`
 		}
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || got.Method != tc.method || got.Video.BitrateKbps > tc.kbps {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil || got.Method != tc.method || got.Video.BitrateKbps > tc.kbps {
 			t.Errorf("from %s asking at most %s: %d %+v, want %s within %d kbps", tc.from, tc.limit, rec.Code, got, tc.method, tc.kbps)
 		}
 	}
@@ -629,7 +630,7 @@ func TestAClientIsToldWhyNothingPlays(t *testing.T) {
 		var got struct {
 			Reasons []string `json:"reasons"`
 		}
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 			t.Fatalf("%s: %v", tc.body, err)
 		}
 		if rec.Code != tc.wantStatus || !slices.Equal(got.Reasons, tc.wantReasons) {
@@ -823,7 +824,7 @@ func TestAPlayerIsGivenTheSegmentsItAsksFor(t *testing.T) {
 		var got struct {
 			Playlist string `json:"playlist"`
 		}
-		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil || got.Playlist == "" {
+		if err := json.UnmarshalRead(rec.Body, &got); err != nil || got.Playlist == "" {
 			t.Fatalf("play asking %q: %d, want a playlist", segments, rec.Code)
 		}
 		rec = httptest.NewRecorder()
@@ -861,13 +862,13 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		return do(req)
 	}
-	admin := func() (transcodes struct{ Active, Conversions, Limit int }) {
+	admin := func() (transcodes transcodesJSON) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
 		req.Header.Set("Authorization", "Bearer "+goodToken)
 		var playing struct {
-			Transcodes struct{ Active, Conversions, Limit int }
+			Transcodes transcodesJSON `json:"transcodes"`
 		}
-		if err := json.NewDecoder(do(req).Body).Decode(&playing); err != nil {
+		if err := json.UnmarshalRead(do(req).Body, &playing); err != nil {
 			t.Fatal(err)
 		}
 		return playing.Transcodes
@@ -884,14 +885,14 @@ func TestAServerTranscodesNoMoreThanItsLimit(t *testing.T) {
 		PlaybackID uuid.UUID `json:"playback_id"`
 		Method     string    `json:"method"`
 	}
-	if err := json.NewDecoder(transcode().Body).Decode(&first); err != nil || first.Method != "transcode" {
+	if err := json.UnmarshalRead(transcode().Body, &first); err != nil || first.Method != "transcode" {
 		t.Fatalf("the first play = %+v, %v; want a transcode, the conversion stopped for it", first, err)
 	}
 	if !errors.Is(context.Cause(converting), hls.ErrPreempted) {
 		t.Errorf("the conversion after a play took its slot: %v, want it stopped", context.Cause(converting))
 	}
 	var refused problem
-	if rec := transcode(); rec.Code != http.StatusServiceUnavailable || json.NewDecoder(rec.Body).Decode(&refused) != nil ||
+	if rec := transcode(); rec.Code != http.StatusServiceUnavailable || json.UnmarshalRead(rec.Body, &refused) != nil ||
 		refused.Code != codeTranscodeLimit || !strings.HasSuffix(refused.Detail, ": 1") {
 		t.Errorf("a second transcode: %d %+v, want 503 transcode_limit naming the limit", rec.Code, refused)
 	}
@@ -909,10 +910,10 @@ photon_transcode_refusals_total{reason="no_space"} 0
 	list := httptest.NewRequest(http.MethodGet, "/api/v1/admin/playbacks", nil)
 	list.Header.Set("Authorization", "Bearer "+goodToken)
 	var playing struct {
-		Items      []json.RawMessage `json:"items"`
-		Transcodes struct{ Active, Conversions, Limit int }
+		Items      []jsontext.Value `json:"items"`
+		Transcodes transcodesJSON   `json:"transcodes"`
 	}
-	if err := json.NewDecoder(do(list).Body).Decode(&playing); err != nil || len(playing.Items) != 2 ||
+	if err := json.UnmarshalRead(do(list).Body, &playing); err != nil || len(playing.Items) != 2 ||
 		playing.Transcodes.Active != 1 || playing.Transcodes.Conversions != 0 || playing.Transcodes.Limit != 1 {
 		t.Errorf("admin playbacks = %+v, %v; want the transcode and the remux, one of one transcoding", playing, err)
 	}
@@ -957,12 +958,14 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 		Playlist   string    `json:"playlist"`
 	}
 	body := `{"profile": {"containers": ["matroska"], "video": [{"codec": "h264"}], "audio": [{"codec": "aac"}], "max_bitrate_kbps": 2000, "parts": "each"}}`
-	if err := json.NewDecoder(do(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", body).Body).Decode(&started); err != nil {
+	if err := json.UnmarshalRead(do(http.MethodPost, "/api/v1/titles/"+films.String()+"/play", body).Body, &started); err != nil {
 		t.Fatal(err)
 	}
-	list := func() (items []json.RawMessage) {
-		var playing struct{ Items []json.RawMessage }
-		if err := json.NewDecoder(do(http.MethodGet, "/api/v1/admin/playbacks", "").Body).Decode(&playing); err != nil {
+	list := func() (items []jsontext.Value) {
+		var playing struct {
+			Items []jsontext.Value `json:"items"`
+		}
+		if err := json.UnmarshalRead(do(http.MethodGet, "/api/v1/admin/playbacks", "").Body, &playing); err != nil {
 			t.Fatal(err)
 		}
 		return playing.Items

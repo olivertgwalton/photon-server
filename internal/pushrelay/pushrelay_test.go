@@ -2,7 +2,7 @@ package pushrelay
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -38,13 +38,15 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer r.mu.Unlock()
 	switch req.URL.Path {
 	case "/v1/servers":
-		var asked struct{ Server uuid.UUID }
-		if err := json.NewDecoder(req.Body).Decode(&asked); err != nil {
+		var asked struct {
+			Server uuid.UUID `json:"server"`
+		}
+		if err := json.UnmarshalRead(req.Body, &asked); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		r.registered = append(r.registered, asked.Server)
-		if err := json.NewEncoder(w).Encode(map[string]string{"credential": r.credential()}); err != nil {
+		if err := json.MarshalWrite(w, map[string]string{"credential": r.credential()}); err != nil {
 			panic(err)
 		}
 	case "/v1/send":
@@ -53,7 +55,7 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		var body map[string]any
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		if err := json.UnmarshalRead(req.Body, &body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

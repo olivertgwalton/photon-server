@@ -4,7 +4,7 @@ package jellyfin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -174,8 +174,8 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
 	if err := json.Unmarshal(call(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo",
 		`{"UserId":"`+guid(ada.ID)+`","IsPlayback":true,"AutoOpenLiveStream":true,"EnableDirectPlay":true,"MaxStreamingBitrate":200000000,"DirectPlayProtocols":["Http"],"DeviceProfile":{"MaxStaticBitrate":200000000}}`,
@@ -219,7 +219,9 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 	call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(versionID)+"/Subtitles/9/0/Stream.srt", "", http.StatusNotFound)
 
-	var segs struct{ Items []map[string]any }
+	var segs struct {
+		Items []map[string]any `json:"Items"`
+	}
 	if err := json.Unmarshal(call(http.MethodGet, "/MediaSegments/"+guid(heat), "", http.StatusOK), &segs); err != nil {
 		t.Fatal(err)
 	}
@@ -403,8 +405,8 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -562,8 +564,8 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		var info struct {
-			MediaSources  []map[string]any
-			PlaySessionID string `json:"PlaySessionId"`
+			MediaSources  []map[string]any `json:"MediaSources"`
+			PlaySessionID string           `json:"PlaySessionId"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
@@ -589,8 +591,8 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	w := httptest.NewRecorder()
 	api.ServeHTTP(w, r)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
@@ -643,8 +645,8 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		var info struct {
-			MediaSources []map[string]any
-			ErrorCode    string
+			MediaSources []map[string]any `json:"MediaSources"`
+			ErrorCode    string           `json:"ErrorCode"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
@@ -693,8 +695,8 @@ func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
 		t.Helper()
 		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webOS, `{"StartTimeTicks":9663630000,`+flags+profile+`}`)
 		var info struct {
-			MediaSources  []map[string]any
-			PlaySessionID string `json:"PlaySessionId"`
+			MediaSources  []map[string]any `json:"MediaSources"`
+			PlaySessionID string           `json:"PlaySessionId"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) == 0 {
 			t.Fatalf("%d %s", w.Code, w.Body)
@@ -741,8 +743,8 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 		{"Type":"Audio","Container":"aac","AudioCodec":"aac","Protocol":"hls"},
 		{"Type":"Video","Container":"ts","VideoCodec":"hevc,h264,av1","AudioCodec":"aac","MaxAudioChannels":"2","Protocol":"hls"}]}}`)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -830,7 +832,9 @@ func TestAnAppIsAnsweredTheVersionItAskedFor(t *testing.T) {
 	})
 	for _, v := range versions[heat] {
 		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", `MediaBrowser Token="pst_ada"`, `{"MediaSourceId":"`+guid(v.ID)+`"}`)
-		var info struct{ MediaSources []map[string]any }
+		var info struct {
+			MediaSources []map[string]any `json:"MediaSources"`
+		}
 		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
@@ -930,7 +934,7 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 		var got struct {
 			MediaSources []struct {
 				ID string `json:"Id"`
-			}
+			} `json:"MediaSources"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(versionID) {
 			t.Errorf("%s %s: %d %s, want only the version on disk", method, target, w.Code, w.Body)
