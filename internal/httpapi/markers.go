@@ -27,49 +27,36 @@ type markersJSON struct {
 // setMarkers says where a version's intro, credits, recap and preview are, on its whole timeline as
 // its chapters are, and which of its parts have none of a kind, over whatever its chapters or
 // fingerprints say; saying nothing clears what was said.
-func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req markersJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setMarkers(r *http.Request, req markersJSON) (none, error) {
 	markers := make([]domain.Marker, len(req.Markers))
 	for i, m := range req.Markers {
 		if m.Kind == "" {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
-			return
+			return none{}, refuse(codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
 		}
 		if m.StartMS < 0 || m.EndMS <= m.StartMS {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker ends after it starts, at 0 or later")
-			return
+			return none{}, refuse(codeInvalidBody, "a marker ends after it starts, at 0 or later")
 		}
 		markers[i] = domain.Marker{Kind: m.Kind, StartMS: m.StartMS, EndMS: m.EndMS}
 	}
 	absent := make([]domain.MarkerAbsent, len(req.Absent))
 	for i, m := range req.Absent {
 		if m.Kind == "" {
-			writeProblem(w, a.logger, codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
-			return
+			return none{}, refuse(codeInvalidBody, "a marker's kind is intro, credits, recap or preview")
 		}
 		if m.Part < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "a part is counted from 0")
-			return
+			return none{}, refuse(codeInvalidBody, "a part is counted from 0")
 		}
 		absent[i] = domain.MarkerAbsent{Kind: m.Kind, Part: m.Part}
 	}
-	err := a.svc.Editing.SetMarkers(r.Context(), id, markers, absent)
-	if a.answeredAs(w, r, err, "no version has that id") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(a.svc.Editing.SetMarkers(r.Context(), pathUUID(r, "id"), markers, absent), "no version has that id")
 }
 
 func (a *API) markersRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/versions/{id}/markers", access: admin,
 			summary: "Say where a version's intro, credits, recap and preview are, or that a part has none, over what was found",
-			body:    markersJSON{}, status: http.StatusNoContent, handle: a.setMarkers,
-		},
+			status:  http.StatusNoContent,
+		}, a.setMarkers),
 	}
 }

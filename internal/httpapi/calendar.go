@@ -45,28 +45,26 @@ type calendarEntryJSON struct {
 
 // calendar answers the days from start to end with a film released or an episode aired on them, of
 // the titles the filter holds.
-func (a *API) calendar(w http.ResponseWriter, r *http.Request) {
+func (a *API) calendar(r *http.Request, _ none) (calendarJSON, error) {
 	var days [2]time.Time
 	for n, name := range []string{"start", "end"} {
 		d, err := time.Parse(time.DateOnly, r.URL.Query().Get(name))
 		if err != nil {
-			writeProblem(w, a.logger, codeInvalidParameter, name+" is a day, as 2006-01-02")
-			return
+			return calendarJSON{}, refuse(codeInvalidParameter, name+" is a day, as 2006-01-02")
 		}
 		days[n] = d
 	}
 	filter, err := queryEnum(r, "filter", domain.CalendarAll, domain.CalendarFilters())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return calendarJSON{}, err
 	}
 	start, end := days[0], days[1]
 	if end.Before(start) || end.Sub(start) >= maxCalendarDays*24*time.Hour {
-		writeProblem(w, a.logger, codeInvalidParameter, fmt.Sprintf("end is from start to %d days on", maxCalendarDays-1))
-		return
+		return calendarJSON{}, refuse(codeInvalidParameter, fmt.Sprintf("end is from start to %d days on", maxCalendarDays-1))
 	}
 	found, err := a.svc.Catalogue.Calendar(r.Context(), store.CalendarQuery{Profile: auth.SessionOf(r.Context()).Profile.ID, Start: start, End: end, Filter: filter})
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return calendarJSON{}, err
 	}
 	out := calendarJSON{Days: make([]calendarDayJSON, len(found))}
 	for n, d := range found {
@@ -79,12 +77,12 @@ func (a *API) calendar(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 func (a *API) calendarRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/calendar", access: signedIn,
 			summary: "The days between two with a film released or an episode aired, here or announced, that the profile sees",
 			query: []param{
@@ -92,7 +90,7 @@ func (a *API) calendarRoutes() []route {
 				{"end", domain.Date{}, "The last day, from start to " + strconv.Itoa(maxCalendarDays-1) + " days on; required."},
 				{"filter", domain.CalendarFilter(""), "Whose titles: everything the profile sees by default, or its own, begun, on its watchlist or favourites."},
 			},
-			status: http.StatusOK, reply: calendarJSON{}, handle: a.calendar,
-		},
+			status: http.StatusOK,
+		}, a.calendar),
 	}
 }

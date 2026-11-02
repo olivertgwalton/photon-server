@@ -124,16 +124,16 @@ const (
 	maxPath         = 2000
 )
 
-func (a *API) signInProviders(w http.ResponseWriter, r *http.Request) {
+func (a *API) signInProviders(r *http.Request, _ none) (listJSON[signInProviderJSON], error) {
 	all, err := a.svc.SignIns.Providers(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[signInProviderJSON]{}, err
 	}
 	out := make([]signInProviderJSON, len(all))
 	for i, p := range all {
 		out[i] = signInProviderJSON{Slug: p.Slug, Name: p.Name}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[signInProviderJSON]{out})
+	return listJSON[signInProviderJSON]{out}, nil
 }
 
 func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProviderJSON {
@@ -151,27 +151,22 @@ func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProvider
 	return out
 }
 
-func (a *API) adminSignInProviders(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminSignInProviders(r *http.Request, _ none) (listJSON[adminSignInProviderJSON], error) {
 	all, err := a.svc.SignIns.Providers(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[adminSignInProviderJSON]{}, err
 	}
 	out := make([]adminSignInProviderJSON, len(all))
 	for i, p := range all {
 		out[i] = a.adminSignInProviderOf(p)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[adminSignInProviderJSON]{out})
+	return listJSON[adminSignInProviderJSON]{out}, nil
 }
 
-func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
+func (a *API) setSignInProvider(r *http.Request, req signInProviderChangeJSON) (adminSignInProviderJSON, error) {
 	slug := r.PathValue("slug")
 	if !providerSlug.MatchString(slug) {
-		writeProblem(w, a.logger, codeInvalidParameter, "slug is 1 to 32 lower-case letters, digits and hyphens, starting with a letter or digit")
-		return
-	}
-	var req signInProviderChangeJSON
-	if !a.decode(w, r, &req) {
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidParameter, "slug is 1 to 32 lower-case letters, digits and hyphens, starting with a letter or digit")
 	}
 	name, nameOK := domain.ProfileName(req.Name)
 	p := domain.SignInProvider{
@@ -183,47 +178,37 @@ func (a *API) setSignInProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case !nameOK:
-		writeProblem(w, a.logger, codeInvalidBody, "name is what the login page calls the provider: up to 64 characters")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "name is what the login page calls the provider: up to 64 characters")
 	case p.Issuer == "" || len(p.Issuer) > maxIssuer:
-		writeProblem(w, a.logger, codeInvalidBody, "issuer is the provider's address, as its discovery document names it")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "issuer is the provider's address, as its discovery document names it")
 	case p.ClientID == "" || len(p.ClientID) > maxClientID || strings.ContainsFunc(p.ClientID, unicode.IsSpace):
-		writeProblem(w, a.logger, codeInvalidBody, "client_id is the id of the client registered at the provider, with no spaces")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "client_id is the id of the client registered at the provider, with no spaces")
 	case len(p.ClientSecret) > maxClientSecret:
-		writeProblem(w, a.logger, codeInvalidBody, "client_secret is too long")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "client_secret is too long")
 	case p.Provisioning == "":
-		writeProblem(w, a.logger, codeInvalidBody, "provisioning is required")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "provisioning is required")
 	case p.MaxAge != nil && (*p.MaxAge < 0 || *p.MaxAge > 21):
-		writeProblem(w, a.logger, codeInvalidBody, "access.max_age is an age to 21 or null")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "access.max_age is an age to 21 or null")
 	case !commonSenseAgeOK(p.MaxCommonSenseAge):
-		writeProblem(w, a.logger, codeInvalidBody, "access.max_common_sense_age is an age from 1 to 18 or null")
-		return
+		return adminSignInProviderJSON{}, refuse(codeInvalidBody, "access.max_common_sense_age is an age from 1 to 18 or null")
 	}
 	if p.ClientSecret == "" {
 		now, err := a.svc.SignIns.Provider(r.Context(), slug)
-		if !errors.Is(err, store.ErrNotFound) && a.answered(w, r, err) {
-			return
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return adminSignInProviderJSON{}, err
 		}
 		if err == nil && now.ClientID == p.ClientID && now.Issuer == p.Issuer {
 			p.ClientSecret = now.ClientSecret
 		}
 	}
-	if a.answeredAs(w, r, a.svc.SignIns.SetProvider(r.Context(), p), "access.libraries names a library that is not") {
-		return
+	if err := a.svc.SignIns.SetProvider(r.Context(), p); err != nil {
+		return adminSignInProviderJSON{}, notFoundAs(err, "access.libraries names a library that is not")
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.adminSignInProviderOf(p))
+	return a.adminSignInProviderOf(p), nil
 }
 
-func (a *API) removeSignInProvider(w http.ResponseWriter, r *http.Request) {
-	if a.answeredAs(w, r, a.svc.SignIns.RemoveProvider(r.Context(), r.PathValue("slug")), "no provider has that slug") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+func (a *API) removeSignInProvider(r *http.Request, _ none) (none, error) {
+	return none{}, notFoundAs(a.svc.SignIns.RemoveProvider(r.Context(), r.PathValue("slug")), "no provider has that slug")
 }
 
 // origin is an address's scheme and host, without the port its scheme has anyway, as a browser's
@@ -374,15 +359,15 @@ func refusedPath(f kv.SignInFlow, reason sso.Refusal) string {
 	return loginPage + "?" + q.Encode()
 }
 
-func (a *API) ownSignInProviders(w http.ResponseWriter, r *http.Request) {
+func (a *API) ownSignInProviders(r *http.Request, _ none) (listJSON[profileSignInProviderJSON], error) {
 	ctx := r.Context()
 	all, err := a.svc.SignIns.Providers(ctx)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[profileSignInProviderJSON]{}, err
 	}
 	accounts, err := a.svc.SignIns.Accounts(ctx, auth.SessionOf(ctx).Profile.ID)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[profileSignInProviderJSON]{}, err
 	}
 	out := make([]profileSignInProviderJSON, len(all))
 	for i, p := range all {
@@ -393,61 +378,57 @@ func (a *API) ownSignInProviders(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[profileSignInProviderJSON]{out})
+	return listJSON[profileSignInProviderJSON]{out}, nil
 }
 
-func (a *API) unlinkSignIn(w http.ResponseWriter, r *http.Request) {
+func (a *API) unlinkSignIn(r *http.Request, _ none) (none, error) {
 	err := a.svc.SignIns.Unlink(r.Context(), auth.SessionOf(r.Context()).Profile.ID, r.PathValue("slug"))
-	if a.answeredAs(w, r, err, "the profile has linked no account there") {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, notFoundAs(err, "the profile has linked no account there")
 }
 
 func (a *API) signInRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/auth/sign-in-providers", access: public,
 			summary: "List the providers the household signs in through, for the login page",
-			status:  http.StatusOK, reply: listJSON[signInProviderJSON]{}, handle: a.signInProviders,
-		},
+			status:  http.StatusOK,
+		}, a.signInProviders),
 		{
 			pattern: "POST /api/v1/auth/sign-in-providers/{slug}/sign-in", access: public,
 			summary: "Send a browser to sign in at a provider, from the server's public address; it comes back signed in, in the session's cookie",
 			path:    []param{signInSlugParam}, body: signInStartJSON{}, status: http.StatusOK, reply: signInRedirectJSON{},
 			handle: a.startSignIn,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/sign-in-providers", access: admin,
 			summary: "List the OpenID Connect providers the server is registered on, and the redirect URI to register at each",
-			status:  http.StatusOK, reply: listJSON[adminSignInProviderJSON]{}, handle: a.adminSignInProviders,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminSignInProviders),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/sign-in-providers/{slug}", access: admin,
 			summary: "Register the server on an OpenID Connect provider, or change how; the provider must answer at its issuer",
-			path:    []param{signInSlugParam}, body: signInProviderChangeJSON{}, status: http.StatusOK,
-			reply: adminSignInProviderJSON{}, handle: a.setSignInProvider,
-		},
-		{
+			path:    []param{signInSlugParam}, status: http.StatusOK,
+		}, a.setSignInProvider),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/sign-in-providers/{slug}", access: admin,
 			summary: "Remove a provider, and every account profiles linked there, signing out the devices they signed in",
-			path:    []param{signInSlugParam}, status: http.StatusNoContent, handle: a.removeSignInProvider,
-		},
-		{
+			path:    []param{signInSlugParam}, status: http.StatusNoContent,
+		}, a.removeSignInProvider),
+		a.handles(route{
 			pattern: "GET /api/v1/profile/sign-in-providers", access: signedIn,
 			summary: "The providers the household signs in through, and the account the profile linked at each",
-			status:  http.StatusOK, reply: listJSON[profileSignInProviderJSON]{}, handle: a.ownSignInProviders,
-		},
+			status:  http.StatusOK,
+		}, a.ownSignInProviders),
 		{
 			pattern: "POST /api/v1/profile/sign-in-providers/{slug}/link", access: signedIn,
 			summary: "Send the browser to a provider to link the profile's account there, in place of any before",
 			path:    []param{signInSlugParam}, body: linkStartJSON{}, status: http.StatusOK, reply: signInRedirectJSON{},
 			handle: a.startLink,
 		},
-		{
+		a.handles(route{
 			pattern: "DELETE /api/v1/profile/sign-in-providers/{slug}", access: signedIn,
 			summary: "Unlink the profile's account at a provider, signing out the devices it signed in, but not one the profile has no other way in than",
-			path:    []param{signInSlugParam}, status: http.StatusNoContent, handle: a.unlinkSignIn,
-		},
+			path:    []param{signInSlugParam}, status: http.StatusNoContent,
+		}, a.unlinkSignIn),
 	}
 }
