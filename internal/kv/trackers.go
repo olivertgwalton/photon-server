@@ -27,7 +27,7 @@ type TrackerLink struct {
 	UserCode                string         `json:"user_code"`
 	VerificationURI         string         `json:"verification_uri"`
 	VerificationURIComplete string         `json:"verification_uri_complete"`
-	Interval                time.Duration  `json:"interval,format:nano"`
+	Interval                time.Duration  `json:"interval"`
 	Expires                 time.Time      `json:"expires"`
 	// Asked is when the tracker was last asked after it, in Valkey's clock's milliseconds.
 	Asked int64 `json:"asked"`
@@ -44,7 +44,7 @@ redis.call('HSETEX', KEYS[1], 'PX', ARGV[3], 'FIELDS', 1, ARGV[1], cjson.encode(
 // StartTrackerLink holds l, in place of any link its profile was making on its tracker, until it
 // expires. The tracker is first asked after it an interval from now.
 func (k *KV) StartTrackerLink(ctx context.Context, l TrackerLink) error {
-	b, err := json.Marshal(l)
+	b, err := json.Marshal(l, stored)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (k *KV) TrackerLink(ctx context.Context, profile uuid.UUID, t domain.Tracke
 	if err != nil {
 		return l, false, err
 	}
-	return l, true, json.Unmarshal(b, &l)
+	return l, true, json.Unmarshal(b, &l, stored)
 }
 
 // dueLinks claims each link whose interval has passed since its tracker was last asked after it,
@@ -96,7 +96,7 @@ func (k *KV) DueTrackerLinks(ctx context.Context) ([]TrackerLink, error) {
 	}
 	out := make([]TrackerLink, len(vals))
 	for i, v := range vals {
-		if err := json.Unmarshal([]byte(v), &out[i]); err != nil {
+		if err := json.Unmarshal([]byte(v), &out[i], stored); err != nil {
 			return nil, err
 		}
 	}

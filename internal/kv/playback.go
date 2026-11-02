@@ -23,7 +23,7 @@ const (
 
 // keep writes v as id's record in set, lapsing after ttl unless written again.
 func keep[T any](ctx context.Context, k *KV, set string, id uuid.UUID, v T, ttl time.Duration) error {
-	record, err := json.Marshal(v)
+	record, err := json.Marshal(v, stored)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func kept[T any](ctx context.Context, k *KV, set string, id uuid.UUID) (T, bool,
 	if err != nil {
 		return v, false, err
 	}
-	return v, true, json.Unmarshal(record, &v)
+	return v, true, json.Unmarshal(record, &v, stored)
 }
 
 // forget deletes id's record in set, answering whether it was there: of two nodes forgetting one
@@ -59,7 +59,7 @@ func every[T any](ctx context.Context, k *KV, set string) ([]T, error) {
 	}
 	out := make([]T, len(records))
 	for i, r := range records {
-		if err := json.Unmarshal([]byte(r), &out[i]); err != nil {
+		if err := json.Unmarshal([]byte(r), &out[i], stored); err != nil {
 			return nil, err
 		}
 	}
@@ -69,7 +69,7 @@ func every[T any](ctx context.Context, k *KV, set string) ([]T, error) {
 // ClaimPlayback writes a new playback session, which lapses after ttl unless written again, if no
 // playback is kept under its id: of nodes claiming one id at once, only one is told it did.
 func (k *KV) ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error) {
-	record, err := json.Marshal(p)
+	record, err := json.Marshal(p, stored)
 	if err != nil {
 		return false, err
 	}

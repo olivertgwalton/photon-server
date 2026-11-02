@@ -22,7 +22,7 @@ func (k *KV) visitKey(codeHash []byte) string { return k.key("visit:" + hex.Enco
 
 // StartVisit keeps a visit for ttl.
 func (k *KV) StartVisit(ctx context.Context, codeHash []byte, v Visit, ttl time.Duration) error {
-	b, err := json.Marshal(v)
+	b, err := json.Marshal(v, stored)
 	if err != nil {
 		return err
 	}
@@ -39,5 +39,5 @@ func (k *KV) TakeVisit(ctx context.Context, codeHash []byte) (v Visit, ok bool, 
 	if err != nil {
 		return v, false, err
 	}
-	return v, true, json.Unmarshal([]byte(s), &v)
+	return v, true, json.Unmarshal([]byte(s), &v, stored)
 }
