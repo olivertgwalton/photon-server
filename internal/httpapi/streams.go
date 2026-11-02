@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
@@ -141,7 +142,9 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-	writeBody(w, a.logger, []byte(vtt))
+	if err := gzipped.Reply(w, r, http.StatusOK, []byte(vtt)); err != nil {
+		a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+	}
 }
 
 // serveLibraryFile serves the first limit bytes of what open opens for the id the path names by

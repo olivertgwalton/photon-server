@@ -1,12 +1,14 @@
-// Package gzipped gzips JSON replies for the clients that take gzip.
+// Package gzipped gzips text replies, JSON and HLS playlists, for the clients that take gzip.
 package gzipped
 
 import (
 	"compress/gzip"
+	"errors"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +59,29 @@ func Release(gz *gzip.Writer) error {
 	err := gz.Close()
 	writers.Put(gz)
 	return err
+}
+
+// Reply writes body, whole, as the reply with status: gzipped where it is Above or more, the client
+// takes gzip and nothing else has encoded it. It says the reply varies by Accept-Encoding.
+func Reply(w http.ResponseWriter, r *http.Request, status int, body []byte) error {
+	h := w.Header()
+	if !slices.Contains(h.Values("Vary"), "Accept-Encoding") {
+		h.Add("Vary", "Accept-Encoding")
+	}
+	if len(body) < Above || h.Get("Content-Encoding") != "" || !Accepts(r, "gzip") {
+		w.WriteHeader(status)
+		_, err := w.Write(body)
+		return err
+	}
+	h.Set("Content-Encoding", "gzip")
+	h.Del("Content-Length")
+	gz, err := Writer(w)
+	if err != nil {
+		return err
+	}
+	w.WriteHeader(status)
+	_, err = gz.Write(body)
+	return errors.Join(err, Release(gz))
 }
 
 // JSON gzips each JSON reply of Above or more that h writes, as it is written, for a client that

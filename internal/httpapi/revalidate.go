@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -15,7 +14,7 @@ import (
 // revalidate holds a reply back whole. It tags a JSON answer to a GET with a weak ETag of its
 // body, and answers a client that already holds that body 304 Not Modified with none; the tag
 // hashes the body before it is gzipped, so it is the same either way. It gzips a JSON reply of
-// compressAbove or more for a client that takes gzip.
+// gzipped.Above or more for a client that takes gzip.
 func (a *API) revalidate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept-Encoding")
@@ -43,21 +42,12 @@ func (a *API) revalidate(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if !json || len(body) < gzipped.Above || h.Get("Content-Encoding") != "" || !gzipped.Accepts(r, "gzip") {
+		if !json {
 			w.WriteHeader(bw.status)
 			writeBody(w, a.logger, body)
 			return
 		}
-		h.Set("Content-Encoding", "gzip")
-		h.Del("Content-Length")
-		gz, err := gzipped.Writer(w)
-		if err != nil {
-			a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
-			return
-		}
-		w.WriteHeader(bw.status)
-		_, err = gz.Write(body)
-		if err = errors.Join(err, gzipped.Release(gz)); err != nil {
+		if err := gzipped.Reply(w, r, bw.status, body); err != nil {
 			a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
 		}
 	})

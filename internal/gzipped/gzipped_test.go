@@ -77,3 +77,54 @@ func TestWhatIsNotWorthGzippingIsSentAsItIs(t *testing.T) {
 		t.Errorf("no content: %d, %d bytes", w.Code, w.Body.Len())
 	}
 }
+
+// A reply written whole is gzipped where it is long enough and the client takes gzip, and sent as
+// it is otherwise, each saying it varies by Accept-Encoding, once.
+func TestAWholeReplyIsGzippedWhereItIsWorthIt(t *testing.T) {
+	long := strings.Repeat("#EXTINF:6.000000,\n7.m4s\n", 100)
+	for _, c := range []struct {
+		name, encoding, body, encoded string
+		zipped                        bool
+	}{
+		{"long, for a client of gzip", "gzip", long, "", true},
+		{"long, for a client of none", "", long, "", false},
+		{"short", "gzip", "#EXTM3U\n", "", false},
+		{"already encoded", "gzip", long, "br", false},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		if c.encoding != "" {
+			r.Header.Set("Accept-Encoding", c.encoding)
+		}
+		w := httptest.NewRecorder()
+		w.Header().Add("Vary", "Accept-Encoding")
+		if c.encoded != "" {
+			w.Header().Set("Content-Encoding", c.encoded)
+		}
+		if err := Reply(w, r, http.StatusOK, []byte(c.body)); err != nil {
+			t.Fatal(err)
+		}
+		if vary := w.Header().Values("Vary"); len(vary) != 1 || vary[0] != "Accept-Encoding" {
+			t.Errorf("%s: Vary %v, want Accept-Encoding once", c.name, vary)
+		}
+		got := w.Body.String()
+		if c.zipped {
+			if w.Header().Get("Content-Encoding") != "gzip" {
+				t.Fatalf("%s: not gzipped", c.name)
+			}
+			zr, err := gzip.NewReader(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := io.ReadAll(zr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = string(b)
+		} else if w.Header().Get("Content-Encoding") == "gzip" {
+			t.Errorf("%s: gzipped", c.name)
+		}
+		if got != c.body {
+			t.Errorf("%s: %.40q, want %.40q", c.name, got, c.body)
+		}
+	}
+}
