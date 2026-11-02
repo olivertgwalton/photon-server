@@ -379,9 +379,9 @@ func (a *API) setLibrary(r *http.Request, req libraryChangeJSON) (adminLibraryJS
 		if field.value == nil {
 			continue
 		}
-		canonical, refusal := field.check(*field.value)
-		if refusal != "" {
-			return adminLibraryJSON{}, refuse(codeInvalidBody, refusal)
+		canonical, why := field.check(*field.value)
+		if why != "" {
+			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 		*field.value = canonical
 	}

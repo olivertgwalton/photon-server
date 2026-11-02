@@ -162,14 +162,16 @@ func playbacksJSON(all []domain.Playback) []domain.NowPlaying {
 
 // stopPlayback ends anyone's playback, as Jellyfin's dashboard stops a session: its remux on the
 // node running it, the place and the play kept where its player last said it was.
-func (a *API) stopPlayback(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if !a.answered(w, r, a.svc.Playbacks.End(r.Context(), id)) {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) stopPlayback(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Playbacks.End(r.Context(), pathUUID(r, "id"))
 }
 
 func (a *API) workRoutes() []route {
+	stop := a.handles(route{
+		pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
+		summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
+	}, a.stopPlayback)
+	stop.handle = a.routeToOwner("id", stop.handle).ServeHTTP
 	return []route{
 		a.handles(route{
 			pattern: "GET /api/v1/admin/tasks", access: admin, summary: "List the scheduled tasks and how each last ran",
@@ -200,10 +202,6 @@ func (a *API) workRoutes() []route {
 			summary: "List who is playing what, and how many videos this node is transcoding",
 			status:  http.StatusOK,
 		}, a.adminPlaybacks),
-		{
-			pattern: "DELETE /api/v1/admin/playbacks/{id}", access: admin,
-			summary: "Stop anyone's playback, keeping where it had got to", status: http.StatusNoContent,
-			handle: a.routeToOwner("id", http.HandlerFunc(a.stopPlayback)).ServeHTTP,
-		},
+		stop,
 	}
 }

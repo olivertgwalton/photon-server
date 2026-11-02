@@ -255,7 +255,7 @@ func (a *API) leave(w http.ResponseWriter, r *http.Request, f kv.SignInFlow) {
 		}
 	}
 	state, provider, err := a.svc.SignIns.Start(r.Context(), slug, f)
-	if a.answeredAs(w, r, err, "no provider has that slug") {
+	if a.answered(w, r, notFoundAs(err, "no provider has that slug")) {
 		return
 	}
 	// Sent only back to the callback, at the path the browser is sent back to.
