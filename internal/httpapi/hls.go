@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/gzipped"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -46,7 +47,11 @@ func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", res.Type)
 	if res.File == nil {
-		writeBody(w, a.logger, []byte(res.Text))
+		// A playlist names everything relative to its own signed address, so it holds no secret a
+		// compressed length could give away; WebVTT is the film's own words.
+		if err := gzipped.Reply(w, r, http.StatusOK, []byte(res.Text)); err != nil {
+			a.logger.DebugContext(r.Context(), "reply not written", slog.Any("err", err))
+		}
 		return
 	}
 	a.serveFile(w, r, res.File, name, nil)

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -472,13 +473,17 @@ func (fakeHLS) WebVTT(_ context.Context, open func() (media.Input, error), langu
 	return "WEBVTT " + language + "\n\n" + string(b), err
 }
 
-// Resource answers the files the playlists name: the master, subtitle segment 2 of track 0, and
-// segment 0, in either format, with its initialisation.
+// Resource answers the files the playlists name: the master, a film's media playlist, subtitle
+// segment 2 of track 0, and segment 0, in either format, with its initialisation.
 func (f fakeHLS) Resource(ctx context.Context, playback uuid.UUID, name string) (hls.Resource, error) {
 	switch name {
 	case "main.m3u8":
 		text, err := f.Playlist(playback, name)
 		return hls.Resource{Text: text, Type: "application/vnd.apple.mpegurl"}, err
+	case "film.m3u8":
+		// A two-hour film's, long enough to be worth compressing.
+		segs := hls.Plan([]hls.Part{{Duration: 2 * time.Hour, Keyframes: hls.Forced(2 * time.Hour)}})
+		return hls.Resource{Text: hls.Playlist(segs, 7, nil, func(n int) string { return strconv.Itoa(n) + ".m4s" }), Type: "application/vnd.apple.mpegurl"}, nil
 	case "sub0-2.vtt":
 		text, err := f.SubtitleSegment(ctx, playback, 0, 2)
 		return hls.Resource{Text: text, Type: "text/vtt; charset=utf-8"}, err
@@ -557,6 +562,24 @@ func TestARemuxPlaysFromOneSignedPath(t *testing.T) {
 		if got := do(httptest.NewRequest(http.MethodGet, base+file, nil)).Header().Get("Content-Type"); got != want {
 			t.Errorf("%s served as %q, want %q", file, got, want)
 		}
+	}
+	// A playlist is gzipped for a player that takes gzip, as RFC 8216 §6.2.1 asks; video, sent from
+	// its file, is not.
+	gz := func(file string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, base+file, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		return do(req)
+	}
+	rec := gz("film.m3u8")
+	if rec.Header().Get("Content-Encoding") != "gzip" || !slices.Contains(rec.Header().Values("Vary"), "Accept-Encoding") {
+		t.Errorf("a film's playlist: headers %v, want gzip varying by Accept-Encoding", rec.Header())
+	} else if zr, err := gzip.NewReader(rec.Body); err != nil {
+		t.Error(err)
+	} else if text, err := io.ReadAll(zr); err != nil || !strings.HasPrefix(string(text), "#EXTM3U\n") || !strings.HasSuffix(string(text), "#EXT-X-ENDLIST\n") {
+		t.Errorf("a film's playlist decodes to %.40q, %v", text, err)
+	}
+	if rec := gz("0.m4s"); rec.Header().Get("Content-Encoding") != "" || rec.Body.String() != "m4s" {
+		t.Errorf("a segment: %q, encoded %q, want it as it is", rec.Body.String(), rec.Header().Get("Content-Encoding"))
 	}
 	other := strings.Replace(base, playbackID.String(), uuid.NewV7().String(), 1)
 	if rec := do(httptest.NewRequest(http.MethodGet, other+"0.m4s", nil)); rec.Code != http.StatusUnauthorized {
