@@ -174,7 +174,10 @@ func showScans(t *testing.T, s *Store, lib uuid.UUID) func(more ...int) []uuid.U
 	var episodes []int
 	return func(more ...int) []uuid.UUID {
 		t.Helper()
-		since := time.Now()
+		_, since, err := s.ScanRequests(t.Context(), lib)
+		if err != nil {
+			t.Fatal(err)
+		}
 		episodes = append(episodes, more...)
 		var eps []Episode
 		for _, n := range episodes {
