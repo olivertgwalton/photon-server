@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 	"uuid"
@@ -134,9 +133,9 @@ func (a *API) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	body := http.MaxBytesReader(w, r.Body, maxBody)
 	// The whole body is read within the deadline, not by the server once the handler is done, and
 	// anything after the value refused.
-	err := json.UnmarshalRead(body, v, json.RejectUnknownMembers(true))
-	if err == nil {
-		err = checkEnums(reflect.ValueOf(v), false)
+	err := json.UnmarshalRead(body, v, json.RejectUnknownMembers(true), enumReader)
+	if e, ok := errors.AsType[*badEnum](err); ok {
+		err = e
 	}
 	if err != nil {
 		// The deadline stands, so what is left of the body is read within it or the connection

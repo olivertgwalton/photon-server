@@ -191,6 +191,7 @@ func TestLogin(t *testing.T) {
 		code problemCode
 	}{
 		{"right password", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon"}`, http.StatusOK, ""},
+		{"an empty keep, as one left out", `{"method":"password","name":"Oliver","password":"correct horse","device":"Living room","client":"Photon","keep":""}`, http.StatusOK, ""},
 		{"wrong password", `{"method":"password","name":"Oliver","password":"guess","device":"Living room","client":"Photon"}`, http.StatusUnauthorized, codeSignInRefused},
 		{"an unknown field", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","admin":true}`, http.StatusBadRequest, codeInvalidBody},
 		{"no device", `{"method":"password","name":"Oliver","password":"correct horse"}`, http.StatusBadRequest, codeInvalidBody},
@@ -482,6 +483,8 @@ func TestABodyIsRefusedAValueNoneOfItsEnums(t *testing.T) {
 	}{
 		{"/api/v1/auth/login", `{"method":"password","name":"Oliver","password":"correct horse","device":"d","client":"c","keep":"forever"}`, "keep is one of token, cookie"},
 		{"/api/v1/titles/" + uuid.New().String() + "/play", `{"profile":{"containers":[],"video":[{"codec":"hevc","ranges":["sdr","hdr11"]}],"audio":[],"max_bitrate_kbps":0}}`, "profile.video.ranges is one of sdr, hlg, hdr10, hdr10plus, dv"},
+		// A field sent empty is one left out, but an empty item of a list names nothing.
+		{"/api/v1/titles/" + uuid.New().String() + "/play", `{"profile":{"containers":[],"video":[{"codec":"hevc","ranges":["sdr",""]}],"audio":[],"max_bitrate_kbps":0}}`, "profile.video.ranges is one of sdr, hlg, hdr10, hdr10plus, dv"},
 	}
 	for _, tt := range tests {
 		rec := serve(t, http.MethodPost, tt.path, goodToken, tt.body)
