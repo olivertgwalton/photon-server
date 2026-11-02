@@ -245,10 +245,7 @@ func (a *API) adminNodes(w http.ResponseWriter, r *http.Request) {
 
 // setNode changes what an admin sets of a node, and tells every node, which takes it up at once.
 func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req nodeChangeJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -277,6 +274,7 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 	case domain.NodeActive:
 		set.Availability, set.Note = domain.NodeActive, ""
 	}
+	var ok bool
 	if req.Address != nil {
 		if set.Address, ok = nodeAddress(string(*req.Address)); !ok {
 			writeProblem(w, a.logger, codeInvalidBody, "address is an http or https address with a host and port alone, such as http://10.0.0.5:8640")
@@ -339,10 +337,7 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 // forgetNode forgets a node that is not up, as one taken away is; one up is refused, as it would be
 // back within the minute.
 func (a *API) forgetNode(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	online, err := a.online(r.Context())
 	if a.answered(w, r, err) {
 		return

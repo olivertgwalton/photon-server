@@ -49,10 +49,7 @@ type personJSON struct {
 // person answers someone's page: who they are, as a provider says the first time it is opened and
 // monthly after, and their films and shows here, the newest first.
 func (a *API) person(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	p, err := a.svc.People.Person(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

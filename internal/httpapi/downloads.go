@@ -198,10 +198,7 @@ func (a *API) ownDownloads(w http.ResponseWriter, r *http.Request) {
 
 // download answers one of the profile's downloads, as far as its conversion has got.
 func (a *API) download(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	d, err := a.svc.Downloads.Download(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -212,10 +209,7 @@ func (a *API) download(w http.ResponseWriter, r *http.Request) {
 // removeDownload forgets one of the profile's downloads; a conversion no other download needs is
 // stopped and its file removed.
 func (a *API) removeDownload(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if a.answered(w, r, a.svc.Conversions.Remove(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
 		return
 	}
@@ -225,10 +219,7 @@ func (a *API) removeDownload(w http.ResponseWriter, r *http.Request) {
 // downloadFile serves a ready conversion in byte ranges, so a download manager resumes it, from
 // the node of the cluster that made it.
 func (a *API) downloadFile(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	f, address, err := a.svc.Conversions.File(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

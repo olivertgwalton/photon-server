@@ -54,10 +54,7 @@ func (a *API) progress(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and "+atRule)
 		return
 	}
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	length, err := a.svc.Watching.Length(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -107,10 +104,7 @@ func (a *API) titleUpdated(r *http.Request, id uuid.UUID) {
 // methods.
 func (a *API) mark(set func(w watching, ctx context.Context, profile, item uuid.UUID) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := a.pathID(w, r, "id")
-		if !ok {
-			return
-		}
+		id := pathUUID(r, "id")
 		if !a.answered(w, r, set(a.svc.Watching, r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
 			a.titleStateChanged(r, id)
 			w.WriteHeader(http.StatusNoContent)

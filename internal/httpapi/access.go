@@ -110,10 +110,7 @@ func readRoot(root string) rootCheckJSON {
 
 // nodeCheckLibrary answers another node whether this one can read a library's root.
 func (a *API) nodeCheckLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -125,10 +122,7 @@ func (a *API) nodeCheckLibrary(w http.ResponseWriter, r *http.Request) {
 // or play from it.
 func (a *API) checkLibrary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(ctx, id)
 	if a.answered(w, r, err) {
 		return

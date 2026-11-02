@@ -116,10 +116,7 @@ func (a *API) setLibraryOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) wall(w http.ResponseWriter, r *http.Request) {
-	lib, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	lib := pathUUID(r, "id")
 	q := r.URL.Query()
 	page := store.WallPage{Profile: auth.SessionOf(r.Context()).Profile.ID}
 	var err error
@@ -156,10 +153,7 @@ func (a *API) wall(w http.ResponseWriter, r *http.Request) {
 // letters answers how many of a library's titles sort under each letter, in title order, so a
 // client jumps to a letter at the sum of those before it.
 func (a *API) letters(w http.ResponseWriter, r *http.Request) {
-	lib, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	lib := pathUUID(r, "id")
 	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
 	if a.answered(w, r, err) {
 		return
@@ -309,10 +303,7 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) title(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	// A remote film or episode is given a version as its page opens, as a player chooses its version
 	// from the page before it plays; one its provider cannot give is a page with none, and one
@@ -415,10 +406,7 @@ type certificateFacetJSON struct {
 
 // facets answers the values a library's titles have, which its wall can be narrowed to.
 func (a *API) facets(w http.ResponseWriter, r *http.Request) {
-	lib, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	lib := pathUUID(r, "id")
 	kind, err := queryEnum(r, "kind", domain.WallTitles, domain.WallKinds())
 	if a.answered(w, r, err) {
 		return
@@ -437,10 +425,7 @@ func (a *API) facets(w http.ResponseWriter, r *http.Request) {
 
 // similar answers the titles most like one, for "More like this".
 func (a *API) similar(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	cards, err := a.svc.Catalogue.Similar(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -451,10 +436,7 @@ func (a *API) similar(w http.ResponseWriter, r *http.Request) {
 // next answers the episode to play after a title: after an episode the one that follows it, and
 // of a show or season the one the profile is at, as Jellyfin's NextUp and Plex's onDeck.
 func (a *API) next(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	card, err := a.svc.Catalogue.Next(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -465,10 +447,7 @@ func (a *API) next(w http.ResponseWriter, r *http.Request) {
 // playable answers the films and episodes a title stands for, in the order they play, for a client
 // to shuffle a show, season or collection.
 func (a *API) playable(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	cards, err := a.svc.Catalogue.PlayOrder(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return

@@ -27,10 +27,7 @@ type artworkCandidateJSON struct {
 // artworkCandidates lists the pictures of a kind each provider has for a title, as Jellyfin's Edit
 // Images and Plex's poster chooser do.
 func (a *API) artworkCandidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	kind := domain.ArtworkKind(r.URL.Query().Get("kind"))
 	if !slices.Contains(domain.ArtworkKinds(), kind) {
 		writeProblem(w, a.logger, codeInvalidParameter, "kind is a kind of picture")
@@ -64,10 +61,7 @@ type chooseArtworkJSON struct {
 // chooseArtwork makes a provider's picture a title's own of its kind, over every source and
 // through every refresh.
 func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	kind, ok := a.pathArtworkKind(w, r)
 	if !ok {
 		return
@@ -86,10 +80,7 @@ func (a *API) chooseArtwork(w http.ResponseWriter, r *http.Request) {
 // uploadArtwork makes the picture in the body a title's own of its kind, over every source and
 // through every refresh, as Jellyfin's Edit Images and Plex's poster upload do.
 func (a *API) uploadArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	kind, ok := a.pathArtworkKind(w, r)
 	if !ok {
 		return
@@ -112,10 +103,7 @@ func (a *API) uploadArtwork(w http.ResponseWriter, r *http.Request) {
 
 // forgetArtwork gives a title's picture of a kind back to its sources.
 func (a *API) forgetArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	kind, ok := a.pathArtworkKind(w, r)
 	if !ok {
 		return

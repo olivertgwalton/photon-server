@@ -274,7 +274,7 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		panic("httpapi: " + err.Error())
 	}
 	for _, r := range routes {
-		h := a.checkQuery(r)
+		h := a.requireIDs(idWildcards(r), a.checkQuery(r))
 		// Within routeToOwner, so a request handed to another node is counted there alone.
 		if r.delivery != "" {
 			h = a.svc.Sent.Counting(r.delivery, h)

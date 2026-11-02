@@ -118,10 +118,7 @@ func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
 
 // setPlaylistRule replaces a smart playlist's rule, and so its entries with what it finds.
 func (a *API) setPlaylistRule(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req smartRuleJSON
 	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckPlayable()) {
 		return
@@ -136,10 +133,7 @@ func (a *API) setPlaylistRule(w http.ResponseWriter, r *http.Request) {
 // playlistEntries answers a page of a playlist, in its order: each entry's own id and the title it
 // plays.
 func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	page, err := paging(r, maxWallLimit)
 	if a.answered(w, r, err) {
 		return
@@ -174,10 +168,7 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 // addToPlaylist puts titles at the end of a playlist: a show or season as its episodes, a
 // collection as its titles.
 func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req itemIDsJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -191,10 +182,7 @@ func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
 
 // setPlaylist renames a playlist.
 func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req nameJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -211,10 +199,7 @@ func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if a.answered(w, r, a.svc.Playlists.RemovePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
 		return
 	}
@@ -224,14 +209,8 @@ func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
 
 // moveEntry moves one entry of a playlist to a position, counted from zero.
 func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	entry, ok := a.pathID(w, r, "entry")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
+	entry := pathUUID(r, "entry")
 	var req moveJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -244,14 +223,8 @@ func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
-	entry, ok := a.pathID(w, r, "entry")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
+	entry := pathUUID(r, "entry")
 	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry)) {
 		return
 	}

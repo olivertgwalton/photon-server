@@ -35,10 +35,7 @@ func (a *API) profileRow(w http.ResponseWriter, r *http.Request) {
 // libraryRow answers the first of one of a library's rows, as the home page has it: the newest or
 // the best, a count and no more, as Plex's and Jellyfin's are.
 func (a *API) libraryRow(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	limit, err := queryNumber(r, "limit", defaultRowLimit, 1, maxWallLimit)
 	if a.answered(w, r, err) {
 		return

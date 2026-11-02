@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"uuid"
@@ -13,14 +14,37 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
-func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue(name))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return uuid.UUID{}, false
+// idWildcards are rt's path wildcards that are ids: every one its path parameters do not name, as
+// the description has them.
+func idWildcards(rt route) []string {
+	var ids []string
+	for _, m := range wildcard.FindAllStringSubmatch(rt.pattern, -1) {
+		if !slices.ContainsFunc(rt.path, func(p param) bool { return p.name == m[1] }) {
+			ids = append(ids, m[1])
+		}
 	}
-	return id, true
+	return ids
 }
+
+// requireIDs answers 404 Not Found for a path whose id wildcards are not all ids, so that a
+// handler reads each with pathUUID.
+func (a *API) requireIDs(ids []string, next http.Handler) http.Handler {
+	if len(ids) == 0 {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, name := range ids {
+			if _, err := uuid.Parse(r.PathValue(name)); err != nil {
+				writeProblem(w, a.logger, codeNotFound, "")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// pathUUID is the id wildcard name, which requireIDs has made sure is one.
+func pathUUID(r *http.Request, name string) uuid.UUID { return uuid.MustParse(r.PathValue(name)) }
 
 // queryID reads an id, or the zero id where the query leaves name out.
 func queryID(r *http.Request, name string) (uuid.UUID, error) {

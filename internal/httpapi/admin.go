@@ -359,10 +359,7 @@ type kindSourcesChangeJSON struct {
 // of item's metadata and pictures come from, the kinds of video it keeps providers' links to, what previews it makes,
 // how it finds markers and keyframes, and where it finds theme tunes.
 func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req libraryChangeJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -455,10 +452,7 @@ func (a *API) setLibrary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
 	if a.answered(w, r, err) || a.answered(w, r, a.svc.Libraries.RemoveLibrary(r.Context(), id)) {
 		return
@@ -470,10 +464,7 @@ func (a *API) removeLibrary(w http.ResponseWriter, r *http.Request) {
 // scanLibrary queues a scan of a library now, or with path, of the folder of it a path is in, as
 // Plex's refresh?path= scans one after a download lands.
 func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	lib, err := a.svc.Libraries.Library(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -484,6 +475,7 @@ func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, a.logger, codeInvalidParameter, "path is an absolute path")
 			return
 		}
+		var ok bool
 		if folder, ok = library.Changed(lib.Root, filepath.Clean(p)); !ok {
 			writeProblem(w, a.logger, codeInvalidParameter, "path is not inside the library")
 			return
@@ -499,10 +491,7 @@ func (a *API) scanLibrary(w http.ResponseWriter, r *http.Request) {
 // refreshLibrary asks a library's providers about its films and shows again, behind what a scan
 // has just found.
 func (a *API) refreshLibrary(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req refreshJSON
 	if !a.decode(w, r, &req) {
 		return

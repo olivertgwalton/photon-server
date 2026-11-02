@@ -25,10 +25,7 @@ func (a *API) partStream(w http.ResponseWriter, r *http.Request) {
 // playbackPartStream serves a version's file as it is to its playback, for as long as the playback
 // lasts: its stop cuts off what is still being sent.
 func (a *API) playbackPartStream(w http.ResponseWriter, r *http.Request) {
-	playback, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	playback := pathUUID(r, "id")
 	rc := http.NewResponseController(w)
 	ctx := r.Context()
 	cut := func() {
@@ -93,10 +90,7 @@ func (a *API) subtitleFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) subtitleAsItIs(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -112,10 +106,7 @@ func (a *API) subtitleAsItIs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) subtitleMatroska(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -134,10 +125,7 @@ func (a *API) subtitleMatroska(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	sub, err := a.svc.Playing.Subtitle(r.Context(), id)
 	if a.answered(w, r, err) {
 		return
@@ -159,11 +147,7 @@ func (a *API) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 // serveLibraryFile serves the first limit bytes of what open opens for the id the path names by
 // param: only media the scanner recorded.
 func (a *API) serveLibraryFile(w http.ResponseWriter, r *http.Request, param string, open func(context.Context, uuid.UUID) (media.Input, error), limit int64) {
-	id, ok := a.pathID(w, r, param)
-	if !ok {
-		return
-	}
-	in, err := open(r.Context(), id)
+	in, err := open(r.Context(), pathUUID(r, param))
 	if a.answered(w, r, err) {
 		return
 	}

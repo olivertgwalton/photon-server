@@ -64,10 +64,7 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) revokeKey(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if !a.answered(w, r, a.svc.Auth.RevokeKey(r.Context(), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}

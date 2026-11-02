@@ -39,10 +39,7 @@ func commonSenseAgeOK(age *int) bool {
 // profileAccess answers what a profile may see, as Jellyfin's parental control and library access
 // say it.
 func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	access, err := a.svc.ProfileAdmin.Access(r.Context(), id, keeper(r))
 	if a.answered(w, r, err) {
 		return
@@ -53,10 +50,7 @@ func (a *API) profileAccess(w http.ResponseWriter, r *http.Request) {
 // setProfileAccess replaces what a profile may see: titles rated for max_age and younger, unrated
 // ones allowed or blocked, and only the libraries listed, every one where none are.
 func (a *API) setProfileAccess(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req accessJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -124,10 +118,7 @@ type profileChangeJSON struct {
 
 // setProfile renames a profile, changes its role, and sets its password.
 func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req profileChangeJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -155,10 +146,7 @@ func (a *API) setProfile(w http.ResponseWriter, r *http.Request) {
 
 // removeProfile forgets a profile, its devices and what it has watched.
 func (a *API) removeProfile(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, keeper(r))
 	if a.answered(w, r, err) {
 		return

@@ -109,10 +109,7 @@ func (a *API) ownRequests(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) withdrawRequest(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	cleared, err := a.svc.Requests.WithdrawRequest(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -162,10 +159,7 @@ func (a *API) declineRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) decideRequest(w http.ResponseWriter, r *http.Request, state domain.RequestState, reason string) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	decided, cleared, err := a.svc.Requests.DecideRequest(r.Context(), id, keeper(r), auth.SessionOf(r.Context()).Profile.ID, state, reason)
 	if a.answered(w, r, err) {
 		return
