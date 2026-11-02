@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -27,66 +25,6 @@ type Hardware struct {
 	HEVC domain.HEVCEncoding
 	// Overlay is how VAAPI lays a burned-in subtitle over the picture.
 	Overlay Overlay
-	// Decoders are what the device decodes, as ProbeDecoders finds them; anything else FFmpeg
-	// decodes and uploads to it.
-	Decoders []Decoder
-}
-
-// Decoder is a codec, as FFmpeg names it, at a bit depth.
-type Decoder struct {
-	Codec    string
-	BitDepth int
-}
-
-// probed are the decoders ProbeDecoders tries, each with the encoder and pixel format its test
-// picture is made with: those a source is commonly in.
-var probed = []struct {
-	Decoder
-	encoder, format string
-}{
-	{Decoder{"h264", 8}, "libx264", "yuv420p"},
-	{Decoder{"h264", 10}, "libx264", "yuv420p10le"},
-	{Decoder{"hevc", 8}, "libx265", "yuv420p"},
-	{Decoder{"hevc", 10}, "libx265", "yuv420p10le"},
-	{Decoder{"av1", 8}, "libsvtav1", "yuv420p"},
-	{Decoder{"av1", 10}, "libsvtav1", "yuv420p10le"},
-	{Decoder{"vp9", 8}, "libvpx-vp9", "yuv420p"},
-	{Decoder{"vp9", 10}, "libvpx-vp9", "yuv420p10le"},
-	{Decoder{"mpeg2video", 8}, "mpeg2video", "yuv420p"},
-}
-
-// ProbeDecoders are the codecs, each at a bit depth, the device decodes: those of which FFmpeg
-// decodes a test picture on it and downloads the frames. A decoder the device lacks is no error
-// to FFmpeg, which decodes in software instead, so it is the download that fails. No two GPUs
-// decode the same: H.264 in 10 bits only Apple's, AV1 only those of the last few years.
-func (h Hardware) ProbeDecoders(ctx context.Context, ffmpeg string) ([]Decoder, error) {
-	if h.Accel == domain.AccelSoftware || h.Accel == domain.AccelAMF {
-		return nil, nil
-	}
-	dir, err := os.MkdirTemp("", "photon-decoders")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	init, decode := h.devices(domain.VideoEncode{})
-	var out []Decoder
-	for i, p := range probed {
-		clip := filepath.Join(dir, "decode"+strconv.Itoa(i)+".mkv")
-		made := encodeTest(ctx, ffmpeg, append(quiet(), "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24", "-t", "0.5",
-			"-pix_fmt", p.format, "-c:v", p.encoder, "-y", clip))
-		if made != nil {
-			continue
-		}
-		download := "nv12"
-		if p.BitDepth == 10 {
-			download = "p010le"
-		}
-		a := append(append(append(quiet(), init...), decode...), "-i", clip, "-vf", "hwdownload,format="+download, "-f", "null", "-")
-		if encodeTest(ctx, ffmpeg, a) == nil {
-			out = append(out, p.Decoder)
-		}
-	}
-	return out, nil
 }
 
 // Overlay is how a VAAPI device lays a subtitle drawn on the CPU over the picture, chosen by its
@@ -212,50 +150,42 @@ func (h Hardware) burnOverlay(e domain.VideoEncode) Overlay {
 // longGOP stops an encoder adding keyframes of its own between those it is told to make.
 const longGOP = "1000"
 
-// decodes reports whether a source is decoded on the device too: one of its decoders, in 4:2:0,
-// but for an interlaced picture on VideoToolbox, which refuses one. VideoToolbox decodes 4:2:2 and
-// 4:4:4 itself in software, and hands FFmpeg its frames as its own (measured on an M4); on any
-// other device FFmpeg falls back to software, and the device's filters refuse its frames.
-// Anything else is decoded by FFmpeg and uploaded.
-func (h Hardware) decodes(v domain.VideoPlan, e domain.VideoEncode) bool {
-	if !slices.Contains(h.Decoders, Decoder{v.Codec, v.BitDepth}) {
-		return false
-	}
-	if h.Accel == domain.AccelVideoToolbox {
-		return !e.Deinterlace
-	}
-	return subsampled420(v.Codec, v.Profile)
+// decodes reports whether the device is asked to decode the source too: every device but for an
+// interlaced picture on VideoToolbox, which refuses one. What its decoder cannot decode, a codec,
+// a bit depth or 4:2:2, FFmpeg decodes itself, and its frames are uploaded (see upload).
+func (h Hardware) decodes(e domain.VideoEncode) bool {
+	return h.Accel != domain.AccelSoftware && h.Accel != domain.AccelAMF && (!e.Deinterlace || h.Accel != domain.AccelVideoToolbox)
 }
 
-// subsampled420 reports whether a profile, as ffprobe names it, is of 4:2:0 pictures: not H.264's
-// High 4:2:2 and High 4:4:4, MPEG-2's 4:2:2, HEVC's Rext, VP9's Profile 1 and 3, nor AV1's High
-// and Professional.
-func subsampled420(codec, profile string) bool {
-	switch codec {
-	case "hevc":
-		return profile != "Rext"
-	case "vp9":
-		return profile != "Profile 1" && profile != "Profile 3"
-	case "av1":
-		return profile != "High" && profile != "Professional"
+// upload puts frames on the device: those FFmpeg decoded are uploaded, and those the device did
+// pass as they are. It is in every chain, as which a source's frames are is known only once it
+// is decoded.
+func (h Hardware) upload() string {
+	switch h.Accel {
+	case domain.AccelSoftware, domain.AccelAMF:
+	case domain.AccelVideoToolbox:
+		return "format=nv12|p010le|videotoolbox_vld,hwupload,"
+	case domain.AccelVAAPI:
+		// To VAAPI also where the filters' device is Vulkan, a subtitle being laid over through it.
+		return "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,"
+	case domain.AccelQSV:
+		// Through the device QSV decodes on, whose frames it maps, in a pool that cannot grow.
+		if runtime.GOOS == "windows" {
+			return "format=nv12|p010le|d3d11,hwupload=derive_device=d3d11va:extra_hw_frames=64,hwmap=derive_device=qsv,"
+		}
+		return "format=nv12|p010le|vaapi,hwupload=derive_device=vaapi:extra_hw_frames=64,hwmap=derive_device=qsv,"
+	case domain.AccelNVENC:
+		return "format=nv12|p010le|cuda,hwupload,"
 	}
-	return !strings.Contains(profile, "4:2:2") && !strings.Contains(profile, "4:4:4")
+	return ""
 }
 
 // inputArgs opens the device, and decodes on it where it can, before the input.
-func (h Hardware) inputArgs(v domain.VideoPlan, e domain.VideoEncode) []string {
-	init, decode := h.devices(e)
-	if h.decodes(v, e) {
-		return append(init, decode...)
-	}
-	return init
-}
-
-// devices are the arguments that open the device for e's filters, and those that decode on it.
-func (h Hardware) devices(e domain.VideoEncode) (init, decode []string) {
+func (h Hardware) inputArgs(e domain.VideoEncode) []string {
+	var init, decode []string
 	switch h.Accel {
 	case domain.AccelSoftware, domain.AccelAMF:
-		return nil, nil
+		return nil
 	case domain.AccelVideoToolbox:
 		init = []string{"-init_hw_device", "videotoolbox=hw", "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"}
@@ -280,7 +210,10 @@ func (h Hardware) devices(e domain.VideoEncode) (init, decode []string) {
 		init = []string{"-init_hw_device", "cuda=hw:" + h.Device, "-filter_hw_device", "hw"}
 		decode = []string{"-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-hwaccel_device", "hw"}
 	}
-	return init, decode
+	if h.decodes(e) {
+		return append(init, decode...)
+	}
+	return init
 }
 
 // x265 is Jellyfin's libx265 tuning: no scene cuts or open GOPs, so a forced keyframe starts every
@@ -302,7 +235,7 @@ func (h Hardware) encoder(codec domain.VideoCodec) string {
 // keyframe where it starts and every SegmentLength after: ffmpeg counts t from the seek. HDR kept
 // is encoded in 10 bits, its colours and mastering metadata carried from the frames. It answers
 // the filter the picture goes through and the encoder's options.
-func (h Hardware) videoArgs(e domain.VideoEncode, v domain.VideoPlan) (string, []string) {
+func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 	w, ht := strconv.Itoa(e.Width), strconv.Itoa(e.Height)
 	kbps := strconv.Itoa(e.BitrateKbps) + "k"
 	rate := []string{"-b:v", kbps, "-maxrate", kbps, "-bufsize", strconv.Itoa(2*e.BitrateKbps) + "k"}
@@ -316,11 +249,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode, v domain.VideoPlan) (string, [
 	case e.Codec == domain.VideoHEVC:
 		profile = "main"
 	}
-	// Frames decoded by FFmpeg are uploaded to the device first.
-	upload := ""
-	if !h.decodes(v, e) {
-		upload = "format=nv12|p010le,hwupload,"
-	}
+	upload := h.upload()
 	// Deinterlaced first, as Jellyfin's is: with its default, yadif, a frame for each frame, on the
 	// device where it has one; QSV's is vpp_qsv's own, below. VideoToolbox's yadif_videotoolbox
 	// crashes FFmpeg 9.0.1 (measured on an M-series Mac), so there it is done before the upload.
@@ -374,23 +303,14 @@ func (h Hardware) videoArgs(e domain.VideoEncode, v domain.VideoPlan) (string, [
 		}
 		encoder = append(encoder, "-prio_speed", "1")
 	case domain.AccelVAAPI:
-		if upload != "" {
-			// To VAAPI where the filters' device is Vulkan, a subtitle being laid over through it.
-			upload = "format=nv12|p010le,hwupload=derive_device=vaapi,"
-		}
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
 		if e.ToneMap {
 			filter = upload + deinterlace + "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
 		}
 		encoder = append(encoder, "-rc_mode", "VBR")
 	case domain.AccelQSV:
-		if h.decodes(v, e) {
-			upload = "hwmap=derive_device=qsv,"
-		} else {
-			upload = "format=nv12|p010le,hwupload=extra_hw_frames=64,"
-		}
 		filter = upload + "vpp_qsv=w=" + w + ":h=" + ht + ":format=" + format
-		if runtime.GOOS == "windows" && h.decodes(v, e) {
+		if runtime.GOOS == "windows" {
 			// D3D11's frame pool cannot grow, so the encoder must not hold the decoder's frames.
 			filter += ":passthrough=0"
 		}
@@ -459,9 +379,10 @@ func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 		if e.Burn != nil {
 			source += "[out0];" + subtitle + "[out1]"
 		}
-		// The test picture is decoded by FFmpeg, so no hardware decode is asked for.
+		// The test picture is FFmpeg's own, so the decode asked of the device falls back, as for a
+		// source it cannot decode, and the picture is uploaded.
 		a := quiet()
-		a = append(a, h.inputArgs(domain.VideoPlan{Codec: "rawvideo"}, e)...)
+		a = append(a, h.inputArgs(e)...)
 		a = append(a, "-f", "lavfi", "-i", source, "-t", "1")
 		a = append(a, streamArgs(h, 0, domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
 		a = append(a, "-f", "null", "-")
@@ -472,7 +393,7 @@ func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 	return nil
 }
 
-// encodeTest runs one of the device's tests, as long as a tool reading part of a file may: a driver
+// encodeTest runs one of Check's encodes, as long as a tool reading part of a file may: a driver
 // that hangs is a device that would not encode.
 func encodeTest(ctx context.Context, ffmpeg string, args []string) error {
 	ctx, cancel := media.Within(ctx, ffmpeg, media.PartRun)
