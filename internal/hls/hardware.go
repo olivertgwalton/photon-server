@@ -176,6 +176,19 @@ func (h Hardware) burnOverlay(e domain.VideoEncode) Overlay {
 	return h.Overlay
 }
 
+// burnsThroughVulkan reports whether VAAPI lays a subtitle over e's picture through Vulkan.
+func (h Hardware) burnsThroughVulkan(e domain.VideoEncode) bool {
+	return (e.Burn != nil || e.BurnFile != nil) && h.burnOverlay(e) == OverlayVulkan
+}
+
+// toVulkan maps a VAAPI picture to libplacebo, which makes it the BGRA overlay_vulkan lays over,
+// with any options of its own after; fromVulkan maps it back to VAAPI's NV12 for the encoder. Both
+// as Jellyfin's pipeline.
+const (
+	toVulkan   = "hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc"
+	fromVulkan = ",hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+)
+
 // longGOP stops an encoder adding keyframes of its own between those it is told to make.
 const longGOP = "1000"
 
@@ -220,7 +233,7 @@ func (h Hardware) inputArgs(e domain.VideoEncode) []string {
 		decode = []string{"-hwaccel", "videotoolbox", "-hwaccel_output_format", "videotoolbox_vld"}
 	case domain.AccelVAAPI:
 		init = []string{"-init_hw_device", "vaapi=hw:" + h.Device, "-filter_hw_device", "hw"}
-		if (e.Burn != nil || e.BurnFile != nil) && h.burnOverlay(e) == OverlayVulkan || e.ToneMap && h.ToneMapper == ToneMapperVulkan {
+		if h.burnsThroughVulkan(e) || e.ToneMap && h.ToneMapper == ToneMapperVulkan {
 			// As Jellyfin's: VAAPI and Vulkan opened on the one DRM device, so frames map between
 			// them, and Vulkan the filters' device, as libplacebo needs.
 			init = []string{"-init_hw_device", "drm=dr:" + h.Device, "-init_hw_device", "vaapi=hw@dr", "-init_hw_device", "vulkan=vk@dr", "-filter_hw_device", "vk"}
@@ -335,6 +348,10 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 		filter = upload + deinterlace + "scale_vaapi=w=" + w + ":h=" + ht + ":format=" + format
 		if e.ToneMap {
 			filter = upload + deinterlace + h.toneMapVAAPI(w, ht)
+			// Left in Vulkan for a subtitle laid over there (see burnArgs).
+			if h.ToneMapper == ToneMapperVulkan && !h.burnsThroughVulkan(e) {
+				filter += fromVulkan
+			}
 		}
 		encoder = append(encoder, "-rc_mode", "VBR")
 	case domain.AccelQSV:
@@ -368,11 +385,8 @@ func (h Hardware) toneMapVAAPI(w, ht string) string {
 	case ToneMapperVAAPI:
 		return "tonemap_vaapi=format=nv12:p=bt709:t=bt709:m=bt709,scale_vaapi=w=" + w + ":h=" + ht
 	case ToneMapperVulkan:
-		// As Jellyfin's: libplacebo's output BGRA, which VAAPI maps back, and scale_vaapi makes the
-		// encoder's NV12.
-		return "hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:w=" + w + ":h=" + ht +
-			":format=bgra:tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=pc," +
-			"format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv"
+		// Left in Vulkan: videoArgs maps it back.
+		return toVulkan + ":w=" + w + ":h=" + ht + ":tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709,format=vulkan"
 	case ToneMapperCPU:
 	}
 	// Scaled on the device first, so the CPU maps only the picture encoded. Uploaded to VAAPI by

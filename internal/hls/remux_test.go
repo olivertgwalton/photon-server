@@ -475,8 +475,8 @@ func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
 		}},
 		{"radeonsi, tone mapped", OverlayVulkan, "hevc", toneMapped, nil, []string{
 			vulkan,
-			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:w=1920:h=800:format=bgra:tonemapping=bt.2390:" +
-				"peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=pc,format=vulkan,hwmap=derive_device=vaapi,format=vaapi,scale_vaapi=format=nv12:out_range=tv" + toVulkan + fromVulkan,
+			"[0:0]format=nv12|p010le|vaapi,hwupload=derive_device=vaapi,hwmap=derive_device=drm,format=drm_prime,libplacebo=upscaler=none:downscaler=none:format=bgra:range=pc:w=1920:h=800:" +
+				"tonemapping=bt.2390:peak_detect=0:color_primaries=bt709:color_trc=bt709:colorspace=bt709,format=vulkan[main];" + fromVulkan,
 		}},
 		{"radeonsi, HDR kept", OverlayVulkan, "hevc", kept, nil, []string{
 			vaapi,
