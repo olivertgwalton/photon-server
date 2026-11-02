@@ -145,9 +145,6 @@ func (a *API) adminSignInProviderOf(p domain.SignInProvider) adminSignInProvider
 			Libraries: p.Libraries,
 		},
 	}
-	if out.Access.Libraries == nil {
-		out.Access.Libraries = []uuid.UUID{}
-	}
 	if cb := a.svc.SignIns.Callback(p.Slug); cb != nil {
 		out.CallbackURL = uri(cb.String())
 	}

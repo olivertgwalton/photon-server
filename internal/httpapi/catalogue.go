@@ -256,9 +256,8 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out := searchJSON{
-		Titles:      pageJSON[cardJSON]{Items: []cardJSON{}, Offset: query.Offset},
-		People:      pageJSON[personRefJSON]{Items: []personRefJSON{}, Offset: query.Offset},
-		Requestable: listJSON[cardJSON]{Items: []cardJSON{}},
+		Titles: pageJSON[cardJSON]{Offset: query.Offset},
+		People: pageJSON[personRefJSON]{Offset: query.Offset},
 	}
 	ctx := r.Context()
 	var wg sync.WaitGroup

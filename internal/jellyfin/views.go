@@ -98,7 +98,7 @@ func (a *API) virtualFolders(w http.ResponseWriter, r *http.Request) {
 	out := make([]folder, len(libs))
 	for n, l := range libs {
 		// Jellyfin's library options name the type a mixed library's item has none of.
-		out[n] = folder{Name: l.Name, Locations: []string{}, CollectionType: cmp.Or(collectionTypes[l.Kind], "mixed"), ItemID: guid(l.ID)}
+		out[n] = folder{Name: l.Name, CollectionType: cmp.Or(collectionTypes[l.Kind], "mixed"), ItemID: guid(l.ID)}
 	}
 	a.writeJSON(w, out)
 }

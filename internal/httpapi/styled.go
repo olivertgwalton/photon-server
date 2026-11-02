@@ -116,7 +116,7 @@ func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	answer := fontsJSON{Fonts: []fontJSON{}}
+	var answer fontsJSON
 	for _, e := range entries {
 		if _, ok := fontTypes[strings.ToLower(filepath.Ext(e.Name()))]; !ok || !e.Type().IsRegular() {
 			continue

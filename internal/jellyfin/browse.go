@@ -277,7 +277,7 @@ func (a *API) byID(w http.ResponseWriter, r *http.Request, names []string, seen 
 			found[id] = a.library(lib)
 		}
 	}
-	out := []item{}
+	var out []item
 	for _, id := range ids {
 		if it, ok := found[id]; ok {
 			out = append(out, it)
@@ -303,7 +303,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 		}
 	}
 	if len(ids) == 0 {
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{StartIndex: l.start})
 		return
 	}
 	p := wallPage(r, auth.SessionOf(r.Context()).Profile.ID, l)
@@ -324,7 +324,7 @@ func (a *API) wall(libs []*store.SeenLibrary, w http.ResponseWriter, r *http.Req
 // seasons, or its episodes where an app asks for them; a season's episodes. Anything else holds
 // nothing an app can ask for here.
 func (a *API) children(w http.ResponseWriter, r *http.Request, profile, parent uuid.UUID, types []string, l listed) {
-	none := queryResult{Items: []item{}, StartIndex: l.start}
+	none := queryResult{StartIndex: l.start}
 	named, err := a.svc.Catalogue.Named(r.Context(), profile, parent)
 	if errors.Is(err, store.ErrNotFound) {
 		a.writeJSON(w, none)
@@ -372,7 +372,7 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 		page, total := paged(members, cardID, l)
 		a.writeList(w, r, page, total, l.start, l)
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{StartIndex: l.start})
 	}
 }
 

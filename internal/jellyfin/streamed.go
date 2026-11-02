@@ -14,7 +14,7 @@ func placeholder(id uuid.UUID, title string) mediaSource {
 	return mediaSource{
 		Protocol: "File", ID: guid(id), Path: title, Type: "Default", Name: title, ETag: guid(id),
 		SupportsDirectStream: true, SupportsDirectPlay: true, SupportsTranscoding: true, VideoType: "VideoFile",
-		MediaStreams: []mediaStream{}, MediaAttachments: []struct{}{}, Formats: []string{}, TranscodingSubProtocol: "http",
+		TranscodingSubProtocol: "http",
 	}
 }
 

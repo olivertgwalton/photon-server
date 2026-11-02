@@ -77,7 +77,7 @@ func (a *API) person(w http.ResponseWriter, r *http.Request) {
 	}
 	out := personJSON{
 		ID: p.ID, Name: p.Name, Photo: p.Photo, Blurhashes: p.Blurhashes, Biography: p.Biography, Born: p.Born,
-		Died: p.Died, Birthplace: p.Birthplace, IDs: p.IDs, Credits: []creditJSON{},
+		Died: p.Died, Birthplace: p.Birthplace, IDs: p.IDs,
 	}
 	for _, c := range credits {
 		out.Credits = append(out.Credits, creditJSON{Credit: c.Kind, Role: c.Role, cardJSON: cardOf(c.Card)})

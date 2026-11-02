@@ -126,8 +126,8 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 		Name: w.Version(v), ETag: guid(v.ID),
 		RunTimeTicks:         v.DurationMS * ticksPerMS,
 		SupportsDirectStream: true, SupportsDirectPlay: true, VideoType: "VideoFile",
-		MediaStreams: make([]mediaStream, 0, len(v.Streams)), MediaAttachments: []struct{}{}, Formats: []string{},
-		Bitrate: v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
+		MediaStreams: make([]mediaStream, 0, len(v.Streams)),
+		Bitrate:      v.BitrateKbps * 1000, TranscodingSubProtocol: "http",
 		DefaultAudioStreamIndex: v.DefaultAudioStream, DefaultSubtitleStreamIndex: v.DefaultSubtitleStream,
 	}
 	for _, t := range v.Streams {

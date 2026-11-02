@@ -125,7 +125,6 @@ func adminLibrary(l domain.Library) adminLibraryJSON {
 
 func librarySettings(l domain.Library) librarySettingsJSON {
 	j := librarySettingsJSON{
-		Sources:      []kindSourcesJSON{},
 		RemoteExtras: l.RemoteExtras, Monitor: l.Monitor, RefreshDays: l.RefreshDays,
 		Previews: l.Previews, Markers: l.Markers, Keyframes: l.Keyframes, Themes: l.Themes, Deletion: l.Deletion,
 		MissingVersions:  l.MissingVersions,

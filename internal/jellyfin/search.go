@@ -38,7 +38,7 @@ func hintOf(it item) searchHint {
 	h := searchHint{
 		ItemID: it.ID, ID: it.ID, Name: it.Name, IndexNumber: it.IndexNumber, ParentIndexNumber: it.ParentIndexNumber,
 		ProductionYear: it.ProductionYear, PrimaryImageTag: it.ImageTags["Primary"], Type: it.Type, IsFolder: it.IsFolder,
-		RunTimeTicks: it.RunTimeTicks, MediaType: it.MediaType, Series: it.SeriesName, Artists: []string{},
+		RunTimeTicks: it.RunTimeTicks, MediaType: it.MediaType, Series: it.SeriesName,
 		PrimaryImageAspectRatio: it.PrimaryImageAspectRatio,
 	}
 	if tag, ok := it.ImageTags["Thumb"]; ok {
@@ -66,7 +66,7 @@ func (a *API) searchHints(w http.ResponseWriter, r *http.Request) {
 		SearchHints      []searchHint `json:"SearchHints"`
 		TotalRecordCount int          `json:"TotalRecordCount"`
 	}
-	out := result{SearchHints: []searchHint{}}
+	var out result
 	q, ok := searchQuery(r, text, parent, values(r, "includeItemTypes"), l)
 	if !ok {
 		a.writeJSON(w, out)
@@ -122,7 +122,7 @@ func searchQuery(r *http.Request, text string, library uuid.UUID, types []string
 func (a *API) search(w http.ResponseWriter, r *http.Request, text string, library uuid.UUID, types []string, l listed) {
 	q, ok := searchQuery(r, text, library, types, l)
 	if !ok {
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{StartIndex: l.start})
 		return
 	}
 	cards, total, err := a.searched(r.Context(), q)

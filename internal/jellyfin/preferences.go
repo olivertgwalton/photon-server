@@ -58,8 +58,8 @@ func configurationOf(p domain.Preferences, libs []*store.SeenLibrary) configurat
 	c := configuration{
 		AudioLanguagePreference: &audio, PlayDefaultAudioTrack: p.AudioTrack == domain.AudioDefault,
 		SubtitleLanguagePreference: &subtitles, SubtitleMode: subtitleModes[p.SubtitleMode],
-		GroupedFolders: []string{}, OrderedViews: make([]string, len(libs)), LatestItemsExcludes: []string{},
-		MyMediaExcludes: []string{}, HidePlayedInLatest: true,
+		OrderedViews:               make([]string, len(libs)),
+		HidePlayedInLatest:         true,
 		RememberAudioSelections:    p.RememberAudio == domain.TrackRemember,
 		RememberSubtitleSelections: p.RememberSubtitles == domain.TrackRemember,
 		EnableNextEpisodeAutoPlay:  p.NextEpisode == domain.NextEpisodePlay,

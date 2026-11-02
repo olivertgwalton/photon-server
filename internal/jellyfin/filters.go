@@ -116,7 +116,7 @@ func (a *API) filters(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	ratings := []string{}
+	var ratings []string
 	for _, c := range f.Certificates {
 		ratings = append(ratings, domain.Bare(c))
 	}
@@ -126,7 +126,7 @@ func (a *API) filters(w http.ResponseWriter, r *http.Request) {
 		Tags            []string `json:"Tags"`
 		OfficialRatings []string `json:"OfficialRatings"`
 		Years           []int    `json:"Years"`
-	}{f.Genres, []string{}, slices.Compact(ratings), f.Years})
+	}{f.Genres, nil, slices.Compact(ratings), f.Years})
 }
 
 // filters2 answers Jellyfin's QueryFilters: the genres, by name and id, and no tags.
@@ -147,7 +147,7 @@ func (a *API) filters2(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, struct {
 		Genres []pair     `json:"Genres"`
 		Tags   []struct{} `json:"Tags"`
-	}{genres, []struct{}{}})
+	}{Genres: genres})
 }
 
 // narrow adds to a filter the names of the genres and studios an app names by id, and the

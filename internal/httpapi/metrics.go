@@ -121,8 +121,8 @@ func shapeMetrics(families []*dto.MetricFamily, at time.Time) gatheredJSON {
 	shared := func() *clusterMetricsJSON {
 		if cluster == nil {
 			cluster = &clusterMetricsJSON{
-				Jobs: []jobCountJSON{}, OldestDue: map[domain.JobKind]float64{}, Tasks: []taskFinishedJSON{},
-				Nodes: map[domain.NodeAvailability]int{}, LibraryItems: map[domain.ItemKind]int{},
+				OldestDue: map[domain.JobKind]float64{},
+				Nodes:     map[domain.NodeAvailability]int{}, LibraryItems: map[domain.ItemKind]int{},
 				LibraryBytes: map[domain.ItemKind]int64{},
 			}
 		}

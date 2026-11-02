@@ -124,7 +124,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		MediaSources  []mediaSource `json:"MediaSources"`
 		PlaySessionID string        `json:"PlaySessionId"`
 		ErrorCode     playbackError `json:"ErrorCode,omitzero"`
-	}{MediaSources: []mediaSource{}, PlaySessionID: guid(session)}
+	}{PlaySessionID: guid(session)}
 	said := words.Negotiate(w, r)
 	for _, v := range versions {
 		src := sourceOf(v, said)

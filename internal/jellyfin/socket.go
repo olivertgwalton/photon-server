@@ -215,10 +215,7 @@ func (a *API) userDataChanged(ctx context.Context, profile, title uuid.UUID) (me
 // playlistTold is one of the profile's playlists changed, as Jellyfin tells a playlist item
 // changed: updated while the profile has it, else removed.
 func (a *API) playlistTold(ctx context.Context, profile, playlist uuid.UUID) (message, bool, error) {
-	u := libraryUpdate{
-		FoldersAddedTo: []string{}, FoldersRemovedFrom: []string{}, CollectionFolders: []string{},
-		ItemsAdded: []string{}, ItemsRemoved: []string{}, ItemsUpdated: []string{},
-	}
+	var u libraryUpdate
 	switch n, err := a.svc.Catalogue.Named(ctx, profile, playlist); {
 	case err == nil && n.Kind == store.NamedPlaylist:
 		u.ItemsUpdated = []string{guid(playlist)}
@@ -247,7 +244,6 @@ func (a *API) libraryChanged(ctx context.Context, profile, lib uuid.UUID, change
 		}
 	}
 	u := libraryUpdate{
-		FoldersAddedTo: []string{}, FoldersRemovedFrom: []string{}, CollectionFolders: []string{},
 		ItemsAdded: ids[domain.TitleAdded], ItemsRemoved: ids[domain.TitleRemoved], ItemsUpdated: ids[domain.TitleUpdated],
 	}
 	if len(u.ItemsAdded)+len(u.ItemsRemoved)+len(u.ItemsUpdated) == 0 {

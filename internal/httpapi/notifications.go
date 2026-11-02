@@ -81,7 +81,7 @@ func (a *API) notificationsOf(ctx context.Context, profile uuid.UUID, said words
 	for _, c := range cards {
 		byID[c.ID] = c
 	}
-	out := []notificationJSON{}
+	var out []notificationJSON
 	for _, n := range in.Notifications {
 		shown := notificationJSON{ID: n.ID, Kind: n.Kind, AddedAt: n.AddedAt, ReadAt: n.ReadAt}
 		switch n.Kind {

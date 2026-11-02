@@ -180,7 +180,7 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 
 // hello is what the profile feed begins with: the scans going on in the libraries the profile sees.
 func (a *API) hello(ctx context.Context, profile uuid.UUID) (helloJSON, error) {
-	out := helloJSON{Scans: []scanJSON{}}
+	var out helloJSON
 	scans, err := a.svc.Events.Scans(ctx)
 	if err != nil {
 		return out, err
@@ -221,10 +221,6 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 			same, err := a.svc.Audience.SameTitles(ctx, profile, e.Item)
 			if err != nil {
 				return eventJSON{}, false, err
-			}
-			if same == nil {
-				// None is still said, as an empty list: omitted, the event would be of no title.
-				same = []uuid.UUID{}
 			}
 			e.Details = domain.UserDataDetails{TitleIDs: same}
 		}

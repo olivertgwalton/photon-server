@@ -53,7 +53,6 @@ func (a *API) systemInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	a.writeJSON(w, systemInfo{
 		SupportsLibraryMonitor: true, WebSocketPortNumber: port,
-		CompletedInstallations: []struct{}{}, CastReceiverApplications: []struct{}{},
 		publicInfo: a.public(r),
 	})
 }

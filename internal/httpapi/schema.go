@@ -384,7 +384,8 @@ func (s *schemas) ref(t reflect.Type, describe func() jsonSchema) jsonSchema {
 func (s *schemas) object(t reflect.Type) jsonSchema {
 	var all []jsonField
 	collect(t, 0, &all)
-	props, required := map[string]jsonSchema{}, []string{}
+	props := map[string]jsonSchema{}
+	var required []string
 	for _, f := range all {
 		if !dominant(f, all) {
 			continue

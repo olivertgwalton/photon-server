@@ -49,7 +49,7 @@ func (a *API) mediaSegments(w http.ResponseWriter, r *http.Request) {
 		Items            []segment `json:"Items"`
 		TotalRecordCount int       `json:"TotalRecordCount"`
 		StartIndex       int       `json:"StartIndex"`
-	}{Items: []segment{}}
+	}{}
 	for _, v := range versions[id] {
 		if v.ID != c.Version {
 			continue

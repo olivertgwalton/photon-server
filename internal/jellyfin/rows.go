@@ -40,7 +40,7 @@ func (a *API) resume(w http.ResponseWriter, r *http.Request) {
 	types := values(r, "mediaTypes")
 	if len(types) > 0 && !slices.ContainsFunc(types, func(t string) bool { return strings.EqualFold(t, "Video") }) {
 		l := listedOf(w, r)
-		a.writeJSON(w, queryResult{Items: []item{}, StartIndex: l.start})
+		a.writeJSON(w, queryResult{StartIndex: l.start})
 		return
 	}
 	a.row(domain.RowContinueWatching)(w, r)
