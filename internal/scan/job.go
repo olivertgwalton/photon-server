@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -33,17 +32,17 @@ func (s *Scanner) Job(hub hub) jobs.Handler {
 		if err != nil {
 			return err
 		}
-		asked, read, err := st.ScanRequests(ctx, id)
+		// The database's clock, not ours, stamps a title added, so what a scan added is counted by it.
+		asked, started, err := st.ScanRequests(ctx, id)
 		if err != nil {
 			return err
 		}
-		started := time.Now()
 		r, err := s.Scan(ctx, lib, asked, hub.Scanning(ctx), func(c store.Changed) { hub.Changed(ctx, lib.ID, c) })
 		hub.Scanned(ctx, lib.ID)
 		if err != nil {
 			return fmt.Errorf("%s: %w", lib.Name, err)
 		}
-		if err := st.ScanAnswered(ctx, id, asked, read); err != nil {
+		if err := st.ScanAnswered(ctx, id, asked, started); err != nil {
 			return err
 		}
 		if err := st.RefreshSmartCollections(ctx, lib.ID); err != nil {

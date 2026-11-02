@@ -129,8 +129,8 @@ func askScan(ctx context.Context, tx db, lib uuid.UUID, folders []string, delay 
 	return enqueueAfter(ctx, tx, domain.JobScanLibrary, lib, delay)
 }
 
-// ScanRequests answers the folders a library's scan has been asked to read, and when they were
-// read, for ScanAnswered.
+// ScanRequests answers the folders a library's scan has been asked to read, and when, by the
+// database's clock, they were read: for ScanAnswered, and for what the scan added since.
 func (s *Store) ScanRequests(ctx context.Context, lib uuid.UUID) (folders []string, read time.Time, err error) {
 	err = s.pool.QueryRow(ctx, `
 		SELECT now(), coalesce(array_agg(path ORDER BY path), '{}') FROM scan_requests WHERE library_id = $1`,

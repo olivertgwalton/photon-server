@@ -93,7 +93,10 @@ func fixture(t *testing.T) (*store.Store, uuid.UUID, uuid.UUID, func(more ...int
 	var episodes []int
 	scan := func(more ...int) {
 		t.Helper()
-		since := time.Now()
+		_, since, err := st.ScanRequests(ctx, tv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
 		episodes = append(episodes, more...)
 		var eps []store.Episode
 		for _, n := range episodes {
