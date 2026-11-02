@@ -3,10 +3,27 @@ package kv
 import (
 	"cmp"
 	"context"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strings"
+	"time"
 	"uuid"
 
 	"github.com/valkey-io/valkey-go"
+)
+
+// stored is how Valkey keeps JSON: a time.Duration, which encoding/json/v2 writes no way of its own,
+// as its nanoseconds, as every server before has kept one.
+var stored = json.JoinOptions(
+	json.WithMarshalers(json.MarshalToFunc(func(enc *jsontext.Encoder, d time.Duration) error {
+		return enc.WriteToken(jsontext.Int(int64(d)))
+	})),
+	json.WithUnmarshalers(json.UnmarshalFromFunc(func(dec *jsontext.Decoder, d *time.Duration) error {
+		var n int64
+		err := json.UnmarshalDecode(dec, &n)
+		*d = time.Duration(n)
+		return err
+	})),
 )
 
 // KV is one server's keys in a Valkey that other servers may share: each is named under the

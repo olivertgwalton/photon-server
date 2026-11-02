@@ -35,7 +35,7 @@ func (k *KV) signInKey(stateHash []byte) string {
 
 // StartSignIn keeps a flow for ttl, answering false where its state is in use.
 func (k *KV) StartSignIn(ctx context.Context, stateHash []byte, f SignInFlow, ttl time.Duration) (bool, error) {
-	b, err := json.Marshal(f)
+	b, err := json.Marshal(f, stored)
 	if err != nil {
 		return false, err
 	}
@@ -56,7 +56,7 @@ func (k *KV) TakeSignIn(ctx context.Context, stateHash []byte) (f SignInFlow, ok
 	if err != nil {
 		return SignInFlow{}, false, err
 	}
-	if err := json.Unmarshal(b, &f); err != nil {
+	if err := json.Unmarshal(b, &f, stored); err != nil {
 		return SignInFlow{}, false, err
 	}
 	return f, true, nil

@@ -19,7 +19,7 @@ const (
 
 // BeginRestore keeps r as the restore under way for ttl, answering false where one already is.
 func (k *KV) BeginRestore(ctx context.Context, r domain.Restore, ttl time.Duration) (bool, error) {
-	v, err := json.Marshal(r)
+	v, err := json.Marshal(r, stored)
 	if err != nil {
 		return false, err
 	}
@@ -32,7 +32,7 @@ func (k *KV) BeginRestore(ctx context.Context, r domain.Restore, ttl time.Durati
 
 // SaveRestore replaces the restore under way, for ttl, and only while there is one.
 func (k *KV) SaveRestore(ctx context.Context, r domain.Restore, ttl time.Duration) error {
-	v, err := json.Marshal(r)
+	v, err := json.Marshal(r, stored)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (k *KV) EndRestore(ctx context.Context) error {
 }
 
 func (k *KV) SaveRestoreOutcome(ctx context.Context, o domain.RestoreOutcome) error {
-	v, err := json.Marshal(o)
+	v, err := json.Marshal(o, stored)
 	if err != nil {
 		return err
 	}
@@ -80,5 +80,5 @@ func read[T any](ctx context.Context, k *KV, name string) (T, bool, error) {
 	if err != nil {
 		return v, false, err
 	}
-	return v, true, json.Unmarshal(b, &v)
+	return v, true, json.Unmarshal(b, &v, stored)
 }
