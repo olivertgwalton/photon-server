@@ -35,7 +35,7 @@ func (c *Client) Info() provider.Info {
 type movie struct {
 	Title               string     `json:"title"`
 	TMDBID              int        `json:"tmdbId"`
-	Year                int        `json:"year,omitempty"`
+	Year                int        `json:"year,omitzero"`
 	QualityProfileID    int        `json:"qualityProfileId"`
 	RootFolderPath      string     `json:"rootFolderPath"`
 	Monitored           bool       `json:"monitored"`

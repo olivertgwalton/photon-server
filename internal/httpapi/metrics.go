@@ -29,7 +29,7 @@ func (a *API) metrics(w http.ResponseWriter, r *http.Request) { a.scrape.ServeHT
 // the node holding the scheduler lease; cluster is absent while none holds it.
 type metricsJSON struct {
 	Nodes   []nodeMetricsJSON   `json:"nodes"`
-	Cluster *clusterMetricsJSON `json:"cluster,omitempty"`
+	Cluster *clusterMetricsJSON `json:"cluster,omitzero"`
 }
 
 // nodeMetricsJSON is a node running, as it tells the others of itself, and what its metrics say;
@@ -41,7 +41,7 @@ type nodeMetricsJSON struct {
 	Availability domain.NodeAvailability `json:"availability"`
 	Reach        nodeReach               `json:"reach"`
 	Error        string                  `json:"error,omitzero"`
-	Metrics      *ownMetricsJSON         `json:"metrics,omitempty"`
+	Metrics      *ownMetricsJSON         `json:"metrics,omitzero"`
 }
 
 // nodeReach is whether a node answered when asked for its metrics.
@@ -99,7 +99,7 @@ type taskFinishedJSON struct {
 // holds the scheduler lease.
 type gatheredJSON struct {
 	Own     ownMetricsJSON      `json:"own"`
-	Cluster *clusterMetricsJSON `json:"cluster,omitempty"`
+	Cluster *clusterMetricsJSON `json:"cluster,omitzero"`
 }
 
 // gather is what this node's metrics say now. A source that cannot be read is left out, and

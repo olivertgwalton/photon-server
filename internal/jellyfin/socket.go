@@ -32,7 +32,7 @@ const (
 // message is Jellyfin's WebSocketMessage.
 type message struct {
 	MessageType messageType `json:"MessageType"`
-	Data        any         `json:"Data,omitempty"`
+	Data        any         `json:"Data,omitzero"`
 	MessageID   string      `json:"MessageId"`
 }
 

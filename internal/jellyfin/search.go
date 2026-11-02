@@ -16,9 +16,9 @@ type searchHint struct {
 	ItemID                  string   `json:"ItemId"`
 	ID                      string   `json:"Id"`
 	Name                    string   `json:"Name"`
-	IndexNumber             *int     `json:"IndexNumber,omitempty"`
-	ParentIndexNumber       *int     `json:"ParentIndexNumber,omitempty"`
-	ProductionYear          int      `json:"ProductionYear,omitempty"`
+	IndexNumber             *int     `json:"IndexNumber,omitzero"`
+	ParentIndexNumber       *int     `json:"ParentIndexNumber,omitzero"`
+	ProductionYear          int      `json:"ProductionYear,omitzero"`
 	PrimaryImageTag         string   `json:"PrimaryImageTag,omitempty"`
 	ThumbImageTag           string   `json:"ThumbImageTag,omitempty"`
 	ThumbImageItemID        string   `json:"ThumbImageItemId,omitempty"`
@@ -26,11 +26,11 @@ type searchHint struct {
 	BackdropImageItemID     string   `json:"BackdropImageItemId,omitempty"`
 	Type                    string   `json:"Type"`
 	IsFolder                bool     `json:"IsFolder"`
-	RunTimeTicks            int64    `json:"RunTimeTicks,omitempty"`
+	RunTimeTicks            int64    `json:"RunTimeTicks,omitzero"`
 	MediaType               string   `json:"MediaType"`
 	Series                  string   `json:"Series,omitempty"`
 	Artists                 []string `json:"Artists"`
-	PrimaryImageAspectRatio float64  `json:"PrimaryImageAspectRatio,omitempty"`
+	PrimaryImageAspectRatio float64  `json:"PrimaryImageAspectRatio,omitzero"`
 }
 
 // hintOf is an item as a search hint: an episode's backdrop is its show's.

@@ -25,11 +25,11 @@ type mediaSource struct {
 	Type                       string        `json:"Type"`
 	Container                  string        `json:"Container"`
 	Path                       string        `json:"Path,omitempty"`
-	Size                       int64         `json:"Size,omitempty"`
+	Size                       int64         `json:"Size,omitzero"`
 	Name                       string        `json:"Name"`
 	IsRemote                   bool          `json:"IsRemote"`
 	ETag                       string        `json:"ETag"`
-	RunTimeTicks               int64         `json:"RunTimeTicks,omitempty"`
+	RunTimeTicks               int64         `json:"RunTimeTicks,omitzero"`
 	ReadAtNativeFramerate      bool          `json:"ReadAtNativeFramerate"`
 	IgnoreDts                  bool          `json:"IgnoreDts"`
 	IgnoreIndex                bool          `json:"IgnoreIndex"`
@@ -46,13 +46,13 @@ type mediaSource struct {
 	MediaStreams               []mediaStream `json:"MediaStreams"`
 	MediaAttachments           []struct{}    `json:"MediaAttachments"`
 	Formats                    []string      `json:"Formats"`
-	Bitrate                    int           `json:"Bitrate,omitempty"`
+	Bitrate                    int           `json:"Bitrate,omitzero"`
 	RequiredHTTPHeaders        struct{}      `json:"RequiredHttpHeaders"`
 	TranscodingURL             string        `json:"TranscodingUrl,omitempty"`
 	TranscodingSubProtocol     string        `json:"TranscodingSubProtocol"`
 	TranscodingContainer       string        `json:"TranscodingContainer,omitempty"`
-	DefaultAudioStreamIndex    *int          `json:"DefaultAudioStreamIndex,omitempty"`
-	DefaultSubtitleStreamIndex *int          `json:"DefaultSubtitleStreamIndex,omitempty"`
+	DefaultAudioStreamIndex    *int          `json:"DefaultAudioStreamIndex,omitzero"`
+	DefaultSubtitleStreamIndex *int          `json:"DefaultSubtitleStreamIndex,omitzero"`
 	HasSegments                bool          `json:"HasSegments"`
 }
 
@@ -63,20 +63,20 @@ type mediaStream struct {
 	Title                  string  `json:"Title,omitempty"`
 	VideoRange             string  `json:"VideoRange,omitempty"`
 	VideoRangeType         string  `json:"VideoRangeType,omitempty"`
-	DvProfile              int16   `json:"DvProfile,omitempty"`
+	DvProfile              int16   `json:"DvProfile,omitzero"`
 	DisplayTitle           string  `json:"DisplayTitle"`
 	IsInterlaced           bool    `json:"IsInterlaced"`
 	ChannelLayout          string  `json:"ChannelLayout,omitempty"`
-	BitRate                int     `json:"BitRate,omitempty"`
-	BitDepth               int16   `json:"BitDepth,omitempty"`
-	Channels               int     `json:"Channels,omitempty"`
-	SampleRate             int     `json:"SampleRate,omitempty"`
+	BitRate                int     `json:"BitRate,omitzero"`
+	BitDepth               int16   `json:"BitDepth,omitzero"`
+	Channels               int     `json:"Channels,omitzero"`
+	SampleRate             int     `json:"SampleRate,omitzero"`
 	IsDefault              bool    `json:"IsDefault"`
 	IsForced               bool    `json:"IsForced"`
 	IsHearingImpaired      bool    `json:"IsHearingImpaired"`
-	Height                 int     `json:"Height,omitempty"`
-	Width                  int     `json:"Width,omitempty"`
-	RealFrameRate          float64 `json:"RealFrameRate,omitempty"`
+	Height                 int     `json:"Height,omitzero"`
+	Width                  int     `json:"Width,omitzero"`
+	RealFrameRate          float64 `json:"RealFrameRate,omitzero"`
 	Profile                string  `json:"Profile,omitempty"`
 	Type                   string  `json:"Type"`
 	Index                  int     `json:"Index"`
@@ -85,7 +85,7 @@ type mediaStream struct {
 	SupportsExternalStream bool    `json:"SupportsExternalStream"`
 	DeliveryMethod         string  `json:"DeliveryMethod,omitempty"`
 	DeliveryURL            string  `json:"DeliveryUrl,omitempty"`
-	Level                  int     `json:"Level,omitempty"`
+	Level                  int     `json:"Level,omitzero"`
 }
 
 // streamTypes are Jellyfin's MediaStreamType for each kind of track.

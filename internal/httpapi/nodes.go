@@ -101,7 +101,7 @@ type knownNodeJSON struct {
 	PublicURL    uri                     `json:"public_url"`
 	LocalURL     uri                     `json:"local_url"`
 	Encoding     nodeEncodingJSON        `json:"encoding"`
-	Online       *nodeJSON               `json:"online,omitempty"`
+	Online       *nodeJSON               `json:"online,omitzero"`
 }
 
 // nodeChangeJSON is what to change of a node: its role, its limit on transcodes at once, whether it

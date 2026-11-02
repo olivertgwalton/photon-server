@@ -52,8 +52,8 @@ type Setting struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 	// Secret is never answered back to an admin once set.
-	Secret   bool `json:"secret,omitempty"`
-	Required bool `json:"required,omitempty"`
+	Secret   bool `json:"secret,omitzero"`
+	Required bool `json:"required,omitzero"`
 }
 
 // Speaks is the version of each capability this server speaks, and its calls: "describe" is
@@ -80,7 +80,7 @@ type MatchRequest struct {
 	Locale
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
-	Year  int    `json:"year,omitempty"`
+	Year  int    `json:"year,omitzero"`
 	// IDs are the ids the title carries, by provider: "imdb", "tmdb", "tvdb", and this plugin's
 	// own, "plugin:<id>", where it gave one before.
 	IDs map[string]string `json:"ids"`
@@ -121,7 +121,7 @@ type Metadata struct {
 	Certificate   string `json:"certificate,omitempty"`
 	// ReleaseDate is a date, as 2006-01-02.
 	ReleaseDate string            `json:"release_date,omitempty"`
-	Year        int               `json:"year,omitempty"`
+	Year        int               `json:"year,omitzero"`
 	Genres      []string          `json:"genres,omitempty"`
 	Studios     []string          `json:"studios,omitempty"`
 	IDs         map[string]string `json:"ids,omitempty"`
@@ -147,8 +147,8 @@ type Artwork struct {
 	Kind     string `json:"kind"`
 	URL      string `json:"url"`
 	Language string `json:"language,omitempty"`
-	Width    int    `json:"width,omitempty"`
-	Height   int    `json:"height,omitempty"`
+	Width    int    `json:"width,omitzero"`
+	Height   int    `json:"height,omitzero"`
 }
 
 // Video is a video hosted elsewhere: a trailer on YouTube is site "YouTube" and its video key.
@@ -180,7 +180,7 @@ type SearchRequest struct {
 	Locale
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
-	Year  int    `json:"year,omitempty"`
+	Year  int    `json:"year,omitzero"`
 }
 
 type SearchResponse struct {
@@ -191,7 +191,7 @@ type Candidate struct {
 	ID            string `json:"id"`
 	Title         string `json:"title"`
 	OriginalTitle string `json:"original_title,omitempty"`
-	Year          int    `json:"year,omitempty"`
+	Year          int    `json:"year,omitzero"`
 	Overview      string `json:"overview,omitempty"`
 	Poster        string `json:"poster,omitempty"`
 }
@@ -211,7 +211,7 @@ type Rating struct {
 	Site string `json:"site"`
 	// Score is out of 100, whatever scale the site uses.
 	Score float64 `json:"score"`
-	Votes int     `json:"votes,omitempty"`
+	Votes int     `json:"votes,omitzero"`
 }
 
 type PersonRequest struct {
@@ -247,7 +247,7 @@ type Listed struct {
 	Kind  string            `json:"kind"`
 	IDs   map[string]string `json:"ids"`
 	Title string            `json:"title,omitempty"`
-	Year  int               `json:"year,omitempty"`
+	Year  int               `json:"year,omitzero"`
 }
 
 // StreamsRequest asks for the streams of a film by its ids, or of an episode by its show's ids
@@ -256,8 +256,8 @@ type StreamsRequest struct {
 	Settings Settings          `json:"settings"`
 	Kind     string            `json:"kind"`
 	IDs      map[string]string `json:"ids"`
-	Season   int               `json:"season,omitempty"`
-	Episode  int               `json:"episode,omitempty"`
+	Season   int               `json:"season,omitzero"`
+	Episode  int               `json:"episode,omitzero"`
 }
 
 // StreamsResponse is the streams the plugin offers, best first; none is no stream.
@@ -273,7 +273,7 @@ type Stream struct {
 	URL      string `json:"url"`
 	Name     string `json:"name,omitempty"`
 	Filename string `json:"filename,omitempty"`
-	Size     int64  `json:"size,omitempty"`
+	Size     int64  `json:"size,omitzero"`
 }
 
 // SubtitlesRequest asks for the subtitles of a film by its ids, or of an episode by its show's ids
@@ -282,8 +282,8 @@ type SubtitlesRequest struct {
 	Settings Settings          `json:"settings"`
 	Kind     string            `json:"kind"`
 	IDs      map[string]string `json:"ids"`
-	Season   int               `json:"season,omitempty"`
-	Episode  int               `json:"episode,omitempty"`
+	Season   int               `json:"season,omitzero"`
+	Episode  int               `json:"episode,omitzero"`
 	// Hash is the file's OpenSubtitles hash, where the version is one file the server can read.
 	Hash string `json:"hash,omitempty"`
 	// Language is an IETF tag, such as en or pt-BR.
@@ -299,11 +299,11 @@ type Subtitle struct {
 	ID              string `json:"id"`
 	Language        string `json:"language"`
 	Release         string `json:"release,omitempty"`
-	HearingImpaired bool   `json:"hearing_impaired,omitempty"`
-	Forced          bool   `json:"forced,omitempty"`
+	HearingImpaired bool   `json:"hearing_impaired,omitzero"`
+	Forced          bool   `json:"forced,omitzero"`
 	// ForRelease is a subtitle made for the very file the hash is of.
-	ForRelease bool `json:"for_release,omitempty"`
-	Downloads  int  `json:"downloads,omitempty"`
+	ForRelease bool `json:"for_release,omitzero"`
+	Downloads  int  `json:"downloads,omitzero"`
 }
 
 type FetchRequest struct {
@@ -334,7 +334,7 @@ type RequestRequest struct {
 	Kind     string            `json:"kind"`
 	IDs      map[string]string `json:"ids"`
 	Title    string            `json:"title"`
-	Year     int               `json:"year,omitempty"`
+	Year     int               `json:"year,omitzero"`
 	Seasons  []int             `json:"seasons,omitempty"`
 }
 
@@ -347,8 +347,8 @@ type MarkersRequest struct {
 	Settings   Settings          `json:"settings"`
 	Kind       string            `json:"kind"`
 	IDs        map[string]string `json:"ids"`
-	Season     int               `json:"season,omitempty"`
-	Episode    int               `json:"episode,omitempty"`
+	Season     int               `json:"season,omitzero"`
+	Episode    int               `json:"episode,omitzero"`
 	DurationMS int64             `json:"duration_ms"`
 }
 

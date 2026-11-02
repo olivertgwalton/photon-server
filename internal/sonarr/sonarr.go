@@ -54,7 +54,7 @@ type series struct {
 	Title            string          `json:"title"`
 	TitleSlug        string          `json:"titleSlug"`
 	TVDBID           int             `json:"tvdbId"`
-	Year             int             `json:"year,omitempty"`
+	Year             int             `json:"year,omitzero"`
 	SeriesType       string          `json:"seriesType"`
 	Images           json.RawMessage `json:"images,omitempty"`
 	Seasons          []season        `json:"seasons"`

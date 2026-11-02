@@ -206,7 +206,7 @@ type Opening struct {
 	Item     uuid.UUID            `json:"item"`
 	Version  uuid.UUID            `json:"version"`
 	Video    domain.VideoPlan     `json:"video"`
-	Audio    *domain.AudioPlan    `json:"audio,omitempty"`
+	Audio    *domain.AudioPlan    `json:"audio,omitzero"`
 	Segments domain.SegmentFormat `json:"segments"`
 	StartMS  int64                `json:"start_ms"`
 	// Renditions are the subtitles its HLS offers as WebVTT.

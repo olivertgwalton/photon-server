@@ -232,15 +232,15 @@ func values[T ~string](list []T) []string {
 // jsonSchema is a JSON Schema, its fields in the order of their names.
 type jsonSchema struct {
 	Ref                  string                `json:"$ref,omitempty"`
-	AdditionalProperties *jsonSchema           `json:"additionalProperties,omitempty"`
+	AdditionalProperties *jsonSchema           `json:"additionalProperties,omitzero"`
 	AnyOf                []jsonSchema          `json:"anyOf,omitempty"`
 	ContentMediaType     string                `json:"contentMediaType,omitempty"`
 	Enum                 []string              `json:"enum,omitempty"`
 	Format               string                `json:"format,omitempty"`
-	Items                *jsonSchema           `json:"items,omitempty"`
+	Items                *jsonSchema           `json:"items,omitzero"`
 	Pattern              string                `json:"pattern,omitempty"`
 	Properties           map[string]jsonSchema `json:"properties,omitzero"`
-	PropertyNames        *jsonSchema           `json:"propertyNames,omitempty"`
+	PropertyNames        *jsonSchema           `json:"propertyNames,omitzero"`
 	Required             []string              `json:"required,omitempty"`
 	Type                 schemaType            `json:"type,omitzero"`
 }
