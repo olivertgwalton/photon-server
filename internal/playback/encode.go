@@ -109,10 +109,22 @@ func (p Profile) videoEncode(s domain.Stream, versionKbps int, hevc domain.HEVCE
 		}
 		return domain.VideoEncode{
 			Codec: codec, Width: width, Height: height, BitrateKbps: kbps, Range: r,
-			ToneMap: s.Range.HDR() && r == domain.RangeSDR, Deinterlace: s.Interlaced,
+			ToneMap: toneMapping(s, r), Deinterlace: s.Interlaced,
 		}, true
 	}
 	return domain.VideoEncode{}, false
+}
+
+// toneMapping is how s is mapped to SDR where it is encoded in r: from its RPU for Dolby Vision
+// with no base layer of its own to map.
+func toneMapping(s domain.Stream, r domain.Range) domain.ToneMapping {
+	switch {
+	case !s.Range.HDR() || r != domain.RangeSDR:
+		return domain.ToneMapNone
+	case s.DolbyVision != nil && s.DolbyVision.Compatibility == domain.CompatibleNone:
+		return domain.ToneMapDolbyVision
+	}
+	return domain.ToneMapHDR
 }
 
 // showsTen reports whether the client shows a range in 10-bit HEVC: it lists the range, and takes

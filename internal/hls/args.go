@@ -90,7 +90,7 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 			case OverlayVulkan:
 				// Mapped to libplacebo for overlay_vulkan, unless it is there already, tone mapped,
 				// and back to VAAPI for the encoder.
-				if !e.ToneMap || hw.ToneMapper != ToneMapperVulkan {
+				if e.ToneMap == domain.ToneMapNone || hw.ToneMapper != ToneMapperVulkan {
 					filter += "," + toVulkan + ",format=vulkan"
 				}
 				after = fromVulkan

@@ -143,7 +143,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
+					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
@@ -170,7 +170,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, Range: domain.RangeSDR, ToneMap: true,
+					Codec: domain.VideoH264, Width: 3840, Height: 2160, BitrateKbps: 20_000 - 640, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 8, BitrateKbps: 640}},
 				Reasons: []domain.TranscodeReason{domain.BitrateExceedsLimit},
@@ -188,7 +188,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
+					Codec: domain.VideoHEVC, Width: 3840, Height: 2160, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
@@ -199,7 +199,7 @@ func TestDecide(t *testing.T) {
 			want: Decision{
 				Method: domain.PlayTranscode,
 				Video: &domain.VideoPlan{Stream: 0, Codec: "hevc", Encode: &domain.VideoEncode{
-					Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: true,
+					Codec: domain.VideoH264, Width: 1920, Height: 1080, BitrateKbps: 40_000, Range: domain.RangeSDR, ToneMap: domain.ToneMapHDR,
 				}},
 				Audio:   &domain.AudioPlan{Stream: 2},
 				Reasons: []domain.TranscodeReason{domain.ContainerNotSupported, domain.VideoRangeNotSupported},
@@ -451,7 +451,8 @@ func TestTheEncodeIsGivenTheRoomItNeedsToMatchTheSource(t *testing.T) {
 }
 
 // HEVC is chosen over H.264 where the client plays it and the server may encode it, and keeps the
-// source's HDR10 or HLG where the client shows it in 10 bits; anything else is tone mapped.
+// source's HDR10 or HLG where the client shows it in 10 bits; anything else is tone mapped, Dolby
+// Vision 5 from its RPU.
 func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
 	hdr10 := domain.Stream{Codec: "hevc", Range: domain.RangeHDR10}
 	hlg := domain.Stream{Codec: "hevc", Range: domain.RangeHLG}
@@ -467,25 +468,25 @@ func TestTheEncodeKeepsHDROnlyWhereTheClientShowsIt(t *testing.T) {
 		hevc    domain.HEVCEncoding
 		codec   domain.VideoCodec
 		r       domain.Range
-		toneMap bool
+		toneMap domain.ToneMapping
 	}{
-		{"HDR10 to an HDR10 client", hdr10, []VideoSupport{h264, shows(domain.RangeSDR, domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
-		{"HDR10 where HEVC is denied", hdr10, []VideoSupport{h264, shows(domain.RangeHDR10)}, domain.HEVCDeny, domain.VideoH264, domain.RangeSDR, true},
-		{"HDR10 to an SDR HEVC client", hdr10, []VideoSupport{shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"HDR10 to a client of 8 bits", hdr10, []VideoSupport{{Codec: "hevc", MaxBitDepth: 8, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"HDR10 to a client of Main alone", hdr10, []VideoSupport{{Codec: "hevc", Profiles: []string{"Main"}, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"HDR10 to an H.264 client", hdr10, []VideoSupport{h264}, domain.HEVCAllow, domain.VideoH264, domain.RangeSDR, true},
-		{"HDR10+ as its HDR10", domain.Stream{Codec: "hevc", Range: domain.RangeHDR10Plus}, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
-		{"HLG to an HLG client", hlg, []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
-		{"HLG to an HDR10 client", hlg, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"Dolby Vision 8.1 as HDR10", dv(domain.CompatibleHDR10), []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, false},
-		{"Dolby Vision 8.4 as HLG", dv(domain.CompatibleHLG), []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, false},
-		{"Dolby Vision 5, which no base layer shows", dv(domain.CompatibleNone), []VideoSupport{shows(domain.RangeHDR10, domain.RangeDV)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, true},
-		{"SDR to HEVC", domain.Stream{Codec: "mpeg2video"}, []VideoSupport{h264, shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, false},
+		{"HDR10 to an HDR10 client", hdr10, []VideoSupport{h264, shows(domain.RangeSDR, domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, domain.ToneMapNone},
+		{"HDR10 where HEVC is denied", hdr10, []VideoSupport{h264, shows(domain.RangeHDR10)}, domain.HEVCDeny, domain.VideoH264, domain.RangeSDR, domain.ToneMapHDR},
+		{"HDR10 to an SDR HEVC client", hdr10, []VideoSupport{shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapHDR},
+		{"HDR10 to a client of 8 bits", hdr10, []VideoSupport{{Codec: "hevc", MaxBitDepth: 8, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapHDR},
+		{"HDR10 to a client of Main alone", hdr10, []VideoSupport{{Codec: "hevc", Profiles: []string{"Main"}, Ranges: []domain.Range{domain.RangeHDR10}}}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapHDR},
+		{"HDR10 to an H.264 client", hdr10, []VideoSupport{h264}, domain.HEVCAllow, domain.VideoH264, domain.RangeSDR, domain.ToneMapHDR},
+		{"HDR10+ as its HDR10", domain.Stream{Codec: "hevc", Range: domain.RangeHDR10Plus}, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, domain.ToneMapNone},
+		{"HLG to an HLG client", hlg, []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, domain.ToneMapNone},
+		{"HLG to an HDR10 client", hlg, []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapHDR},
+		{"Dolby Vision 8.1 as HDR10", dv(domain.CompatibleHDR10), []VideoSupport{shows(domain.RangeHDR10)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHDR10, domain.ToneMapNone},
+		{"Dolby Vision 8.4 as HLG", dv(domain.CompatibleHLG), []VideoSupport{shows(domain.RangeHLG)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeHLG, domain.ToneMapNone},
+		{"Dolby Vision 5, which no base layer shows, from its RPU", dv(domain.CompatibleNone), []VideoSupport{shows(domain.RangeHDR10, domain.RangeDV)}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapDolbyVision},
+		{"SDR to HEVC", domain.Stream{Codec: "mpeg2video"}, []VideoSupport{h264, shows()}, domain.HEVCAllow, domain.VideoHEVC, domain.RangeSDR, domain.ToneMapNone},
 	} {
 		got, ok := Profile{Video: tc.plays}.videoEncode(tc.source, 8000, tc.hevc)
 		if !ok || got.Codec != tc.codec || got.Range != tc.r || got.ToneMap != tc.toneMap {
-			t.Errorf("%s: %s in %s, tone mapped %t (%t); want %s in %s, tone mapped %t", tc.name, got.Codec, got.Range, got.ToneMap, ok, tc.codec, tc.r, tc.toneMap)
+			t.Errorf("%s: %s in %s, tone mapping %q (%t); want %s in %s, tone mapping %q", tc.name, got.Codec, got.Range, got.ToneMap, ok, tc.codec, tc.r, tc.toneMap)
 		}
 	}
 	if _, ok := (Profile{Video: []VideoSupport{shows(domain.RangeHDR10)}}).videoEncode(hdr10, 8000, domain.HEVCDeny); ok {

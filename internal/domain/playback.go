@@ -212,21 +212,33 @@ func (v VideoPlan) Burns() bool {
 }
 
 // VideoEncode is video encoded again: the codec, the picture's size, the most bitrate it may
-// spend, the range it is encoded in, and whether HDR is tone mapped to SDR and an interlaced
-// picture deinterlaced on the way.
+// spend, the range it is encoded in, how HDR is tone mapped to SDR, and whether an interlaced
+// picture is deinterlaced on the way.
 type VideoEncode struct {
 	Codec         VideoCodec
 	Width, Height int
 	BitrateKbps   int
 	// Range is SDR, or the HDR10 or HLG of the source kept in HEVC's 10 bits.
 	Range       Range
-	ToneMap     bool
+	ToneMap     ToneMapping
 	Deinterlace bool
 	// Burn is a subtitle stream of the file drawn into the picture, by its index: a picture, or
 	// styled text. BurnFile is a styled subtitle file beside it drawn so.
 	Burn     *int
 	BurnFile *uuid.UUID
 }
+
+// ToneMapping is how an encode maps HDR to SDR, if it does.
+type ToneMapping string
+
+const (
+	ToneMapNone ToneMapping = ""
+	// ToneMapHDR maps the picture as it is: HDR10, HLG, or Dolby Vision's HDR10 base layer.
+	ToneMapHDR ToneMapping = "hdr"
+	// ToneMapDolbyVision applies a Dolby Vision picture's RPU before mapping it, as profile 5's base
+	// layer is nothing without it. Intel's tone mappers ignore the RPU, as Jellyfin's pipelines have it.
+	ToneMapDolbyVision ToneMapping = "dolby_vision"
+)
 
 // VideoCodec is a codec the server encodes video to.
 type VideoCodec string
