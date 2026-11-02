@@ -38,9 +38,9 @@ func (s *Service) StartReset(ctx context.Context, name string) (code string, err
 	return "", errNoFreeCode
 }
 
-// RedeemReset sets a new password on the profile a reset's code is for, and signs out its every
-// device, as a password changed for fear of who knows it must. The code is used once, and not by a
-// password refused for being too short.
+// RedeemReset sets a new password on the profile a reset's code is for, signs out its every device,
+// as a password changed for fear of who knows it must, and takes its authenticator app away. The
+// code is used once, and not by a password refused for being too short.
 func (s *Service) RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error) {
 	if len([]rune(password)) < minPasswordLen {
 		return uuid.UUID{}, ErrPasswordTooShort
@@ -56,5 +56,5 @@ func (s *Service) RedeemReset(ctx context.Context, code, password string) (uuid.
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	return profile, s.store.ChangePassword(ctx, profile, hash, uuid.UUID{})
+	return profile, s.store.ResetPassword(ctx, profile, hash)
 }

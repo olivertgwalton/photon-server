@@ -55,6 +55,9 @@ const (
 	codeAuthorizationPending problemCode = "authorization_pending"
 	codeSlowDown             problemCode = "slow_down"
 	codeExpiredToken         problemCode = "expired_token"
+	// codeCodeRequired is a password right for a profile whose authenticator app's code was not
+	// sent with it. Not 401: switching profiles asks it of a device signed in.
+	codeCodeRequired problemCode = "authenticator_code_required"
 )
 
 // problemCodes are every code; TestEveryProblemCodeIsListed holds the list to the constants.
@@ -64,6 +67,7 @@ func problemCodes() []problemCode {
 		codeInvalidBody, codeUnauthenticated, codeSignInRefused, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
 		codeTranscodeLimit, codeStreamLimit, codeNoSpace, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+		codeCodeRequired,
 	}
 }
 
@@ -87,7 +91,7 @@ func (c problemCode) status() int {
 		return http.StatusTooManyRequests
 	case codeNoCompatibleStream:
 		return http.StatusUnprocessableEntity
-	case codeForbidden:
+	case codeForbidden, codeCodeRequired:
 		return http.StatusForbidden
 	case codeConflict:
 		return http.StatusConflict
@@ -133,6 +137,9 @@ var problems = []struct {
 	{err: store.ErrLastAdmin, code: codeConflict, ownWords: true},
 	{err: store.ErrSetUp, code: codeConflict, ownWords: true},
 	{err: auth.ErrResetNotFound, code: codeNotFound, ownWords: true},
+	{err: auth.ErrCodeRequired, code: codeCodeRequired},
+	{err: auth.ErrWrongCode, code: codeWrongSecret, ownWords: true},
+	{err: auth.ErrBadSecret, code: codeInvalidBody, ownWords: true},
 	{err: store.ErrBeyondManager, code: codeForbidden, ownWords: true},
 	{err: store.ErrSuperseded, code: codeConflict, ownWords: true},
 	{err: store.ErrNotListable, code: codeConflict, ownWords: true},

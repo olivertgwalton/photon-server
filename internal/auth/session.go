@@ -11,7 +11,7 @@ import (
 
 // Authenticator signs devices in and out, by password or by pairing, and says who a token is.
 type Authenticator interface {
-	SignIn(ctx context.Context, name, password string, device Device) (string, domain.Profile, error)
+	SignIn(ctx context.Context, name, password, code string, device Device) (string, domain.Profile, error)
 	Authenticate(ctx context.Context, token string) (domain.Session, error)
 	SignOut(ctx context.Context, session uuid.UUID) error
 	StartPairing(ctx context.Context, d Device, style CodeStyle, network domain.ClientNetwork) (PairingStart, error)

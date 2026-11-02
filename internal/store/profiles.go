@@ -118,12 +118,16 @@ func (s *Store) SetPasswordHash(ctx context.Context, profileID uuid.UUID, hash s
 // stay, as Jellyfin's do: they are not the password, and revoking one is its own act.
 func (s *Store) ChangePassword(ctx context.Context, profileID uuid.UUID, hash string, keep uuid.UUID) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE profiles SET password_hash = $2 WHERE id = $1`, profileID, hash); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2 AND kind = 'device'`, profileID, keep)
-		return err
+		return changePassword(ctx, tx, profileID, hash, keep)
 	})
+}
+
+func changePassword(ctx context.Context, tx db, profileID uuid.UUID, hash string, keep uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `UPDATE profiles SET password_hash = $2 WHERE id = $1`, profileID, hash); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM device_sessions WHERE profile_id = $1 AND id <> $2 AND kind = 'device'`, profileID, keep)
+	return err
 }
 
 type NewSession struct {

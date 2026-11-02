@@ -15,15 +15,17 @@ var (
 )
 
 // SwitchProfile moves a signed-in device to another profile of the household, if secret is what
-// that profile's lock asks for.
-func (s *Service) SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret string) (domain.Profile, error) {
+// that profile's lock asks for. A password asks for code from the profile's authenticator app too,
+// where it has one, as signing in by it does.
+func (s *Service) SwitchProfile(ctx context.Context, session domain.Session, target uuid.UUID, secret, code string) (domain.Profile, error) {
 	profile, secrets, err := s.store.ProfileSecrets(ctx, target)
 	if err != nil {
 		return domain.Profile{}, err
 	}
 	if target != session.Profile.ID {
+		lock := domain.Lock(profile.Role, secrets.PIN != "")
 		var hash string
-		switch lock := domain.Lock(profile.Role, secrets.PIN != ""); lock {
+		switch lock {
 		case domain.LockPIN:
 			hash = secrets.PIN
 		case domain.LockPassword:
@@ -35,6 +37,11 @@ func (s *Service) SwitchProfile(ctx context.Context, session domain.Session, tar
 		}
 		if !match {
 			return domain.Profile{}, ErrWrongSecret
+		}
+		if lock == domain.LockPassword {
+			if err := s.secondFactor(ctx, target, code); err != nil {
+				return domain.Profile{}, err
+			}
 		}
 	}
 	return profile, s.store.SetSessionProfile(ctx, session.ID, target)
