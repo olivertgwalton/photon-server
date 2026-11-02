@@ -61,95 +61,71 @@ type moveJSON struct {
 }
 
 // playlistsOf answers the profile's playlists, by name.
-func (a *API) playlistsOf(w http.ResponseWriter, r *http.Request) {
+func (a *API) playlistsOf(r *http.Request, _ none) (listJSON[playlistJSON], error) {
 	all, err := a.svc.Playlists.Playlists(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	out := make([]playlistJSON, len(all))
 	for i, p := range all {
 		out[i] = playlistJSON{
 			ID: p.ID, Name: p.Name, Library: p.Library, Rule: ruleOf(p.Rule), Entries: p.Entries, DurationMS: p.DurationMS, UpdatedAt: p.UpdatedAt,
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[playlistJSON]{Items: out})
+	return listJSON[playlistJSON]{Items: out}, err
 }
 
 // addPlaylist makes one of the profile's playlists, of the titles given if any, or a smart one of
 // what its rule finds.
-func (a *API) addPlaylist(w http.ResponseWriter, r *http.Request) {
-	var req addPlaylistJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	if req.Name == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "name is set")
-		return
-	}
-	if (req.Rule != nil) != (req.LibraryID != uuid.UUID{}) {
-		writeProblem(w, a.logger, codeInvalidBody, "library_id names the library a rule reads, and a playlist made by hand neither")
-		return
-	}
-	if req.Rule != nil && len(req.ItemIDs) > 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "a smart playlist's entries are what its rule finds: item_ids is left out")
-		return
+func (a *API) addPlaylist(r *http.Request, req addPlaylistJSON) (createdJSON, error) {
+	switch {
+	case req.Name == "":
+		return createdJSON{}, refuse(codeInvalidBody, "name is set")
+	case (req.Rule != nil) != (req.LibraryID != uuid.UUID{}):
+		return createdJSON{}, refuse(codeInvalidBody, "library_id names the library a rule reads, and a playlist made by hand neither")
+	case req.Rule != nil && len(req.ItemIDs) > 0:
+		return createdJSON{}, refuse(codeInvalidBody, "a smart playlist's entries are what its rule finds: item_ids is left out")
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	var id uuid.UUID
 	var err error
 	if req.Rule != nil {
-		if !a.checkedRule(w, req.Rule.rule().CheckPlayable()) {
-			return
+		if err := req.Rule.rule().CheckPlayable(); err != nil {
+			return createdJSON{}, refuse(codeInvalidBody, err.Error())
 		}
 		id, err = a.svc.Playlists.AddSmartPlaylist(r.Context(), profile, req.LibraryID, req.Name, req.Rule.rule())
-		if a.answeredAs(w, r, err, "library_id names a library the profile sees") {
-			return
-		}
+		err = notFoundAs(err, "library_id names a library the profile sees")
 	} else {
 		id, err = a.svc.Playlists.AddPlaylist(r.Context(), profile, req.Name, req.ItemIDs)
-		if a.answered(w, r, err) {
-			return
-		}
 	}
-	a.playlistChanged(r, id)
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, createdJSON{ID: id})
+	return createdJSON{ID: id}, a.playlistChangedBy(r, id, err)
 }
 
 // setPlaylistRule replaces a smart playlist's rule, and so its entries with what it finds.
-func (a *API) setPlaylistRule(w http.ResponseWriter, r *http.Request) {
+func (a *API) setPlaylistRule(r *http.Request, req smartRuleJSON) (none, error) {
+	if err := req.rule().CheckPlayable(); err != nil {
+		return none{}, refuse(codeInvalidBody, err.Error())
+	}
 	id := pathUUID(r, "id")
-	var req smartRuleJSON
-	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckPlayable()) {
-		return
-	}
-	if a.answered(w, r, a.svc.Playlists.SetPlaylistRule(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.rule())) {
-		return
-	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.SetPlaylistRule(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.rule()))
 }
 
 // playlistEntries answers a page of a playlist, in its order: each entry's own id and the title it
 // plays.
-func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
+func (a *API) playlistEntries(r *http.Request, _ none) (pageJSON[entryJSON], error) {
 	page, err := paging(r, maxWallLimit)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[entryJSON]{}, err
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
-	entries, extent, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, id, page)
-	if a.answered(w, r, err) {
-		return
+	entries, extent, err := a.svc.Playlists.PlaylistEntries(r.Context(), profile, pathUUID(r, "id"), page)
+	if err != nil {
+		return pageJSON[entryJSON]{}, err
 	}
 	titles := make([]uuid.UUID, len(entries))
 	for i, e := range entries {
 		titles[i] = e.Title
 	}
 	cards, err := a.svc.Catalogue.Cards(r.Context(), profile, titles)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return pageJSON[entryJSON]{}, err
 	}
 	drawn := map[uuid.UUID]store.Card{}
 	for _, c := range cards {
@@ -162,115 +138,88 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 			out = append(out, entryJSON{EntryID: e.ID, cardJSON: cardOf(c)})
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pageAt(out, page.Offset, extent))
+	return pageAt(out, page.Offset, extent), nil
 }
 
 // addToPlaylist puts titles at the end of a playlist: a show or season as its episodes, a
 // collection as its titles.
-func (a *API) addToPlaylist(w http.ResponseWriter, r *http.Request) {
+func (a *API) addToPlaylist(r *http.Request, req itemIDsJSON) (none, error) {
 	id := pathUUID(r, "id")
-	var req itemIDsJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	if a.answered(w, r, a.svc.Playlists.AddToPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.ItemIDs)) {
-		return
-	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.AddToPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.ItemIDs))
 }
 
 // setPlaylist renames a playlist.
-func (a *API) setPlaylist(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	var req nameJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setPlaylist(r *http.Request, req nameJSON) (none, error) {
 	if req.Name == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "name is set")
-		return
+		return none{}, refuse(codeInvalidBody, "name is set")
 	}
-	if a.answered(w, r, a.svc.Playlists.RenamePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.Name)) {
-		return
-	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	id := pathUUID(r, "id")
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.RenamePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.Name))
 }
 
-func (a *API) removePlaylist(w http.ResponseWriter, r *http.Request) {
+func (a *API) removePlaylist(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
-	if a.answered(w, r, a.svc.Playlists.RemovePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)) {
-		return
-	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.RemovePlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id))
 }
 
 // moveEntry moves one entry of a playlist to a position, counted from zero.
-func (a *API) moveEntry(w http.ResponseWriter, r *http.Request) {
+func (a *API) moveEntry(r *http.Request, req moveJSON) (none, error) {
 	id := pathUUID(r, "id")
-	entry := pathUUID(r, "entry")
-	var req moveJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
-	if a.answered(w, r, a.svc.Playlists.MovePlaylistEntry(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry, req.Position)) {
-		return
-	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.MovePlaylistEntry(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, pathUUID(r, "entry"), req.Position))
 }
 
-func (a *API) removeEntry(w http.ResponseWriter, r *http.Request) {
+func (a *API) removeEntry(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
-	entry := pathUUID(r, "entry")
-	if a.answered(w, r, a.svc.Playlists.RemoveFromPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, entry)) {
-		return
+	return none{}, a.playlistChangedBy(r, id, a.svc.Playlists.RemoveFromPlaylist(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, pathUUID(r, "entry")))
+}
+
+// playlistChangedBy tells the profile its playlist changed, where err says the change was made.
+func (a *API) playlistChangedBy(r *http.Request, id uuid.UUID, err error) error {
+	if err == nil {
+		a.playlistChanged(r, id)
 	}
-	a.playlistChanged(r, id)
-	w.WriteHeader(http.StatusNoContent)
+	return err
 }
 
 func (a *API) playlistsRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/playlists", access: signedIn, summary: "List the profile's playlists, by name",
-			status: http.StatusOK, reply: listJSON[playlistJSON]{}, handle: a.playlistsOf,
-		},
-		{
+			status: http.StatusOK,
+		}, a.playlistsOf),
+		a.handles(route{
 			pattern: "POST /api/v1/playlists", access: signedIn, summary: "Make a playlist, by hand or by a rule",
-			body: addPlaylistJSON{}, status: http.StatusCreated, reply: createdJSON{}, handle: a.addPlaylist,
-		},
-		{
+			status: http.StatusCreated,
+		}, a.addPlaylist),
+		a.handles(route{
 			pattern: "PUT /api/v1/playlists/{id}/rule", access: signedIn,
 			summary: "Replace a smart playlist's rule, and so its entries with what it finds",
-			body:    smartRuleJSON{}, status: http.StatusNoContent, handle: a.setPlaylistRule,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.setPlaylistRule),
+		a.handles(route{
 			pattern: "PATCH /api/v1/playlists/{id}", access: signedIn, summary: "Rename a playlist",
-			body: nameJSON{}, status: http.StatusNoContent, handle: a.setPlaylist,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.setPlaylist),
+		a.handles(route{
 			pattern: "DELETE /api/v1/playlists/{id}", access: signedIn, summary: "Remove a playlist",
-			status: http.StatusNoContent, handle: a.removePlaylist,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.removePlaylist),
+		a.handles(route{
 			pattern: "GET /api/v1/playlists/{id}/entries", access: signedIn, summary: "Page a playlist, in its order",
-			query: pageParams, status: http.StatusOK, reply: pageJSON[entryJSON]{}, handle: a.playlistEntries,
-		},
-		{
+			query: pageParams, status: http.StatusOK,
+		}, a.playlistEntries),
+		a.handles(route{
 			pattern: "POST /api/v1/playlists/{id}/entries", access: signedIn,
 			summary: "Put titles at the end of a playlist: a show or season as its episodes",
-			body:    itemIDsJSON{}, status: http.StatusNoContent, handle: a.addToPlaylist,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.addToPlaylist),
+		a.handles(route{
 			pattern: "PUT /api/v1/playlists/{id}/entries/{entry}/position", access: signedIn,
-			summary: "Move a playlist's entry", body: moveJSON{}, status: http.StatusNoContent, handle: a.moveEntry,
-		},
-		{
+			summary: "Move a playlist's entry", status: http.StatusNoContent,
+		}, a.moveEntry),
+		a.handles(route{
 			pattern: "DELETE /api/v1/playlists/{id}/entries/{entry}", access: signedIn,
-			summary: "Take an entry out of a playlist", status: http.StatusNoContent, handle: a.removeEntry,
-		},
+			summary: "Take an entry out of a playlist", status: http.StatusNoContent,
+		}, a.removeEntry),
 	}
 }
