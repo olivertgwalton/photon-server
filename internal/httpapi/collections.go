@@ -31,8 +31,8 @@ type collections interface {
 // allCollections answers a page of every collection the profile is shown, by title: what the
 // Collections view lists.
 func (a *API) allCollections(w http.ResponseWriter, r *http.Request) {
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	cards, extent, err := a.svc.Collections.AllCollections(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
@@ -49,8 +49,8 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, ok := a.paging(w, r, defaultWallLimit)
-	if !ok {
+	page, err := paging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	cards, extent, err := a.svc.Collections.Collections(r.Context(), lib, auth.SessionOf(r.Context()).Profile.ID, page)

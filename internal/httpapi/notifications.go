@@ -121,8 +121,8 @@ func (a *API) inbox(w http.ResponseWriter, r *http.Request) {
 // notification answers one of the profile's notifications, as a device woken for it by its id asks
 // to show it.
 func (a *API) notification(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathNumber(w, r, "id")
-	if !ok {
+	id, err := pathNumber(r, "id")
+	if a.answered(w, r, err) {
 		return
 	}
 	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
@@ -166,8 +166,8 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 // clearNotification clears one of the profile's notifications as it is opened, on each of its
 // devices.
 func (a *API) clearNotification(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathNumber(w, r, "id")
-	if !ok {
+	id, err := pathNumber(r, "id")
+	if a.answered(w, r, err) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID

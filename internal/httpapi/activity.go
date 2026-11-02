@@ -53,12 +53,12 @@ func eventOf(e domain.Event) eventJSON {
 // adminActivity answers a page of the activity log, the newest first, as Jellyfin's dashboard
 // lists it: every kind, or one.
 func (a *API) adminActivity(w http.ResponseWriter, r *http.Request) {
-	kind, ok := queryEnum(a, w, r, "kind", "", domain.LoggedEventKinds())
-	if !ok {
+	kind, err := queryEnum(r, "kind", "", domain.LoggedEventKinds())
+	if a.answered(w, r, err) {
 		return
 	}
-	before, limit, ok := a.cursorPaging(w, r, defaultWallLimit)
-	if !ok {
+	before, limit, err := cursorPaging(r, defaultWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	entries, more, err := a.svc.Activity.Activity(r.Context(), kind, before, limit)

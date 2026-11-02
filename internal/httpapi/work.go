@@ -127,8 +127,8 @@ func (a *API) adminJobs(w http.ResponseWriter, r *http.Request) {
 
 // retryJob gives a dead job a fresh set of attempts.
 func (a *API) retryJob(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathNumber(w, r, "id")
-	if !ok {
+	id, err := pathNumber(r, "id")
+	if a.answered(w, r, err) {
 		return
 	}
 	if a.answered(w, r, a.svc.Jobs.RetryJob(r.Context(), int64(id))) {

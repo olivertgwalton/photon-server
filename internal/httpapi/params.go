@@ -23,70 +23,66 @@ func (a *API) pathID(w http.ResponseWriter, r *http.Request, name string) (uuid.
 }
 
 // queryID reads an id, or the zero id where the query leaves name out.
-func (a *API) queryID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
+func queryID(r *http.Request, name string) (uuid.UUID, error) {
 	s := r.URL.Query().Get(name)
 	if s == "" {
-		return uuid.UUID{}, true
+		return uuid.UUID{}, nil
 	}
 	id, err := uuid.Parse(s)
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, name+" is not an id")
-		return uuid.UUID{}, false
+		return uuid.UUID{}, refuse(codeInvalidParameter, name+" is not an id")
 	}
-	return id, true
+	return id, nil
 }
 
 // pathNumber reads a count or id from 0 that a path names; any other is a path to nothing.
-func (a *API) pathNumber(w http.ResponseWriter, r *http.Request, name string) (int, bool) {
+func pathNumber(r *http.Request, name string) (int, error) {
 	n, err := strconv.Atoi(r.PathValue(name))
 	if err != nil || n < 0 {
-		writeProblem(w, a.logger, codeNotFound, "")
-		return 0, false
+		return 0, refuse(codeNotFound, "")
 	}
-	return n, true
+	return n, nil
 }
 
 // queryNumber reads a whole number from least to most, or def where the query leaves name out.
-func (a *API) queryNumber(w http.ResponseWriter, r *http.Request, name string, def, least, most int) (int, bool) {
+func queryNumber(r *http.Request, name string, def, least, most int) (int, error) {
 	s := r.URL.Query().Get(name)
 	if s == "" {
-		return def, true
+		return def, nil
 	}
 	if n, err := strconv.Atoi(s); err == nil && n >= least && n <= most {
-		return n, true
+		return n, nil
 	}
 	detail := fmt.Sprintf("%s is a number from %d", name, least)
 	if most < math.MaxInt {
 		detail += fmt.Sprintf(" to %d", most)
 	}
-	writeProblem(w, a.logger, codeInvalidParameter, detail)
-	return 0, false
+	return 0, refuse(codeInvalidParameter, detail)
 }
 
 // queryEnum reads one of all, or def where the query leaves name out.
-func queryEnum[T ~string](a *API, w http.ResponseWriter, r *http.Request, name string, def T, all []T) (T, bool) {
+func queryEnum[T ~string](r *http.Request, name string, def T, all []T) (T, error) {
 	s := r.URL.Query().Get(name)
 	if s == "" {
-		return def, true
+		return def, nil
 	}
 	v, err := domain.Parse(name, s, all)
 	if err != nil {
-		writeProblem(w, a.logger, codeInvalidParameter, err.Error())
-		return "", false
+		return "", refuse(codeInvalidParameter, err.Error())
 	}
-	return v, true
+	return v, nil
 }
 
 // paging reads a page's offset and limit, as walls page, and whether it asks how many there are.
-func (a *API) paging(w http.ResponseWriter, r *http.Request, defaultLimit int) (page store.Page, ok bool) {
-	if page.Offset, ok = a.queryNumber(w, r, "offset", 0, 0, store.MaxOffset); !ok {
-		return page, false
+func paging(r *http.Request, defaultLimit int) (page store.Page, err error) {
+	if page.Offset, err = queryNumber(r, "offset", 0, 0, store.MaxOffset); err != nil {
+		return page, err
 	}
-	if page.Limit, ok = a.queryNumber(w, r, "limit", defaultLimit, 1, maxWallLimit); !ok {
-		return page, false
+	if page.Limit, err = queryNumber(r, "limit", defaultLimit, 1, maxWallLimit); err != nil {
+		return page, err
 	}
-	page.Count, ok = queryEnum(a, w, r, "total", domain.CountNone, domain.Countings())
-	return page, ok
+	page.Count, err = queryEnum(r, "total", domain.CountNone, domain.Countings())
+	return page, err
 }
 
 // list is the values of the list parameter name, repeated or comma-separated.

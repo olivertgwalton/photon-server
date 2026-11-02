@@ -36,12 +36,12 @@ func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	width, ok := a.queryNumber(w, r, "width", 0, 1, math.MaxInt)
-	if !ok {
+	width, err := queryNumber(r, "width", 0, 1, math.MaxInt)
+	if a.answered(w, r, err) {
 		return
 	}
-	height, ok := a.queryNumber(w, r, "height", 0, 1, math.MaxInt)
-	if !ok {
+	height, err := queryNumber(r, "height", 0, 1, math.MaxInt)
+	if a.answered(w, r, err) {
 		return
 	}
 	o, name, err := a.svc.Artwork.Open(r.Context(), id, pic, width, height)

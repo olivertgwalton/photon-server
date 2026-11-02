@@ -190,6 +190,10 @@ func (a *API) answered(w http.ResponseWriter, r *http.Request, err error) bool {
 	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
 		return true
 	}
+	if e, ok := errors.AsType[*refusal](err); ok {
+		writeProblem(w, a.logger, e.code, e.detail)
+		return true
+	}
 	for _, p := range problems {
 		if errors.Is(err, p.err) {
 			detail := p.detail
@@ -203,6 +207,17 @@ func (a *API) answered(w http.ResponseWriter, r *http.Request, err error) bool {
 	a.internal(w, r, err)
 	return true
 }
+
+// refusal is a problem to answer, as an error: what a reading of the request returns, for answered
+// to write.
+type refusal struct {
+	code   problemCode
+	detail string
+}
+
+func (e *refusal) Error() string { return string(e.code) + ": " + e.detail }
+
+func refuse(code problemCode, detail string) error { return &refusal{code, detail} }
 
 // answeredAs is answered, naming the missing resource notFound.
 func (a *API) answeredAs(w http.ResponseWriter, r *http.Request, err error, notFound string) bool {

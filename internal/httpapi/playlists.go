@@ -140,8 +140,8 @@ func (a *API) playlistEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, ok := a.paging(w, r, maxWallLimit)
-	if !ok {
+	page, err := paging(r, maxWallLimit)
+	if a.answered(w, r, err) {
 		return
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID

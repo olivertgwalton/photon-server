@@ -83,8 +83,8 @@ func eventsSocket() asSocket {
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	ctx, session := r.Context(), auth.SessionOf(r.Context())
 	profile := session.Profile.ID
-	want, ok := queryEnum(a, w, r, "feed", feedProfile, feeds())
-	if !ok {
+	want, err := queryEnum(r, "feed", feedProfile, feeds())
+	if a.answered(w, r, err) {
 		return
 	}
 	if want == feedServer && session.Profile.Role != domain.RoleAdmin {
