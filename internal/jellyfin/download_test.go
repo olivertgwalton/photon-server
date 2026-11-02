@@ -175,10 +175,12 @@ func TestAnAppTakesAStrmAsItsMedia(t *testing.T) {
 	}
 	w = serve(api, http.MethodGet, "/Items/"+guid(cards[0])+"?ApiKey=pst_ada&fields=MediaSources,Path", "", "")
 	var item struct {
-		Path         string
-		MediaSources []struct{ Path string }
+		Path         string `json:"Path"`
+		MediaSources []struct {
+			Path string `json:"Path"`
+		} `json:"MediaSources"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &item, anyCase); err != nil || len(item.MediaSources) != 1 ||
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil || len(item.MediaSources) != 1 ||
 		item.Path != "Heat (1995).mkv" || item.MediaSources[0].Path != "Heat (1995).mkv" {
 		t.Errorf("the item: %d %s", w.Code, w.Body)
 	}

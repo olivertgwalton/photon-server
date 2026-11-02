@@ -12,7 +12,7 @@ import (
 func profileOf(t *testing.T, body string) deviceProfile {
 	t.Helper()
 	var p deviceProfile
-	if err := json.Unmarshal([]byte(body), &p, anyCase); err != nil {
+	if err := json.Unmarshal([]byte(body), &p); err != nil {
 		t.Fatal(err)
 	}
 	return p

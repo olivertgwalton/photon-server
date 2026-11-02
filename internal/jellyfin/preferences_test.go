@@ -22,10 +22,12 @@ import (
 func defaultSubtitle(t *testing.T, api http.Handler, item uuid.UUID) any {
 	t.Helper()
 	const header = `MediaBrowser Client="Infuse-Direct", Device="Apple TV", DeviceId="E0BE", Version="8.5.6", Token="pst_ada"`
-	var info, it struct{ MediaSources []map[string]any }
+	var info, it struct {
+		MediaSources []map[string]any `json:"MediaSources"`
+	}
 	for target, into := range map[string]any{"/Items/" + guid(item) + "/PlaybackInfo": &info, "/Items/" + guid(item): &it} {
 		w := serve(api, http.MethodGet, target, header, "")
-		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}
@@ -82,9 +84,11 @@ func TestAnAppSavesItsUsersConfiguration(t *testing.T) {
 	const web = `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="10.11.0", Token="pst_ada"`
 	configuration := func() map[string]any {
 		t.Helper()
-		var u struct{ Configuration map[string]any }
+		var u struct {
+			Configuration map[string]any `json:"Configuration"`
+		}
 		w := serve(api, http.MethodGet, "/Users/Me", web, "")
-		if err := json.Unmarshal(w.Body.Bytes(), &u, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &u); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("/Users/Me: %d %s", w.Code, w.Body)
 		}
 		return u.Configuration
@@ -166,7 +170,7 @@ func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
 	const web = `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="10.11.0", Token="pst_ada"`
 	w := serve(api, http.MethodGet, "/Localization/cultures", web, "")
 	var cultures []map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &cultures, anyCase); err != nil || w.Code != http.StatusOK {
+	if err := json.Unmarshal(w.Body.Bytes(), &cultures); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("/Localization/cultures: %d %s", w.Code, w.Body)
 	}
 	names := map[string]bool{}
@@ -185,8 +189,10 @@ func TestTheWebAppOffersLanguagesToPrefer(t *testing.T) {
 		if w := serve(api, http.MethodPost, "/Users/Configuration", web, body); w.Code != http.StatusNoContent {
 			t.Fatalf("saving %v: %d %s", code, w.Code, w.Body)
 		}
-		var u struct{ Configuration map[string]any }
-		if err := json.Unmarshal(serve(api, http.MethodGet, "/Users/Me", web, "").Body.Bytes(), &u, anyCase); err != nil {
+		var u struct {
+			Configuration map[string]any `json:"Configuration"`
+		}
+		if err := json.Unmarshal(serve(api, http.MethodGet, "/Users/Me", web, "").Body.Bytes(), &u); err != nil {
 			t.Fatal(err)
 		}
 		if a, s := u.Configuration["AudioLanguagePreference"], u.Configuration["SubtitleLanguagePreference"]; a != code || s != code {

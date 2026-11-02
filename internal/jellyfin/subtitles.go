@@ -131,7 +131,9 @@ func (a *API) writeTrackEvents(w http.ResponseWriter, cues []hls.Cue) {
 	for i, c := range cues {
 		events[i] = trackEvent{ID: strconv.Itoa(i + 1), Text: c.Text, StartPositionTicks: int64(c.Start / 100), EndPositionTicks: int64(c.End / 100)}
 	}
-	a.writeJSON(w, struct{ TrackEvents []trackEvent }{events})
+	a.writeJSON(w, struct {
+		TrackEvents []trackEvent `json:"TrackEvents"`
+	}{events})
 }
 
 // readOut serves a subtitle stream of a version's file read out of it, where the file name asks for it

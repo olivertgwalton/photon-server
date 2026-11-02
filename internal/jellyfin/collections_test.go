@@ -96,11 +96,14 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	})
 	type result struct {
 		Items []struct {
-			ID, Name, Type, CollectionType string
-			IsFolder                       bool
-			ChildCount                     *int
-		}
-		TotalRecordCount int
+			ID             string `json:"Id"`
+			Name           string `json:"Name"`
+			Type           string `json:"Type"`
+			CollectionType string `json:"CollectionType"`
+			IsFolder       bool   `json:"IsFolder"`
+			ChildCount     *int   `json:"ChildCount"`
+		} `json:"Items"`
+		TotalRecordCount int `json:"TotalRecordCount"`
 	}
 	get := func(token, target string, into any) {
 		t.Helper()
@@ -108,7 +111,7 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -144,8 +147,9 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	// Opened, a box set says how many titles it holds, and lists them in its order.
 	alien := all.Items[0].ID
 	var set struct {
-		Name, Type string
-		ChildCount *int
+		Name       string `json:"Name"`
+		Type       string `json:"Type"`
+		ChildCount *int   `json:"ChildCount"`
 	}
 	get("pst_ada", "/Users/"+guid(ada.ID)+"/Items/"+alien, &set)
 	if set.Type != "BoxSet" || set.ChildCount == nil || *set.ChildCount != 2 {
@@ -185,7 +189,11 @@ func TestAnAppBrowsesCollections(t *testing.T) {
 	if len(guests.Items) != 1 {
 		t.Errorf("the views of a profile with no collections = %v, want its library alone", names(guests))
 	}
-	var opened struct{ ID, Type, CollectionType string }
+	var opened struct {
+		ID             string `json:"Id"`
+		Type           string `json:"Type"`
+		CollectionType string `json:"CollectionType"`
+	}
 	get("pst_kid", "/Items/"+view, &opened)
 	if opened.ID != view || opened.CollectionType != "boxsets" {
 		t.Errorf("the view of collections by id = %+v", opened)

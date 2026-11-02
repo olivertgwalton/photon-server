@@ -232,7 +232,7 @@ func serve(api http.Handler, method, target, header, body string) *httptest.Resp
 func object(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var m map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &m, anyCase); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
 		t.Fatalf("%d %q: %v", w.Code, w.Body, err)
 	}
 	return m

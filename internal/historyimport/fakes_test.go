@@ -102,7 +102,10 @@ func (f *fakeJellyfin) serve(t *testing.T) string {
 			return
 		}
 		if r.URL.Path == "/Users/AuthenticateByName" && r.Method == http.MethodPost {
-			var body struct{ Username, Pw string }
+			var body struct {
+				Username string `json:"Username"`
+				Pw       string `json:"Pw"`
+			}
 			if json.UnmarshalRead(r.Body, &body) != nil || body.Username != f.user || body.Pw != f.password {
 				w.WriteHeader(http.StatusUnauthorized)
 				return

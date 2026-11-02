@@ -134,7 +134,7 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 		var v any
-		if err := json.Unmarshal(w.Body.Bytes(), &v, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 		return v
@@ -368,22 +368,30 @@ func TestAnAppBrowsesAMixedLibrary(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), v, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), v); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 	}
-	var views struct{ Items []map[string]any }
+	var views struct {
+		Items []map[string]any `json:"Items"`
+	}
 	get("/UserViews", &views)
 	if len(views.Items) != 1 || views.Items[0]["CollectionType"] != nil {
 		t.Errorf("views: %v, want the library with no collection type", views.Items)
 	}
-	var folders []struct{ CollectionType string }
+	var folders []struct {
+		CollectionType string `json:"CollectionType"`
+	}
 	get("/Library/VirtualFolders", &folders)
 	if len(folders) != 1 || folders[0].CollectionType != "mixed" {
 		t.Errorf("virtual folders: %+v, want the library's type mixed", folders)
 	}
 	for types, want := range map[string][]string{"": {"Heat", "The Wire"}, "Movie": {"Heat"}, "Series": {"The Wire"}, "Movie,Series": {"Heat", "The Wire"}} {
-		var page struct{ Items []struct{ Name string } }
+		var page struct {
+			Items []struct {
+				Name string `json:"Name"`
+			} `json:"Items"`
+		}
 		get("/Items?recursive=true&sortBy=SortName&parentId="+guid(lib.ID)+"&includeItemTypes="+types, &page)
 		var got []string
 		for _, it := range page.Items {

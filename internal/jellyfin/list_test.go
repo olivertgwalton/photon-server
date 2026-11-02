@@ -143,7 +143,7 @@ func TestAnAppIsAnsweredALongListWhole(t *testing.T) {
 			t.Errorf("%s: answered\n%.300s\nwant\n%.300s", target, got, want)
 		}
 		var got queryResult
-		if err := json.Unmarshal(w.Body.Bytes(), &got, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 		if len(got.Items) != len(page) || len(page) > 0 && got.Items[len(page)-1].Name != page[len(page)-1].Title {

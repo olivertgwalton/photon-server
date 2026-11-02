@@ -212,8 +212,10 @@ func TestAnAppIsSentASubtitleFileInTheFormatItAsks(t *testing.T) {
 	if got := string(get(srtFile, "Stream.vtt", http.StatusOK)); !strings.HasPrefix(got, "WEBVTT") || !strings.Contains(got, "00:01.000 --> 00:03.000\n<i>Café</i>") {
 		t.Errorf("the SubRip as WebVTT = %q", got)
 	}
-	var track struct{ TrackEvents []trackEvent }
-	if err := json.Unmarshal(get(srtFile, "Stream.js", http.StatusOK), &track, anyCase); err != nil ||
+	var track struct {
+		TrackEvents []trackEvent `json:"TrackEvents"`
+	}
+	if err := json.Unmarshal(get(srtFile, "Stream.js", http.StatusOK), &track); err != nil ||
 		len(track.TrackEvents) != 1 || track.TrackEvents[0] != (trackEvent{ID: "1", Text: "<i>Café</i>", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
 		t.Errorf("the SubRip as JSON = %+v, %v", track, err)
 	}
@@ -258,8 +260,10 @@ func playbackInfo(t *testing.T, api http.Handler, film uuid.UUID, subtitle int, 
 	t.Helper()
 	w := serve(api, http.MethodPost, "/Items/"+guid(film)+"/PlaybackInfo", jellyfinWeb,
 		`{"SubtitleStreamIndex":`+strconv.Itoa(subtitle)+`,"DeviceProfile":`+profile+`}`)
-	var info struct{ MediaSources []map[string]any }
-	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 {
+	var info struct {
+		MediaSources []map[string]any `json:"MediaSources"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) != 1 {
 		t.Fatalf("PlaybackInfo: %d %s", w.Code, w.Body)
 	}
 	return info.MediaSources[0]
@@ -357,8 +361,10 @@ func TestATextStreamIsReadOutAsWebVTTBesideTheFile(t *testing.T) {
 	other := func(format string) *httptest.ResponseRecorder {
 		return serve(api, http.MethodGet, strings.Replace(address, "Stream.vtt", "Stream."+format, 1), "", "")
 	}
-	var track struct{ TrackEvents []trackEvent }
-	if w := other("js"); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track, anyCase) != nil || len(track.TrackEvents) != 1 ||
+	var track struct {
+		TrackEvents []trackEvent `json:"TrackEvents"`
+	}
+	if w := other("js"); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil || len(track.TrackEvents) != 1 ||
 		track.TrackEvents[0] != (trackEvent{ID: "1", Text: "Hello.", StartPositionTicks: 10_000_000, EndPositionTicks: 30_000_000}) {
 		t.Errorf("the SubRip stream as JSON: %d %s", w.Code, w.Body)
 	}
@@ -394,8 +400,10 @@ func TestJellyfinWebDrawsASubtitleFileItself(t *testing.T) {
 		}
 	}
 	srt := subtitleStream(t, src, srtFile)["DeliveryUrl"].(string)
-	var track struct{ TrackEvents []trackEvent }
-	if w := serve(api, http.MethodGet, strings.Replace(srt, ".vtt", ".js", 1), "", ""); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track, anyCase) != nil ||
+	var track struct {
+		TrackEvents []trackEvent `json:"TrackEvents"`
+	}
+	if w := serve(api, http.MethodGet, strings.Replace(srt, ".vtt", ".js", 1), "", ""); w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &track) != nil ||
 		len(track.TrackEvents) != 1 || track.TrackEvents[0].Text != "<i>Café</i>" {
 		t.Errorf("the SubRip's cues: %d %s", w.Code, w.Body)
 	}

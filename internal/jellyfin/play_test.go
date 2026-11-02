@@ -174,8 +174,8 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
 	if err := json.Unmarshal(call(http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo",
 		`{"UserId":"`+guid(ada.ID)+`","IsPlayback":true,"AutoOpenLiveStream":true,"EnableDirectPlay":true,"MaxStreamingBitrate":200000000,"DirectPlayProtocols":["Http"],"DeviceProfile":{"MaxStaticBitrate":200000000}}`,
@@ -219,8 +219,10 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 	call(http.MethodGet, "/Videos/"+guid(heat)+"/"+guid(versionID)+"/Subtitles/9/0/Stream.srt", "", http.StatusNotFound)
 
-	var segs struct{ Items []map[string]any }
-	if err := json.Unmarshal(call(http.MethodGet, "/MediaSegments/"+guid(heat), "", http.StatusOK), &segs, anyCase); err != nil {
+	var segs struct {
+		Items []map[string]any `json:"Items"`
+	}
+	if err := json.Unmarshal(call(http.MethodGet, "/MediaSegments/"+guid(heat), "", http.StatusOK), &segs); err != nil {
 		t.Fatal(err)
 	}
 	if len(segs.Items) != 1 || segs.Items[0]["Type"] != "Intro" || segs.Items[0]["StartTicks"] != 1e7 || segs.Items[0]["EndTicks"] != 61e7 {
@@ -254,13 +256,13 @@ func TestAnAppPlaysAFilm(t *testing.T) {
 	}
 
 	var data map[string]any
-	if err := json.Unmarshal(call(http.MethodPost, "/UserPlayedItems/"+guid(heat), "", http.StatusOK), &data, anyCase); err != nil || data["Played"] != true {
+	if err := json.Unmarshal(call(http.MethodPost, "/UserPlayedItems/"+guid(heat), "", http.StatusOK), &data); err != nil || data["Played"] != true {
 		t.Errorf("marked watched: %v, %v", data, err)
 	}
-	if err := json.Unmarshal(call(http.MethodPost, "/Users/"+guid(ada.ID)+"/FavoriteItems/"+guid(heat), "", http.StatusOK), &data, anyCase); err != nil || data["IsFavorite"] != true {
+	if err := json.Unmarshal(call(http.MethodPost, "/Users/"+guid(ada.ID)+"/FavoriteItems/"+guid(heat), "", http.StatusOK), &data); err != nil || data["IsFavorite"] != true {
 		t.Errorf("a favourite: %v, %v", data, err)
 	}
-	if err := json.Unmarshal(call(http.MethodDelete, "/UserFavoriteItems/"+guid(heat), "", http.StatusOK), &data, anyCase); err != nil || data["IsFavorite"] != false {
+	if err := json.Unmarshal(call(http.MethodDelete, "/UserFavoriteItems/"+guid(heat), "", http.StatusOK), &data); err != nil || data["IsFavorite"] != false {
 		t.Errorf("no longer a favourite: %v, %v", data, err)
 	}
 	// The profile's other devices hear of where it got to without a playback, and of each mark.
@@ -287,7 +289,7 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 	for _, target := range []string{"/UserItems/" + guid(heat) + "/UserData", "/Users/" + guid(ada.ID) + "/Items/" + guid(heat) + "/UserData"} {
 		w := serve(api, http.MethodGet, target, header, "")
 		var data map[string]any
-		if err := json.Unmarshal(w.Body.Bytes(), &data, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 		requireKeys(t, "UserItemDataDto", data, "PlaybackPositionTicks", "PlayCount", "IsFavorite", "Played", "Key", "ItemId")
@@ -312,7 +314,7 @@ func TestAnAppReadsAndChangesItsUserData(t *testing.T) {
 	} {
 		w := serve(api, http.MethodPost, "/Users/"+guid(ada.ID)+"/Items/"+guid(heat)+"/UserData", header, tc.body)
 		var data map[string]any
-		if err := json.Unmarshal(w.Body.Bytes(), &data, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", tc.body, w.Code, w.Body)
 		}
 		for k, v := range tc.want {
@@ -403,10 +405,10 @@ func TestAnAppIsGivenHLSOfWhatItCannotPlayAsItIs(t *testing.T) {
 	const swiftfinHeader = `MediaBrowser DeviceId=iOS_1, Client=Swiftfin iOS, Version=1.6.1, Device=iPhone, Token=pst_ada`
 	w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", swiftfinHeader, `{"MaxStreamingBitrate":120000000,"DeviceProfile":`+swiftfin+`}`)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK {
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 	src := info.MediaSources[0]
@@ -562,10 +564,10 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		var info struct {
-			MediaSources  []map[string]any
-			PlaySessionID string `json:"PlaySessionId"`
+			MediaSources  []map[string]any `json:"MediaSources"`
+			PlaySessionID string           `json:"PlaySessionId"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
 		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
@@ -589,10 +591,10 @@ func TestARemoteAppIsKeptWithinTheServersLimit(t *testing.T) {
 	w := httptest.NewRecorder()
 	api.ServeHTTP(w, r)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
 	transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
@@ -643,10 +645,10 @@ func TestAnAppsVideoIsEncodedAsTheNodeEncodingItCan(t *testing.T) {
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		var info struct {
-			MediaSources []map[string]any
-			ErrorCode    string
+			MediaSources []map[string]any `json:"MediaSources"`
+			ErrorCode    string           `json:"ErrorCode"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
 		transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
@@ -693,10 +695,10 @@ func TestJellyfinsWebAppFallsBackToHLS(t *testing.T) {
 		t.Helper()
 		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", webOS, `{"StartTimeTicks":9663630000,`+flags+profile+`}`)
 		var info struct {
-			MediaSources  []map[string]any
-			PlaySessionID string `json:"PlaySessionId"`
+			MediaSources  []map[string]any `json:"MediaSources"`
+			PlaySessionID string           `json:"PlaySessionId"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK || len(info.MediaSources) == 0 {
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK || len(info.MediaSources) == 0 {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
 		address, _ := info.MediaSources[0]["TranscodingUrl"].(string)
@@ -741,10 +743,10 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 		{"Type":"Audio","Container":"aac","AudioCodec":"aac","Protocol":"hls"},
 		{"Type":"Video","Container":"ts","VideoCodec":"hevc,h264,av1","AudioCodec":"aac","MaxAudioChannels":"2","Protocol":"hls"}]}}`)
 	var info struct {
-		MediaSources  []map[string]any
-		PlaySessionID string `json:"PlaySessionId"`
+		MediaSources  []map[string]any `json:"MediaSources"`
+		PlaySessionID string           `json:"PlaySessionId"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK {
+	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 	transcoding, _ := info.MediaSources[0]["TranscodingUrl"].(string)
@@ -830,8 +832,10 @@ func TestAnAppIsAnsweredTheVersionItAskedFor(t *testing.T) {
 	})
 	for _, v := range versions[heat] {
 		w := serve(api, http.MethodPost, "/Items/"+guid(heat)+"/PlaybackInfo", `MediaBrowser Token="pst_ada"`, `{"MediaSourceId":"`+guid(v.ID)+`"}`)
-		var info struct{ MediaSources []map[string]any }
-		if err := json.Unmarshal(w.Body.Bytes(), &info, anyCase); err != nil || w.Code != http.StatusOK {
+		var info struct {
+			MediaSources []map[string]any `json:"MediaSources"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || w.Code != http.StatusOK {
 			t.Fatalf("%d %s", w.Code, w.Body)
 		}
 		if len(info.MediaSources) != 1 || info.MediaSources[0]["Id"] != guid(v.ID) {
@@ -880,7 +884,7 @@ func plannedFor(t *testing.T, api http.Handler, transcoding string) transcode {
 	b, ok, err := api.(*API).svc.Plans.Plan(t.Context(), session)
 	var p planned
 	if err == nil && ok {
-		err = json.Unmarshal(b, &p, anyCase)
+		err = json.Unmarshal(b, &p)
 	}
 	if err != nil || !ok {
 		t.Fatalf("no plan kept for %s: %v", transcoding, err)
@@ -930,9 +934,9 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 		var got struct {
 			MediaSources []struct {
 				ID string `json:"Id"`
-			}
+			} `json:"MediaSources"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &got, anyCase); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(versionID) {
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.MediaSources) != 1 || got.MediaSources[0].ID != guid(versionID) {
 			t.Errorf("%s %s: %d %s, want only the version on disk", method, target, w.Code, w.Body)
 		}
 	}

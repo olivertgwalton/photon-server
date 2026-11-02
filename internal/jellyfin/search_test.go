@@ -57,9 +57,14 @@ func TestAnAppSearchesByHints(t *testing.T) {
 	}
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type hint struct {
-		ItemID, ID, Name, Type, MediaType, Series string
-		IndexNumber                               int
-		Artists                                   []string
+		ItemID      string   `json:"ItemId"`
+		ID          string   `json:"Id"`
+		Name        string   `json:"Name"`
+		Type        string   `json:"Type"`
+		MediaType   string   `json:"MediaType"`
+		Series      string   `json:"Series"`
+		IndexNumber int      `json:"IndexNumber"`
+		Artists     []string `json:"Artists"`
 	}
 	search := func(params string) ([]hint, int) {
 		t.Helper()
@@ -68,10 +73,10 @@ func TestAnAppSearchesByHints(t *testing.T) {
 			t.Fatalf("%s: %d %s", params, w.Code, w.Body)
 		}
 		var result struct {
-			SearchHints      []hint
-			TotalRecordCount int
+			SearchHints      []hint `json:"SearchHints"`
+			TotalRecordCount int    `json:"TotalRecordCount"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &result, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
 		return result.SearchHints, result.TotalRecordCount
@@ -150,11 +155,13 @@ func TestAnAppsSearchFindsWhatARemoteLibraryDoesNotHoldYet(t *testing.T) {
 		w := serve(api, http.MethodGet, "/Items?recursive=true&"+params, `MediaBrowser Token="pst_ada"`, "")
 		var result struct {
 			Items []struct {
-				ID, Name, Type string
-			}
-			TotalRecordCount int
+				ID   string `json:"Id"`
+				Name string `json:"Name"`
+				Type string `json:"Type"`
+			} `json:"Items"`
+			TotalRecordCount int `json:"TotalRecordCount"`
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), &result, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
 		var names []string

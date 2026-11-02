@@ -66,8 +66,8 @@ func aShowWithATheme(t *testing.T) (st *store.Store, ada domain.Profile, show, e
 
 // themeResult is Jellyfin's ThemeMediaResult as an app reads it.
 type themeResult struct {
-	Items   []map[string]any
-	OwnerID string `json:"OwnerId"`
+	Items   []map[string]any `json:"Items"`
+	OwnerID string           `json:"OwnerId"`
 }
 
 // An app plays a show's theme tune under its pages, as Jellyfin's web app does: asks for its theme
@@ -82,7 +82,7 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	get := func(target string, v any) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, "")
-		if err := json.Unmarshal(w.Body.Bytes(), v, anyCase); w.Code != http.StatusOK || err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), v); w.Code != http.StatusOK || err != nil {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
 	}
@@ -93,7 +93,11 @@ func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	}
 	requireKeys(t, "a theme song", songs.Items[0], "Id", "Name", "ServerId", "ImageTags", "BackdropImageTags")
 
-	var all struct{ ThemeVideosResult, ThemeSongsResult, SoundtrackSongsResult themeResult }
+	var all struct {
+		ThemeVideosResult     themeResult `json:"ThemeVideosResult"`
+		ThemeSongsResult      themeResult `json:"ThemeSongsResult"`
+		SoundtrackSongsResult themeResult `json:"SoundtrackSongsResult"`
+	}
 	get("/Items/"+guid(episode)+"/ThemeMedia?inheritFromParent=true&sortBy=Random", &all)
 	if len(all.ThemeSongsResult.Items) != 1 || all.ThemeSongsResult.OwnerID != guid(show) || all.ThemeSongsResult.Items[0]["Id"] != songs.Items[0]["Id"] {
 		t.Errorf("an episode's theme songs, its show's: %+v", all.ThemeSongsResult)

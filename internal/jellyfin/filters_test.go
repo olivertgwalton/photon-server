@@ -74,14 +74,20 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", target, w.Code, w.Body)
 		}
-		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatal(err)
 		}
 	}
-	type named struct{ ID, Name, Type string }
+	type named struct {
+		ID   string `json:"Id"`
+		Name string `json:"Name"`
+		Type string `json:"Type"`
+	}
 	list := func(target string) ([]string, []named) {
 		t.Helper()
-		var page struct{ Items []named }
+		var page struct {
+			Items []named `json:"Items"`
+		}
 		get(target, &page)
 		var names []string
 		for _, it := range page.Items {
@@ -103,8 +109,10 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 	}
 
 	var legacy struct {
-		Genres, Tags, OfficialRatings []string
-		Years                         []int
+		Genres          []string `json:"Genres"`
+		Tags            []string `json:"Tags"`
+		OfficialRatings []string `json:"OfficialRatings"`
+		Years           []int    `json:"Years"`
 	}
 	get("/Items/Filters?"+lib, &legacy)
 	if len(legacy.Genres) != 4 || legacy.Tags == nil || !slices.Equal(legacy.OfficialRatings, []string{"15", "18", "A"}) ||
@@ -112,8 +120,8 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		t.Errorf("filters: %+v", legacy)
 	}
 	var filters struct {
-		Genres []named
-		Tags   []any
+		Genres []named `json:"Genres"`
+		Tags   []any   `json:"Tags"`
 	}
 	get("/Items/Filters2?"+lib, &filters)
 	if len(filters.Genres) != 4 || filters.Tags == nil || filters.Genres[3].Name != "Science Fiction" || filters.Genres[3].ID != items[3].ID {

@@ -76,7 +76,7 @@ func (h household) send(t *testing.T, method, token, target, body string, into a
 	t.Helper()
 	w := serve(h.api, method, target, `MediaBrowser Client="Jellyfin Web", Token="`+token+`"`, body)
 	if w.Code == http.StatusOK && into != nil {
-		if err := json.Unmarshal(w.Body.Bytes(), into, anyCase); err != nil {
+		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatalf("%s %s: %v", method, target, err)
 		}
 	}
@@ -91,12 +91,16 @@ func (h household) read(t *testing.T, token, target string, into any) int {
 // playlistResult is a BaseItemDtoQueryResult of playlists, or of a playlist's items.
 type playlistResult struct {
 	Items []struct {
-		ID, Name, Type, MediaType, PlaylistItemID string
-		IsFolder                                  bool
-		ChildCount                                *int
-		MediaSources                              []any
-	}
-	TotalRecordCount int
+		ID             string `json:"Id"`
+		Name           string `json:"Name"`
+		Type           string `json:"Type"`
+		MediaType      string `json:"MediaType"`
+		PlaylistItemID string `json:"PlaylistItemId"`
+		IsFolder       bool   `json:"IsFolder"`
+		ChildCount     *int   `json:"ChildCount"`
+		MediaSources   []any  `json:"MediaSources"`
+	} `json:"Items"`
+	TotalRecordCount int `json:"TotalRecordCount"`
 }
 
 func (r playlistResult) names() []string {
@@ -123,7 +127,10 @@ func TestAnAppListsItsPlaylists(t *testing.T) {
 		p.ChildCount == nil || *p.ChildCount != 2 {
 		t.Errorf("Night = %+v, want a folder of video, of two", p)
 	}
-	var opened struct{ Name, Type string }
+	var opened struct {
+		Name string `json:"Name"`
+		Type string `json:"Type"`
+	}
 	if code := h.read(t, "pst_ada", "/Items/"+guid(night), &opened); code != http.StatusOK || opened.Name != "Night" || opened.Type != "Playlist" {
 		t.Errorf("Night opened = %d %+v", code, opened)
 	}
@@ -145,14 +152,22 @@ func TestAnAppFindsPlaylistsInTheirView(t *testing.T) {
 		t.Fatal(err)
 	}
 	var views struct {
-		Items []struct{ ID, Name, Type, CollectionType string }
+		Items []struct {
+			ID             string `json:"Id"`
+			Name           string `json:"Name"`
+			Type           string `json:"Type"`
+			CollectionType string `json:"CollectionType"`
+		} `json:"Items"`
 	}
 	h.read(t, "pst_ada", "/UserViews", &views)
 	if len(views.Items) != 2 || views.Items[1].Name != "Playlists" || views.Items[1].Type != "ManualPlaylistsFolder" || views.Items[1].CollectionType != "playlists" {
 		t.Fatalf("Ada's views = %+v, want the films, then the playlists", views.Items)
 	}
 	view := views.Items[1].ID
-	var opened struct{ ID, CollectionType string }
+	var opened struct {
+		ID             string `json:"Id"`
+		CollectionType string `json:"CollectionType"`
+	}
 	if code := h.read(t, "pst_ada", "/Items/"+view, &opened); code != http.StatusOK || opened.ID != view || opened.CollectionType != "playlists" {
 		t.Errorf("the view of playlists by id = %d %+v", code, opened)
 	}
@@ -161,7 +176,11 @@ func TestAnAppFindsPlaylistsInTheirView(t *testing.T) {
 	if got := inView.names(); len(got) != 1 || got[0] != "Night" {
 		t.Errorf("the view of playlists holds %v, want Night", got)
 	}
-	var bobs struct{ Items []struct{ Name string } }
+	var bobs struct {
+		Items []struct {
+			Name string `json:"Name"`
+		} `json:"Items"`
+	}
 	h.read(t, "pst_bob", "/Users/"+guid(h.bob.ID)+"/Views", &bobs)
 	if len(bobs.Items) != 1 {
 		t.Errorf("Bob's views = %+v, want the films alone: he has no playlist", bobs.Items)
@@ -205,7 +224,9 @@ func TestAnAppReadsAPlaylist(t *testing.T) {
 // and no profile adds to another's.
 func TestAnAppMakesAPlaylist(t *testing.T) {
 	h := newHousehold(t)
-	var made struct{ ID string }
+	var made struct {
+		ID string `json:"Id"`
+	}
 	body := `{"Name":"Night","Ids":["` + guid(h.films["Heat"]) + `"],"UserId":"` + guid(h.ada.ID) + `","MediaType":"Video","IsPublic":false}`
 	if code := h.send(t, http.MethodPost, "pst_ada", "/Playlists", body, &made); code != http.StatusOK || !hexID.MatchString(made.ID) {
 		t.Fatalf("making Night: %d %+v, want its id", code, made)
@@ -301,9 +322,9 @@ func TestAnAppEditsAPlaylist(t *testing.T) {
 	}
 	path := "/Playlists/" + guid(night)
 	var dto struct {
-		OpenAccess bool
-		Shares     []any
-		ItemIDs    []string
+		OpenAccess bool     `json:"OpenAccess"`
+		Shares     []any    `json:"Shares"`
+		ItemIDs    []string `json:"ItemIds"`
 	}
 	h.read(t, "pst_ada", path, &dto)
 	if dto.OpenAccess || dto.Shares == nil || len(dto.Shares) != 0 || len(dto.ItemIDs) != 2 || dto.ItemIDs[1] != guid(h.films["Thief"]) {
@@ -312,7 +333,9 @@ func TestAnAppEditsAPlaylist(t *testing.T) {
 	if code := h.send(t, http.MethodPost, "pst_ada", path, `{"Name":"Late","IsPublic":false}`, nil); code != http.StatusNoContent {
 		t.Errorf("renaming Night: %d, want 204", code)
 	}
-	var late struct{ Name string }
+	var late struct {
+		Name string `json:"Name"`
+	}
 	if h.read(t, "pst_ada", "/Items/"+guid(night), &late); late.Name != "Late" {
 		t.Errorf("renamed, Night is %q, want Late", late.Name)
 	}

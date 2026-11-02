@@ -65,17 +65,17 @@ func TestAnAppFindsSimilarTitles(t *testing.T) {
 	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st})
 	type result struct {
 		Items []struct {
-			Name         string
-			MediaSources []any
-		}
-		TotalRecordCount int
+			Name         string `json:"Name"`
+			MediaSources []any  `json:"MediaSources"`
+		} `json:"Items"`
+		TotalRecordCount int `json:"TotalRecordCount"`
 	}
 	similar := func(target string) (int, result) {
 		t.Helper()
 		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Swiftfin iOS", Token="pst_ada"`, "")
 		var out result
 		if w.Code == http.StatusOK {
-			if err := json.Unmarshal(w.Body.Bytes(), &out, anyCase); err != nil {
+			if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 				t.Fatal(err)
 			}
 		}
