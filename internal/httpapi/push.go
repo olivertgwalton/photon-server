@@ -73,23 +73,18 @@ func subscriptionOf(s store.PushSubscription) pushSubscriptionJSON {
 }
 
 // pushKey answers the key a browser subscribes to the server's pushes with.
-func (a *API) pushKey(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, a.logger, "application/json", http.StatusOK, pushKeyJSON{
-		Key: base64.RawURLEncoding.EncodeToString(a.svc.PushKey.PublicKey()),
-	})
+func (a *API) pushKey(_ *http.Request, _ none) (pushKeyJSON, error) {
+	return pushKeyJSON{Key: base64.RawURLEncoding.EncodeToString(a.svc.PushKey.PublicKey())}, nil
 }
 
 // pushSubscriptions answers the browsers pushed the profile's notifications.
-func (a *API) pushSubscriptions(w http.ResponseWriter, r *http.Request) {
+func (a *API) pushSubscriptions(r *http.Request, _ none) (listJSON[pushSubscriptionJSON], error) {
 	subs, err := a.svc.Push.PushSubscriptions(r.Context(), auth.SessionOf(r.Context()).Profile.ID)
-	if a.answered(w, r, err) {
-		return
-	}
 	out := listJSON[pushSubscriptionJSON]{Items: make([]pushSubscriptionJSON, len(subs))}
 	for i, s := range subs {
 		out.Items[i] = subscriptionOf(s)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, err
 }
 
 // subscribe has a browser or an Apple or Android device pushed the profile's notifications, worded
@@ -176,35 +171,32 @@ func androidSubscription(req subscribeJSON, sub *store.PushSubscription) string 
 }
 
 // unsubscribe stops a device being pushed the profile's notifications.
-func (a *API) unsubscribe(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	err := a.svc.Push.Unsubscribe(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if !a.answeredAs(w, r, err, "no such subscription") {
-		w.WriteHeader(http.StatusNoContent)
-	}
+func (a *API) unsubscribe(r *http.Request, _ none) (none, error) {
+	err := a.svc.Push.Unsubscribe(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"))
+	return none{}, notFoundAs(err, "no such subscription")
 }
 
 func (a *API) pushRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/push-key", access: signedIn,
 			summary: "The key a browser subscribes to the server's pushes with",
-			status:  http.StatusOK, reply: pushKeyJSON{}, handle: a.pushKey,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.pushKey),
+		a.handles(route{
 			pattern: "GET /api/v1/profile/push-subscriptions", access: signedIn,
 			summary: "List the browsers and the Apple and Android devices pushed the profile's notifications",
-			status:  http.StatusOK, reply: listJSON[pushSubscriptionJSON]{}, handle: a.pushSubscriptions,
-		},
+			status:  http.StatusOK,
+		}, a.pushSubscriptions),
 		{
 			pattern: "POST /api/v1/profile/push-subscriptions", access: signedIn,
 			summary: "Push the profile's notifications to a browser, by the subscription it made with the server's key, to an Apple device by its APNs token, or to an Android device by its FCM registration token; one subscribed already is the profile's from now",
 			body:    subscribeJSON{}, status: http.StatusCreated, reply: pushSubscriptionJSON{}, again: http.StatusOK, handle: a.subscribe,
 		},
-		{
+		a.handles(route{
 			pattern: "DELETE /api/v1/profile/push-subscriptions/{id}", access: signedIn,
 			summary: "Stop pushing the profile's notifications to a browser or a device",
-			status:  http.StatusNoContent, handle: a.unsubscribe,
-		},
+			status:  http.StatusNoContent,
+		}, a.unsubscribe),
 	}
 }

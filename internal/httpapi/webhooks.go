@@ -48,29 +48,20 @@ func webhookOf(w store.Webhook) webhookJSON {
 }
 
 // adminWebhooks lists the webhooks, never their secrets.
-func (a *API) adminWebhooks(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminWebhooks(r *http.Request, _ none) (listJSON[webhookJSON], error) {
 	all, err := a.svc.Webhooks.Webhooks(r.Context())
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
 	out := make([]webhookJSON, len(all))
 	for i, h := range all {
 		out[i] = webhookOf(h)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[webhookJSON]{out})
+	return listJSON[webhookJSON]{out}, err
 }
 
 // addWebhook adds an address to POST the events it asks for to, and answers the secret each body
 // is signed with: once, as it is never answered again.
-func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
-	var req addWebhookJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) addWebhook(r *http.Request, req addWebhookJSON) (addedWebhookJSON, error) {
 	if u, err := url.Parse(string(req.URL)); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		writeProblem(w, a.logger, codeInvalidBody, "url is an http or https address")
-		return
+		return addedWebhookJSON{}, refuse(codeInvalidBody, "url is an http or https address")
 	}
 	hookable := domain.HookableEventKinds()
 	for i, k := range req.Events {
@@ -80,53 +71,40 @@ func (a *API) addWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(req.Events) == 0 {
-		writeProblem(w, a.logger, codeInvalidBody, fmt.Sprintf("events are some of %v, each once", hookable))
-		return
+		return addedWebhookJSON{}, refuse(codeInvalidBody, fmt.Sprintf("events are some of %v, each once", hookable))
 	}
 	secret := rand.Text()
 	hook, err := a.svc.Webhooks.AddWebhook(r.Context(), string(req.URL), cmp.Or(req.Format, domain.WebhookPhoton), req.Events, secret)
-	if err != nil {
-		a.internal(w, r, err)
-		return
-	}
-	writeJSON(w, a.logger, "application/json", http.StatusCreated, addedWebhookJSON{webhookOf(hook), secret})
+	return addedWebhookJSON{webhookOf(hook), secret}, err
 }
 
-func (a *API) removeWebhook(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if a.answered(w, r, a.svc.Webhooks.RemoveWebhook(r.Context(), id)) {
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+func (a *API) removeWebhook(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Webhooks.RemoveWebhook(r.Context(), pathUUID(r, "id"))
 }
 
 // testWebhook queues a webhook.test event to one webhook, whatever it asked for.
-func (a *API) testWebhook(w http.ResponseWriter, r *http.Request) {
-	id := pathUUID(r, "id")
-	if a.answered(w, r, a.svc.Events.TestWebhook(r.Context(), id)) {
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
+func (a *API) testWebhook(r *http.Request, _ none) (none, error) {
+	return none{}, a.svc.Events.TestWebhook(r.Context(), pathUUID(r, "id"))
 }
 
 func (a *API) webhooksRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/webhooks", access: admin, summary: "List the webhooks, without their secrets",
-			status: http.StatusOK, reply: listJSON[webhookJSON]{}, handle: a.adminWebhooks,
-		},
-		{
+			status: http.StatusOK,
+		}, a.adminWebhooks),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/webhooks", access: admin,
 			summary: "Add a webhook, answering the secret its bodies are signed with, this once",
-			body:    addWebhookJSON{}, status: http.StatusCreated, reply: addedWebhookJSON{}, handle: a.addWebhook,
-		},
-		{
+			status:  http.StatusCreated,
+		}, a.addWebhook),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/webhooks/{id}", access: admin, summary: "Remove a webhook and what waits to be sent to it",
-			status: http.StatusNoContent, handle: a.removeWebhook,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.removeWebhook),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/webhooks/{id}/test", access: admin, summary: "Send a webhook.test event to one webhook",
-			status: http.StatusAccepted, handle: a.testWebhook,
-		},
+			status: http.StatusAccepted,
+		}, a.testWebhook),
 	}
 }

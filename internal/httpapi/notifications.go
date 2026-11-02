@@ -165,43 +165,38 @@ func (a *API) inboxChange(ctx context.Context, profile uuid.UUID, said words.Wor
 
 // clearNotification clears one of the profile's notifications as it is opened, on each of its
 // devices.
-func (a *API) clearNotification(w http.ResponseWriter, r *http.Request) {
+func (a *API) clearNotification(r *http.Request, _ none) (none, error) {
 	id, err := pathNumber(r, "id")
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return none{}, err
 	}
 	profile := auth.SessionOf(r.Context()).Profile.ID
 	unread, err := a.svc.Notifications.ClearNotification(r.Context(), profile, int64(id))
-	if a.answeredAs(w, r, err, "no such notification") {
-		return
+	if err != nil {
+		return none{}, notFoundAs(err, "no such notification")
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
 		Change: domain.NotificationsCleared, IDs: []int64{int64(id)}, Unread: unread,
 	}})
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 // marked moves a profile's marker on its notifications, up to the newest it was shown: read, or
 // cleared from its inbox, on each of its devices.
-func (a *API) marked(change domain.NotificationChange, mark func(notifications, context.Context, uuid.UUID, time.Time) (int, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req inboxMarkerJSON
-		if !a.decode(w, r, &req) {
-			return
-		}
+func (a *API) marked(change domain.NotificationChange, mark func(notifications, context.Context, uuid.UUID, time.Time) (int, error)) func(*http.Request, inboxMarkerJSON) (none, error) {
+	return func(r *http.Request, req inboxMarkerJSON) (none, error) {
 		if req.Through.IsZero() {
-			writeProblem(w, a.logger, codeInvalidBody, "through is the added_at of the newest notification shown")
-			return
+			return none{}, refuse(codeInvalidBody, "through is the added_at of the newest notification shown")
 		}
 		profile := auth.SessionOf(r.Context()).Profile.ID
 		unread, err := mark(a.svc.Notifications, r.Context(), profile, req.Through)
-		if a.answered(w, r, err) {
-			return
+		if err != nil {
+			return none{}, err
 		}
 		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNotificationsChanged, Profile: profile, Details: domain.NotificationsDetails{
 			Change: change, Through: req.Through, Unread: unread,
 		}})
-		w.WriteHeader(http.StatusNoContent)
+		return none{}, nil
 	}
 }
 
@@ -219,21 +214,21 @@ func (a *API) notificationsRoutes() []route {
 			status:  http.StatusOK, reply: notificationJSON{},
 			handle: a.notification,
 		},
-		{
+		a.handles(route{
 			pattern: "DELETE /api/v1/profile/notifications/{id}", access: signedIn,
 			summary: "Clear one of the profile's notifications from its inbox, read, as it is opened",
 			path:    []param{{"id", int64(0), "The notification."}},
-			status:  http.StatusNoContent, handle: a.clearNotification,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.clearNotification),
+		a.handles(route{
 			pattern: "PUT /api/v1/profile/notifications/read", access: signedIn,
 			summary: "Mark the profile's notifications read, up to the newest it was shown",
-			body:    inboxMarkerJSON{}, status: http.StatusNoContent, handle: a.marked(domain.NotificationsRead, notifications.ReadNotifications),
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.marked(domain.NotificationsRead, notifications.ReadNotifications)),
+		a.handles(route{
 			pattern: "PUT /api/v1/profile/notifications/cleared", access: signedIn,
 			summary: "Clear the profile's notifications from its inbox, up to the newest it was shown; what they told of is not told again",
-			body:    inboxMarkerJSON{}, status: http.StatusNoContent, handle: a.marked(domain.NotificationsCleared, notifications.ClearNotifications),
-		},
+			status:  http.StatusNoContent,
+		}, a.marked(domain.NotificationsCleared, notifications.ClearNotifications)),
 	}
 }

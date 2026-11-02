@@ -112,7 +112,7 @@ type serverJSON struct {
 
 // adminServer answers how the node answering was set up and what it reaches, as Jellyfin's
 // dashboard shows it; this server is set up by its environment, so all of it is read only.
-func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminServer(r *http.Request, _ none) (serverJSON, error) {
 	s := a.svc.Setup
 	active, _, limit := a.svc.HLS.Transcodes()
 	hw := a.svc.HLS.Hardware()
@@ -134,7 +134,7 @@ func (a *API) adminServer(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Postgres = a.backend(r, "postgres", a.svc.Postgres)
 	out.Valkey = a.backend(r, "valkey", a.svc.Valkey)
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // backend says whether a backend answers, and its version. Why it does not is logged, not
@@ -156,8 +156,8 @@ func folder(path string) folderJSON {
 	return f
 }
 
-func (a *API) server(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, a.logger, "application/json", http.StatusOK, a.self())
+func (a *API) server(_ *http.Request, _ none) (domain.Info, error) {
+	return a.self(), nil
 }
 
 // self is the server as it says of itself now.
@@ -186,15 +186,10 @@ type serverSettingsJSON struct {
 const maxServerName = domain.MaxProfileName
 
 // setServer renames the server and sets what its metadata is asked in, and tells every node.
-func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
-	var req serverSettingsJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setServer(r *http.Request, req serverSettingsJSON) (serverSettingsJSON, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if utf8.RuneCountInString(req.Name) > maxServerName || strings.ContainsFunc(req.Name, unicode.IsControl) {
-		writeProblem(w, a.logger, codeInvalidBody, "name is up to "+strconv.Itoa(maxServerName)+" characters, and no control characters")
-		return
+		return serverSettingsJSON{}, refuse(codeInvalidBody, "name is up to "+strconv.Itoa(maxServerName)+" characters, and no control characters")
 	}
 	lang, refusal := metadataLanguage(string(req.MetadataLanguage))
 	if req.MetadataLanguage == "" {
@@ -205,50 +200,48 @@ func (a *API) setServer(w http.ResponseWriter, r *http.Request) {
 		refusal2 = cmp.Or(refusal2, "release_check is on or off")
 	}
 	if refusal = cmp.Or(refusal, refusal2); refusal != "" {
-		writeProblem(w, a.logger, codeInvalidBody, refusal)
-		return
+		return serverSettingsJSON{}, refuse(codeInvalidBody, refusal)
 	}
 	set := domain.ServerSettings{Name: req.Name, Locale: domain.Locale{Language: lang, Country: country}, ReleaseCheck: req.ReleaseCheck}
-	if a.answered(w, r, a.svc.ServerSettings.SetServerSettings(r.Context(), set)) {
-		return
+	if err := a.svc.ServerSettings.SetServerSettings(r.Context(), set); err != nil {
+		return serverSettingsJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventServerChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, serverSettingsJSON{
+	return serverSettingsJSON{
 		Name: set.Name, MetadataLanguage: domain.LanguageTag(lang), CertificationCountry: domain.CountryCode(country), ReleaseCheck: set.ReleaseCheck,
-	})
+	}, nil
 }
 
-func (a *API) health(w http.ResponseWriter, r *http.Request) {
+func (a *API) health(r *http.Request, _ none) (none, error) {
 	if err := a.svc.Ready(r.Context()); err != nil {
 		// A node draining is not ready by design, asked as often as a balancer likes.
 		if !errors.Is(err, domain.ErrStopping) {
 			a.logger.WarnContext(r.Context(), "not ready", slog.Any("err", err))
 		}
-		writeProblem(w, a.logger, codeNotReady, "")
-		return
+		return none{}, refuse(codeNotReady, "")
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 func (a *API) serverRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/server", access: public, summary: "Say which server this is",
-			status: http.StatusOK, reply: domain.Info{}, handle: a.server,
-		},
-		{
+			status: http.StatusOK,
+		}, a.server),
+		a.handles(route{
 			pattern: "GET /health", access: public, summary: "Say whether Postgres and Valkey are reachable",
-			status: http.StatusNoContent, handle: a.health,
-		},
-		{
+			status: http.StatusNoContent,
+		}, a.health),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/server", access: admin,
 			summary: "Name the server, set what its metadata is asked in and whether it looks for a newer release, which every node takes up at once",
-			body:    serverSettingsJSON{}, status: http.StatusOK, reply: serverSettingsJSON{}, handle: a.setServer,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.setServer),
+		a.handles(route{
 			pattern: "GET /api/v1/admin/server", access: admin,
 			summary: "Say how this node was set up, what it reaches, and the cluster's nodes",
-			status:  http.StatusOK, reply: serverJSON{}, handle: a.adminServer,
-		},
+			status:  http.StatusOK,
+		}, a.adminServer),
 	}
 }

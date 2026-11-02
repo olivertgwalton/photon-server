@@ -227,32 +227,28 @@ func askNode[T any](ctx context.Context, a *API, n domain.Node, path string, wit
 
 // adminNodes lists every node there is or has been, the first to start first, and how busy each
 // is that is up.
-func (a *API) adminNodes(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminNodes(r *http.Request, _ none) (listJSON[knownNodeJSON], error) {
 	known, err := a.svc.Nodes.KnownNodes(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[knownNodeJSON]{}, err
 	}
 	online, err := a.online(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return listJSON[knownNodeJSON]{}, err
 	}
 	out := make([]knownNodeJSON, len(known))
 	for i, n := range known {
 		out[i] = showKnownNode(n, online)
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, listJSON[knownNodeJSON]{Items: out})
+	return listJSON[knownNodeJSON]{Items: out}, nil
 }
 
 // setNode changes what an admin sets of a node, and tells every node, which takes it up at once.
-func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
+func (a *API) setNode(r *http.Request, req nodeChangeJSON) (knownNodeJSON, error) {
 	id := pathUUID(r, "id")
-	var req nodeChangeJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
 	n, err := a.svc.Nodes.Node(r.Context(), id)
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return knownNodeJSON{}, err
 	}
 	set := n.NodeSettings
 	if req.Role != "" {
@@ -261,8 +257,7 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 	switch req.LimitSource {
 	case domain.LimitSet:
 		if req.Limit == nil || *req.Limit < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "a limit set is how many videos at once, 0 for no limit")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "a limit set is how many videos at once, 0 for no limit")
 		}
 		set.LimitSource, set.Limit = domain.LimitSet, *req.Limit
 	case domain.LimitAutomatic:
@@ -277,28 +272,24 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 	var ok bool
 	if req.Address != nil {
 		if set.Address, ok = nodeAddress(string(*req.Address)); !ok {
-			writeProblem(w, a.logger, codeInvalidBody, "address is an http or https address with a host and port alone, such as http://10.0.0.5:8640")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "address is an http or https address with a host and port alone, such as http://10.0.0.5:8640")
 		}
 	}
 	if req.PublicURL != nil {
 		if set.PublicURL, ok = nodeAddress(string(*req.PublicURL)); !ok {
-			writeProblem(w, a.logger, codeInvalidBody, "public_url is an http or https address with a host and port alone, such as https://gpu.example.com")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "public_url is an http or https address with a host and port alone, such as https://gpu.example.com")
 		}
 	}
 	if req.LocalURL != nil {
 		if set.LocalURL, ok = nodeAddress(string(*req.LocalURL)); !ok {
-			writeProblem(w, a.logger, codeInvalidBody, "local_url is an http or https address with a host and port alone, such as http://192.168.1.5:8640")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "local_url is an http or https address with a host and port alone, such as http://192.168.1.5:8640")
 		}
 	}
 	if e := req.Encoding; e != nil {
 		switch e.Source {
 		case domain.EncoderSet:
 			if e.Acceleration == "" {
-				writeProblem(w, a.logger, codeInvalidBody, "an encoder set is an acceleration, and the device it is on where it is not the first")
-				return
+				return knownNodeJSON{}, refuse(codeInvalidBody, "an encoder set is an acceleration, and the device it is on where it is not the first")
 			}
 			set.Encoding = domain.EncoderChoice{Source: domain.EncoderSet, Acceleration: e.Acceleration, Device: strings.TrimSpace(e.Device)}
 		case domain.EncoderAutomatic:
@@ -307,68 +298,65 @@ func (a *API) setNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.StreamLimit != nil {
 		if *req.StreamLimit < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "stream_limit is how many playbacks at once, 0 for no limit")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "stream_limit is how many playbacks at once, 0 for no limit")
 		}
 		set.StreamLimit = *req.StreamLimit
 	}
 	if req.EgressLimit != nil {
 		if *req.EgressLimit < 0 {
-			writeProblem(w, a.logger, codeInvalidBody, "egress_limit_mbps is megabits a second, 0 for no limit")
-			return
+			return knownNodeJSON{}, refuse(codeInvalidBody, "egress_limit_mbps is megabits a second, 0 for no limit")
 		}
 		set.EgressLimitMbps = *req.EgressLimit
 	}
 	if req.Group != nil {
 		set.Group = strings.TrimSpace(*req.Group)
 	}
-	if err := a.svc.Nodes.SetNodeSettings(r.Context(), id, set); a.answered(w, r, err) {
-		return
+	if err := a.svc.Nodes.SetNodeSettings(r.Context(), id, set); err != nil {
+		return knownNodeJSON{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNodesChanged})
 	online, err := a.online(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return knownNodeJSON{}, err
 	}
 	n.NodeSettings = set
-	writeJSON(w, a.logger, "application/json", http.StatusOK, showKnownNode(n, online))
+	return showKnownNode(n, online), nil
 }
 
 // forgetNode forgets a node that is not up, as one taken away is; one up is refused, as it would be
 // back within the minute.
-func (a *API) forgetNode(w http.ResponseWriter, r *http.Request) {
+func (a *API) forgetNode(r *http.Request, _ none) (none, error) {
 	id := pathUUID(r, "id")
 	online, err := a.online(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return none{}, err
 	}
 	if _, up := online[id]; up {
-		writeProblem(w, a.logger, codeConflict, "the node is up: stop it first, or it is back within the minute")
-		return
+		return none{}, refuse(codeConflict, "the node is up: stop it first, or it is back within the minute")
 	}
-	if a.answered(w, r, a.svc.Nodes.ForgetNode(r.Context(), id)) {
-		return
+	if err := a.svc.Nodes.ForgetNode(r.Context(), id); err != nil {
+		return none{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventNodesChanged})
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 func (a *API) nodesRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/nodes", access: admin,
 			summary: "List the server's nodes, there or that have been, what is set of each, and how busy each that is up is",
-			status:  http.StatusOK, reply: listJSON[knownNodeJSON]{}, handle: a.adminNodes,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminNodes),
+		a.handles(route{
 			pattern: "PATCH /api/v1/admin/nodes/{id}", access: admin,
 			summary: "Change a node's role, its limit on transcodes at once, its limits on streams at once and on egress, its address, its public and local URLs, its group or what it encodes on; it takes them up at once",
-			body:    nodeChangeJSON{}, status: http.StatusOK, reply: knownNodeJSON{}, handle: a.setNode,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.setNode),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/nodes/{id}", access: admin,
 			summary: "Forget a node that is not up, as one taken away is; one up is refused",
-			status:  http.StatusNoContent, handle: a.forgetNode,
-		},
+			status:  http.StatusNoContent,
+		}, a.forgetNode),
 	}
 }

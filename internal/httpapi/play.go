@@ -407,50 +407,34 @@ type playbackProgressJSON struct {
 }
 
 // playbackProgress is the player saying where it has got to, every ten seconds or so.
-func (a *API) playbackProgress(w http.ResponseWriter, r *http.Request) {
-	var req playbackProgressJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) playbackProgress(r *http.Request, req playbackProgressJSON) (reachedJSON, error) {
 	if req.State == "" || req.PositionMS < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative and state is playing or paused")
-		return
+		return reachedJSON{}, refuse(codeInvalidBody, "position_ms is not negative and state is playing or paused")
 	}
 	if req.AudioStream != nil && *req.AudioStream < 0 || req.SubtitleStream != nil && *req.SubtitleStream < domain.NoSubtitle ||
 		req.SubtitleStream != nil && req.SubtitleFile != nil {
-		writeProblem(w, a.logger, codeInvalidBody, "audio_stream is a stream, and subtitles are subtitle_stream, -1 for none, or subtitle_file")
-		return
+		return reachedJSON{}, refuse(codeInvalidBody, "audio_stream is a stream, and subtitles are subtitle_stream, -1 for none, or subtitle_file")
 	}
 	tracks := domain.ChosenTracks{Audio: req.AudioStream, Subtitle: req.SubtitleStream, SubtitleFile: req.SubtitleFile}
-	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
-		return a.svc.Playbacks.Progress(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond, req.State, tracks)
-	})
+	reach, err := a.svc.Playbacks.Progress(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"), time.Duration(req.PositionMS)*time.Millisecond, req.State, tracks)
+	return reachedJSON{Reach: reach}, err
 }
 
 // playbackStop is the player saying it has stopped, and where.
-func (a *API) playbackStop(w http.ResponseWriter, r *http.Request) {
-	var req positionJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) playbackStop(r *http.Request, req positionJSON) (reachedJSON, error) {
 	if req.PositionMS < 0 {
-		writeProblem(w, a.logger, codeInvalidBody, "position_ms is not negative")
-		return
+		return reachedJSON{}, refuse(codeInvalidBody, "position_ms is not negative")
 	}
-	a.reportPlayback(w, r, func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error) {
-		return a.svc.Playbacks.Stop(ctx, profile, id, time.Duration(req.PositionMS)*time.Millisecond)
-	})
-}
-
-func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)) {
-	id := pathUUID(r, "id")
-	reach, err := report(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if !a.answered(w, r, err) {
-		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})
-	}
+	reach, err := a.svc.Playbacks.Stop(r.Context(), auth.SessionOf(r.Context()).Profile.ID, pathUUID(r, "id"), time.Duration(req.PositionMS)*time.Millisecond)
+	return reachedJSON{Reach: reach}, err
 }
 
 func (a *API) playRoutes() []route {
+	stop := a.handles(route{
+		pattern: "POST /api/v1/playbacks/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
+		status: http.StatusOK,
+	}, a.playbackStop)
+	stop.handle = a.routeToOwner("id", stop.handle).ServeHTTP
 	return []route{
 		{
 			pattern: "POST /api/v1/titles/{id}/play", access: signedIn,
@@ -458,14 +442,10 @@ func (a *API) playRoutes() []route {
 			body:    playJSON{}, status: http.StatusOK, reply: playbackJSON{},
 			refusals: map[int]any{codeNoCompatibleStream.status(): refusalJSON{}}, handle: a.play,
 		},
-		{
+		a.handles(route{
 			pattern: "POST /api/v1/playbacks/{id}/progress", access: signedIn, summary: "A playback's heartbeat: where it has got to, paused too; one unheard from for two minutes is stopped",
-			body: playbackProgressJSON{}, status: http.StatusOK, reply: reachedJSON{}, handle: a.playbackProgress,
-		},
-		{
-			pattern: "POST /api/v1/playbacks/{id}/stop", access: signedIn, summary: "Stop a playback, and say where",
-			body: positionJSON{}, status: http.StatusOK, reply: reachedJSON{},
-			handle: a.routeToOwner("id", http.HandlerFunc(a.playbackStop)).ServeHTTP,
-		},
+			status: http.StatusOK,
+		}, a.playbackProgress),
+		stop,
 	}
 }

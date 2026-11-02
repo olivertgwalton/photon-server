@@ -115,16 +115,15 @@ func showStorage(s domain.Storage) storageStatusJSON {
 	return out
 }
 
-func (a *API) adminStorage(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminStorage(r *http.Request, _ none) (storageStatusJSON, error) {
 	s, err := a.svc.Storage.Storage(r.Context())
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return storageStatusJSON{}, err
 	}
 	out := showStorage(s)
 	m, moving, err := a.svc.Storage.StorageMove(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return storageStatusJSON{}, err
 	}
 	if moving {
 		out.Move = showMove(m)
@@ -132,19 +131,18 @@ func (a *API) adminStorage(w http.ResponseWriter, r *http.Request) {
 	if out.Bucket != nil {
 		// This node's store is the one an admin chose, but for the minute a change takes to reach it.
 		if out.Bucket.Probe, err = a.svc.Stores.Probe(r.Context()); err != nil {
-			a.internal(w, r, err)
-			return
+			return storageStatusJSON{}, err
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // storageOf is where req says things be kept, keeping the secret key kept now for its access key
-// where req leaves it out; false, answered, where it says nothing whole.
-func (a *API) storageOf(w http.ResponseWriter, req storageJSON, now domain.Storage) (domain.Storage, bool) {
+// where req leaves it out; refused where it says nothing whole.
+func storageOf(req storageJSON, now domain.Storage) (domain.Storage, error) {
 	switch req.Kind {
 	case domain.StorageDisk:
-		return domain.Storage{Kind: domain.StorageDisk}, true
+		return domain.Storage{Kind: domain.StorageDisk}, nil
 	case domain.StorageBucket:
 	}
 	b := domain.Bucket{
@@ -157,43 +155,34 @@ func (a *API) storageOf(w http.ResponseWriter, req storageJSON, now domain.Stora
 	}
 	switch {
 	case b.Name == "":
-		writeProblem(w, a.logger, codeInvalidBody, "a bucket needs its name")
+		return domain.Storage{}, refuse(codeInvalidBody, "a bucket needs its name")
 	case (b.AccessKey == "") != (b.SecretKey == ""):
-		writeProblem(w, a.logger, codeInvalidBody, "an access key needs its secret key, and a secret key its access key")
-	default:
-		return domain.Storage{Kind: domain.StorageBucket, Bucket: b}, true
+		return domain.Storage{}, refuse(codeInvalidBody, "an access key needs its secret key, and a secret key its access key")
 	}
-	return domain.Storage{}, false
+	return domain.Storage{Kind: domain.StorageBucket, Bucket: b}, nil
 }
 
 // setStorage keeps artwork and previews where req says, once a bucket is checked. Signing for the
 // same place differently is taken up by every node at once; another place is moved to, every node
 // copying what it keeps, and the answer says the move has begun.
-func (a *API) setStorage(w http.ResponseWriter, r *http.Request) {
-	var req storageJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) setStorage(r *http.Request, req storageJSON) (storageStatusJSON, error) {
 	ctx := r.Context()
 	now, err := a.svc.Storage.Storage(ctx)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return storageStatusJSON{}, err
 	}
-	if _, moving, err := a.svc.Storage.StorageMove(ctx); err != nil || moving {
-		if !a.answered(w, r, err) {
-			writeProblem(w, a.logger, codeConflict, "what is kept is being moved: cancel the move first")
-		}
-		return
+	if _, moving, err := a.svc.Storage.StorageMove(ctx); err != nil {
+		return storageStatusJSON{}, err
+	} else if moving {
+		return storageStatusJSON{}, refuse(codeConflict, "what is kept is being moved: cancel the move first")
 	}
-	s, ok := a.storageOf(w, req, now)
-	if !ok {
-		return
+	s, err := storageOf(req, now)
+	if err != nil {
+		return storageStatusJSON{}, err
 	}
 	if s.Kind == domain.StorageBucket {
 		if err := a.svc.Stores.Check(ctx, s.Bucket); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, err.Error())
-			return
+			return storageStatusJSON{}, refuse(codeInvalidBody, err.Error())
 		}
 	}
 	out := showStorage(s)
@@ -204,68 +193,62 @@ func (a *API) setStorage(w http.ResponseWriter, r *http.Request) {
 		out.Move = showMove(domain.StorageMove{To: s, Started: time.Now()})
 		err = a.svc.Storage.StartStorageMove(ctx, s)
 	}
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return storageStatusJSON{}, err
 	}
 	a.svc.Events.Raise(ctx, domain.Event{Kind: domain.EventStorageChanged})
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 // cancelStorageMove stops a move, every node keeping things where they were; what was copied stays
 // where it was copied to.
-func (a *API) cancelStorageMove(w http.ResponseWriter, r *http.Request) {
-	if a.answered(w, r, a.svc.Storage.CancelStorageMove(r.Context())) {
-		return
+func (a *API) cancelStorageMove(r *http.Request, _ none) (none, error) {
+	if err := a.svc.Storage.CancelStorageMove(r.Context()); err != nil {
+		return none{}, err
 	}
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventStorageChanged})
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 // checkStorage reports why a bucket cannot keep artwork and previews, before it is chosen.
-func (a *API) checkStorage(w http.ResponseWriter, r *http.Request) {
-	var req storageJSON
-	if !a.decode(w, r, &req) {
-		return
-	}
+func (a *API) checkStorage(r *http.Request, req storageJSON) (none, error) {
 	now, err := a.svc.Storage.Storage(r.Context())
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return none{}, err
 	}
-	s, ok := a.storageOf(w, req, now)
-	if !ok {
-		return
+	s, err := storageOf(req, now)
+	if err != nil {
+		return none{}, err
 	}
 	if s.Kind == domain.StorageBucket {
 		if err := a.svc.Stores.Check(r.Context(), s.Bucket); err != nil {
-			writeProblem(w, a.logger, codeInvalidBody, err.Error())
-			return
+			return none{}, refuse(codeInvalidBody, err.Error())
 		}
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return none{}, nil
 }
 
 func (a *API) storageRoutes() []route {
 	return []route{
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/storage", access: admin,
 			summary: "Where artwork, avatars, theme tunes and previews are kept: each server's disk, or a bucket all share",
-			status:  http.StatusOK, reply: storageStatusJSON{}, handle: a.adminStorage,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.adminStorage),
+		a.handles(route{
 			pattern: "PUT /api/v1/admin/storage", access: admin,
 			summary: "Keep artwork and previews elsewhere, once a bucket is checked: the same place signed for differently at once, another moved to as every node copies what it keeps",
-			body:    storageJSON{}, status: http.StatusOK, reply: storageStatusJSON{}, handle: a.setStorage,
-		},
-		{
+			status:  http.StatusOK,
+		}, a.setStorage),
+		a.handles(route{
 			pattern: "DELETE /api/v1/admin/storage/move", access: admin,
 			summary: "Cancel moving what is kept; every node keeps it where it was",
-			status:  http.StatusNoContent, handle: a.cancelStorageMove,
-		},
-		{
+			status:  http.StatusNoContent,
+		}, a.cancelStorageMove),
+		a.handles(route{
 			pattern: "POST /api/v1/admin/storage/check", access: admin,
 			summary: "Check a bucket can keep artwork and previews: that it answers, and keeps, lists and removes what is put there",
-			body:    storageJSON{}, status: http.StatusNoContent, handle: a.checkStorage,
-		},
+			status:  http.StatusNoContent,
+		}, a.checkStorage),
 	}
 }

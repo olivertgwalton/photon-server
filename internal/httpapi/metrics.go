@@ -186,11 +186,11 @@ func (a *API) nodeMetrics(w http.ResponseWriter, r *http.Request) {
 
 // adminMetrics answers what the metrics of every node running say now, and what the nodes share,
 // from the node holding the scheduler lease. A node that does not answer is listed unreachable.
-func (a *API) adminMetrics(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminMetrics(r *http.Request, _ none) (metricsJSON, error) {
 	ctx := r.Context()
 	answers, err := fromEveryNode(ctx, a, metricsPath, gatherWithin, func() gatheredJSON { return a.gather(ctx) })
-	if a.answered(w, r, err) {
-		return
+	if err != nil {
+		return metricsJSON{}, err
 	}
 	out := metricsJSON{Nodes: make([]nodeMetricsJSON, len(answers))}
 	for i, ans := range answers {
@@ -207,7 +207,7 @@ func (a *API) adminMetrics(w http.ResponseWriter, r *http.Request) {
 			out.Cluster = c
 		}
 	}
-	writeJSON(w, a.logger, "application/json", http.StatusOK, out)
+	return out, nil
 }
 
 func (a *API) metricsRoutes() []route {
@@ -216,10 +216,10 @@ func (a *API) metricsRoutes() []route {
 			pattern: "GET /metrics", access: localNetwork, summary: "This node's metrics, for Prometheus",
 			status: http.StatusOK, reply: asFile{"text/plain"}, handle: a.metrics,
 		},
-		{
+		a.handles(route{
 			pattern: "GET /api/v1/admin/metrics", access: admin,
 			summary: "What each node's metrics say now, and what the nodes share, for a dashboard; Prometheus scrapes /metrics for history",
-			status:  http.StatusOK, reply: metricsJSON{}, handle: a.adminMetrics,
-		},
+			status:  http.StatusOK,
+		}, a.adminMetrics),
 	}
 }
