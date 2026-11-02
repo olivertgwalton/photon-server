@@ -209,7 +209,7 @@ func (c *Cache) hashAndSize(ctx context.Context, id uuid.UUID) error {
 		return nil
 	}
 	for _, w := range ahead(src.Bounds()) {
-		if err := c.keepResized(ctx, fmt.Sprintf("%s-w%d", id, w), src, w, 0); err != nil && !errors.Is(err, ErrNotResizable) {
+		if err := c.keepResized(ctx, copyName(id.String(), w, 0), src, w, 0); err != nil && !errors.Is(err, ErrNotResizable) {
 			return err
 		}
 	}
@@ -253,7 +253,8 @@ func (a *atMost) Read(p []byte) (int, error) {
 }
 
 // Sweep removes the objects of every picture live says is gone, original and resized copies
-// alike. It answers how many it removed.
+// alike, and a live picture's copies made before they were brought into sRGB. It answers how many
+// it removed.
 func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error)) (int, error) {
 	byID := map[uuid.UUID][]string{}
 	for e, err := range c.blobs.List(ctx, "") {
@@ -273,10 +274,10 @@ func (c *Cache) Sweep(ctx context.Context, live func(ctx context.Context, ids []
 	}
 	removed := 0
 	for id, names := range byID {
-		if alive[id] {
-			continue
-		}
 		for _, name := range names {
+			if rest := name[36:]; alive[id] && (rest == "" || strings.HasPrefix(rest, copyMark)) {
+				continue
+			}
 			if err := c.blobs.Delete(ctx, name); err != nil {
 				return removed, err
 			}

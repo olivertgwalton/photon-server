@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -149,7 +148,7 @@ func TestAFetchedPictureIsSizedForCards(t *testing.T) {
 		}
 		_ = f.Close()
 		for _, w := range tc.kept {
-			f, err := os.Open(filepath.Join(dir, fmt.Sprintf("%s-w%d", id, w)))
+			f, err := os.Open(filepath.Join(dir, copyName(id.String(), w, 0)))
 			if err != nil {
 				t.Errorf("%s at %d wide: %v, want it kept as fetched", tc.path, w, err)
 				continue
@@ -161,7 +160,7 @@ func TestAFetchedPictureIsSizedForCards(t *testing.T) {
 			}
 		}
 		for _, w := range tc.later {
-			if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("%s-w%d", id, w))); err == nil {
+			if _, err := os.Stat(filepath.Join(dir, copyName(id.String(), w, 0))); err == nil {
 				t.Errorf("%s at %d wide was made before it was asked for", tc.path, w)
 			}
 		}
@@ -231,12 +230,14 @@ func TestAProviderRefusingPicturesStopsTheFetch(t *testing.T) {
 	}
 }
 
-func TestASweepClearsReplacedPictures(t *testing.T) {
+// A replaced picture is cleared whole, and a kept one's copies made before copies were brought
+// into sRGB, so they are made again.
+func TestASweepClearsReplacedPicturesAndCopiesNotInSRGB(t *testing.T) {
 	c := newCache(t, t.TempDir(), nil)
 	kept, gone := uuid.NewV7(), uuid.NewV7()
 	for _, key := range []string{
-		kept.String(), kept.String() + "-w300",
-		gone.String(), gone.String() + "-w300", gone.String() + "-w600.as-is",
+		kept.String(), copyName(kept.String(), 320, 0), kept.String() + "-w480",
+		gone.String(), copyName(gone.String(), 320, 0), gone.String() + "-w640.as-is",
 		"README",
 	} {
 		if err := c.blobs.Put(t.Context(), key, strings.NewReader("x")); err != nil {
@@ -246,8 +247,8 @@ func TestASweepClearsReplacedPictures(t *testing.T) {
 	n, err := c.Sweep(t.Context(), func(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]bool, error) {
 		return map[uuid.UUID]bool{kept: true}, nil
 	})
-	if err != nil || n != 3 {
-		t.Errorf("removed %d, %v; want the replaced picture's three objects", n, err)
+	if err != nil || n != 4 {
+		t.Errorf("removed %d, %v; want the replaced picture's three objects and the old copy", n, err)
 	}
 	var left []string
 	for e, err := range c.blobs.List(t.Context(), "") {
