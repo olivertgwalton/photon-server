@@ -142,7 +142,7 @@ func TestWhatAProfileWatchesIsPushedToItsTrackers(t *testing.T) {
 	simkl.set(func() { simkl.failing = true })
 	push()
 	asJSON := func(v any) string {
-		b, err := json.Marshal(v)
+		b, err := json.Marshal(v, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}

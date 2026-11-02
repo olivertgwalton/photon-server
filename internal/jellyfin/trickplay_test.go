@@ -64,6 +64,10 @@ func TestAnAppReadsAFilmsTrickplay(t *testing.T) {
 		if it.Items == nil {
 			return it.Trickplay
 		}
+		// json/v2 would marshal a nil map as {}, which reads back as an empty one.
+		if it.Items[0].Trickplay == nil {
+			return nil
+		}
 		var got map[string]map[string]trickplayInfo
 		if b, err := json.Marshal(it.Items[0].Trickplay); err != nil || json.Unmarshal(b, &got) != nil {
 			t.Fatal(err)
