@@ -39,10 +39,7 @@ type foundSubtitlesJSON struct {
 // episode, the one asked for else its longest, as Plex's and Jellyfin's subtitle search: those
 // made for its very file first, found by its hash, then the most fetched.
 func (a *API) subtitleCandidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	lang, err := language.Parse(r.URL.Query().Get("language"))
 	if err != nil {
 		writeProblem(w, a.logger, codeInvalidParameter, "language is a BCP 47 tag")
@@ -75,10 +72,7 @@ type fetchSubtitleJSON struct {
 // fetchSubtitle fetches a subtitle a search found and keeps it beside the version, for every profile
 // to choose, as Jellyfin's subtitle download does.
 func (a *API) fetchSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req fetchSubtitleJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -99,10 +93,7 @@ func (a *API) fetchSubtitle(w http.ResponseWriter, r *http.Request) {
 
 // removeFetchedSubtitle forgets a fetched subtitle; one in a library is the library's.
 func (a *API) removeFetchedSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if !a.answered(w, r, a.svc.Subtitles.RemoveFetchedSubtitle(r.Context(), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}

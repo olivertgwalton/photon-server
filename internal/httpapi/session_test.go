@@ -167,6 +167,26 @@ func serve(t *testing.T, method, target, token, body string) *httptest.ResponseR
 	return rec
 }
 
+// A path that names an id where it is none names nothing, on every route an admin may call.
+func TestAPathThatIsNoIDIsNotFound(t *testing.T) {
+	for _, r := range newAPI(nil).routes() {
+		ids := idWildcards(r)
+		if len(ids) == 0 || r.access != signedIn && r.access != admin {
+			continue
+		}
+		method, path, _ := strings.Cut(r.pattern, " ")
+		for _, name := range ids {
+			path = strings.Replace(path, "{"+name+"}", "not-an-id", 1)
+		}
+		path = wildcard.ReplaceAllString(path, "x")
+		var p problem
+		if rec := serve(t, method, path, goodToken, "{}"); rec.Code != http.StatusNotFound ||
+			json.UnmarshalRead(rec.Body, &p) != nil || p.Code != codeNotFound {
+			t.Errorf("%s at %s: status %d, problem %+v; want 404 not_found", r.pattern, path, rec.Code, p)
+		}
+	}
+}
+
 // Every route for the signed-in refuses a request without a valid token.
 func TestSignedInRoutesRefuseStrangers(t *testing.T) {
 	for _, r := range newAPI(nil).routes() {

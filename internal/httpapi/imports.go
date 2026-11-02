@@ -98,10 +98,7 @@ func (a *API) adminImports(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) adminImport(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	h, err := a.svc.HistoryImports.Import(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

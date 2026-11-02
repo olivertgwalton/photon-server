@@ -61,10 +61,7 @@ type editJSON struct {
 
 // editTitle writes what an admin says of a title, field by field; what it locks no source changes.
 func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req editJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -88,10 +85,7 @@ func (a *API) editTitle(w http.ResponseWriter, r *http.Request) {
 
 // resetEdits gives the fields named, or every one, back to the sources.
 func (a *API) resetEdits(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var fields []domain.Field
 	for _, f := range r.URL.Query()["field"] {
 		if !slices.Contains(domain.Fields(), domain.Field(f)) {
@@ -118,10 +112,7 @@ type candidateJSON struct {
 // candidates lists what a provider has by a name, the title's own unless another is asked for, for
 // an admin choosing its match, as Plex's Fix Match and Jellyfin's Identify do.
 func (a *API) candidates(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	q := r.URL.Query()
 	p, found, err := a.svc.Providers.Get(r.Context(), domain.FieldSource(q.Get("provider")))
 	if err != nil {
@@ -167,10 +158,7 @@ type pinMatchJSON struct {
 
 // pinMatch fixes a film or show to the title a provider has by the id given, and matches it again.
 func (a *API) pinMatch(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req pinMatchJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -203,10 +191,7 @@ type setEpisodeOrderJSON struct {
 // setEpisodeOrder says the order a show's episode files are numbered in, as Plex's and Jellyfin's
 // per-show episode ordering does, and matches its episodes again in it.
 func (a *API) setEpisodeOrder(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req setEpisodeOrderJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -238,10 +223,7 @@ type episodeGrouper interface {
 // episodeGroups lists the episode groups TMDB has a show in, for an admin choosing the one its
 // files are numbered by.
 func (a *API) episodeGroups(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	sub, ok, err := a.svc.Editing.IdentifySubject(r.Context(), id)
 	if err != nil {
 		a.internal(w, r, err)
@@ -281,10 +263,7 @@ type refreshJSON struct {
 // Delete do, where its library allows it. The files go first: should one not, the title stays, and
 // those deleted before it are missing at the next scan, as a file deleted by hand would be.
 func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	files, err := a.svc.Editing.TitleFiles(r.Context(), id)
 	if a.answeredAs(w, r, err, "no film, show, season, episode or extra has that id") {
 		return
@@ -306,10 +285,7 @@ func (a *API) deleteTitle(w http.ResponseWriter, r *http.Request) {
 
 // split splits a film's versions apart, each other than the one that plays first a film of its own.
 func (a *API) split(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	err := a.svc.Editing.SplitTitle(r.Context(), id)
 	if a.answeredAs(w, r, err, "no film has that id") {
 		return
@@ -324,10 +300,7 @@ type mergeJSON struct {
 
 // merge merges another film into a film, as Plex's Merge does: its versions become the film's.
 func (a *API) merge(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req mergeJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -352,10 +325,7 @@ type titleLocaleJSON struct {
 // setTitleLocale gives a film or show a locale of its own over its library's, as Jellyfin's item
 // settings do, and describes it again in it.
 func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req titleLocaleJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -376,10 +346,7 @@ func (a *API) setTitleLocale(w http.ResponseWriter, r *http.Request) {
 // unmatch takes a film or show off its providers and holds it so, until its match is fixed or it
 // is refreshed: the match PUT sets, gone.
 func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	err := a.svc.Editing.Unmatch(r.Context(), id)
 	if a.answeredAs(w, r, err, "no film or show has that id") {
 		return
@@ -390,10 +357,7 @@ func (a *API) unmatch(w http.ResponseWriter, r *http.Request) {
 // analyse asks for a title's files to be read again, as Plex's Analyze does, with what is made
 // from them after: its keyframes, previews and markers.
 func (a *API) analyse(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if a.answered(w, r, a.svc.Editing.AnalyseTitle(r.Context(), id)) {
 		return
 	}
@@ -402,10 +366,7 @@ func (a *API) analyse(w http.ResponseWriter, r *http.Request) {
 
 // refresh asks a title's providers about it again now, ahead of the schedule.
 func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req refreshJSON
 	if !a.decode(w, r, &req) {
 		return

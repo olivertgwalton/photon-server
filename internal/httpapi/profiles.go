@@ -40,10 +40,7 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !a.decode(w, r, &req) {
 		return
 	}
-	target, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	target := pathUUID(r, "id")
 	if !a.allowed(w, r, switchesPerSession, "switch:session:"+auth.SessionOf(r.Context()).ID.String()) {
 		return
 	}

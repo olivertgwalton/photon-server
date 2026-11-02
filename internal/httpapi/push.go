@@ -177,10 +177,7 @@ func androidSubscription(req subscribeJSON, sub *store.PushSubscription) string 
 
 // unsubscribe stops a device being pushed the profile's notifications.
 func (a *API) unsubscribe(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	err := a.svc.Push.Unsubscribe(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if !a.answeredAs(w, r, err, "no such subscription") {
 		w.WriteHeader(http.StatusNoContent)

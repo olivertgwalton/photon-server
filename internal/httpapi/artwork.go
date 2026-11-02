@@ -28,10 +28,7 @@ type pictureCache interface {
 // does not size pictures itself. Its id changes whenever the picture does, so a client keeps it for good. It is
 // public, as Jellyfin's are, so a page can show it without a token; ids are random.
 func (a *API) artwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	pic, err := a.svc.Pictures.Picture(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

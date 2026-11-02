@@ -45,10 +45,7 @@ func (a *API) allCollections(w http.ResponseWriter, r *http.Request) {
 // libraryCollections answers a page of the collections holding a library's titles, by title, as
 // walls page.
 func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
-	lib, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	lib := pathUUID(r, "id")
 	page, err := paging(r, defaultWallLimit)
 	if a.answered(w, r, err) {
 		return
@@ -62,10 +59,7 @@ func (a *API) libraryCollections(w http.ResponseWriter, r *http.Request) {
 
 // members answers a collection's titles.
 func (a *API) members(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	cards, err := a.svc.Collections.Members(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -131,10 +125,7 @@ func (a *API) addCollection(w http.ResponseWriter, r *http.Request) {
 
 // setMembers replaces an admin's collection's titles, in the order given.
 func (a *API) addMembers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req itemIDsJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -148,10 +139,7 @@ func (a *API) addMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req itemIDsJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -166,10 +154,7 @@ func (a *API) setMembers(w http.ResponseWriter, r *http.Request) {
 
 // removeCollection removes an admin's collection, leaving its titles.
 func (a *API) removeCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if !a.answered(w, r, a.svc.Collections.RemoveCollection(r.Context(), id)) {
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -184,10 +169,7 @@ type collectionChangeJSON struct {
 
 // setCollection changes how a library's wall shows a collection, whoever made it.
 func (a *API) setCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req collectionChangeJSON
 	if !a.decode(w, r, &req) {
 		return
@@ -213,10 +195,7 @@ func (a *API) checkedRule(w http.ResponseWriter, err error) bool {
 
 // setRule replaces a smart collection's rule, and its titles with what it finds.
 func (a *API) setRule(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req smartRuleJSON
 	if !a.decode(w, r, &req) || !a.checkedRule(w, req.rule().CheckShared()) {
 		return
@@ -278,10 +257,7 @@ func (a *API) keptLists(w http.ResponseWriter, r *http.Request) {
 
 // syncList reads a list collection's list again now, and keeps what it holds.
 func (a *API) syncList(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	list, err := a.svc.Collections.CollectionList(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

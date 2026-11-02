@@ -49,10 +49,7 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 // readOutStream serves a subtitle stream of a part, read out: styled or pictures as it is, plain text
 // as WebVTT.
 func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	part := pathUUID(r, "id")
 	n, err := strconv.Atoi(r.PathValue("subtitle"))
 	if err != nil {
 		writeProblem(w, a.logger, codeNotFound, "")
@@ -93,10 +90,7 @@ func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 // partFonts lists the fonts a part's file carries for its styled subtitles, each at an address
 // signed until the list's own lapses.
 func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	part := pathUUID(r, "id")
 	src, err := a.partSubtitles(r.Context(), part)
 	if a.answered(w, r, err) {
 		return
@@ -131,10 +125,7 @@ func (a *API) partFonts(w http.ResponseWriter, r *http.Request) {
 
 // partFont serves a font a part's file carries, as partFonts listed it.
 func (a *API) partFont(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	part := pathUUID(r, "id")
 	name := r.PathValue("name")
 	t, ok := fontTypes[strings.ToLower(filepath.Ext(name))]
 	if !ok {

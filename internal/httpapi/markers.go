@@ -28,10 +28,7 @@ type markersJSON struct {
 // its chapters are, and which of its parts have none of a kind, over whatever its chapters or
 // fingerprints say; saying nothing clears what was said.
 func (a *API) setMarkers(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	var req markersJSON
 	if !a.decode(w, r, &req) {
 		return

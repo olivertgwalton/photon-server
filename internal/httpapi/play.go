@@ -172,10 +172,7 @@ func (a *API) play(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	if a.answered(w, r, a.svc.RemoteVersions.Ensure(r.Context(), id)) {
 		return
 	}
@@ -446,10 +443,7 @@ func (a *API) playbackStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) reportPlayback(w http.ResponseWriter, r *http.Request, report func(ctx context.Context, profile, id uuid.UUID) (domain.Reach, error)) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	reach, err := report(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if !a.answered(w, r, err) {
 		writeJSON(w, a.logger, "application/json", http.StatusOK, reachedJSON{Reach: reach})

@@ -33,10 +33,7 @@ type trickplayJSON struct {
 // trickplay answers how a part's thumbnail sheets are laid out, so a client can find the
 // thumbnail for any time: sheet floor(t / interval / (columns × rows)), counted from zero.
 func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	t, err := a.svc.Previews.Trickplay(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if a.answered(w, r, err) {
 		return
@@ -45,10 +42,7 @@ func (a *API) trickplay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	n, err := pathNumber(r, "sheet")
 	if a.answered(w, r, err) {
 		return
@@ -67,10 +61,7 @@ func (a *API) trickplaySheet(w http.ResponseWriter, r *http.Request) {
 // chapterImage serves a chapter's picture at the address a title's page signed for the profile
 // that could see it.
 func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
-	part, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	part := pathUUID(r, "id")
 	chapter, err := pathNumber(r, "chapter")
 	if a.answered(w, r, err) {
 		return

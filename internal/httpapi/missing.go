@@ -12,10 +12,7 @@ type forgottenJSON struct {
 // forgetMissingVersions takes a library's versions on no disk out of it, and the titles left with
 // nothing with them, as Plex's Empty Trash does for a library whose trash its scans do not empty.
 func (a *API) forgetMissingVersions(w http.ResponseWriter, r *http.Request) {
-	id, ok := a.pathID(w, r, "id")
-	if !ok {
-		return
-	}
+	id := pathUUID(r, "id")
 	forgotten, changed, err := a.svc.Libraries.ForgetMissingVersions(r.Context(), id)
 	if a.answered(w, r, err) {
 		return

@@ -38,10 +38,7 @@ func hlsSubject(playback uuid.UUID) string { return "/api/v1/hls/" + playback.St
 // signature, not the page's origin, is what admits it.
 func (a *API) hlsFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	playback, ok := a.pathID(w, r, "playback")
-	if !ok {
-		return
-	}
+	playback := pathUUID(r, "playback")
 	name := r.PathValue("file")
 	res, err := a.svc.HLS.Resource(r.Context(), playback, name)
 	if a.answered(w, r, err) {
