@@ -35,15 +35,22 @@ type remuxer interface {
 // Remuxes opens a playback's version as HLS: each of its files cut at its keyframes where the video
 // is copied and they are known, which are indexed in the background as a library is scanned; or
 // every SegmentLength where it is encoded or none are known, as Jellyfin cuts a file it has no
-// keyframes for. A play never waits on a file being read for them.
+// keyframes for. A file played before it is indexed is indexed then, as Jellyfin reads a Matroska
+// file's Cues as it plays it, for no longer than indexWait.
 type Remuxes struct {
 	store partStore
 	parts partOpener
 	hls   remuxer
+	// index reads a part's keyframes from its file and keeps them, as the job that indexes it does.
+	index func(ctx context.Context, part uuid.UUID) error
 }
 
-func NewRemuxes(st partStore, parts partOpener, h remuxer) *Remuxes {
-	return &Remuxes{store: st, parts: parts, hls: h}
+// indexWait is the longest a play waits on a file's index: a few reads, which for a .strm's media
+// are byte ranges asked of its server.
+const indexWait = 3 * time.Second
+
+func NewRemuxes(st partStore, parts partOpener, h remuxer, index func(ctx context.Context, part uuid.UUID) error) *Remuxes {
+	return &Remuxes{store: st, parts: parts, hls: h, index: index}
 }
 
 // Renditions are the plain text subtitles of a version its HLS offers as WebVTT.
@@ -156,14 +163,22 @@ func subtitle(title string, lang language.Tag, def, forced, sdh bool) hls.Subtit
 }
 
 // keyframes answers a part's keyframes where they are known. One its library finds but has not
-// reached yet has its job moved to the front, so the next play is cut at them.
+// reached yet is indexed now; where that takes too long or fails, its job is moved to the front, so
+// the next play is cut at them.
 func (r *Remuxes) keyframes(ctx context.Context, part uuid.UUID) ([]time.Duration, error) {
 	known, err := r.store.Keyframes(ctx, part)
 	if err != nil {
 		return nil, err
 	}
 	if known.PtsMS == nil && known.Mode != domain.KeyframesOff {
-		if err := r.store.AskKeyframes(ctx, part); err != nil {
+		indexing, cancel := context.WithTimeout(ctx, indexWait)
+		err := r.index(indexing, part)
+		cancel()
+		if err != nil {
+			if err := r.store.AskKeyframes(ctx, part); err != nil {
+				return nil, err
+			}
+		} else if known, err = r.store.Keyframes(ctx, part); err != nil {
 			return nil, err
 		}
 	}

@@ -2,9 +2,11 @@ package playback
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 	"uuid"
 
@@ -139,7 +141,7 @@ func TestTheMasterPlaylistSaysWhatIsSent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			hlsOf := opened{}
 			playback := uuid.NewV7()
-			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, versionOf(tc.version), tc.video, tc.audio, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
+			if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf, unindexed).Open(t.Context(), playback, versionOf(tc.version), tc.video, tc.audio, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 				t.Fatal(err)
 			}
 			got := hlsOf[playback]
@@ -167,7 +169,7 @@ func TestAPlayerFetchingSubtitleFilesIsOfferedOnlyTheVersionsOwn(t *testing.T) {
 	for renditions, want := range map[Renditions]int{RenditionsAll: 2, RenditionsEmbedded: 1} {
 		hlsOf := opened{}
 		playback := uuid.NewV7()
-		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, domain.VideoPlan{Codec: "hevc"}, nil, domain.SegmentsFMP4, 0, renditions); err != nil {
+		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf, unindexed).Open(t.Context(), playback, c, domain.VideoPlan{Codec: "hevc"}, nil, domain.SegmentsFMP4, 0, renditions); err != nil {
 			t.Fatal(err)
 		}
 		if got := hlsOf[playback].Subtitles; len(got) != want || got[0].Stream == nil {
@@ -206,7 +208,7 @@ func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 	} {
 		hlsOf := opened{}
 		playback := uuid.NewV7()
-		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
+		if err := NewRemuxes(indexed{}, library.Parts{Places: indexed{}}, hlsOf, unindexed).Open(t.Context(), playback, c, tc.video, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
 			t.Fatal(err)
 		}
 		for i, src := range hlsOf[playback].Parts {
@@ -219,6 +221,9 @@ func TestStyledTextDrawnInReachesEachPart(t *testing.T) {
 		}
 	}
 }
+
+// unindexed is a file's index that cannot be read.
+func unindexed(context.Context, uuid.UUID) error { return errors.New("no index") }
 
 type knownKeyframes struct {
 	known store.PartKeyframes
@@ -243,34 +248,55 @@ func (k *knownKeyframes) AskKeyframes(context.Context, uuid.UUID) error {
 }
 
 // A copied video is cut at its keyframes where they are known, and every segment length where
-// none are; a play never reads the file for them, and moves a part not reached yet to the front.
+// none are. A file not read for them yet is read as it is played, its index kept; where that fails,
+// or takes longer than a play waits, it is cut every segment length and its part moved to the front
+// of those to read.
 func TestAVersionIsCutAtTheKeyframesItsLibraryFound(t *testing.T) {
 	const duration = 20 * time.Second
+	indexes := func(k *knownKeyframes) func(context.Context, uuid.UUID) error {
+		return func(context.Context, uuid.UUID) error {
+			k.known.PtsMS = []int64{0, 9000}
+			return nil
+		}
+	}
+	slow := func(*knownKeyframes) func(context.Context, uuid.UUID) error {
+		return func(ctx context.Context, _ uuid.UUID) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+	}
+	fails := func(*knownKeyframes) func(context.Context, uuid.UUID) error { return unindexed }
 	cases := []struct {
 		name  string
 		known store.PartKeyframes
+		index func(*knownKeyframes) func(context.Context, uuid.UUID) error
 		want  []time.Duration
 		asked bool
 	}{
-		{"known", store.PartKeyframes{Mode: domain.KeyframesIndex, PtsMS: []int64{0, 7000}}, []time.Duration{0, 7 * time.Second}, false},
-		{"none known", store.PartKeyframes{Mode: domain.KeyframesFull, PtsMS: []int64{}}, hls.Forced(duration), false},
-		{"not read yet", store.PartKeyframes{Mode: domain.KeyframesIndex}, hls.Forced(duration), true},
-		{"off", store.PartKeyframes{Mode: domain.KeyframesOff}, hls.Forced(duration), false},
+		{"known", store.PartKeyframes{Mode: domain.KeyframesIndex, PtsMS: []int64{0, 7000}}, fails, []time.Duration{0, 7 * time.Second}, false},
+		{"none known", store.PartKeyframes{Mode: domain.KeyframesFull, PtsMS: []int64{}}, fails, hls.Forced(duration), false},
+		{"not read yet, read as it plays", store.PartKeyframes{Mode: domain.KeyframesIndex}, indexes, []time.Duration{0, 9 * time.Second}, false},
+		{"not read yet, its index unread", store.PartKeyframes{Mode: domain.KeyframesIndex}, fails, hls.Forced(duration), true},
+		{"not read yet, its index slow", store.PartKeyframes{Mode: domain.KeyframesIndex}, slow, hls.Forced(duration), true},
+		{"off", store.PartKeyframes{Mode: domain.KeyframesOff}, indexes, hls.Forced(duration), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			parts := &knownKeyframes{known: c.known}
-			hlsOf, playback := opened{}, uuid.NewV7()
-			copied := store.PlayVersion{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
-			if err := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf).Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
-				t.Fatal(err)
-			}
-			if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {
-				t.Errorf("keyframes (-want +got):\n%s", diff)
-			}
-			if parts.asked != c.asked {
-				t.Errorf("asked for the part's keyframes: %t, want %t", parts.asked, c.asked)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				parts := &knownKeyframes{known: c.known}
+				hlsOf, playback := opened{}, uuid.NewV7()
+				copied := store.PlayVersion{Parts: []store.PlayPart{{ID: uuid.NewV7(), DurationMS: duration.Milliseconds()}}}
+				r := NewRemuxes(parts, library.Parts{Places: parts}, hlsOf, c.index(parts))
+				if err := r.Open(t.Context(), playback, copied, domain.VideoPlan{Codec: "h264"}, nil, domain.SegmentsFMP4, 0, RenditionsAll); err != nil {
+					t.Fatal(err)
+				}
+				if diff := cmp.Diff(c.want, hlsOf[playback].Parts[0].Part.Keyframes); diff != "" {
+					t.Errorf("keyframes (-want +got):\n%s", diff)
+				}
+				if parts.asked != c.asked {
+					t.Errorf("asked for the part's keyframes: %t, want %t", parts.asked, c.asked)
+				}
+			})
 		})
 	}
 }

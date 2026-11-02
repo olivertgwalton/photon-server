@@ -239,7 +239,7 @@ func (n *node) wire(ctx context.Context) error {
 	n.signIns = sso.New(st, n.cache, n.reach.PublicURL, logger)
 	p := playing{
 		files: files, owners: playback.NewRouter(n.cache, n.id), signer: playback.NewSigner(signingKey), nodeKey: nodeKey,
-		placer:  playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer), n.sessions, nodeKey),
+		placer:  playback.NewPlacer(n.cache, n.self.Node, playback.NewRemuxes(files, n.parts, n.remuxer, analysis.Keyframes(st, n.parts)), n.sessions, nodeKey),
 		plugins: n.plugins, fetcher: fetcher,
 	}
 	n.secured = secure.New(st, n.hub.Subscribe, logger)
