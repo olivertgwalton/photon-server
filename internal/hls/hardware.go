@@ -273,7 +273,7 @@ func (h Hardware) videoArgs(e domain.VideoEncode) (string, []string) {
 			filter += "10le"
 		}
 		if e.ToneMap {
-			filter = deinterlace + "scale=" + w + ":" + ht + "," + media.ToneMap
+			filter = deinterlace + "scale=" + w + ":" + ht + "," + media.ToneMap + ":format=yuv420p"
 		}
 		if h.Accel == domain.AccelAMF {
 			// ponytail: AMF is given frames decoded, scaled and tone mapped on the CPU, Jellyfin's
