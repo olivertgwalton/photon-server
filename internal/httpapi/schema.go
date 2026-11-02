@@ -22,126 +22,127 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/tracker"
 )
 
-// enums are the values of each typed string the API sends or takes.
-var enums = map[reflect.Type][]string{
-	reflect.TypeFor[feed]():                       values(feeds()),
-	reflect.TypeFor[domain.Counting]():            values(domain.Countings()),
-	reflect.TypeFor[domain.AudioTrack]():          values(domain.AudioTracks()),
-	reflect.TypeFor[domain.NextEpisode]():         values(domain.NextEpisodes()),
-	reflect.TypeFor[domain.SegmentAction]():       values(domain.SegmentActions()),
-	reflect.TypeFor[domain.SubtitleMode]():        values(domain.SubtitleModes()),
-	reflect.TypeFor[domain.SubtitleDelivery]():    values(domain.SubtitleDeliveries()),
-	reflect.TypeFor[domain.TrackMemory]():         values(domain.TrackMemories()),
-	reflect.TypeFor[domain.Acceleration]():        values(domain.Accelerations()),
-	reflect.TypeFor[domain.ArtworkKind]():         values(domain.ArtworkKinds()),
-	reflect.TypeFor[domain.Capability]():          values(domain.Capabilities()),
-	reflect.TypeFor[domain.LibraryMedia]():        values(domain.LibraryMedias()),
-	reflect.TypeFor[domain.PluginProtocol]():      values(domain.PluginProtocols()),
-	reflect.TypeFor[domain.CollectionOrigin]():    values(domain.CollectionOrigins()),
-	reflect.TypeFor[domain.CreditKind]():          values(domain.CreditKinds()),
-	reflect.TypeFor[domain.Discovery]():           values(domain.Discoveries()),
-	reflect.TypeFor[domain.DolbyVisionHandling](): values(domain.DolbyVisionHandlings()),
-	reflect.TypeFor[domain.DownloadState]():       values(domain.DownloadStates()),
-	reflect.TypeFor[domain.EpisodeOrder]():        values(domain.EpisodeOrders()),
-	reflect.TypeFor[domain.RefreshMode]():         values(domain.RefreshModes()),
-	reflect.TypeFor[domain.ReleaseCheck]():        values(domain.ReleaseChecks()),
-	reflect.TypeFor[domain.EventKind]():           values(domain.EventKinds()),
-	reflect.TypeFor[domain.ExtraKind]():           values(domain.ExtraKinds()),
-	reflect.TypeFor[domain.Field]():               values(domain.Fields()),
-	reflect.TypeFor[domain.FieldSource]():         values(domain.FieldSources()),
-	reflect.TypeFor[domain.HEVCEncoding]():        values(domain.HEVCEncodings()),
-	reflect.TypeFor[domain.RowVisibility]():       values(domain.RowVisibilities()),
-	reflect.TypeFor[domain.HomeRow]():             values(domain.HomeRows()),
-	reflect.TypeFor[domain.Availability]():        values(domain.Availabilities()),
-	reflect.TypeFor[domain.CalendarFilter]():      values(domain.CalendarFilters()),
-	reflect.TypeFor[domain.Milestone]():           values(domain.Milestones()),
-	reflect.TypeFor[domain.Keep]():                values(domain.Keeps()),
-	reflect.TypeFor[domain.SignInMethod]():        values(domain.SignInMethods()),
-	reflect.TypeFor[domain.ClientNetwork]():       values(domain.ClientNetworks()),
-	reflect.TypeFor[domain.Provisioning]():        values(domain.Provisionings()),
-	reflect.TypeFor[domain.Recheck]():             values(domain.Rechecks()),
-	reflect.TypeFor[domain.ItemKind]():            values(domain.ItemKinds()),
-	reflect.TypeFor[domain.ImportSource]():        values(domain.ImportSources()),
-	reflect.TypeFor[domain.ImportStatus]():        values(domain.ImportStatuses()),
-	reflect.TypeFor[domain.ImportMiss]():          values(domain.ImportMisses()),
-	reflect.TypeFor[domain.Tracker]():             values(domain.Trackers()),
-	reflect.TypeFor[domain.WebhookFormat]():       values(domain.WebhookFormats()),
-	reflect.TypeFor[tracker.State]():              values(tracker.States()),
-	reflect.TypeFor[domain.JobKind]():             values(domain.JobKinds()),
-	reflect.TypeFor[domain.JobState]():            values(domain.JobStates()),
-	reflect.TypeFor[domain.KeyframeMode]():        values(domain.KeyframeModes()),
-	reflect.TypeFor[domain.MediaDeletion]():       values(domain.MediaDeletions()),
-	reflect.TypeFor[domain.MissingVersion]():      values(domain.MissingVersions()),
-	reflect.TypeFor[domain.ArtworkLanguage]():     values(domain.ArtworkLanguages()),
-	reflect.TypeFor[domain.TitleLanguage]():       values(domain.TitleLanguages()),
-	reflect.TypeFor[domain.BoxSetMode]():          values(domain.BoxSetModes()),
-	reflect.TypeFor[domain.RequestState]():        values(domain.RequestStates()),
-	reflect.TypeFor[domain.CollectionBoxSet]():    values(domain.CollectionBoxSets()),
-	reflect.TypeFor[domain.SubtitleMatch]():       values(domain.SubtitleMatches()),
-	reflect.TypeFor[domain.LibraryKind]():         values(domain.LibraryKinds()),
-	reflect.TypeFor[domain.MarkerDetection]():     values(domain.MarkerDetections()),
-	reflect.TypeFor[domain.MarkerKind]():          values(domain.MarkerKinds()),
-	reflect.TypeFor[domain.MarkerSource]():        values(domain.MarkerSources()),
-	reflect.TypeFor[domain.Mark]():                values(domain.Marks()),
-	reflect.TypeFor[domain.Monitor]():             values(domain.Monitors()),
-	reflect.TypeFor[domain.Order]():               values(domain.Orders()),
-	reflect.TypeFor[domain.PartPlayback]():        values(domain.PartPlaybacks()),
-	reflect.TypeFor[domain.PlayMethod]():          values(domain.PlayMethods()),
-	reflect.TypeFor[domain.PreviewLevel]():        values(domain.PreviewLevels()),
-	reflect.TypeFor[domain.PlayState]():           values(domain.PlayStates()),
-	reflect.TypeFor[domain.ProfileLock]():         values(domain.ProfileLocks()),
-	reflect.TypeFor[domain.Provider]():            values(domain.Providers()),
-	reflect.TypeFor[domain.Range]():               values(domain.Ranges()),
-	reflect.TypeFor[domain.RatingSite]():          values(domain.RatingSites()),
-	reflect.TypeFor[domain.Reach]():               values(domain.Reaches()),
-	reflect.TypeFor[domain.Resolution]():          values(domain.Resolutions()),
-	reflect.TypeFor[domain.Role]():                values(domain.Roles()),
-	reflect.TypeFor[domain.SearchKind]():          values(domain.SearchKinds()),
-	reflect.TypeFor[domain.SegmentFormat]():       values(domain.SegmentFormats()),
-	reflect.TypeFor[domain.ScanPhase]():           values(domain.ScanPhases()),
-	reflect.TypeFor[domain.StreamKind]():          values(domain.StreamKinds()),
-	reflect.TypeFor[domain.StoppedBy]():           values(domain.StoppedBys()),
-	reflect.TypeFor[domain.TaskKey]():             values(domain.TaskKeys()),
-	reflect.TypeFor[plugin.PageAccess]():          values(plugin.PageAccesses()),
-	reflect.TypeFor[domain.TaskResult]():          values(domain.TaskResults()),
-	reflect.TypeFor[domain.Timing]():              values(domain.Timings()),
-	reflect.TypeFor[domain.SecureConnections]():   values(domain.SecureConnectionModes()),
-	reflect.TypeFor[domain.NodeAvailability]():    values(domain.NodeAvailabilities()),
-	reflect.TypeFor[domain.NodeRole]():            values(domain.NodeRoles()),
-	reflect.TypeFor[domain.LimitSource]():         values(domain.LimitSources()),
-	reflect.TypeFor[domain.EncoderSource]():       values(domain.EncoderSources()),
-	reflect.TypeFor[domain.RestorePhase]():        values(domain.RestorePhases()),
-	reflect.TypeFor[domain.RestoreResult]():       values(domain.RestoreResults()),
-	reflect.TypeFor[domain.JellyfinMode]():        values(domain.JellyfinModes()),
-	reflect.TypeFor[domain.StorageKind]():         values(domain.StorageKinds()),
-	reflect.TypeFor[domain.Delivery]():            values(domain.Deliveries()),
-	reflect.TypeFor[domain.ThemeLookup]():         values(domain.ThemeLookups()),
-	reflect.TypeFor[domain.ThemeMusic]():          values(domain.ThemeMusics()),
-	reflect.TypeFor[domain.CardArt]():             values(domain.CardArts()),
-	reflect.TypeFor[domain.StillWatching]():       values(domain.StillWatchings()),
-	reflect.TypeFor[domain.SpoilerMode]():         values(domain.SpoilerModes()),
-	reflect.TypeFor[tracker.LinkFlow]():           values(tracker.LinkFlows()),
-	reflect.TypeFor[domain.GroupKind]():           values(domain.GroupKinds()),
-	reflect.TypeFor[domain.Notify]():              values(domain.Notifies()),
-	reflect.TypeFor[domain.PushKind]():            values(domain.PushKinds()),
-	reflect.TypeFor[domain.NotificationKind]():    values(domain.NotificationKinds()),
-	reflect.TypeFor[domain.APNsEnvironment]():     values(domain.APNsEnvironments()),
-	reflect.TypeFor[domain.NotificationChange]():  values(domain.NotificationChanges()),
-	reflect.TypeFor[domain.Unrated]():             values(domain.UnratedPolicies()),
-	reflect.TypeFor[domain.WallSort]():            values(domain.WallSorts()),
-	reflect.TypeFor[domain.WallKind]():            values(domain.WallKinds()),
-	reflect.TypeFor[domain.VideoCodec]():          values(domain.VideoCodecs()),
-	reflect.TypeFor[domain.TranscodeReason]():     values(domain.TranscodeReasons()),
-	reflect.TypeFor[downloadScope]():              values(downloadScopes()),
-	reflect.TypeFor[decision]():                   values(decisions()),
-	reflect.TypeFor[hiddenFolders]():              values(hiddenFolderModes()),
-	reflect.TypeFor[problemCode]():                values(problemCodes()),
-	reflect.TypeFor[rootAccess]():                 values(rootAccesses()),
-	reflect.TypeFor[setupState]():                 values(setupStates()),
-	reflect.TypeFor[nodeReach]():                  values(nodeReaches()),
-	reflect.TypeFor[subtitleFormat]():             values(subtitleFormats()),
-	reflect.TypeFor[subtitleKind]():               values(subtitleKinds()),
-}
+// enums are the values of each typed string the API sends or takes, and enumReader the option
+// that refuses one none of its type's values as a request body is read, where it is.
+var enums, enumReader = indexEnums(
+	enumOf(feeds()),
+	enumOf(domain.Countings()),
+	enumOf(domain.AudioTracks()),
+	enumOf(domain.NextEpisodes()),
+	enumOf(domain.SegmentActions()),
+	enumOf(domain.SubtitleModes()),
+	enumOf(domain.SubtitleDeliveries()),
+	enumOf(domain.TrackMemories()),
+	enumOf(domain.Accelerations()),
+	enumOf(domain.ArtworkKinds()),
+	enumOf(domain.Capabilities()),
+	enumOf(domain.LibraryMedias()),
+	enumOf(domain.PluginProtocols()),
+	enumOf(domain.CollectionOrigins()),
+	enumOf(domain.CreditKinds()),
+	enumOf(domain.Discoveries()),
+	enumOf(domain.DolbyVisionHandlings()),
+	enumOf(domain.DownloadStates()),
+	enumOf(domain.EpisodeOrders()),
+	enumOf(domain.RefreshModes()),
+	enumOf(domain.ReleaseChecks()),
+	enumOf(domain.EventKinds()),
+	enumOf(domain.ExtraKinds()),
+	enumOf(domain.Fields()),
+	enumOf(domain.FieldSources()),
+	enumOf(domain.HEVCEncodings()),
+	enumOf(domain.RowVisibilities()),
+	enumOf(domain.HomeRows()),
+	enumOf(domain.Availabilities()),
+	enumOf(domain.CalendarFilters()),
+	enumOf(domain.Milestones()),
+	enumOf(domain.Keeps()),
+	enumOf(domain.SignInMethods()),
+	enumOf(domain.ClientNetworks()),
+	enumOf(domain.Provisionings()),
+	enumOf(domain.Rechecks()),
+	enumOf(domain.ItemKinds()),
+	enumOf(domain.ImportSources()),
+	enumOf(domain.ImportStatuses()),
+	enumOf(domain.ImportMisses()),
+	enumOf(domain.Trackers()),
+	enumOf(domain.WebhookFormats()),
+	enumOf(tracker.States()),
+	enumOf(domain.JobKinds()),
+	enumOf(domain.JobStates()),
+	enumOf(domain.KeyframeModes()),
+	enumOf(domain.MediaDeletions()),
+	enumOf(domain.MissingVersions()),
+	enumOf(domain.ArtworkLanguages()),
+	enumOf(domain.TitleLanguages()),
+	enumOf(domain.BoxSetModes()),
+	enumOf(domain.RequestStates()),
+	enumOf(domain.CollectionBoxSets()),
+	enumOf(domain.SubtitleMatches()),
+	enumOf(domain.LibraryKinds()),
+	enumOf(domain.MarkerDetections()),
+	enumOf(domain.MarkerKinds()),
+	enumOf(domain.MarkerSources()),
+	enumOf(domain.Marks()),
+	enumOf(domain.Monitors()),
+	enumOf(domain.Orders()),
+	enumOf(domain.PartPlaybacks()),
+	enumOf(domain.PlayMethods()),
+	enumOf(domain.PreviewLevels()),
+	enumOf(domain.PlayStates()),
+	enumOf(domain.ProfileLocks()),
+	enumOf(domain.Providers()),
+	enumOf(domain.Ranges()),
+	enumOf(domain.RatingSites()),
+	enumOf(domain.Reaches()),
+	enumOf(domain.Resolutions()),
+	enumOf(domain.Roles()),
+	enumOf(domain.SearchKinds()),
+	enumOf(domain.SegmentFormats()),
+	enumOf(domain.ScanPhases()),
+	enumOf(domain.StreamKinds()),
+	enumOf(domain.StoppedBys()),
+	enumOf(domain.TaskKeys()),
+	enumOf(plugin.PageAccesses()),
+	enumOf(domain.TaskResults()),
+	enumOf(domain.Timings()),
+	enumOf(domain.SecureConnectionModes()),
+	enumOf(domain.NodeAvailabilities()),
+	enumOf(domain.NodeRoles()),
+	enumOf(domain.LimitSources()),
+	enumOf(domain.EncoderSources()),
+	enumOf(domain.RestorePhases()),
+	enumOf(domain.RestoreResults()),
+	enumOf(domain.JellyfinModes()),
+	enumOf(domain.StorageKinds()),
+	enumOf(domain.Deliveries()),
+	enumOf(domain.ThemeLookups()),
+	enumOf(domain.ThemeMusics()),
+	enumOf(domain.CardArts()),
+	enumOf(domain.StillWatchings()),
+	enumOf(domain.SpoilerModes()),
+	enumOf(tracker.LinkFlows()),
+	enumOf(domain.GroupKinds()),
+	enumOf(domain.Notifies()),
+	enumOf(domain.PushKinds()),
+	enumOf(domain.NotificationKinds()),
+	enumOf(domain.APNsEnvironments()),
+	enumOf(domain.NotificationChanges()),
+	enumOf(domain.UnratedPolicies()),
+	enumOf(domain.WallSorts()),
+	enumOf(domain.WallKinds()),
+	enumOf(domain.VideoCodecs()),
+	enumOf(domain.TranscodeReasons()),
+	enumOf(downloadScopes()),
+	enumOf(decisions()),
+	enumOf(hiddenFolderModes()),
+	enumOf(problemCodes()),
+	enumOf(rootAccesses()),
+	enumOf(setupStates()),
+	enumOf(nodeReaches()),
+	enumOf(subtitleFormats()),
+	enumOf(subtitleKinds()),
+)
 
 // open are the enums that take, beside their own values, any matching a pattern: a registered
 // plugin's source and the kind of id it files titles under.
@@ -164,62 +165,64 @@ func (e *badEnum) Error() string {
 	return msg
 }
 
-// checkEnums refuses a value of an enum type in v, or anywhere in it, that is none of its values,
-// so a handler never sees one. A field left out is empty and let be; an item of a list is not.
-func checkEnums(v reflect.Value, item bool) error {
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		if !v.IsNil() {
-			return checkEnums(v.Elem(), item)
-		}
-	case reflect.Struct:
-		// A field the body cannot set is empty, so every one is walked and named only if refused.
-		for i := range v.NumField() {
-			err := checkEnums(v.Field(i), false)
-			if err == nil {
-				continue
-			}
-			f := v.Type().Field(i)
-			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-			if e, ok := errors.AsType[*badEnum](err); ok && (!f.Anonymous || name != "") {
-				e.path = strings.TrimSuffix(cmp.Or(name, f.Name)+"."+e.path, ".")
-			}
-			return err
-		}
-	case reflect.Slice, reflect.Array:
-		if v.Type().Elem().Kind() < reflect.Array {
-			return nil // numbers, as a uuid's bytes
-		}
-		for i := range v.Len() {
-			if err := checkEnums(v.Index(i), true); err != nil {
-				return err
-			}
-		}
-	case reflect.Map:
-		return checkMap(v)
-	case reflect.String:
-		list, ok := enums[v.Type()]
-		s := v.String()
-		if !ok || s == "" && !item || slices.Contains(list, s) || open[v.Type()] != nil && open[v.Type()].MatchString(s) {
-			return nil
-		}
-		return &badEnum{typ: v.Type()}
-	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func,
-		reflect.UnsafePointer:
-	}
-	return nil
+// enumType is a typed string's values, and the reader that refuses a request body's value of it
+// that is none of them.
+type enumType struct {
+	typ    reflect.Type
+	values []string
+	read   *json.Unmarshalers
 }
 
-// checkMap is apart from checkEnums so that only a map's value escapes to the heap.
-func checkMap(m reflect.Value) error {
-	for k, e := range m.Seq2() {
-		if err := cmp.Or(checkEnums(k, true), checkEnums(e, true)); err != nil {
+func enumOf[T ~string](list []T) enumType {
+	t := reflect.TypeFor[T]()
+	values := values(list)
+	return enumType{t, values, json.UnmarshalFromFunc(func(dec *jsontext.Decoder, v *T) error {
+		if dec.PeekKind() != jsontext.KindString {
+			return errors.ErrUnsupported
+		}
+		tok, err := dec.ReadToken()
+		if err != nil {
 			return err
 		}
+		s := tok.String()
+		if !slices.Contains(values, s) && (s != "" || !omittable(dec)) && (open[t] == nil || !open[t].MatchString(s)) {
+			return &badEnum{path: pathOf(dec), typ: t}
+		}
+		*v = T(s)
+		return nil
+	})}
+}
+
+func indexEnums(list ...enumType) (map[reflect.Type][]string, json.Options) {
+	byType := make(map[reflect.Type][]string, len(list))
+	read := make([]*json.Unmarshalers, len(list))
+	for i, e := range list {
+		if _, ok := byType[e.typ]; ok {
+			panic(fmt.Sprintf("%v is listed among the enums twice", e.typ))
+		}
+		byType[e.typ], read[i] = e.values, e.read
 	}
-	return nil
+	return byType, json.WithUnmarshalers(json.JoinUnmarshalers(read...))
+}
+
+// omittable reports whether the value dec has just read may be empty: a field's, as a field left
+// out is empty, but not an item of a list nor a map's key.
+func omittable(dec *jsontext.Decoder) bool {
+	kind, n := dec.StackIndex(dec.StackDepth())
+	return kind != jsontext.KindBeginArray && (kind != jsontext.KindBeginObject || n%2 == 0)
+}
+
+// pathOf names where in a body the value dec has just read is, by the names it is under.
+func pathOf(dec *jsontext.Decoder) string {
+	var names []string
+	depth := 0
+	for name := range dec.StackPointer().Tokens() {
+		depth++
+		if kind, _ := dec.StackIndex(depth); kind == jsontext.KindBeginObject {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, ".")
 }
 
 func values[T ~string](list []T) []string {
