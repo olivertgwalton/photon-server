@@ -85,10 +85,10 @@ func TestAnAdminIsToldHowANewLibraryOfEachKindIsKept(t *testing.T) {
 	api.ServeHTTP(rec, req)
 	for _, want := range []string{
 		`{"kind":"movies","defaults":[{"media":"folder","sources":[{"kind":"movie","metadata":[{"source":"nfo","enabled":true},{"source":"tmdb","enabled":true}],` +
-			`"images":[{"source":"tmdb","enabled":true}]}],"remote_extras":["trailer","featurette","behind_the_scenes"],"monitor":"realtime","refresh_days":30,` +
+			`"images":[{"source":"tmdb","enabled":true}],"lyrics":[]}],"remote_extras":["trailer","featurette","behind_the_scenes"],"monitor":"realtime","refresh_days":30,` +
 			`"previews":"all","markers":"all"`,
 		`"monitor":"off","refresh_days":30,"previews":"off","markers":"off"`,
-		`{"kind":"season","metadata":["nfo","tmdb","tvdb","anilist","anidb"],"images":["tmdb","tvdb","anilist","anidb"]}`,
+		`{"kind":"season","metadata":["nfo","tmdb","tvdb","anilist","anidb"],"images":["tmdb","tvdb","anilist","anidb"],"lyrics":[]}`,
 	} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("%d %s\nwant %s", rec.Code, rec.Body, want)

@@ -134,7 +134,7 @@ func (s *Store) Libraries(ctx context.Context) ([]domain.Library, error) {
 		var sources []domain.KindSources
 		for _, kind := range r.Kind.ItemKinds() {
 			by := ranked[r.ID][kind]
-			sources = append(sources, domain.KindSources{Kind: kind, Metadata: by[domain.FetcherMetadata], Images: by[domain.FetcherImages]})
+			sources = append(sources, domain.KindSources{Kind: kind, Metadata: by[domain.FetcherMetadata], Images: by[domain.FetcherImages], Lyrics: by[domain.FetcherLyrics]})
 		}
 		libs[i] = library(*r, sources, extras[r.ID])
 	}

@@ -40,10 +40,11 @@ type metadataProviderJSON struct {
 	Settings     []settingJSON       `json:"settings"`
 	// Ready is whether every setting it needs is set.
 	Ready bool `json:"ready"`
-	// MetadataKinds and ImageKinds are the kinds of item a library may rank it for, as a metadata
-	// downloader and as an image fetcher.
+	// MetadataKinds, ImageKinds and LyricsKinds are the kinds of item a library may rank it for, as
+	// a metadata downloader, an image fetcher and a lyrics fetcher.
 	MetadataKinds []domain.ItemKind `json:"metadata_kinds"`
 	ImageKinds    []domain.ItemKind `json:"image_kinds"`
+	LyricsKinds   []domain.ItemKind `json:"lyrics_kinds"`
 }
 
 // adminProviders lists the metadata providers the server has, what each can do, and what is set of
@@ -95,6 +96,7 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 	j := metadataProviderJSON{
 		ID: info.ID, Name: info.Name, Kinds: info.Kinds, Capabilities: can, Ready: true,
 		MetadataKinds: rankedFor(info, can, domain.FetcherMetadata), ImageKinds: rankedFor(info, can, domain.FetcherImages),
+		LyricsKinds: rankedFor(info, can, domain.FetcherLyrics),
 	}
 	if len(info.Settings) == 0 {
 		return j, nil
@@ -131,6 +133,10 @@ func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []
 		}
 		return out
 	}
+	// A plugin finds no lyrics: the plugin protocol has no capability for them.
+	if f == domain.FetcherLyrics {
+		return nil
+	}
 	for _, kind := range domain.LibraryMixed.ItemKinds() {
 		title := domain.ItemShow
 		if kind == domain.ItemMovie {
@@ -163,6 +169,7 @@ type fetchableJSON struct {
 	Kind     domain.ItemKind      `json:"kind"`
 	Metadata []domain.FieldSource `json:"metadata"`
 	Images   []domain.FieldSource `json:"images"`
+	Lyrics   []domain.FieldSource `json:"lyrics"`
 }
 
 // libraryKinds lists the kinds of library and the options of each, as Jellyfin's library options
@@ -179,6 +186,7 @@ func (a *API) libraryKinds(_ *http.Request, _ none) (listJSON[libraryKindOptions
 				Kind:     k.Kind,
 				Metadata: domain.Fetchable(domain.FetcherMetadata, k.Kind),
 				Images:   domain.Fetchable(domain.FetcherImages, k.Kind),
+				Lyrics:   domain.Fetchable(domain.FetcherLyrics, k.Kind),
 			})
 		}
 		out = append(out, j)
