@@ -37,7 +37,7 @@ func client(t *testing.T) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("1.0", nil)
-	c.api.Base, c.api.HTTP = srv.URL+"/", srv.Client()
+	c.api.Base, c.api.HTTP, c.pace.Every = srv.URL+"/", srv.Client(), 0
 	return c
 }
 
