@@ -262,13 +262,13 @@ func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `UPDATE fetched_lyrics SET fetched_at = now() - interval '31 days'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, kept, _ := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); kept {
-		t.Error("a none a month old is still believed")
+	if _, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || kept {
+		t.Errorf("a none a month old is still believed, or %v", err)
 	}
 	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, "[00:01.00]Timeless"); err != nil {
 		t.Fatal(err)
 	}
-	if text, kept, _ := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); !kept || text != "[00:01.00]Timeless" {
-		t.Errorf("lyrics found: %q %v", text, kept)
+	if text, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !kept || text != "[00:01.00]Timeless" {
+		t.Errorf("lyrics found: %q %v %v", text, kept, err)
 	}
 }
