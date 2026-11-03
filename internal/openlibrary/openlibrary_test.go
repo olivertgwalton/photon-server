@@ -90,3 +90,17 @@ func TestBooksAndAuthorsAreDescribed(t *testing.T) {
 		t.Errorf("the author: %+v, %v", author, err)
 	}
 }
+
+// A description reaches a client as the plain text Open Library's Markdown says: without the
+// "See also" notes under its rule, the link to its source, link addresses or emphasis.
+func TestADescriptionIsPlainText(t *testing.T) {
+	md := "Harry must find the *remaining* Horcruxes.\r\n\r\nHe will face [Voldemort](https://openlibrary.org/x) at last.\r\n\r\n" +
+		"([source](https://www.jkrowling.com/book/))\r\n\r\n---\r\n\r\nSee also:\r\n\r\n- [Deathly Hallows \\[2/2\\]](https://openlibrary.org/works/OL1W)"
+	want := "Harry must find the remaining Horcruxes.\n\nHe will face Voldemort at last."
+	if got := plain(md); got != want {
+		t.Errorf("plain:\n%q\nwant:\n%q", got, want)
+	}
+	if got := plain(`The Lord of the Rings \[1/6\], **in full**`); got != "The Lord of the Rings [1/6], in full" {
+		t.Errorf("escapes and emphasis: %q", got)
+	}
+}
