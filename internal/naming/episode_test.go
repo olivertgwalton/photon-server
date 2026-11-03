@@ -33,6 +33,10 @@ func TestParseEpisode(t *testing.T) {
 		{stem: "S05E23 11-59 [HDTV-1080p]", want: Episode{Season: new(5), Episodes: []int{23}, Confidence: ConfidenceHigh}},
 		{stem: "Star Trek Enterprise (2001) - S03E21 - E2 (1080p BluRay x265)", want: Episode{Season: new(3), Episodes: []int{21}, Confidence: ConfidenceHigh}},
 		{stem: "02-04 - blah 14 blah", want: Episode{Episodes: []int{2, 3, 4}, Confidence: ConfidenceMedium}},
+		{stem: "Doctor Who (2005) - S03E07 - 42", want: Episode{Season: new(3), Episodes: []int{7}, Confidence: ConfidenceHigh}},
+		{stem: "Stargate SG-1 - S02E17 - 1969", want: Episode{Season: new(2), Episodes: []int{17}, Confidence: ConfidenceHigh}},
+		{stem: "Show 1x02 - 10 Things", want: Episode{Season: new(1), Episodes: []int{2}, Confidence: ConfidenceHigh}},
+		{stem: "Show S01E01 - E02 - Two Parter", want: Episode{Season: new(1), Episodes: []int{1, 2}, Confidence: ConfidenceHigh}},
 
 		// Air dates.
 		{stem: "anything_1996.11.14", want: Episode{AirDate: day(1996, 11, 14), Confidence: ConfidenceHigh}},
@@ -121,6 +125,7 @@ func TestEpisodeTitles(t *testing.T) {
 		"The Great (2020) {tvdb-369301} - s01e02 [hd]":            "",
 		"The Great (2020) {tvdb-369301} - s01e02 [ultra_hd]":      "",
 		"The Great (2020) {tvdb-369301} - s01e02 - Pilot [1080p]": "Pilot",
+		"Show - S01E05 - 100 Days":                                "100 Days",
 	} {
 		ep, ok := ParseEpisode(stem, "")
 		if !ok {
