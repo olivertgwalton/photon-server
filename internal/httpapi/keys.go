@@ -8,6 +8,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 const maxKeyName = 64
@@ -51,7 +52,12 @@ func (a *API) createKey(r *http.Request, req newKeyJSON) (createdKeyJSON, error)
 }
 
 func (a *API) revokeKey(r *http.Request, _ none) (none, error) {
-	return none{}, a.svc.Auth.RevokeKey(r.Context(), pathUUID(r, "id"))
+	profile, err := a.svc.Auth.RevokeKey(r.Context(), pathUUID(r, "id"))
+	if err != nil {
+		return none{}, err
+	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: profile})
+	return none{}, nil
 }
 
 func (a *API) keysRoutes() []route {

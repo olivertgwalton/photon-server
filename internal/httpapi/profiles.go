@@ -48,8 +48,10 @@ func (a *API) switchProfile(w http.ResponseWriter, r *http.Request) {
 	if req.Secret != "" && !a.allowed(w, r, auth.SignInsPerName, "switch:profile:"+target.String()) {
 		return
 	}
-	profile, err := a.svc.Auth.SwitchProfile(r.Context(), auth.SessionOf(r.Context()), target, req.Secret)
+	session := auth.SessionOf(r.Context())
+	profile, err := a.svc.Auth.SwitchProfile(r.Context(), session, target, req.Secret)
 	if !a.answered(w, r, err) {
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: session.Profile.ID})
 		writeJSON(w, a.logger, "application/json", http.StatusOK, profileOf(profile))
 	}
 }
@@ -85,6 +87,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.answered(w, r, a.svc.Auth.ChangePassword(r.Context(), session, req.Current, req.New)) {
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: session.Profile.ID})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

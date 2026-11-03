@@ -462,19 +462,19 @@ func TestDevicesAreSeenAndSignedOutWithinTheirScope(t *testing.T) {
 	if n := count(sam); n != 2 {
 		t.Errorf("Sam sees %d devices, want Sam's 2", n)
 	}
-	if err := svc.SignOutDevice(t.Context(), sam, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
+	if _, err := svc.SignOutDevice(t.Context(), sam, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
 		t.Errorf("Sam signed out the admin's device (err %v)", err)
 	}
-	if err := svc.SignOutDevice(t.Context(), sam, manager.ID); !errors.Is(err, ErrDeviceNotFound) {
+	if _, err := svc.SignOutDevice(t.Context(), sam, manager.ID); !errors.Is(err, ErrDeviceNotFound) {
 		t.Errorf("Sam signed out Mia's device (err %v)", err)
 	}
-	if err := svc.SignOutDevice(t.Context(), manager, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
+	if _, err := svc.SignOutDevice(t.Context(), manager, admin.ID); !errors.Is(err, ErrDeviceNotFound) {
 		t.Errorf("Mia signed out the admin's device (err %v)", err)
 	}
-	if err := svc.SignOutDevice(t.Context(), manager, samTV.ID); err != nil {
+	if _, err := svc.SignOutDevice(t.Context(), manager, samTV.ID); err != nil {
 		t.Errorf("Mia could not sign out the TV of Sam, whom she keeps: %v", err)
 	}
-	if err := svc.SignOutDevice(t.Context(), admin, sam.ID); err != nil {
+	if _, err := svc.SignOutDevice(t.Context(), admin, sam.ID); err != nil {
 		t.Errorf("the admin could not sign out Sam's phone: %v", err)
 	}
 	if n := count(admin); n != 2 {
@@ -567,7 +567,7 @@ func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 	if devices, err := svc.Devices(t.Context(), mac); err != nil || len(devices) != 1 {
 		t.Errorf("%d devices listed (err %v), want the one signed in, not the key", len(devices), err)
 	}
-	if err := svc.SignOutDevice(t.Context(), mac, id); !errors.Is(err, ErrDeviceNotFound) {
+	if _, err := svc.SignOutDevice(t.Context(), mac, id); !errors.Is(err, ErrDeviceNotFound) {
 		t.Errorf("signing the key out as a device: err = %v, want %v", err, ErrDeviceNotFound)
 	}
 	if err := svc.ChangePassword(t.Context(), mac, "correct horse", "battery staple"); err != nil {
@@ -581,13 +581,13 @@ func TestAnAPIKeyActsAsItsAdminUntilRevoked(t *testing.T) {
 		t.Errorf("keys = %+v (err %v), want Oliver's Sonarr", keys, err)
 	}
 
-	if err := svc.RevokeKey(t.Context(), id); err != nil {
+	if _, err := svc.RevokeKey(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Authenticate(t.Context(), key); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("a revoked key still authenticates (err %v)", err)
 	}
-	if err := svc.RevokeKey(t.Context(), id); !errors.Is(err, ErrKeyNotFound) {
+	if _, err := svc.RevokeKey(t.Context(), id); !errors.Is(err, ErrKeyNotFound) {
 		t.Errorf("revoking it again: err = %v, want %v", err, ErrKeyNotFound)
 	}
 }

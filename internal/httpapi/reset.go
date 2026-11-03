@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // A forgotten password is reset as Jellyfin resets one: asked for from the server's local network,
@@ -78,6 +79,7 @@ func (a *API) redeemReset(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: profile})
 	a.logger.WarnContext(r.Context(), "a password was reset", slog.String("profile", profile.String()), slog.String("address", a.svc.Reach.Client(r).String()))
 	w.WriteHeader(http.StatusNoContent)
 }

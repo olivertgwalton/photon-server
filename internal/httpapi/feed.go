@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json/v2"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -65,7 +66,9 @@ func eventsSocket() asSocket {
 	profile[string(domain.EventNotificationsChanged)] = inboxChangeJSON{}
 	server := map[string]any{"snapshot": snapshotJSON{}}
 	for _, k := range domain.EventKinds() {
-		server[string(k)] = eventJSON{}
+		if k != domain.EventSessionsChanged {
+			server[string(k)] = eventJSON{}
+		}
 	}
 	return asSocket{feedProfile: profile, feedServer: server}
 }
@@ -80,6 +83,8 @@ func eventsSocket() asSocket {
 // Each feed begins with what is going on now: the profile's with a hello naming the scans going
 // on, the server's with a snapshot, so a dashboard needs no second request. Nothing is kept to
 // resend, so a client that reconnects asks again for what it shows.
+// The socket closes once its session no longer may have it: signed out, moved to another profile,
+// or, for the server feed, no longer an admin's, as Jellyfin closes a session's sockets as it ends.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	ctx, session := r.Context(), auth.SessionOf(r.Context())
 	profile := session.Profile.ID
@@ -162,6 +167,12 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
+			if e.Kind == domain.EventSessionsChanged {
+				if e.Profile == profile && !a.mayFeed(ctx, session.ID, profile, want) {
+					return
+				}
+				continue
+			}
 			told, send, err := a.toldTo(ctx, profile, said, e)
 			if err != nil {
 				// The client reconnects and asks again for what it shows.
@@ -176,6 +187,27 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// mayFeed answers whether a session still may have a feed it opened as profile: it is signed in
+// still, to the same profile, and for the server feed an admin's.
+func (a *API) mayFeed(ctx context.Context, id, profile uuid.UUID, want feed) bool {
+	session, err := a.svc.Auth.Session(ctx, id)
+	if err != nil {
+		if !errors.Is(err, auth.ErrUnauthenticated) {
+			a.logger.WarnContext(ctx, "events socket ended", slog.Any("err", err))
+		}
+		return false
+	}
+	if session.Profile.ID != profile {
+		return false
+	}
+	switch want {
+	case feedServer:
+		return session.Profile.Role == domain.RoleAdmin
+	case feedProfile:
+	}
+	return true
 }
 
 // hello is what the profile feed begins with: the scans going on in the libraries the profile sees.
@@ -279,7 +311,8 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 		domain.EventTaskStarted, domain.EventTaskFinished, domain.EventTaskFailed, domain.EventBackupMade,
 		domain.EventJobStarted, domain.EventJobFinished, domain.EventJobFailed, domain.EventJobDead,
 		domain.EventJobsProgress, domain.EventWebhookTest, domain.EventMaintenanceChanged,
-		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged:
+		domain.EventNetworkChanged, domain.EventStorageChanged, domain.EventNodesChanged, domain.EventServerChanged,
+		domain.EventSessionsChanged:
 	}
 	return eventJSON{}, false, nil
 }

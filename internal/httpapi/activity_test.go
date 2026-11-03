@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/json/v2"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/websocket/websockettest"
@@ -214,4 +216,201 @@ func TestASocketNobodyReadsIsGivenUp(t *testing.T) {
 			t.Fatal("the socket is still held by a client that stopped reading")
 		}
 	}
+}
+
+// signedInDevices keeps each token's session until it is signed out, on a profile an admin may
+// change, as the store does.
+type signedInDevices struct {
+	fakeAuth
+	mu       sync.Mutex
+	sessions map[string]domain.Session
+}
+
+func (d *signedInDevices) Authenticate(_ context.Context, token string) (domain.Session, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[token]
+	if !ok {
+		return domain.Session{}, auth.ErrUnauthenticated
+	}
+	return s, nil
+}
+
+func (d *signedInDevices) Session(_ context.Context, id uuid.UUID) (domain.Session, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, s := range d.sessions {
+		if s.ID == id {
+			return s, nil
+		}
+	}
+	return domain.Session{}, auth.ErrUnauthenticated
+}
+
+func (d *signedInDevices) SignOutDevice(_ context.Context, _ domain.Session, device uuid.UUID) (uuid.UUID, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for token, s := range d.sessions {
+		if s.ID == device {
+			delete(d.sessions, token)
+			return s.Profile.ID, nil
+		}
+	}
+	return uuid.UUID{}, auth.ErrDeviceNotFound
+}
+
+// household changes the role of a profile its devices are signed in to.
+type household struct {
+	*fakeProfiles
+	devices *signedInDevices
+}
+
+func (h household) SetProfile(_ context.Context, id uuid.UUID, c store.ProfileChange, _ *uuid.UUID) (domain.Profile, error) {
+	h.devices.mu.Lock()
+	defer h.devices.mu.Unlock()
+	var out domain.Profile
+	for token, s := range h.devices.sessions {
+		if s.Profile.ID == id {
+			s.Profile.Role = cmp.Or(c.Role, s.Profile.Role)
+			h.devices.sessions[token], out = s, s.Profile
+		}
+	}
+	if out.ID == (uuid.UUID{}) {
+		return domain.Profile{}, store.ErrNotFound
+	}
+	return out, nil
+}
+
+// relayedEvents tells each stream what is raised, as one node's hub does.
+type relayedEvents struct {
+	*fakeEvents
+	mu      sync.Mutex
+	streams map[chan domain.Event]struct{}
+}
+
+func (f *relayedEvents) Raise(ctx context.Context, e domain.Event) {
+	f.fakeEvents.Raise(ctx, e)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for s := range f.streams {
+		s <- e
+	}
+}
+
+func (f *relayedEvents) Subscribe() (<-chan domain.Event, func()) {
+	s := make(chan domain.Event, 64)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.streams[s] = struct{}{}
+	return s, func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		delete(f.streams, s)
+	}
+}
+
+// socketClosed opens the events socket at target as token, answering a channel closed once the
+// server closes it.
+func socketClosed(t *testing.T, target, token string) <-chan struct{} {
+	t.Helper()
+	c, res, err := websockettest.Dial(t.Context(), target, http.Header{"Authorization": {"Bearer " + token}})
+	if err != nil || c == nil {
+		t.Fatalf("%s as %s: %v %v", target, token, res, err)
+	}
+	res.Body.Close()
+	t.Cleanup(func() { c.Close() })
+	if err := c.SetDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		for {
+			head, _, err := c.Next()
+			if err != nil || head == websockettest.Fin|websockettest.OpClose {
+				return
+			}
+		}
+	}()
+	return closed
+}
+
+func sessionsAPI(t *testing.T, devices *signedInDevices) string {
+	t.Helper()
+	work := &fakeWork{}
+	srv := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
+		Auth: devices, ProfileAdmin: household{&fakeProfiles{hashes: map[string]string{}}, devices},
+		Tasks: work, Jobs: work, NowPlaying: work, Profiles: listedProfiles{oliver}, Libraries: &fakeLibraries{},
+		Events: &relayedEvents{fakeEvents: &fakeEvents{}, streams: map[chan domain.Event]struct{}{}},
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+func askAs(t *testing.T, method, target, token, body string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, target, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode >= http.StatusBadRequest {
+		t.Fatalf("%s %s: %d", method, target, res.StatusCode)
+	}
+}
+
+func waitClosed(t *testing.T, closed <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s is still open", what)
+	}
+}
+
+// stillOpen fails if a socket closed by the time another, told the same, has.
+func stillOpen(t *testing.T, closed <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-closed:
+		t.Errorf("%s closed", what)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// A device signed out stops being told anything, as Jellyfin closes a session's sockets as it ends.
+func TestASocketClosesWhenItsDeviceIsSignedOut(t *testing.T) {
+	t.Parallel()
+	tv, phone := uuid.NewV7(), uuid.NewV7()
+	url := sessionsAPI(t, &signedInDevices{sessions: map[string]domain.Session{
+		goodToken:   {ID: uuid.NewV7(), Profile: oliver},
+		"pst_tv":    {ID: tv, Profile: sam},
+		"pst_phone": {ID: phone, Profile: sam},
+	}})
+	tvClosed := socketClosed(t, url+"/api/v1/events", "pst_tv")
+	phoneClosed := socketClosed(t, url+"/api/v1/events", "pst_phone")
+	askAs(t, http.MethodDelete, url+"/api/v1/devices/"+tv.String(), goodToken, "")
+	waitClosed(t, tvClosed, "the signed-out TV's socket")
+	stillOpen(t, phoneClosed, "the phone's socket, still signed in,")
+}
+
+// An admin made a user stops being told what happens on every node, but not what its profile sees.
+func TestTheServerFeedClosesWhenItsAdminIsDemoted(t *testing.T) {
+	t.Parallel()
+	ada := domain.Profile{ID: uuid.NewV7(), Name: "Ada", Role: domain.RoleAdmin}
+	url := sessionsAPI(t, &signedInDevices{sessions: map[string]domain.Session{
+		goodToken: {ID: uuid.NewV7(), Profile: oliver},
+		"pst_ada": {ID: uuid.NewV7(), Profile: ada},
+	}})
+	serverClosed := socketClosed(t, url+"/api/v1/events?feed=server", "pst_ada")
+	profileClosed := socketClosed(t, url+"/api/v1/events", "pst_ada")
+	askAs(t, http.MethodPatch, url+"/api/v1/admin/profiles/"+ada.ID.String(), goodToken, `{"role": "user"}`)
+	waitClosed(t, serverClosed, "the demoted admin's server feed")
+	stillOpen(t, profileClosed, "the demoted admin's profile feed")
 }

@@ -6,6 +6,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 type deviceListingJSON struct {
@@ -33,7 +34,12 @@ func (a *API) devices(r *http.Request, _ none) (listJSON[deviceListingJSON], err
 }
 
 func (a *API) signOutDevice(r *http.Request, _ none) (none, error) {
-	return none{}, a.svc.Auth.SignOutDevice(r.Context(), auth.SessionOf(r.Context()), pathUUID(r, "id"))
+	profile, err := a.svc.Auth.SignOutDevice(r.Context(), auth.SessionOf(r.Context()), pathUUID(r, "id"))
+	if err != nil {
+		return none{}, err
+	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: profile})
+	return none{}, nil
 }
 
 func (a *API) devicesRoutes() []route {

@@ -101,6 +101,7 @@ type route struct {
 
 type authenticator interface {
 	auth.Authenticator
+	Session(ctx context.Context, id uuid.UUID) (domain.Session, error)
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	HashPassword(ctx context.Context, password string) (string, error)
 	SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device auth.Device) (string, error)
@@ -112,10 +113,10 @@ type authenticator interface {
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
-	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error
+	SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) (uuid.UUID, error)
 	CreateKey(ctx context.Context, creator domain.Session, name string) (uuid.UUID, string, error)
 	Keys(ctx context.Context) ([]store.KeyListing, error)
-	RevokeKey(ctx context.Context, id uuid.UUID) error
+	RevokeKey(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type profileLister interface {
