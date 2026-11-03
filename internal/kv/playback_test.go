@@ -66,6 +66,42 @@ func TestAPlaybackIsKeptForItsLife(t *testing.T) {
 	}
 }
 
+// A report renewing a playback as it ends does not bring it back.
+func TestAnEndedPlaybackIsNotRenewed(t *testing.T) {
+	k, err := Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	defer k.Close()
+	ctx := t.Context()
+	p := domain.Playback{ID: uuid.NewV7(), Position: time.Minute}
+	if renewed, err := k.RenewPlayback(ctx, p, time.Minute); renewed || err != nil {
+		t.Fatalf("renewing one never kept = %v, %v; want it not written", renewed, err)
+	}
+	if _, ok, err := k.Playback(ctx, p.ID); ok || err != nil {
+		t.Fatalf("renewing one never kept wrote it: %v, %v", ok, err)
+	}
+	if err := k.SavePlayback(ctx, p, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	p.Position = 2 * time.Minute
+	if renewed, err := k.RenewPlayback(ctx, p, time.Minute); !renewed || err != nil {
+		t.Fatalf("renewing one kept = %v, %v; want it written", renewed, err)
+	}
+	if got, ok, err := k.Playback(ctx, p.ID); !ok || err != nil || got.Position != 2*time.Minute {
+		t.Errorf("after renewing: %+v, %v, %v; want it at two minutes", got, ok, err)
+	}
+	if _, err := k.EndPlayback(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if renewed, err := k.RenewPlayback(ctx, p, time.Minute); renewed || err != nil {
+		t.Errorf("renewing one ended = %v, %v; want it not written", renewed, err)
+	}
+	if _, ok, err := k.Playback(ctx, p.ID); ok || err != nil {
+		t.Errorf("renewing one ended brought it back: %v, %v", ok, err)
+	}
+}
+
 func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	k, err := Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {

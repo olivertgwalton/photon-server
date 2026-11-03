@@ -78,6 +78,18 @@ func (k *KV) ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Dura
 	return n == 1, err
 }
 
+// RenewPlayback writes a playback session again, which lapses after ttl unless written again, if
+// it is still kept: one ended or lapsed meanwhile stays gone, and the answer is false.
+func (k *KV) RenewPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error) {
+	record, err := json.Marshal(p, stored)
+	if err != nil {
+		return false, err
+	}
+	n, err := k.client.Do(ctx, k.client.B().Hsetex().Key(k.key(playbacks)).Fxx().Px(ttl.Milliseconds()).Fields().
+		Numfields(1).FieldValue().FieldValue(p.ID.String(), string(record)).Build()).AsInt64()
+	return n == 1, err
+}
+
 // SavePlayback writes a playback session, which lapses after ttl unless written again.
 func (k *KV) SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error {
 	return keep(ctx, k, playbacks, p.ID, p, ttl)
