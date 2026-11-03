@@ -6,6 +6,7 @@ import { problemMessage } from "#lib/api/problem.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import { artworkURL } from "#lib/artwork.ts";
 import { shuffled } from "#lib/shuffle.ts";
+import { Joined, joinable, trackAt } from "./joined.ts";
 import {
 	type AudioCapabilities,
 	after,
@@ -46,10 +47,13 @@ export type Sleep =
 
 // One thing on an audio element of its own: what plays, or the next, opened
 // and buffering before the one playing ends, so it starts at once.
+// A deck whose tracks are joined plays one after another on one timeline,
+// its key and playback the track's it is at.
 type Deck = {
 	key: string;
 	audio: HTMLAudioElement;
 	hls?: Hls;
+	joined?: Joined;
 	playback: Playback;
 	part: number;
 	off: () => void;
@@ -259,7 +263,17 @@ class Listening {
 		const to = Math.min(Math.max(seconds, 0), this.duration || seconds);
 		this.position = to;
 		const parts = deck.playback.parts;
-		if (parts?.length) {
+		if (deck.joined) {
+			const { time, dropped } = deck.joined.seek(deck.key, to);
+			for (const t of dropped) {
+				void send(t.playback.playback_id)({
+					kind: "stop",
+					position_ms: 0,
+					keepalive: false,
+				});
+			}
+			deck.audio.currentTime = time;
+		} else if (parts?.length) {
 			const index = partAt(parts, to);
 			if (index !== deck.part) {
 				const playing = !deck.audio.paused;
@@ -400,18 +414,46 @@ class Listening {
 
 	#timeupdate(deck: Deck) {
 		if (this.#seekTo !== undefined) return;
-		const offset = deck.playback.parts?.[deck.part]?.offset_ms ?? 0;
+		let offset = (deck.playback.parts?.[deck.part]?.offset_ms ?? 0) / 1000;
+		const joined = deck.joined;
+		if (joined) {
+			const track =
+				joined.tracks[trackAt(joined.tracks, deck.audio.currentTime)];
+			if (track.key !== deck.key)
+				this.#crossed(deck, track.key, track.playback);
+			offset = -track.start;
+		}
 		const before = Math.floor(this.position / keepEvery);
-		this.position = offset / 1000 + deck.audio.currentTime;
+		this.position = offset + deck.audio.currentTime;
 		if (Math.floor(this.position / keepEvery) !== before) this.#keep();
 		if (this.sleep.kind === "end" && this.position >= this.sleep.at - 0.25) {
 			this.#fallAsleep();
 			return;
 		}
 		const lastPart = deck.part >= (deck.playback.parts?.length ?? 1) - 1;
-		if (lastPart && this.duration - this.position < readyAhead) {
+		const lastJoined = !joined || joined.tracks.at(-1)?.key === deck.key;
+		if (lastPart && lastJoined && this.duration - this.position < readyAhead) {
 			void this.#makeReady();
 		}
+	}
+
+	// The joined timeline has gone on into the next track: the one before is
+	// told it ended, and the next is reported on, without a sample between.
+	#crossed(deck: Deck, key: string, playback: Playback) {
+		const to = this.queue.findIndex((q) => q.key === key);
+		if (to < 0) return;
+		void this.#reporter?.stop();
+		deck.key = key;
+		deck.playback = playback;
+		this.at = to;
+		this.duration = (this.queue[to].duration_ms ?? 0) / 1000;
+		this.#setUp(deck);
+		this.#keep();
+		this.#reporter = new ProgressReporter(
+			() => this.position * 1000,
+			send(playback.playback_id),
+		);
+		this.#reporter.playing();
 	}
 
 	#progress(deck: Deck) {
@@ -455,10 +497,17 @@ class Listening {
 	async #makeReady() {
 		const to = after(this.#q, this.repeat);
 		const item = to === null || to === this.at ? undefined : this.queue[to];
-		if (!item || item.start_ms || this.#ready?.key === item.key) return;
+		const joined = this.#deck?.joined;
+		if (!item) {
+			// Nothing comes after: the joined timeline ends with this track.
+			joined?.finish();
+			return;
+		}
+		if (item.start_ms || this.#ready?.key === item.key) return;
 		if (this.#readying === item.key) return;
 		this.#readying = item.key;
-		const data = await this.#ask(item, 0);
+		const join = joined !== undefined && this.#joins(item);
+		const data = await this.#ask(item, 0, join);
 		this.#readying = undefined;
 		if (!data) return;
 		if (this.queue[after(this.#q, this.repeat) ?? -1]?.key !== item.key) {
@@ -469,9 +518,22 @@ class Listening {
 			});
 			return;
 		}
+		if (join && joined && (await joined.append(item.key, data))) return;
 		this.#discardReady();
-		const deck = await this.#deckOf(item.key, data, 0);
+		const deck = await this.#deckOf(item.key, data, 0, false);
 		if (deck) this.#ready = deck;
+	}
+
+	// A track joins the one before where the browser takes lossless sound in a
+	// media source and nothing asks the server to encode it: an audiobook,
+	// played from its place, keeps a file at a time.
+	#joins(item: Listen): boolean {
+		return (
+			this.quality === "original" &&
+			!item.version &&
+			!item.chapters?.length &&
+			joinable()
+		);
 	}
 
 	#takeReady(ready: Deck) {
@@ -494,8 +556,22 @@ class Listening {
 	// A deck made ready for what is no longer next is let go.
 	#settleReady() {
 		const to = after(this.#q, this.repeat);
-		if (this.#ready && this.queue[to ?? -1]?.key !== this.#ready.key) {
+		const next = this.queue[to ?? -1]?.key;
+		if (this.#ready && next !== this.#ready.key) {
 			this.#discardReady();
+		}
+		const deck = this.#deck;
+		const joined = deck?.joined;
+		if (!deck || !joined) return;
+		const at = joined.tracks.findIndex((t) => t.key === deck.key);
+		if (joined.tracks[at + 1] && joined.tracks[at + 1].key !== next) {
+			for (const t of joined.dropAfter(at)) {
+				void send(t.playback.playback_id)({
+					kind: "stop",
+					position_ms: 0,
+					keepalive: false,
+				});
+			}
 		}
 	}
 
@@ -525,7 +601,8 @@ class Listening {
 		this.#settleReady();
 		this.position = at;
 		this.duration = (item.duration_ms ?? 0) / 1000;
-		const data = await this.#ask(item, at);
+		const join = this.#joins(item);
+		const data = await this.#ask(item, at, join);
 		if (mine !== this.#opening) {
 			if (data)
 				void send(data.playback_id)({
@@ -536,7 +613,7 @@ class Listening {
 			return;
 		}
 		if (!data) return;
-		const deck = await this.#deckOf(item.key, data, at);
+		const deck = await this.#deckOf(item.key, data, at, join);
 		if (!deck || mine !== this.#opening) return;
 		this.#deck = deck;
 		deck.off = this.#listen(deck);
@@ -548,13 +625,21 @@ class Listening {
 		await deck.audio.play().catch(() => undefined);
 	}
 
-	async #ask(item: Listen, at: number): Promise<Playback | undefined> {
+	// A track to be joined is asked for as HLS, which the server copies its
+	// sound into as it is.
+	async #ask(
+		item: Listen,
+		at: number,
+		join = false,
+	): Promise<Playback | undefined> {
 		this.#caps ??= probeAudio();
+		const profile = audioProfile(this.#caps, qualityKbps(this.quality));
+		if (join) profile.containers = [];
 		const { data, error } = await client().POST("/api/v1/titles/{id}/play", {
 			params: { path: { id: item.id } },
 			body: {
 				version_id: item.version,
-				profile: audioProfile(this.#caps, qualityKbps(this.quality)),
+				profile,
 				start_ms: Math.round(at * 1000),
 			},
 		});
@@ -567,11 +652,18 @@ class Listening {
 		key: string,
 		playback: Playback,
 		at: number,
+		join: boolean,
 	): Promise<Deck | undefined> {
 		const audio = new Audio();
 		audio.preload = "auto";
 		const deck: Deck = { key, audio, playback, part: 0, off: () => undefined };
-		if (playback.parts?.length) {
+		const joined = join
+			? await Joined.open(audio, key, playback, at)
+			: undefined;
+		if (joined) {
+			deck.joined = joined;
+			if (at) this.#seekTo = at;
+		} else if (playback.parts?.length) {
 			this.#load(deck, partAt(playback.parts, at), at);
 		} else if (playback.playlist) {
 			if (this.#caps?.nativeHLS) {
@@ -617,6 +709,7 @@ class Listening {
 		if (!deck) return;
 		deck.off();
 		deck.hls?.destroy();
+		deck.joined?.close();
 		deck.audio.pause();
 		deck.audio.removeAttribute("src");
 		deck.audio.load();
