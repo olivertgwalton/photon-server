@@ -178,19 +178,47 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, into any) (
 	return err == nil, err
 }
 
-// text is a description as Open Library writes one: a string, or {"type": ..., "value": ...}.
+// text is a description as Open Library writes one, a string or {"type": ..., "value": ...}, as
+// plain text (see plain).
 func text(v jsontext.Value) string {
 	var s string
 	if json.Unmarshal(v, &s) == nil {
-		return strings.TrimSpace(s)
+		return plain(s)
 	}
 	var typed struct {
 		Value string `json:"value"`
 	}
 	if json.Unmarshal(v, &typed) == nil {
-		return strings.TrimSpace(typed.Value)
+		return plain(typed.Value)
 	}
 	return ""
+}
+
+var (
+	// rule is the horizontal rule Open Library's librarians write a description's notes under,
+	// "See also" lists of other editions.
+	rule = regexp.MustCompile(`(?m)^\s*(?:-{3,}|\*{3,}|_{3,})\s*$`)
+	// source is the link to where a description was taken from, "([source](https://…))".
+	source = regexp.MustCompile(`\(\[[Ss]ource\]\([^)]*\)\)`)
+	// link is a Markdown link, inline or by reference, and emphasis its asterisks or underscores.
+	link     = regexp.MustCompile(`\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])`)
+	emphasis = regexp.MustCompile(`(\*{1,2}|_{1,2})([^*_\n]+)(\*{1,2}|_{1,2})`)
+	blank    = regexp.MustCompile(`\n{3,}`)
+)
+
+// plain is Open Library's Markdown as the plain text a client shows: the description alone,
+// without the notes under its rule or the link to its source, each link its words and each
+// emphasis its text.
+func plain(md string) string {
+	md = strings.ReplaceAll(md, "\r\n", "\n")
+	if loc := rule.FindStringIndex(md); loc != nil {
+		md = md[:loc[0]]
+	}
+	md = source.ReplaceAllString(md, "")
+	md = link.ReplaceAllString(md, "$1")
+	md = emphasis.ReplaceAllString(md, "$2")
+	md = strings.NewReplacer(`\[`, "[", `\]`, "]", `\*`, "*", `\_`, "_").Replace(md)
+	return strings.TrimSpace(blank.ReplaceAllString(md, "\n\n"))
 }
 
 // olid is the OLID a key names: "/works/OL82586W" is OL82586W.

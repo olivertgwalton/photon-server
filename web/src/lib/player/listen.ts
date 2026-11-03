@@ -1,4 +1,5 @@
 import type { components } from "#lib/api/schema.d.ts";
+import { trackArtists } from "#lib/music.ts";
 import { shuffled } from "#lib/shuffle.ts";
 
 type Schemas = components["schemas"];
@@ -97,6 +98,8 @@ export type Listen = {
 	duration_ms?: number;
 	// How a track's lyrics are timed, where it has any.
 	lyrics?: Schemas["LyricsTiming"];
+	// A track's parental advisory, which its title is marked by where explicit.
+	advisory?: Schemas["Advisory"];
 	chapters?: Schemas["ChapterRef"][];
 	// Where it opens: an audiobook, where the reader stopped.
 	start_ms?: number;
@@ -109,13 +112,14 @@ export function trackListen(card: Schemas["Card"]): Listen {
 		id: card.id,
 		kind: "track",
 		title: card.title,
-		by: card.artists?.join(", ") || card.artist?.title,
+		by: trackArtists(card),
 		creator: card.artist ?? undefined,
 		from: card.album ?? undefined,
 		artwork: card.poster,
 		blurhash: card.poster ? card.blurhashes?.[card.poster] : undefined,
 		duration_ms: card.duration_ms,
 		lyrics: card.lyrics,
+		advisory: card.advisory,
 	};
 }
 
@@ -396,6 +400,10 @@ function listenOf(x: unknown): Listen | undefined {
 		duration_ms: count(x.duration_ms),
 		lyrics:
 			x.lyrics === "line" || x.lyrics === "untimed" ? x.lyrics : undefined,
+		advisory:
+			x.advisory === "explicit" || x.advisory === "clean"
+				? x.advisory
+				: undefined,
 		start_ms: count(x.start_ms),
 		chapters: Array.isArray(x.chapters)
 			? x.chapters.flatMap((c) =>
