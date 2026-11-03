@@ -18,10 +18,20 @@ const (
 	ItemExtra ItemKind = "extra"
 	// ItemCollection is a box set: titles grouped by a provider, or by an admin.
 	ItemCollection ItemKind = "collection"
+	// ItemArtist holds the albums it is the album artist of, and ItemAlbum its tracks, as a show
+	// holds seasons and a season episodes.
+	ItemArtist ItemKind = "artist"
+	ItemAlbum  ItemKind = "album"
+	ItemTrack  ItemKind = "track"
 )
 
 func ItemKinds() []ItemKind {
-	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection}
+	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack}
+}
+
+// Music is whether the kind is an artist, an album or a track.
+func (k ItemKind) Music() bool {
+	return k == ItemArtist || k == ItemAlbum || k == ItemTrack
 }
 
 // SearchKind is what a search can be narrowed to: a kind of title it finds, or people.

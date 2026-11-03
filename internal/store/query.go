@@ -15,7 +15,8 @@ import (
 // itemColumns are model.Item's, for a statement that reads whole items.
 const itemColumns = `id, library_id, kind, title, sort_title, year, folder, added_at, parent_id, season_number,
 	episode_number, episode_end, air_date, extra_kind, scan_title, original_title, overview, tagline, certificate,
-	release_date, genres, studios, episode_order, episode_group, airs_before_season, airs_before_episode, airs_after_season`
+	release_date, genres, studios, episode_order, episode_group, airs_before_season, airs_before_episode, airs_after_season,
+	disc_number, track_number, artists`
 
 // itemColumnsOf is itemColumns read through alias, for a statement that joins items to others.
 func itemColumnsOf(alias string) string {
@@ -55,6 +56,12 @@ const seasonEpisodes = `JOIN items s ON s.parent_id = here.parent_id AND s.kind 
 
 // seasonOrder is the order of seasonEpisodes, ascending: as they are watched, or, of the specials,
 // as their files number them.
+// trackOrder orders an album's tracks, of alias, by disc and then place on it, as the album lists
+// them; a track its tags number nowhere comes after, by title.
+func trackOrder(alias string) string {
+	return alias + ".disc_number NULLS FIRST, " + alias + ".track_number NULLS LAST, " + alias + ".sort_title, " + alias + ".id"
+}
+
 func seasonOrder() string {
 	aired := episodeOrder("e")
 	filed := map[int]string{0: "e.season_number", 2: "coalesce(e.episode_number, 0)"}

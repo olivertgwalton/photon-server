@@ -66,7 +66,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"session_kind":             names(domain.SessionKinds()),
 		"extra_kind":               names(domain.ExtraKinds()),
 		"field":                    names(domain.Fields()),
-		"library_source_item_kind": names(append(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds()...)),
+		"library_source_item_kind": names(slices.Concat(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds(), domain.LibraryMusic.ItemKinds())),
 		"library_source_fetcher":   names(domain.Fetchers()),
 		"library_extra_kind":       names(domain.ExtraKinds()),
 		"remote_video_kind":        names(domain.ExtraKinds()),

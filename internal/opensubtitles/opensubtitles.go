@@ -103,7 +103,7 @@ func (c *Client) SearchSubtitles(ctx context.Context, q domain.SubtitleQuery) ([
 		ids = "parent_"
 	case domain.ItemMovie:
 		query.Set("type", "movie")
-	case domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection:
+	case domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		return nil, nil
 	}
 	if imdb := strings.TrimLeft(strings.TrimPrefix(q.IDs[domain.ProviderIMDb], "tt"), "0"); imdb != "" {

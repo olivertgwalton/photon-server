@@ -110,8 +110,8 @@ func (s *Scanner) readVersion(ctx context.Context, r reading, c *store.Version) 
 			s.unreadable(ctx, r, p.RelPath, err)
 			return false, nil
 		}
-		if !slices.ContainsFunc(facts.Streams, func(st domain.Stream) bool { return st.Kind == domain.StreamVideo }) {
-			s.skip(ctx, r.run, p.RelPath, errNoPicture)
+		if want, refused := heldBy(r.run.lib.Kind); !slices.ContainsFunc(facts.Streams, func(st domain.Stream) bool { return st.Kind == want }) {
+			s.skip(ctx, r.run, p.RelPath, refused)
 			return false, nil
 		}
 		c.Parts[i].Facts = &facts
@@ -121,8 +121,21 @@ func (s *Scanner) readVersion(ctx context.Context, r reading, c *store.Version) 
 
 // errNoPicture is a file that is no version of a film or episode: sound or subtitles alone, which
 // plays as nothing. Plex and Jellyfin decide by extension and so never meet one, but a .strm says
-// nothing of what it names until its media is probed.
-var errNoPicture = errors.New("no video stream")
+// nothing of what it names until its media is probed. errNoSound is a music library's file that
+// holds no sound.
+var (
+	errNoPicture = errors.New("no video stream")
+	errNoSound   = errors.New("no audio stream")
+)
+
+// heldBy is the kind of stream a version of a library of kind must hold, and the reason one is
+// refused without it.
+func heldBy(kind domain.LibraryKind) (domain.StreamKind, error) {
+	if kind == domain.LibraryMusic {
+		return domain.StreamAudio, errNoSound
+	}
+	return domain.StreamVideo, errNoPicture
+}
 
 // describe is a planned version's parts and subtitles, its bytes not yet read.
 func describe(dir string, v versionPlan) store.Version {

@@ -55,7 +55,13 @@ const known: Partial<Record<ListFilter, string[]>> = {
 	] satisfies Schemas["Range"][],
 };
 
-const kinds: Schemas["WallKind"][] = ["titles", "films", "shows", "episodes"];
+const kinds: Schemas["WallKind"][] = [
+	"titles",
+	"films",
+	"shows",
+	"episodes",
+	"albums",
+];
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

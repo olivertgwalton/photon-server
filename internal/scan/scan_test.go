@@ -25,6 +25,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -39,7 +40,8 @@ func (l lists) List(context.Context, domain.FieldSource, string) ([]domain.Liste
 	return l, nil
 }
 
-// fakeProber describes every file alike, once it is sure ffprobe would read it from its start.
+// fakeProber describes every file alike, once it is sure ffprobe would read it from its start: a
+// sound file as sound alone, anything else as a film.
 type fakeProber struct{}
 
 func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
@@ -53,6 +55,12 @@ func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error)
 			return domain.Facts{}, err
 		}
 		size = info.Size()
+	}
+	if in.File != nil && naming.IsAudio(in.File.Name()) {
+		return domain.Facts{
+			Container: "flac", Size: size, Duration: 3 * time.Minute,
+			Streams: []domain.Stream{{Index: 0, Kind: domain.StreamAudio, Codec: "flac", Channels: 2}},
+		}, nil
 	}
 	return domain.Facts{
 		Container: "matroska,webm",

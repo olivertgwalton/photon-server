@@ -246,7 +246,7 @@ func TestAnAdminKeepsTheLibraries(t *testing.T) {
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Again", "kind": "movies", "root": ` + quoted + `}`, http.StatusConflict},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Gone", "kind": "movies", "root": ` + missing + `}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Relative", "kind": "movies", "root": "films"}`, http.StatusBadRequest},
-		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Music", "kind": "music", "root": "/"}`, http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/admin/libraries", `{"name": "Podcasts", "kind": "podcasts", "root": "/"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "metadata": [{"source": "tmdb", "enabled": true}, {"source": "tmdb", "enabled": false}]}]}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "episode", "metadata": []}]}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/admin/libraries/" + added.ID.String(), `{"sources": [{"kind": "movie", "metadata": [{"source": "tvdb", "enabled": true}]}]}`, http.StatusBadRequest},

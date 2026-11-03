@@ -347,8 +347,13 @@ func playableOf(ctx context.Context, tx db, id uuid.UUID) ([]uuid.UUID, error) {
 	}
 	var sql string
 	switch kind {
-	case domain.ItemMovie, domain.ItemEpisode:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemTrack:
 		return []uuid.UUID{id}, nil
+	case domain.ItemAlbum:
+		sql = `SELECT id FROM items WHERE parent_id = $1 AND kind = 'track' ORDER BY ` + trackOrder("items")
+	case domain.ItemArtist:
+		sql = `SELECT t.id FROM items a JOIN items t ON t.parent_id = a.id AND t.kind = 'track'
+			WHERE a.parent_id = $1 AND a.kind = 'album' ORDER BY a.released_asc, a.sort_title, a.id, ` + trackOrder("t")
 	case domain.ItemSeason:
 		sql = `SELECT e.id FROM items here ` + seasonEpisodes + ` WHERE here.id = $1 ORDER BY ` + seasonOrder()
 	case domain.ItemShow:

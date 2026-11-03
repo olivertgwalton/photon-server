@@ -67,11 +67,12 @@ type TitlePage struct {
 	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
 	Show                                                 *TitleRef
 	Season                                               *TitleRef
-	Versions                                             []VersionPage
-	Seasons                                              []SeasonCard
-	Episodes                                             []EpisodeCard
-	Extras                                               []ExtraCard
-	Videos                                               []VideoLink
+	MusicPage
+	Versions []VersionPage
+	Seasons  []SeasonCard
+	Episodes []EpisodeCard
+	Extras   []ExtraCard
+	Videos   []VideoLink
 	// State is what the profile asking has made of it.
 	State TitleState
 	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}.
@@ -176,7 +177,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		Year: deref(item.Year), ReleaseDate: domain.Date(deref(item.ReleaseDate)), Genres: item.Genres, Studios: item.Studios,
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
 		EpisodeEnd: item.EpisodeEnd, AirsBeforeSeason: item.AirsBeforeSeason, AirsBeforeEpisode: item.AirsBeforeEpisode,
-		AirsAfterSeason: item.AirsAfterSeason,
+		AirsAfterSeason: item.AirsAfterSeason, DiscNumber: item.DiscNumber, TrackNumber: item.TrackNumber, Artists: item.Artists,
 	}
 	var credits, showCredits []CreditRef
 	g, gctx = errgroup.WithContext(ctx)
@@ -281,7 +282,11 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 		p.State = states[item.ID]
 	case domain.ItemSeason:
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
+	case domain.ItemArtist:
+		p.Albums, err = s.Albums(ctx, profile, item.ID)
+	case domain.ItemAlbum:
+		p.Tracks, err = s.Tracks(ctx, profile, item.ID)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
 		var versions map[uuid.UUID][]VersionPage
 		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
 		p.Versions = versions[item.ID]
@@ -437,10 +442,11 @@ func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, er
 	return s.cards(ctx, profile, rows)
 }
 
-// parents names the show a season belongs to, and the season and show an episode does.
+// parents names the show a season belongs to, and the season and show an episode does; the artist
+// an album belongs to, and the album and artist a track does.
 func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) error {
 	parent := item.ParentID
-	for parent != nil && (item.Kind == domain.ItemSeason || item.Kind == domain.ItemEpisode) {
+	for parent != nil && slices.Contains([]domain.ItemKind{domain.ItemSeason, domain.ItemEpisode, domain.ItemAlbum, domain.ItemTrack}, item.Kind) {
 		row, err := readItem(ctx, s.pool, *parent)
 		if err != nil {
 			return err
@@ -453,7 +459,11 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 			p.Season = ref
 		case domain.ItemShow:
 			p.Show = ref
-		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
+		case domain.ItemAlbum:
+			p.Album = ref
+		case domain.ItemArtist:
+			p.Artist = ref
+		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack:
 		}
 		parent = row.ParentID
 	}

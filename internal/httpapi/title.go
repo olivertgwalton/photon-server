@@ -86,17 +86,27 @@ type titlePageJSON struct {
 	EpisodeEnd           *int      `json:"episode_end,omitzero"`
 	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among its
 	// show's seasons, which it is watched in.
-	AirsBeforeSeason  *int              `json:"airs_before_season,omitzero"`
-	AirsBeforeEpisode *int              `json:"airs_before_episode,omitzero"`
-	AirsAfterSeason   *int              `json:"airs_after_season,omitzero"`
-	Show              *titleRefJSON     `json:"show,omitzero"`
-	Season            *titleRefJSON     `json:"season,omitzero"`
-	Versions          []versionPageJSON `json:"versions,omitzero"`
-	Seasons           []seasonCardJSON  `json:"seasons,omitzero"`
-	Episodes          []episodeCardJSON `json:"episodes,omitzero"`
-	Extras            []extraCardJSON   `json:"extras,omitzero"`
-	Videos            []videoLinkJSON   `json:"videos,omitzero"`
-	State             titleStateJSON    `json:"state,omitzero"`
+	AirsBeforeSeason  *int          `json:"airs_before_season,omitzero"`
+	AirsBeforeEpisode *int          `json:"airs_before_episode,omitzero"`
+	AirsAfterSeason   *int          `json:"airs_after_season,omitzero"`
+	Show              *titleRefJSON `json:"show,omitzero"`
+	Season            *titleRefJSON `json:"season,omitzero"`
+	// Artist is an album's or a track's album artist, and Album a track's album. DiscNumber and
+	// TrackNumber are a track's place on it, and Artists the track's own, which may be others.
+	Artist      *titleRefJSON     `json:"artist,omitzero"`
+	Album       *titleRefJSON     `json:"album,omitzero"`
+	DiscNumber  *int              `json:"disc_number,omitzero"`
+	TrackNumber *int              `json:"track_number,omitzero"`
+	Artists     []string          `json:"artists,omitzero"`
+	Versions    []versionPageJSON `json:"versions,omitzero"`
+	Seasons     []seasonCardJSON  `json:"seasons,omitzero"`
+	Episodes    []episodeCardJSON `json:"episodes,omitzero"`
+	// Albums are an artist's, the earliest first, and Tracks an album's, in its order.
+	Albums []cardJSON      `json:"albums,omitzero"`
+	Tracks []cardJSON      `json:"tracks,omitzero"`
+	Extras []extraCardJSON `json:"extras,omitzero"`
+	Videos []videoLinkJSON `json:"videos,omitzero"`
+	State  titleStateJSON  `json:"state,omitzero"`
 	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}. Every picture a
 	// provider offers for it is an admin's to choose from at /api/v1/admin/titles/{id}/artwork/candidates.
 	Artwork    map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
@@ -311,6 +321,9 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		EpisodeNumber: p.EpisodeNumber, EpisodeEnd: p.EpisodeEnd, AirsBeforeSeason: p.AirsBeforeSeason,
 		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
+		Artist: (*titleRefJSON)(p.Artist), Album: (*titleRefJSON)(p.Album),
+		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
+		Albums: each(p.Albums, cardOf), Tracks: each(p.Tracks, cardOf),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
 		Seasons: each(p.Seasons, func(s store.SeasonCard) seasonCardJSON {
 			return seasonCardJSON{

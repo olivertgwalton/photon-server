@@ -4,9 +4,12 @@ import { wallSearch } from "#lib/wall.ts";
 let { data } = $props();
 
 const name = $derived(
-	{ movies: "Studios", shows: "Networks", mixed: "Studios and networks" }[
-		data.library.kind
-	],
+	{
+		movies: "Studios",
+		shows: "Networks",
+		mixed: "Studios and networks",
+		music: "Labels",
+	}[data.library.kind],
 );
 </script>
 

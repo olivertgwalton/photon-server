@@ -152,6 +152,38 @@ two files named as episodes (`S01E01`).
 Here The Wire and Fleabag are shows, and Alien and Heat are films. Everything else is treated as a
 film, so give every show its own folder.
 
+## Music
+
+A music library reads each sound file's own tags: its title, album, artist, disc and track number.
+It puts every track on its album, and every album under the artist its tags name as the album's.
+Any layout works, though one folder per album, under one per artist, is the tidiest:
+
+```text
+/media/Music
+├── Pink Floyd
+│   └── The Wall
+│       ├── CD1
+│       │   └── 01 In the Flesh.flac
+│       ├── CD2
+│       │   └── 01 Hey You.flac
+│       └── cover.jpg
+└── The Weeknd - Hurry Up Tomorrow
+    ├── 101-wake_me_up.flac
+    └── 201-i_cant_wait_to_get_there.flac
+```
+
+Where the tags leave something out, the files fill it in:
+
+- An album with no album artist belongs to the artist all its tracks name, or to **Various Artists**
+  if they name different ones.
+- A disc kept in a folder of its own (`CD2`, `Disc 2`) joins the rest of its album.
+- Files numbered `101`, `102`, `201` are tracks of two discs.
+- A track with no title is named by its file.
+
+An album's cover is `cover.jpg`, `folder.jpg` or `poster.jpg` in its folder, else the picture its
+tracks hold. A music library supports FLAC, MP3, AAC and M4A, Ogg and Opus, WAV and AIFF, WMA,
+Monkey's Audio and WavPack files.
+
 ## Extras
 
 Trailers, featurettes and other extras go beside their title, either in a folder named for their

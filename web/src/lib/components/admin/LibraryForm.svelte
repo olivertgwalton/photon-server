@@ -79,9 +79,14 @@ const searchers = $derived([
 // A library of files' requests go to a provider that fetches every kind of
 // title it holds, or to an admin, by hand.
 const holds = $derived(
-	({ movies: ["movie"], shows: ["show"], mixed: ["movie", "show"] } as const)[
-		kind
-	],
+	(
+		{
+			movies: ["movie"],
+			shows: ["show"],
+			mixed: ["movie", "show"],
+			music: ["artist"],
+		} as const
+	)[kind],
 );
 const requesters = $derived([
 	{ value: "", label: "Nobody: you add them yourself" },

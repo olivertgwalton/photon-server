@@ -19,7 +19,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/library"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 
 	// Decoders for the pictures providers and libraries hold.
 	_ "image/gif"
@@ -48,9 +48,13 @@ const maxPixels = 50_000_000
 var ErrNotResizable = errors.New("picture cannot be resized")
 
 // Open opens picture id, or with width or height a copy that fits inside them where it can be
-// made, and answers the name its format is known by: "" for a copy, whose content says.
+// made, and answers the name its format is known by: "" for a copy or a sound file's cover, whose
+// content says.
 func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error) {
 	name := path.Base(p.Path + p.URL)
+	if naming.IsAudio(p.Path) {
+		name = ""
+	}
 	original := func(ctx context.Context) (blob.Object, error) { return c.original(ctx, id, p) }
 	if width > 0 || height > 0 {
 		f, err := c.Resized(ctx, id.String(), width, height, original)
@@ -73,11 +77,7 @@ func (c *Cache) original(ctx context.Context, id uuid.UUID, p domain.Picture) (b
 	case len(p.Mosaic) > 0:
 		return c.Mosaic(ctx, id, p.Mosaic)
 	}
-	f, err := library.Open(p.Root, p.Path)
-	if err != nil {
-		return blob.Object{}, err
-	}
-	return blob.OfFile(f)
+	return libraryPicture(p.Root, p.Path)
 }
 
 // Resized answers the picture with key shrunk to fit inside width×height, keeping its shape, where

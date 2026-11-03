@@ -1,5 +1,6 @@
 import ClapperboardIcon from "@lucide/svelte/icons/clapperboard";
 import FilmIcon from "@lucide/svelte/icons/film";
+import MusicIcon from "@lucide/svelte/icons/music";
 import TvIcon from "@lucide/svelte/icons/tv";
 import type { Component } from "svelte";
 import type { components } from "#lib/api/schema.d.ts";
@@ -12,4 +13,5 @@ export const libraryIcons: Record<
 	movies: FilmIcon,
 	shows: TvIcon,
 	mixed: ClapperboardIcon,
+	music: MusicIcon,
 };

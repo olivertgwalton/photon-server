@@ -8310,12 +8310,16 @@ export interface components {
         Card: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
                 [key: string]: string;
             };
             certificate?: string;
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
@@ -8342,6 +8346,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -8426,11 +8431,14 @@ export interface components {
         /** @enum {string} */
         Counting: "none" | "exact";
         Counts: {
+            albums: number;
+            artists: number;
             collections: number;
             episodes: number;
             movies: number;
             seasons: number;
             shows: number;
+            tracks: number;
         };
         Created: {
             /** Format: uuid */
@@ -8449,6 +8457,9 @@ export interface components {
         Credit: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
@@ -8456,6 +8467,7 @@ export interface components {
             };
             certificate?: string;
             credit: components["schemas"]["CreditKind"];
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
@@ -8483,6 +8495,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -8628,12 +8641,16 @@ export interface components {
         Entry: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
                 [key: string]: string;
             };
             certificate?: string;
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             /** Format: uuid */
@@ -8662,6 +8679,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -8840,7 +8858,7 @@ export interface components {
             next?: string;
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_added_albums" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
             library_kinds?: components["schemas"]["LibraryKind"][];
             row: components["schemas"]["HomeRowKind"];
@@ -8904,7 +8922,7 @@ export interface components {
             item_ids: string[];
         };
         /** @enum {string} */
-        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection";
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection" | "artist" | "album" | "track";
         /** @enum {string} */
         JellyfinMode: "on" | "off";
         JobCount: {
@@ -9026,7 +9044,7 @@ export interface components {
             root: string;
         };
         /** @enum {string} */
-        LibraryKind: "movies" | "shows" | "mixed";
+        LibraryKind: "movies" | "shows" | "mixed" | "music";
         LibraryKindOptions: {
             defaults: components["schemas"]["NewLibrary"][];
             fetchable: components["schemas"]["Fetchable"][];
@@ -10199,6 +10217,10 @@ export interface components {
             airs_after_season?: number | null;
             airs_before_episode?: number | null;
             airs_before_season?: number | null;
+            album?: components["schemas"]["TitleRef"] | null;
+            albums?: components["schemas"]["Card"][];
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             artwork?: {
                 [key: string]: string[];
             };
@@ -10211,6 +10233,7 @@ export interface components {
             collections?: components["schemas"]["CollectionCard"][];
             common_sense_age?: number;
             credits?: components["schemas"]["CreditRef"][];
+            disc_number?: number | null;
             episode_end?: number | null;
             episode_group?: string;
             episode_number?: number | null;
@@ -10250,6 +10273,8 @@ export interface components {
             themes?: string[];
             title: string;
             title_language?: components["schemas"]["TitleLanguage"];
+            track_number?: number | null;
+            tracks?: components["schemas"]["Card"][];
             versions?: components["schemas"]["VersionPage"][];
             videos?: components["schemas"]["VideoLink"][];
             year?: number;
@@ -10516,7 +10541,7 @@ export interface components {
             years?: number[];
         };
         /** @enum {string} */
-        WallKind: "titles" | "films" | "shows" | "episodes";
+        WallKind: "titles" | "films" | "shows" | "episodes" | "albums";
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
         Watched: {

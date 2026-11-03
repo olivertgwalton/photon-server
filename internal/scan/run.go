@@ -27,7 +27,7 @@ type run struct {
 	mu     sync.Mutex
 	report Report
 	told   domain.ScanProgress
-	// folders and present are every folder read and every video and subtitle file in them.
+	// folders and present are every folder read and every media and subtitle file in them.
 	folders, present []string
 	// unread is every folder, and every entry of one, that is there and could not be read: a
 	// mount's passing failure, which leaves what the library held under it as it was.
@@ -36,12 +36,13 @@ type run struct {
 	shows map[string]bool
 }
 
-// seriesOf is the folder of the series a folder of the library is in, none for a folder of films:
+// seriesOf is the folder of the series a folder of the library is in, none for a folder of films
+// or of music:
 // a shows library's first folder down from its root, and a mixed library's first one down that
 // isShow says is a show's, those below it being its seasons, as Jellyfin's are.
 func (r *run) seriesOf(folder library.Folder) (string, error) {
 	switch r.lib.Kind {
-	case domain.LibraryMovies:
+	case domain.LibraryMovies, domain.LibraryMusic:
 		return "", nil
 	case domain.LibraryShows:
 		return firstFolder(folder.Path), nil

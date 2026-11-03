@@ -119,6 +119,9 @@ const nouns: Record<Schemas["ItemKind"], string> = {
 	episode: "episode",
 	extra: "extra",
 	collection: "collection",
+	artist: "artist",
+	album: "album",
+	track: "track",
 };
 const held = $derived(
 	(

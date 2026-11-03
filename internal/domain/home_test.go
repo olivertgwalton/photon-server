@@ -16,6 +16,7 @@ func TestAHomeIsEveryRowInTheProfilesOrder(t *testing.T) {
 		{RowWatchlist, RowShown},
 		{RowRecentFilms, RowShown},
 		{RowRecentShows, RowShown},
+		{RowRecentAlbums, RowShown},
 		{RowRecentlyReleased, RowShown},
 		{RowTopRatedUnwatched, RowShown},
 	}

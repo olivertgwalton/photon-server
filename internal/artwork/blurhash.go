@@ -6,8 +6,6 @@ import (
 	"math"
 
 	"golang.org/x/image/draw"
-
-	"github.com/olivertgwalton/photon-server/internal/library"
 )
 
 // hashedEdge is the longest side a picture is shrunk to before its BlurHash is taken: a blur of
@@ -43,7 +41,7 @@ func blurhashOf(src image.Image) string {
 
 // FileBlurhash answers the BlurHash of the library file at rel under root.
 func FileBlurhash(root, rel string) (string, error) {
-	f, err := library.Open(root, rel)
+	f, err := libraryPicture(root, rel)
 	if err != nil {
 		return "", err
 	}
