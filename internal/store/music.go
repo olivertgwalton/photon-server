@@ -146,3 +146,74 @@ func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, alb
 	}
 	return saveVersion(ctx, tx, lib, settings, row.ID, t.Version)
 }
+
+// MusicPage is what only an artist's, an album's or a track's page has: an album's or a track's
+// album artist, and a track's album, which lists Tracks as an artist lists Albums. DiscNumber and
+// TrackNumber place a track on its album, and Artists are the track's own.
+type MusicPage struct {
+	Artist, Album           *TitleRef
+	DiscNumber, TrackNumber *int
+	Artists                 []string
+	Albums                  []Card
+	Tracks                  []Card
+}
+
+// Albums answers an artist's albums as cards, the earliest first, as a discography lists them.
+func (s *Store) Albums(ctx context.Context, profile, artist uuid.UUID) ([]Card, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'album' ORDER BY released_asc, sort_title, id`, artist)
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, rows)
+}
+
+// Tracks answers an album's tracks as cards, in its order.
+func (s *Store) Tracks(ctx context.Context, profile, album uuid.UUID) ([]Card, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `
+		SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'track' ORDER BY `+trackOrder("items"), album)
+	if err != nil {
+		return nil, err
+	}
+	return s.cards(ctx, profile, rows)
+}
+
+// musicPlace is the album a track is on, and the artist an album or a track is under.
+type musicPlace struct {
+	artist, album *TitleRef
+}
+
+// musicOf answers where each album and track among rows is, read in one lookup.
+func (s *Store) musicOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]musicPlace, error) {
+	var asked []uuid.UUID
+	for _, r := range rows {
+		if r.Kind == domain.ItemAlbum || r.Kind == domain.ItemTrack {
+			asked = append(asked, r.ID)
+		}
+	}
+	out := map[uuid.UUID]musicPlace{}
+	if len(asked) == 0 {
+		return out, nil
+	}
+	type place struct {
+		ID          uuid.UUID
+		AlbumID     *uuid.UUID
+		AlbumTitle  *string
+		ArtistID    uuid.UUID
+		ArtistTitle string
+	}
+	found, err := queryStructs[place](ctx, s.pool, `
+		SELECT i.id, al.id AS album_id, al.title AS album_title, ar.id AS artist_id, ar.title AS artist_title
+		FROM items i
+		LEFT JOIN items al ON i.kind = 'track' AND al.id = i.parent_id
+		JOIN items ar ON ar.id = CASE WHEN i.kind = 'track' THEN al.parent_id ELSE i.parent_id END
+		WHERE i.id = ANY($1)`, asked)
+	for _, f := range found {
+		p := musicPlace{artist: &TitleRef{ID: f.ArtistID, Title: f.ArtistTitle}}
+		if f.AlbumID != nil {
+			p.album = &TitleRef{ID: *f.AlbumID, Title: deref(f.AlbumTitle)}
+		}
+		out[f.ID] = p
+	}
+	return out, err
+}

@@ -8310,12 +8310,16 @@ export interface components {
         Card: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
                 [key: string]: string;
             };
             certificate?: string;
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
@@ -8342,6 +8346,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -8452,6 +8457,9 @@ export interface components {
         Credit: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
@@ -8459,6 +8467,7 @@ export interface components {
             };
             certificate?: string;
             credit: components["schemas"]["CreditKind"];
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             episode_end?: number | null;
@@ -8486,6 +8495,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -8631,12 +8641,16 @@ export interface components {
         Entry: {
             /** Format: date-time */
             added_at: string;
+            album?: components["schemas"]["TitleRef"] | null;
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
                 [key: string]: string;
             };
             certificate?: string;
+            disc_number?: number | null;
             /** Format: int64 */
             duration_ms?: number;
             /** Format: uuid */
@@ -8665,6 +8679,7 @@ export interface components {
             /** Format: uuid */
             thumb?: string;
             title: string;
+            track_number?: number | null;
             version_count?: number;
             year?: number;
         };
@@ -10202,6 +10217,10 @@ export interface components {
             airs_after_season?: number | null;
             airs_before_episode?: number | null;
             airs_before_season?: number | null;
+            album?: components["schemas"]["TitleRef"] | null;
+            albums?: components["schemas"]["Card"][];
+            artist?: components["schemas"]["TitleRef"] | null;
+            artists?: string[];
             artwork?: {
                 [key: string]: string[];
             };
@@ -10214,6 +10233,7 @@ export interface components {
             collections?: components["schemas"]["CollectionCard"][];
             common_sense_age?: number;
             credits?: components["schemas"]["CreditRef"][];
+            disc_number?: number | null;
             episode_end?: number | null;
             episode_group?: string;
             episode_number?: number | null;
@@ -10253,6 +10273,8 @@ export interface components {
             themes?: string[];
             title: string;
             title_language?: components["schemas"]["TitleLanguage"];
+            track_number?: number | null;
+            tracks?: components["schemas"]["Card"][];
             versions?: components["schemas"]["VersionPage"][];
             videos?: components["schemas"]["VideoLink"][];
             year?: number;

@@ -44,7 +44,12 @@ type Card struct {
 	// AirsBeforeSeason, AirsBeforeEpisode and AirsAfterSeason are where a special aired among the
 	// show's seasons.
 	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
-	Thumb                                                uuid.UUID
+	// An album's card names its artist, and a track's its album and artist, its place on the album
+	// and the artists it names.
+	Artist, Album           *TitleRef
+	DiscNumber, TrackNumber *int
+	Artists                 []string
+	Thumb                   uuid.UUID
 	// ShowThumb is an episode's show's thumb, the landscape picture lettered with its name, which a
 	// row of what is watched draws the episode by where the profile chose it. It is not answered
 	// beside the card's own.
@@ -375,6 +380,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		sets     map[uuid.UUID]boxSet
 		ratings  map[uuid.UUID][]domain.Rating
 		posters  []shownPoster
+		music    map[uuid.UUID]musicPlace
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
@@ -404,6 +410,10 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		posters, err = s.collectionPosters(gctx, profile, rows)
 		return err
 	})
+	g.Go(func() (err error) {
+		music, err = s.musicOf(gctx, rows)
+		return err
+	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
@@ -420,6 +430,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
 			Origin: sets[r.ID].Origin, Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
+			Artist: music[r.ID].artist, Album: music[r.ID].album, DiscNumber: r.DiscNumber, TrackNumber: r.TrackNumber, Artists: r.Artists,
 		}
 		c := &cards[n]
 		if set, ok := sets[r.ID]; ok {
