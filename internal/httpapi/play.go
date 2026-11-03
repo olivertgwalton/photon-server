@@ -63,6 +63,7 @@ type discover interface {
 // parts opens the parts of versions for tools to read and players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
+	Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error)
 }
 
 type partJSON struct {

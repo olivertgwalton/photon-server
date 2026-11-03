@@ -495,6 +495,11 @@ func (a *API) catalogueRoutes() []route {
 			status:  http.StatusOK,
 		}, a.playable),
 		a.handles(route{
+			pattern: "GET /api/v1/titles/{id}/lyrics", access: signedIn,
+			summary: "A track's lyrics, each line where it is sung where they are timed",
+			status:  http.StatusOK,
+		}, a.lyrics),
+		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/similar", access: signedIn, summary: "The titles most like one",
 			status: http.StatusOK,
 		}, a.similar),

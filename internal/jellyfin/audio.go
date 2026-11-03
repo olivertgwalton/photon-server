@@ -21,12 +21,16 @@ import (
 // not counted as media sent, as theirs is not.
 func (a *API) audio(w http.ResponseWriter, r *http.Request) {
 	name := strings.ToLower(r.PathValue("file"))
-	if name != "universal" && name != "stream" && !strings.HasPrefix(name, "stream.") {
+	if name != "universal" && name != "stream" && name != "lyrics" && !strings.HasPrefix(name, "stream.") {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
 	id, ok := a.itemID(w, r)
 	if !ok {
+		return
+	}
+	if name == "lyrics" {
+		a.lyrics(w, r, id)
 		return
 	}
 	t, err := a.svc.Themes.Theme(r.Context(), id)
