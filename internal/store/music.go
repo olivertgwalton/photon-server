@@ -68,12 +68,12 @@ func saveAlbum(ctx context.Context, tx db, lib uuid.UUID, settings analysis, fol
 	if a.Folder != "." {
 		artistFolder = path.Dir(a.Folder)
 	}
-	artist, err := ensureMusic(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemArtist, Folder: artistFolder},
+	artist, err := ensureNamed(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemArtist, Folder: artistFolder},
 		domain.Metadata{Title: a.Artist, SortTitle: a.ArtistSort, IDs: a.ArtistIDs}, changed)
 	if err != nil {
 		return err
 	}
-	album, err := ensureMusic(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemAlbum, ParentID: &artist, Folder: a.Folder},
+	album, err := ensureNamed(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemAlbum, ParentID: &artist, Folder: a.Folder},
 		domain.Metadata{Title: a.Title, SortTitle: a.SortTitle, Year: a.Year, ReleaseDate: a.Released, Genres: a.Genres, IDs: a.IDs}, changed)
 	if err != nil {
 		return err
@@ -89,10 +89,10 @@ func saveAlbum(ctx context.Context, tx db, lib uuid.UUID, settings analysis, fol
 	return keyTitle(ctx, tx, artist)
 }
 
-// ensureMusic is the artist or album of a title under row's parent, by its name in any case,
-// added where there is none, and asked of its providers once it is; what the files say of it,
-// and the ids their tags carry, are written either way.
-func ensureMusic(ctx context.Context, tx db, row model.Item, said domain.Metadata, changed Changed) (uuid.UUID, error) {
+// ensureNamed is the artist, album, author or book of a title under row's parent, by its name in
+// any case, added where there is none, and asked of its providers once it is; what the files say
+// of it, and the ids their tags carry, are written either way.
+func ensureNamed(ctx context.Context, tx db, row model.Item, said domain.Metadata, changed Changed) (uuid.UUID, error) {
 	row.ScanTitle, row.Title, row.SortTitle = said.Title, said.Title, sortTitle(said.Title)
 	err := tx.QueryRow(ctx, `
 		SELECT id FROM items WHERE library_id = $1 AND kind = $2 AND parent_id IS NOT DISTINCT FROM $3::uuid

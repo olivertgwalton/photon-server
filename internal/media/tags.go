@@ -1,6 +1,7 @@
 package media
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"go.senan.xyz/taglib"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // Tags is what an audio file's own tags say of it. TagLib reads them, as Navidrome's scanner
@@ -35,6 +38,9 @@ type Tags struct {
 	// AlbumArtistMBID and ReleaseGroupMBID are the MusicBrainz ids of its album's artist and of the
 	// album, as Picard tags them.
 	AlbumArtistMBID, ReleaseGroupMBID string
+	// An audiobook's tags, as Audible's and AAXClean's: its series and its place there, what it is
+	// about, and a cue sheet of its chapters.
+	Series, SeriesPart, Comment, CueSheet string
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -63,6 +69,8 @@ func ReadTags(path string) (Tags, error) {
 		Disc: ordinal(first(taglib.DiscNumber)), Track: ordinal(first(taglib.TrackNumber)),
 		Compilation:     first(taglib.Compilation) == "1",
 		AlbumArtistMBID: first(taglib.MusicBrainzAlbumArtistID), ReleaseGroupMBID: first(taglib.MusicBrainzReleaseGroupID),
+		Series: cmp.Or(first("SERIES"), first(taglib.MovementName)), SeriesPart: cmp.Or(first("PART"), first(taglib.MovementNumber)),
+		Comment: first(taglib.Comment), CueSheet: first("CUESHEET"),
 	}
 	// Picard writes each artist apart in ARTISTS, and their credit as printed in ARTIST.
 	if len(t.Artists) == 0 {
@@ -119,4 +127,48 @@ func dated(s string) (time.Time, int) {
 		}
 	}
 	return time.Time{}, 0
+}
+
+// Chapters reads a cue sheet's tracks as chapters, as an audiobook in one file carries its own:
+// each from its INDEX 01, in minutes, seconds and frames of 1/75 s, to the next's, the last to the
+// end of a file that runs length.
+func Chapters(cue string, length time.Duration) []domain.Chapter {
+	var out []domain.Chapter
+	title := ""
+	for line := range strings.Lines(cue) {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "TRACK "):
+			title = ""
+		case strings.HasPrefix(line, "TITLE "):
+			title = strings.Trim(strings.TrimPrefix(line, "TITLE "), `"`)
+		case strings.HasPrefix(line, "INDEX 01 "):
+			at, ok := cueTime(strings.TrimPrefix(line, "INDEX 01 "))
+			if !ok {
+				continue
+			}
+			if n := len(out); n > 0 {
+				out[n-1].End = at
+			}
+			out = append(out, domain.Chapter{Start: at, End: length, Title: title})
+		}
+	}
+	return out
+}
+
+// cueTime reads a cue sheet's mm:ss:ff.
+func cueTime(s string) (time.Duration, bool) {
+	parts := strings.Split(strings.TrimSpace(s), ":")
+	if len(parts) != 3 {
+		return 0, false
+	}
+	var n [3]int
+	for i, p := range parts {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			return 0, false
+		}
+		n[i] = v
+	}
+	return time.Duration(n[0])*time.Minute + time.Duration(n[1])*time.Second + time.Duration(n[2])*time.Second/75, true
 }

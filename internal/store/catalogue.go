@@ -381,17 +381,17 @@ func (s *Store) ForgetMissingVersions(ctx context.Context, lib uuid.UUID) (int64
 	return forgotten, changed, err
 }
 
-// removeEmptied removes a library's films, episodes, extras and tracks left with no version, the
-// seasons, shows, albums and artists left with nothing in them, and a provider's box set left empty,
-// whichever library's titles it held, answering every title that went.
+// removeEmptied removes a library's films, episodes, extras, tracks and books left with no version,
+// the seasons, shows, albums, artists and authors left with nothing in them, and a provider's box
+// set left empty, whichever library's titles it held, answering every title that went.
 func removeEmptied(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
 	var removed []uuid.UUID
 	for _, sql := range []string{
-		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra', 'track')
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra', 'track', 'book')
 			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
 		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('season', 'album')
 			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('show', 'artist')
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('show', 'artist', 'author')
 			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
 	} {
 		gone, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)
