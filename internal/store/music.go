@@ -154,20 +154,34 @@ func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, alb
 	if err != nil {
 		return err
 	}
-	return saveVersion(ctx, tx, lib, settings, row.ID, t.Version)
+	if err := saveVersion(ctx, tx, lib, settings, row.ID, t.Version); err != nil {
+		return err
+	}
+	return askLyrics(ctx, tx, `@id`, pgx.NamedArgs{"id": row.ID})
 }
 
 // MusicPage is what only an artist's, an album's or a track's page has: an album's or a track's
 // album artist, and a track's album, which lists Tracks as an artist lists Albums. DiscNumber and
-// TrackNumber place a track on its album, Artists are the track's own, and Advisory says whether it
-// is explicit or clean.
+// TrackNumber place a track on its album, Artists are the track's own, Advisory says whether it
+// is explicit or clean, and Lyrics how its lyrics are timed, "" for none known.
 type MusicPage struct {
 	Artist, Album           *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
 	Advisory                domain.Advisory
+	Lyrics                  domain.LyricsTiming
 	Albums                  []Card
 	Tracks                  []Card
+}
+
+// trackVersions answers a track's versions and how its lyrics are timed.
+func (s *Store) trackVersions(ctx context.Context, track *model.Item) ([]VersionPage, domain.LyricsTiming, error) {
+	versions, err := s.Versions(ctx, []uuid.UUID{track.ID})
+	if err != nil {
+		return nil, "", err
+	}
+	timings, err := s.lyricsTimings(ctx, []*model.Item{track})
+	return versions[track.ID], timings[track.ID], err
 }
 
 // Albums answers an artist's albums as cards, the earliest first, as a discography lists them.

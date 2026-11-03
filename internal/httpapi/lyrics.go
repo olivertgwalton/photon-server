@@ -3,9 +3,9 @@ package httpapi
 import (
 	"errors"
 	"net/http"
-	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
@@ -20,12 +20,16 @@ type lyricLineJSON struct {
 	Text    string `json:"text"`
 }
 
-// lyrics answers the lyrics of the version of a track that plays: an LRC file beside it, else its
-// tags', else what its library's lyrics sources find.
+// lyrics answers the lyrics of a version of a track, the one that plays unasked where none is
+// named: an LRC file beside it, else its tags', else what its library's lyrics sources found.
 func (a *API) lyrics(r *http.Request, _ none) (lyricsJSON, error) {
 	ctx := r.Context()
 	id := pathUUID(r, "id")
-	v, err := a.svc.Playing.Playable(ctx, auth.SessionOf(ctx).Profile.ID, id, uuid.UUID{})
+	version, err := queryID(r, "version_id")
+	if err != nil {
+		return lyricsJSON{}, err
+	}
+	v, err := a.svc.Playing.Playable(ctx, auth.SessionOf(ctx).Profile.ID, id, version)
 	if err != nil {
 		return lyricsJSON{}, err
 	}
@@ -39,10 +43,10 @@ func (a *API) lyrics(r *http.Request, _ none) (lyricsJSON, error) {
 	return lyricsJSON{Lines: each(l.Lines, func(line media.LyricLine) lyricLineJSON {
 		out := lyricLineJSON{Text: line.Text}
 		switch l.Timing {
-		case media.TimedByLine:
+		case domain.TimedByLine:
 			ms := line.Start.Milliseconds()
 			out.StartMS = &ms
-		case media.Untimed:
+		case domain.Untimed:
 		}
 		return out
 	})}, nil

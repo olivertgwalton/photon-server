@@ -185,7 +185,7 @@ func describeAgain(ctx context.Context, tx db, items string, args pgx.NamedArgs)
 }
 
 // RefreshLibrary queues a match of a library's films, shows, artists, albums, authors and books, as Jellyfin's Refresh Metadata
-// on a library does. RefreshMissing takes only those not yet described: never
+// on a library does, and a fetch of its tracks' lyrics. RefreshMissing takes only those not yet described: never
 // matched, with no overview or poster, a season still titled by its file, or a match that failed
 // every attempt. RefreshAll takes every one, and every season and episode under it. Either is
 // claimed after the titles a scan has just found, so a large refresh never holds up a new film.
@@ -216,7 +216,18 @@ func (s *Store) RefreshLibrary(ctx context.Context, lib uuid.UUID, mode domain.R
 			INSERT INTO jobs (kind, subject, priority)
 			SELECT 'identify', i.id, @priority FROM items i
 			WHERE i.library_id = @lib AND i.kind IN `+matchedKinds+` `+which+requeue, args)
-		return err
+		if err != nil {
+			return err
+		}
+		// A track's lyrics are fetched apart from its album's match: those it lacks, or all again.
+		tracks := `SELECT id FROM items WHERE library_id = @lib AND kind = 'track'`
+		switch mode {
+		case domain.RefreshMissing:
+			return askLyrics(ctx, tx, tracks, args)
+		case domain.RefreshAll:
+			return askLyricsAgain(ctx, tx, tracks, args)
+		}
+		return nil
 	})
 }
 

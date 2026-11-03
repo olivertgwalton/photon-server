@@ -95,15 +95,17 @@ type titlePageJSON struct {
 	// Artist is an album's or a track's album artist, and Album a track's album. DiscNumber and
 	// TrackNumber are a track's place on it, Artists the track's own, which may be others, and
 	// Advisory whether it is explicit or clean, where its tags say.
-	Artist      *titleRefJSON     `json:"artist,omitzero"`
-	Album       *titleRefJSON     `json:"album,omitzero"`
-	DiscNumber  *int              `json:"disc_number,omitzero"`
-	TrackNumber *int              `json:"track_number,omitzero"`
-	Artists     []string          `json:"artists,omitzero"`
-	Advisory    domain.Advisory   `json:"advisory,omitzero"`
-	Versions    []versionPageJSON `json:"versions,omitzero"`
-	Seasons     []seasonCardJSON  `json:"seasons,omitzero"`
-	Episodes    []episodeCardJSON `json:"episodes,omitzero"`
+	Artist      *titleRefJSON   `json:"artist,omitzero"`
+	Album       *titleRefJSON   `json:"album,omitzero"`
+	DiscNumber  *int            `json:"disc_number,omitzero"`
+	TrackNumber *int            `json:"track_number,omitzero"`
+	Artists     []string        `json:"artists,omitzero"`
+	Advisory    domain.Advisory `json:"advisory,omitzero"`
+	// Lyrics is how a track's lyrics are timed, left out where none are known.
+	Lyrics   domain.LyricsTiming `json:"lyrics,omitzero"`
+	Versions []versionPageJSON   `json:"versions,omitzero"`
+	Seasons  []seasonCardJSON    `json:"seasons,omitzero"`
+	Episodes []episodeCardJSON   `json:"episodes,omitzero"`
 	// Albums are an artist's, the earliest first, and Tracks an album's, in its order.
 	Albums []cardJSON `json:"albums,omitzero"`
 	Tracks []cardJSON `json:"tracks,omitzero"`
@@ -134,20 +136,22 @@ type versionPageJSON struct {
 	ID uuid.UUID `json:"id"`
 	// DisplayTitle names the version by its label or edition and its picture, in the reader's
 	// language.
-	DisplayTitle string            `json:"display_title"`
-	Edition      string            `json:"edition,omitzero"`
-	Label        string            `json:"label,omitzero"`
-	Container    string            `json:"container"`
-	DurationMS   int64             `json:"duration_ms"`
-	SizeBytes    int64             `json:"size_bytes"`
-	BitrateKbps  int               `json:"bitrate_kbps,omitzero"`
-	Parts        int               `json:"parts"`
-	MissingSince *time.Time        `json:"missing_since,omitzero"`
-	ReplayGain   *replayGainJSON   `json:"replay_gain,omitzero"`
-	Streams      []streamPageJSON  `json:"streams"`
-	Subtitles    []subtitleRefJSON `json:"subtitles,omitzero"`
-	Chapters     []chapterRefJSON  `json:"chapters,omitzero"`
-	Markers      []markerRefJSON   `json:"markers,omitzero"`
+	DisplayTitle string          `json:"display_title"`
+	Edition      string          `json:"edition,omitzero"`
+	Label        string          `json:"label,omitzero"`
+	Container    string          `json:"container"`
+	DurationMS   int64           `json:"duration_ms"`
+	SizeBytes    int64           `json:"size_bytes"`
+	BitrateKbps  int             `json:"bitrate_kbps,omitzero"`
+	Parts        int             `json:"parts"`
+	MissingSince *time.Time      `json:"missing_since,omitzero"`
+	ReplayGain   *replayGainJSON `json:"replay_gain,omitzero"`
+	// Lyrics is how the lyrics its own file carries are timed, left out where it carries none.
+	Lyrics    domain.LyricsTiming `json:"lyrics,omitzero"`
+	Streams   []streamPageJSON    `json:"streams"`
+	Subtitles []subtitleRefJSON   `json:"subtitles,omitzero"`
+	Chapters  []chapterRefJSON    `json:"chapters,omitzero"`
+	Markers   []markerRefJSON     `json:"markers,omitzero"`
 	// Files are its parts in order, each where it starts on the version's timeline, by the id the
 	// /api/v1/parts/{id} routes take.
 	Files []partRefJSON `json:"files"`
@@ -336,7 +340,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Artist: (*titleRefJSON)(p.Artist), Album: (*titleRefJSON)(p.Album),
-		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists, Advisory: p.Advisory,
+		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists, Advisory: p.Advisory, Lyrics: p.Lyrics,
 		Albums: each(p.Albums, cardOf), Tracks: each(p.Tracks, cardOf),
 		Author: (*titleRefJSON)(p.Author), Series: p.Series, SeriesIndex: p.SeriesIndex, Books: each(p.Books, cardOf),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
@@ -371,6 +375,7 @@ func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 	return versionPageJSON{
 		ID: v.ID, DisplayTitle: w.Version(v), Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
 		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince, ReplayGain: replayGainOf(v.Gain),
+		Lyrics:  v.Lyrics,
 		Streams: each(v.Streams, func(s domain.Stream) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{

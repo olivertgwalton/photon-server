@@ -3,7 +3,6 @@ package lyrics
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 	"uuid"
 
@@ -20,9 +19,16 @@ func (noFile) Lyrics(context.Context, uuid.UUID) (media.Lyrics, error) {
 	return media.Lyrics{}, library.ErrNoLyrics
 }
 
+type answer struct {
+	text    string
+	timing  domain.LyricsTiming
+	current bool
+}
+
 type kept struct {
 	sources []domain.FieldSource
-	saved   map[domain.FieldSource]string
+	saved   map[domain.FieldSource]answer
+	queued  int
 }
 
 func (k *kept) LyricsAsk(context.Context, uuid.UUID) (store.LyricsAsk, error) {
@@ -30,12 +36,17 @@ func (k *kept) LyricsAsk(context.Context, uuid.UUID) (store.LyricsAsk, error) {
 }
 
 func (k *kept) KeptLyrics(_ context.Context, _ uuid.UUID, s domain.FieldSource) (string, bool, error) {
-	text, ok := k.saved[s]
-	return text, ok, nil
+	a := k.saved[s]
+	return a.text, a.current, nil
 }
 
-func (k *kept) KeepLyrics(_ context.Context, _ uuid.UUID, s domain.FieldSource, text string) error {
-	k.saved[s] = text
+func (k *kept) KeepLyrics(_ context.Context, _ uuid.UUID, s domain.FieldSource, text string, timing domain.LyricsTiming) error {
+	k.saved[s] = answer{text, timing, true}
+	return nil
+}
+
+func (k *kept) AskLyrics(context.Context, uuid.UUID) error {
+	k.queued++
 	return nil
 }
 
@@ -59,54 +70,55 @@ func (r registry) Get(context.Context, domain.FieldSource) (provider.Provider, b
 }
 
 func finder(sources []domain.FieldSource, l *lyricist) (Finder, *kept) {
-	k := &kept{sources: sources, saved: map[domain.FieldSource]string{}}
-	return Finder{Parts: noFile{}, Store: k, Providers: registry{l}, Log: slog.New(slog.DiscardHandler)}, k
+	k := &kept{sources: sources, saved: map[domain.FieldSource]answer{}}
+	return Finder{Parts: noFile{}, Store: k, Providers: registry{l}}, k
 }
 
-// A track with no lyrics of its own takes its library's lyrics source's, which is asked once:
-// what it found, or that it found none, is kept.
-func TestATracksLyricsAreAskedOfItsSourceOnce(t *testing.T) {
+var lrclib = []domain.FieldSource{domain.SourceLRCLIB}
+
+// A track's lyrics are fetched by a job, which asks its library's source once and keeps what it
+// found, timed; reading them asks no source.
+func TestATracksLyricsAreFetchedOnceAndReadFromWhatWasKept(t *testing.T) {
 	l := &lyricist{answer: "[00:01.00]Timeless"}
-	f, k := finder([]domain.FieldSource{domain.SourceLRCLIB}, l)
+	f, k := finder(lrclib, l)
+	if _, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7()); !errors.Is(err, library.ErrNoLyrics) || k.queued != 1 || l.asked != 0 {
+		t.Fatalf("before the fetch: %v, %d fetches queued, asked %d times; want none yet, one queued, none asked", err, k.queued, l.asked)
+	}
 	for range 2 {
-		got, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7())
-		if err != nil || got.Timing != media.TimedByLine || got.Lines[0].Text != "Timeless" {
-			t.Fatalf("lyrics: %+v, %v", got, err)
+		if err := f.Fetch(t.Context(), uuid.NewV7()); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if l.asked != 1 || k.saved[domain.SourceLRCLIB] != "[00:01.00]Timeless" {
-		t.Errorf("asked %d times, kept %q; want once, and its answer kept", l.asked, k.saved[domain.SourceLRCLIB])
+	if a := k.saved[domain.SourceLRCLIB]; l.asked != 1 || a.text != "[00:01.00]Timeless" || a.timing != domain.TimedByLine {
+		t.Errorf("asked %d times, kept %+v; want once, its answer kept timed by line", l.asked, a)
+	}
+	got, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7())
+	if err != nil || got.Timing != domain.TimedByLine || got.Lines[0].Text != "Timeless" || k.queued != 1 {
+		t.Errorf("after the fetch: %+v, %v, %d queued; want the lyrics kept, nothing more queued", got, err, k.queued)
+	}
+}
+
+// A source that cannot be reached keeps nothing and fails the fetch, so it is asked again; one
+// that has none is kept as having none; a library that ranks no lyrics source asks none.
+func TestALyricsSourceThatFailsHasNoneOrIsOff(t *testing.T) {
+	down := &lyricist{err: errors.New("lrclib: 503")}
+	f, k := finder(lrclib, down)
+	if err := f.Fetch(t.Context(), uuid.NewV7()); err == nil || len(k.saved) != 0 {
+		t.Errorf("a source that failed: %v, kept %v; want the fetch failed, nothing kept", err, k.saved)
 	}
 
 	none := &lyricist{}
-	f, k = finder([]domain.FieldSource{domain.SourceLRCLIB}, none)
-	for range 2 {
-		if _, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7()); !errors.Is(err, library.ErrNoLyrics) {
-			t.Fatalf("a source with none: %v, want %v", err, library.ErrNoLyrics)
-		}
-	}
-	if text, ok := k.saved[domain.SourceLRCLIB]; none.asked != 1 || !ok || text != "" {
-		t.Errorf("asked %d times, kept %q %v; want once, and none kept", none.asked, text, ok)
-	}
-}
-
-// A source that cannot be reached keeps nothing, so it is asked again; a library that ranks no
-// lyrics source asks none.
-func TestALyricsSourceThatFailsOrIsOffIsNotKept(t *testing.T) {
-	down := &lyricist{err: errors.New("lrclib: 503")}
-	f, k := finder([]domain.FieldSource{domain.SourceLRCLIB}, down)
-	for range 2 {
-		if _, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7()); !errors.Is(err, library.ErrNoLyrics) {
-			t.Fatalf("a source that failed: %v", err)
-		}
-	}
-	if _, ok := k.saved[domain.SourceLRCLIB]; down.asked != 2 || ok {
-		t.Errorf("asked %d times, kept %v; want asked each time, nothing kept", down.asked, ok)
+	f, k = finder(lrclib, none)
+	if err := f.Fetch(t.Context(), uuid.NewV7()); err != nil || k.saved[domain.SourceLRCLIB] != (answer{current: true}) {
+		t.Errorf("a source with none: %v, kept %+v; want none kept", err, k.saved)
 	}
 
 	off := &lyricist{answer: "Timeless"}
-	f, _ = finder(nil, off)
-	if _, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7()); !errors.Is(err, library.ErrNoLyrics) || off.asked != 0 {
+	f, k = finder(nil, off)
+	if err := f.Fetch(t.Context(), uuid.NewV7()); err != nil || off.asked != 0 {
 		t.Errorf("a library with no lyrics source: %v, asked %d times; want none asked", err, off.asked)
+	}
+	if _, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7()); !errors.Is(err, library.ErrNoLyrics) || k.queued != 0 {
+		t.Errorf("reading with no lyrics source: %v, %d queued; want none queued", err, k.queued)
 	}
 }

@@ -47,6 +47,8 @@ type Tags struct {
 	Series, SeriesPart, Comment, CueSheet string
 	Gain                                  domain.ReplayGain
 	Advisory                              domain.Advisory
+	// Lyrics is how the lyrics the tags hold are timed, "" for none.
+	Lyrics domain.LyricsTiming
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -92,6 +94,7 @@ func ReadTags(path string) (Tags, error) {
 	if t.Advisory == "" && isMP4(path) {
 		t.Advisory = mp4Advisory(path)
 	}
+	t.Lyrics = TimingOf(strings.Join(raw[taglib.Lyrics], "\n"))
 	props, err := taglib.ReadProperties(path)
 	t.Pictured = len(props.Images) > 0
 	return t, err

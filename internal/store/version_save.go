@@ -22,8 +22,10 @@ type Version struct {
 	Label      string
 	Parts      []Part
 	Subtitles  []Subtitle
-	// Gain is a track's, as its tags give it.
-	Gain domain.ReplayGain
+	// Gain is a track's, as its tags give it, and Lyrics how the lyrics its file carries are timed,
+	// "" for none.
+	Gain   domain.ReplayGain
+	Lyrics domain.LyricsTiming
 }
 
 // Subtitle is a subtitle file beside a version.
@@ -66,8 +68,8 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 		trackGain, trackPeak, albumGain, albumPeak := gainColumns(c.Gain)
 		_, err := tx.Exec(ctx, `
 			UPDATE versions SET item_id = CASE WHEN split_at IS NULL THEN $2 ELSE item_id END, edition = $3, label = $4,
-				missing_since = NULL, track_gain_db = $5, track_peak = $6, album_gain_db = $7, album_peak = $8
-			WHERE id = $1`, known, itemID, edition, label, trackGain, trackPeak, albumGain, albumPeak)
+				missing_since = NULL, track_gain_db = $5, track_peak = $6, album_gain_db = $7, album_peak = $8, lyrics = $9
+			WHERE id = $1`, known, itemID, edition, label, trackGain, trackPeak, albumGain, albumPeak, optional(c.Lyrics))
 		if err != nil {
 			return err
 		}
@@ -81,6 +83,7 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 		ItemID: itemID, LibraryID: lib, Fingerprint: c.ContentKey, Edition: edition, Label: label,
 	}
 	version.TrackGainDB, version.TrackPeak, version.AlbumGainDB, version.AlbumPeak = gainColumns(c.Gain)
+	version.Lyrics = optional(c.Lyrics)
 	var offset int64
 	for _, part := range c.Parts {
 		version.SizeBytes += part.Facts.Size
@@ -104,12 +107,12 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 	_, err = tx.Exec(ctx, `
 		INSERT INTO versions (id, item_id, library_id, fingerprint, edition, label, container, width, height,
 			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
-			album_gain_db, album_peak)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+			album_gain_db, album_peak, lyrics)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
 		version.ID, version.ItemID, version.LibraryID, version.Fingerprint, version.Edition, version.Label, version.Container,
 		version.Width, version.Height, version.VideoCodec, version.VideoRange, version.DVProfile,
 		version.BitrateKbps, version.SizeBytes, version.DurationMS, version.TrackGainDB, version.TrackPeak,
-		version.AlbumGainDB, version.AlbumPeak)
+		version.AlbumGainDB, version.AlbumPeak, version.Lyrics)
 	if err != nil {
 		return err
 	}
@@ -188,10 +191,10 @@ func cloneVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, 
 	err := tx.QueryRow(ctx, `
 		INSERT INTO versions (item_id, library_id, fingerprint, edition, label, container, width, height,
 			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
-			album_gain_db, album_peak)
+			album_gain_db, album_peak, lyrics)
 		SELECT $2, library_id, fingerprint, $3, $4, container, width, height,
 			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
-			album_gain_db, album_peak
+			album_gain_db, album_peak, lyrics
 		FROM versions WHERE id = $1 RETURNING id`, from, itemID, optional(c.Edition), optional(c.Label)).Scan(&id)
 	if err != nil {
 		return err
