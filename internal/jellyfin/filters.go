@@ -46,6 +46,8 @@ func wallKind(types []string) domain.WallKind {
 		return domain.WallEpisodes
 	case len(types) == 1 && has(types, itemKinds[domain.ItemAlbum]):
 		return domain.WallAlbums
+	case has(types, itemKinds[domain.ItemBook]) || has(types, audioBook):
+		return domain.WallBooks
 	case films && !shows:
 		return domain.WallFilms
 	case shows && !films:

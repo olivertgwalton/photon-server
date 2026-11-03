@@ -132,12 +132,16 @@ var itemKinds = map[domain.ItemKind]string{
 	domain.ItemMovie: "Movie", domain.ItemShow: "Series", domain.ItemSeason: "Season",
 	domain.ItemEpisode: "Episode", domain.ItemCollection: "BoxSet", domain.ItemExtra: "Video",
 	domain.ItemArtist: "MusicArtist", domain.ItemAlbum: "MusicAlbum", domain.ItemTrack: "Audio",
+	domain.ItemAuthor: "Folder", domain.ItemBook: "Book",
 }
+
+// audioBook is Jellyfin's kind of a book with sound to play, which its apps' audio player plays.
+const audioBook = "AudioBook"
 
 // collectionTypes are Jellyfin's CollectionType for each kind of library. A mixed library has none,
 // as Jellyfin's has none, and its apps browse it as folders.
 var collectionTypes = map[domain.LibraryKind]string{
-	domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows", domain.LibraryMusic: "music",
+	domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows", domain.LibraryMusic: "music", domain.LibraryBooks: "books",
 }
 
 // Shapes of the pictures Jellyfin's apps lay cards out by: an album's cover is square.
@@ -243,7 +247,9 @@ func (a *API) fromCard(c store.Card) item {
 		it.SeriesPrimaryImageTag = tag(c.Poster)
 	case domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		it.music(c)
-	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection, domain.ItemAuthor, domain.ItemBook:
+	case domain.ItemBook:
+		it.book(c)
+	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection, domain.ItemAuthor:
 		it.pictures(c.Poster, c.Backdrop, c.Logo, c.Thumb, c.Blurhashes)
 		it.PrimaryImageAspectRatio = posterAspect
 	}
@@ -276,6 +282,25 @@ func (it *item) music(c store.Card) {
 	}
 }
 
+// book fills in a book as Jellyfin's apps read one: an AudioBook where it has sound to play, as an
+// audiobook's version runs, else a Book to read, under its author's folder, in its series by its
+// place there.
+func (it *item) book(c store.Card) {
+	it.pictures(c.Poster, c.Backdrop, c.Logo, c.Thumb, c.Blurhashes)
+	it.PrimaryImageAspectRatio = posterAspect
+	if c.DurationMS > 0 {
+		it.Type, it.MediaType = audioBook, "Audio"
+	}
+	if c.Author != nil {
+		it.ParentID = guid(c.Author.ID)
+	}
+	it.SeriesName = c.Series
+	if c.SeriesIndex != nil {
+		n := int(*c.SeriesIndex)
+		it.IndexNumber = &n
+	}
+}
+
 // fromSeason is a show's season.
 func (a *API) fromSeason(show store.TitleRef, s store.SeasonCard) item {
 	it := a.newItem(s.ID, domain.ItemSeason, s.Title)
@@ -297,6 +322,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		Logo: first(p.Artwork[domain.ArtworkLogo]), Thumb: first(p.Artwork[domain.ArtworkThumb]), State: p.State,
 		Show: p.Show, Season: p.Season, SeasonNumber: p.SeasonNumber, EpisodeNumber: p.EpisodeNumber,
 		Artist: p.Artist, Album: p.Album, DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
+		Author: p.Author, Series: p.Series, SeriesIndex: p.SeriesIndex, DurationMS: longest(p.Versions),
 		EpisodeEnd: p.EpisodeEnd, Overview: p.Overview, Genres: p.Genres, Certificate: p.Certificate,
 		Ratings: p.Ratings, Blurhashes: p.Blurhashes,
 	})
@@ -445,4 +471,13 @@ func (a *API) library(l *store.SeenLibrary) item {
 	it.pictures(uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, nil)
 	it.Etag = etag(it)
 	return it
+}
+
+// longest is how long a title's longest version runs: an audiobook's sound, none of an ebook.
+func longest(versions []store.VersionPage) int64 {
+	var ms int64
+	for _, v := range versions {
+		ms = max(ms, v.DurationMS)
+	}
+	return ms
 }

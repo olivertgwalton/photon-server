@@ -89,6 +89,10 @@ artists and albums and play its tracks. A track plays as it is where the app pla
 is converted to AAC where it doesn't, or where it is over the app's streaming limit. An app's list
 of every song in a library is empty: browse by artist or album instead.
 
+A books library is a Jellyfin books library: its authors are folders of their books. An audiobook
+plays in the app's audio player, and an ebook opens in the app's reader where it has one, such as
+Jellyfin's web app's.
+
 Some parts of Jellyfin are left out on purpose:
 
 - **No profile is a Jellyfin admin**, not even an admin. Jellyfin's dashboard isn't there: you run

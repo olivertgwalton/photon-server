@@ -34,6 +34,7 @@ type catalogue interface {
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
 	Albums(ctx context.Context, profile, artist uuid.UUID) ([]store.Card, error)
 	Tracks(ctx context.Context, profile, album uuid.UUID) ([]store.Card, error)
+	Books(ctx context.Context, profile, author uuid.UUID) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
@@ -373,11 +374,10 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 		}
 		page, total := paged(members, cardID, l)
 		a.writeList(w, r, page, total, l.start, l)
-	case domain.ItemArtist, domain.ItemAlbum:
-		list := a.svc.Catalogue.Albums
-		if kind == domain.ItemAlbum {
-			list = a.svc.Catalogue.Tracks
-		}
+	case domain.ItemArtist, domain.ItemAlbum, domain.ItemAuthor:
+		list := map[domain.ItemKind]func(context.Context, uuid.UUID, uuid.UUID) ([]store.Card, error){
+			domain.ItemArtist: a.svc.Catalogue.Albums, domain.ItemAlbum: a.svc.Catalogue.Tracks, domain.ItemAuthor: a.svc.Catalogue.Books,
+		}[kind]
 		cards, err := list(r.Context(), profile, parent)
 		if err != nil {
 			a.internal(w, r, err)
@@ -385,7 +385,7 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 		}
 		page, total := paged(cards, cardID, l)
 		a.writeList(w, r, page, total, l.start, l)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemBook:
 		a.writeJSON(w, queryResult{StartIndex: l.start})
 	}
 }
