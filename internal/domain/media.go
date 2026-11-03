@@ -167,6 +167,13 @@ type Chapter struct {
 	Title      string
 }
 
+// LyricsQuery is a track as a lyrics source finds it: by its artist, its title, its album and how
+// long it is, as LRCLIB matches a recording.
+type LyricsQuery struct {
+	Artist, Title, Album string
+	Duration             time.Duration
+}
+
 // ReplayGain is how far a track is turned to play as loud as any other, and as loud as the rest of
 // its album, as its tags say: nil for either they do not give. The client turns it, so loudness
 // never costs an encode.

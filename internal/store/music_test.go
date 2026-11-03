@@ -219,3 +219,56 @@ func TestATrackKeepsItsReplayGain(t *testing.T) {
 		t.Errorf("tagged again (-want +got):\n%s", diff)
 	}
 }
+
+// A track's lyrics are asked by its artist, title, album and length, of the sources its library
+// ranks for them; what a source said is kept, and a none is believed for a while.
+func TestATracksLyricsAreAskedAndKept(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
+		Tracks: []Track{track("Timeless", 1, 1, "The Weeknd", "Playboi Carti")},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	var id uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	ask, err := s.LyricsAsk(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := LyricsAsk{
+		Query:   domain.LyricsQuery{Artist: "The Weeknd", Title: "Timeless", Album: "Hurry Up Tomorrow", Duration: 4 * time.Minute},
+		Sources: []domain.FieldSource{domain.SourceLRCLIB},
+	}
+	if diff := cmp.Diff(want, ask); diff != "" {
+		t.Errorf("asked by (-want +got):\n%s", diff)
+	}
+	if _, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || kept {
+		t.Errorf("before asking: kept %v, %v", kept, err)
+	}
+	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, ""); err != nil {
+		t.Fatal(err)
+	}
+	if text, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !kept || text != "" {
+		t.Errorf("a none: %q %v %v, want it kept", text, kept, err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE fetched_lyrics SET fetched_at = now() - interval '31 days'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || kept {
+		t.Errorf("a none a month old is still believed, or %v", err)
+	}
+	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, "[00:01.00]Timeless"); err != nil {
+		t.Fatal(err)
+	}
+	if text, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !kept || text != "[00:01.00]Timeless" {
+		t.Errorf("lyrics found: %q %v %v", text, kept, err)
+	}
+}

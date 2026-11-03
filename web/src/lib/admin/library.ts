@@ -4,7 +4,25 @@ import { textAsTyped } from "#lib/form.ts";
 type Schemas = components["schemas"];
 type Ranked = Schemas["RankedSource"];
 
-type Fetcher = "metadata" | "images";
+type Fetcher = "metadata" | "images" | "lyrics";
+
+// What a library ranks sources for, in the order its settings ask them.
+const fetchers: Fetcher[] = ["metadata", "images", "lyrics"];
+
+// The kinds of item a provider may be ranked for to fetch f.
+function kindsOf(
+	p: Schemas["MetadataProvider"],
+	f: Fetcher,
+): Schemas["ItemKind"][] {
+	switch (f) {
+		case "metadata":
+			return p.metadata_kinds;
+		case "images":
+			return p.image_kinds;
+		case "lyrics":
+			return p.lyrics_kinds;
+	}
+}
 
 // The sources a library may rank to fetch f for an item of a kind: the
 // built-ins the server says it may that are no provider, named as Jellyfin
@@ -24,9 +42,7 @@ export function offeredSources(
 				ready: true,
 			})),
 		...providers
-			.filter((p) =>
-				(f === "metadata" ? p.metadata_kinds : p.image_kinds).includes(kind),
-			)
+			.filter((p) => kindsOf(p, f).includes(kind))
 			.map((p) => ({ id: p.id, name: p.name, ready: p.ready })),
 	];
 }
@@ -99,13 +115,13 @@ export function libraryChange(
 	const sources: Schemas["KindSourcesChange"][] = [];
 	for (const has of current.sources) {
 		const asked: Schemas["KindSourcesChange"] = { kind: has.kind };
-		for (const f of ["metadata", "images"] as const) {
+		for (const f of fetchers) {
 			const given = form.get(`sources-${has.kind}-${f}`);
 			if (given === null) continue;
 			const list = JSON.parse(String(given)) as Ranked[];
 			if (said(list) !== said(has[f])) asked[f] = list;
 		}
-		if (asked.metadata || asked.images) sources.push(asked);
+		if (fetchers.some((f) => asked[f])) sources.push(asked);
 	}
 	if (sources.length) change.sources = sources;
 	if (!same([...extras].sort(), [...current.remote_extras].sort())) {

@@ -6,16 +6,18 @@ import (
 )
 
 // Fetcher is what a library asks its sources for about an item, ranked apart as Jellyfin ranks
-// metadata downloaders and image fetchers.
+// metadata downloaders, image fetchers and lyrics fetchers.
 type Fetcher string
 
 const (
 	FetcherMetadata Fetcher = "metadata"
 	FetcherImages   Fetcher = "images"
+	// FetcherLyrics finds a track's lyrics where neither a file beside it nor its tags hold any.
+	FetcherLyrics Fetcher = "lyrics"
 )
 
 func Fetchers() []Fetcher {
-	return []Fetcher{FetcherMetadata, FetcherImages}
+	return []Fetcher{FetcherMetadata, FetcherImages, FetcherLyrics}
 }
 
 // ItemKinds are the kinds of item a library ranks its sources for, its titles' first.
@@ -62,6 +64,13 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // describe, and pictures an album by its cover. Open Library alone describes and pictures books
 // and their authors. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
+	if f == FetcherLyrics {
+		// Only a track is sung, and LRCLIB alone finds it its words.
+		if kind == ItemTrack {
+			return []FieldSource{SourceLRCLIB}
+		}
+		return nil
+	}
 	switch {
 	case kind.Music():
 		return musicFetchable(f, kind)
@@ -70,8 +79,8 @@ func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 	}
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
-	switch f {
-	case FetcherMetadata:
+	// Lyrics were answered above, so what is asked is metadata or images.
+	if f == FetcherMetadata {
 		out = append(out, SourceNFO, SourceTMDB)
 		if kind != ItemMovie {
 			out = append(out, SourceTVDB)
@@ -86,17 +95,17 @@ func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 			out = append(out, SourceAniList)
 		}
 		out = append(out, SourceAniDB)
-	case FetcherImages:
-		out = append(out, SourceTMDB)
-		if kind != ItemMovie {
-			out = append(out, SourceTVDB)
-		}
-		if title {
-			out = append(out, SourceOMDb, SourceFanart)
-		}
-		if kind != ItemEpisode {
-			out = append(out, SourceAniList, SourceAniDB)
-		}
+		return out
+	}
+	out = append(out, SourceTMDB)
+	if kind != ItemMovie {
+		out = append(out, SourceTVDB)
+	}
+	if title {
+		out = append(out, SourceOMDb, SourceFanart)
+	}
+	if kind != ItemEpisode {
+		out = append(out, SourceAniList, SourceAniDB)
 	}
 	return out
 }
@@ -126,6 +135,7 @@ type KindSources struct {
 	Kind     ItemKind
 	Metadata []RankedSource
 	Images   []RankedSource
+	Lyrics   []RankedSource
 }
 
 func (k KindSources) Of(f Fetcher) []RankedSource {
@@ -134,6 +144,8 @@ func (k KindSources) Of(f Fetcher) []RankedSource {
 		return k.Metadata
 	case FetcherImages:
 		return k.Images
+	case FetcherLyrics:
+		return k.Lyrics
 	}
 	return nil
 }
@@ -155,6 +167,8 @@ func DefaultSources(lib LibraryKind) []KindSources {
 						sources.Metadata = append(sources.Metadata, RankedSource{src, true})
 					case FetcherImages:
 						sources.Images = append(sources.Images, RankedSource{src, true})
+					case FetcherLyrics:
+						sources.Lyrics = append(sources.Lyrics, RankedSource{src, true})
 					}
 				}
 			}

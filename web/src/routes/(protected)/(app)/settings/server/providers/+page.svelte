@@ -32,6 +32,7 @@ const capabilities = {
 	segments: "Intros and credits",
 	request: "Requests",
 	pages: "Pages",
+	lyrics: "Lyrics",
 } as const;
 
 // A plugin's slug, from its source id plugin:<slug>.

@@ -122,16 +122,18 @@ const (
 	SourceMusicBrainz FieldSource = "musicbrainz"
 	// SourceOpenLibrary describes authors and books, and pictures them by its covers.
 	SourceOpenLibrary FieldSource = "openlibrary"
+	// SourceLRCLIB gives a track's lyrics, timed where it has them, and says nothing else of it.
+	SourceLRCLIB FieldSource = "lrclib"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceUpload, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr, SourceMusicBrainz, SourceOpenLibrary}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceUpload, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr, SourceMusicBrainz, SourceOpenLibrary, SourceLRCLIB}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files
 // say always ranks lowest, and a reader's own edit highest. A registered plugin is one too.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart, SourceMusicBrainz, SourceOpenLibrary}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart, SourceMusicBrainz, SourceOpenLibrary, SourceLRCLIB}
 }
 
 // PluginPattern is a metadata plugin's source id: its slug after "plugin:", so none collides with
@@ -180,10 +182,12 @@ const (
 	CapabilityPages Capability = "pages"
 	// CapabilityRequest is fetching titles a library lacks, which its profiles asked for.
 	CapabilityRequest Capability = "request"
+	// CapabilityLyrics is finding a track's lyrics.
+	CapabilityLyrics Capability = "lyrics"
 )
 
 func Capabilities() []Capability {
-	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents, CapabilitySegments, CapabilityPages, CapabilityRequest}
+	return []Capability{CapabilityDescribe, CapabilitySearch, CapabilityRate, CapabilityPerson, CapabilityList, CapabilityStream, CapabilitySubtitles, CapabilityEvents, CapabilitySegments, CapabilityPages, CapabilityRequest, CapabilityLyrics}
 }
 
 // PluginProtocol is what a plugin speaks: photon's own protocol, or a Stremio addon's.

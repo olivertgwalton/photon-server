@@ -99,6 +99,7 @@ const films: Schemas["AdminLibrary"] = {
 				{ source: "tmdb", enabled: true },
 			],
 			images: [{ source: "tmdb", enabled: true }],
+			lyrics: [],
 		},
 	],
 	remote_extras: ["trailer"],
@@ -125,6 +126,7 @@ const madeWith = (kind: Schemas["ItemKind"]): Schemas["KindSources"] => ({
 		{ source: "tmdb", enabled: true },
 	],
 	images: [{ source: "tmdb", enabled: true }],
+	lyrics: [],
 });
 // How the server keeps a new library: one of files, and a remote one, which
 // has no folder to watch or files to read whole.
@@ -156,6 +158,7 @@ const libraryKinds: Schemas["LibraryKindOptions"][] = [
 				kind: "movie",
 				metadata: ["nfo", "tmdb", "mdblist"],
 				images: ["tmdb"],
+				lyrics: [],
 			},
 		],
 	},
@@ -171,16 +174,19 @@ const libraryKinds: Schemas["LibraryKindOptions"][] = [
 				kind: "show",
 				metadata: ["nfo", "tmdb", "tvdb", "mdblist"],
 				images: ["tmdb", "tvdb"],
+				lyrics: [],
 			},
 			{
 				kind: "season",
 				metadata: ["nfo", "tmdb", "tvdb"],
 				images: ["tmdb", "tvdb"],
+				lyrics: [],
 			},
 			{
 				kind: "episode",
 				metadata: ["nfo", "tmdb", "tvdb"],
 				images: ["tmdb", "tvdb"],
+				lyrics: [],
 			},
 		],
 	},
@@ -196,6 +202,7 @@ const providers: Schemas["MetadataProvider"][] = [
 		ready: true,
 		metadata_kinds: ["movie", "show", "season", "episode"],
 		image_kinds: ["movie", "show", "season", "episode"],
+		lyrics_kinds: [],
 	},
 	{
 		id: "tvdb",
@@ -206,6 +213,7 @@ const providers: Schemas["MetadataProvider"][] = [
 		ready: true,
 		metadata_kinds: ["show", "season", "episode"],
 		image_kinds: ["show", "season", "episode"],
+		lyrics_kinds: [],
 	},
 	{
 		id: "mdblist",
@@ -224,6 +232,7 @@ const providers: Schemas["MetadataProvider"][] = [
 		ready: false,
 		metadata_kinds: ["movie", "show"],
 		image_kinds: [],
+		lyrics_kinds: [],
 	},
 ];
 

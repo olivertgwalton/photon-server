@@ -110,6 +110,12 @@ type Subtitler interface {
 	FetchSubtitle(ctx context.Context, id string) ([]byte, error)
 }
 
+// Lyricist finds a track's lyrics, as an LRC file writes them, timed or not: "" where it has none.
+type Lyricist interface {
+	Provider
+	Lyrics(ctx context.Context, q domain.LyricsQuery) (string, error)
+}
+
 // Requester fetches titles a library lacks, as Radarr, Sonarr and riven do: it answers once it has
 // taken a title on, or why not.
 type Requester interface {
@@ -156,6 +162,8 @@ func Capabilities(p Provider) []domain.Capability {
 			_, ok = As[Segmenter](p, c)
 		case domain.CapabilityRequest:
 			_, ok = As[Requester](p, c)
+		case domain.CapabilityLyrics:
+			_, ok = As[Lyricist](p, c)
 		case domain.CapabilityEvents, domain.CapabilityPages:
 			// Events are sent through the webhook queue, and pages are visited, not asked for: only a
 			// plugin has them.

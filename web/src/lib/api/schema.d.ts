@@ -8388,7 +8388,7 @@ export interface components {
             items: components["schemas"]["Candidate"][];
         };
         /** @enum {string} */
-        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages" | "request";
+        Capability: "describe" | "search" | "rate" | "person" | "list" | "stream" | "subtitles" | "events" | "segments" | "pages" | "request" | "lyrics";
         Card: {
             /** Format: date-time */
             added_at: string;
@@ -8876,11 +8876,12 @@ export interface components {
         Fetchable: {
             images: components["schemas"]["FieldSource"][];
             kind: components["schemas"]["ItemKind"];
+            lyrics: components["schemas"]["FieldSource"][];
             metadata: components["schemas"]["FieldSource"][];
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios" | "airs_before_season" | "airs_before_episode" | "airs_after_season";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "upload" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr" | "musicbrainz" | "openlibrary");
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "upload" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr" | "musicbrainz" | "openlibrary" | "lrclib");
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
@@ -9062,11 +9063,13 @@ export interface components {
         KindSources: {
             images: components["schemas"]["RankedSource"][];
             kind: components["schemas"]["ItemKind"];
+            lyrics: components["schemas"]["RankedSource"][];
             metadata: components["schemas"]["RankedSource"][];
         };
         KindSourcesChange: {
             images?: components["schemas"]["RankedSource"][];
             kind: components["schemas"]["ItemKind"];
+            lyrics?: components["schemas"]["RankedSource"][];
             metadata?: components["schemas"]["RankedSource"][];
         };
         KnownNode: {
@@ -9239,6 +9242,7 @@ export interface components {
             id: components["schemas"]["FieldSource"];
             image_kinds: components["schemas"]["ItemKind"][];
             kinds: components["schemas"]["ItemKind"][];
+            lyrics_kinds: components["schemas"]["ItemKind"][];
             metadata_kinds: components["schemas"]["ItemKind"][];
             name: string;
             ready: boolean;

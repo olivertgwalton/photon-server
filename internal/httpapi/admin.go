@@ -103,13 +103,15 @@ type librarySettingsJSON struct {
 	SubtitleMatch     domain.SubtitleMatch `json:"subtitle_match"`
 }
 
-// kindSourcesJSON ranks where a kind of item a library holds takes its metadata and its pictures
-// from, most trusted first, as Jellyfin's metadata downloaders and image fetchers: a lower source
-// only fills what those above it left empty. A source not enabled keeps its place but is not asked.
+// kindSourcesJSON ranks where a kind of item a library holds takes its metadata, its pictures and,
+// for a track, its lyrics from, most trusted first, as Jellyfin's metadata downloaders, image
+// fetchers and lyrics fetchers: a lower source only fills what those above it left empty. A
+// source not enabled keeps its place but is not asked.
 type kindSourcesJSON struct {
 	Kind     domain.ItemKind    `json:"kind"`
 	Metadata []rankedSourceJSON `json:"metadata"`
 	Images   []rankedSourceJSON `json:"images"`
+	Lyrics   []rankedSourceJSON `json:"lyrics"`
 }
 
 type rankedSourceJSON struct {
@@ -144,7 +146,7 @@ func librarySettings(l domain.Library) librarySettingsJSON {
 }
 
 func kindSourcesOf(k domain.KindSources) kindSourcesJSON {
-	return kindSourcesJSON{Kind: k.Kind, Metadata: rankedJSON(k.Metadata), Images: rankedJSON(k.Images)}
+	return kindSourcesJSON{Kind: k.Kind, Metadata: rankedJSON(k.Metadata), Images: rankedJSON(k.Images), Lyrics: rankedJSON(k.Lyrics)}
 }
 
 func rankedJSON(list []domain.RankedSource) []rankedSourceJSON {
@@ -353,6 +355,7 @@ type kindSourcesChangeJSON struct {
 	Kind     domain.ItemKind    `json:"kind"`
 	Metadata []rankedSourceJSON `json:"metadata,omitzero"`
 	Images   []rankedSourceJSON `json:"images,omitzero"`
+	Lyrics   []rankedSourceJSON `json:"lyrics,omitzero"`
 }
 
 // setLibrary changes what is sent of a library: its name, whether it is watched, where each kind
@@ -425,7 +428,7 @@ func (a *API) setLibrary(r *http.Request, req libraryChangeJSON) (adminLibraryJS
 		return out
 	}
 	for _, k := range req.Sources {
-		change.Sources = append(change.Sources, domain.KindSources{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images)})
+		change.Sources = append(change.Sources, domain.KindSources{Kind: k.Kind, Metadata: ranked(k.Metadata), Images: ranked(k.Images), Lyrics: ranked(k.Lyrics)})
 	}
 	if err := domain.CheckSources(lib.Kind, change.Sources); err != nil {
 		return adminLibraryJSON{}, refuse(codeInvalidBody, err.Error())

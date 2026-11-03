@@ -63,7 +63,12 @@ type discover interface {
 // parts opens the parts of versions for tools to read and players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
-	Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error)
+}
+
+// lyricsFinder finds a track's lyrics beside its file, in its tags, or from its library's lyrics
+// sources.
+type lyricsFinder interface {
+	Find(ctx context.Context, item, part uuid.UUID) (media.Lyrics, error)
 }
 
 type partJSON struct {
