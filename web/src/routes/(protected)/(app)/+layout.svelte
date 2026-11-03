@@ -5,6 +5,7 @@ import { LiveStream, setLiveStream } from "#lib/admin/stream.svelte.ts";
 import AppSidebar from "#lib/components/AppSidebar.svelte";
 import NotificationMenu from "#lib/components/NotificationMenu.svelte";
 import ProfileMenu from "#lib/components/ProfileMenu.svelte";
+import AudioBar from "#lib/components/player/AudioBar.svelte";
 import RestoringScreen from "#lib/components/RestoringScreen.svelte";
 import TitleMenu from "#lib/components/TitleMenu.svelte";
 import * as Sidebar from "#lib/components/ui/sidebar/index.ts";
@@ -94,6 +95,7 @@ $effect(() => connectLive(admin ? stream : undefined));
 		>
 			{@render children()}
 		</main>
+		<AudioBar />
 	</Sidebar.Inset>
 </Sidebar.Provider>
 
