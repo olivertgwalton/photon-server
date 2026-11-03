@@ -23,6 +23,7 @@ import { refreshable } from "#lib/admin/edit.ts";
 import { client } from "#lib/api/client.ts";
 import { problemMessage } from "#lib/api/problem.ts";
 import { blurStyle, tintColour } from "#lib/blurhash.ts";
+import AlbumPage from "#lib/components/AlbumPage.svelte";
 import Artwork from "#lib/components/Artwork.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
@@ -277,506 +278,523 @@ async function ask() {
 	<title>{titleWithShow(t)} · Photon</title>
 </svelte:head>
 
-<article class="grid gap-10">
-	<header class="relative -mx-3 -mt-6 sm:-mx-6" style:--accent={accent}>
-		{#if backdrop}
-			<div
-				class="absolute inset-x-0 top-0 h-[70svh] overflow-hidden"
-				style={blurStyle(t.blurhashes?.[backdrop])}
-			>
-				<!-- A new element for each title, so the old picture goes at once and the
+<!-- Music has pages of its own, drawn from the same title. -->
+{#if t.kind === "album"}
+	<AlbumPage title={t} />
+{:else}
+	<article class="grid gap-10">
+		<header class="relative -mx-3 -mt-6 sm:-mx-6" style:--accent={accent}>
+			{#if backdrop}
+				<div
+					class="absolute inset-x-0 top-0 h-[70svh] overflow-hidden"
+					style={blurStyle(t.blurhashes?.[backdrop])}
+				>
+					<!-- A new element for each title, so the old picture goes at once and the
 					new one fades in over its blur. -->
-				{#key backdrop}
-					<Artwork
-						id={backdrop}
-						shape="backdrop"
-						loading="eager"
-						sizes="100vw"
-						fetchpriority="high"
-						class="size-full object-cover object-top transition-opacity duration-700 data-loading:opacity-0"
-					/>
-				{/key}
-				<div
-					class="from-ground via-(--accent)/35 absolute inset-0 bg-linear-to-t to-transparent"
-				></div>
-				<div
-					class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent max-sm:hidden"
-				></div>
-			</div>
-		{/if}
-		<div
-			class={[
-				// Centred on a phone, as the apps' hero is at a compact width.
-				"relative grid gap-5 px-3 max-sm:justify-items-center max-sm:text-center sm:px-6",
-				backdrop ? "pt-[28svh]" : "pt-6",
-			]}
-		>
-			<!-- An episode's or season's lettering is its show's, which names it and leads to it. -->
-			{#if t.show && !logo}
-				<a
-					href="/titles/{t.show.id}"
-					class="text-ink-2 text-sm hover:underline"
-				>
-					{t.show.title}
-				</a>
-			{/if}
-			<div class="flex items-end gap-6 max-sm:justify-center">
-				{#if poster && !backdrop}
-					<Artwork
-						id={poster}
-						shape="poster"
-						loading="eager"
-						sizes="12rem"
-						class="hidden aspect-2/3 w-48 rounded-lg object-cover sm:block"
-						style={blurStyle(t.blurhashes?.[poster])}
-					/>
-				{/if}
-				<h1 class="max-w-3xl">
-					{#if logo}
-						{#key logo}
-							{#snippet lettering(alt: string)}
-								<Lettering
-									id={logo}
-									{alt}
-									class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)] max-sm:[--lettering-align:center]"
-								/>
-							{/snippet}
-							{#if t.show}
-								<a href="/titles/{t.show.id}" class="block w-fit">
-									{@render lettering(t.show.title)}
-								</a>
-							{:else}
-								{@render lettering(t.title)}
-							{/if}
-						{/key}
-					{:else}
-						<span class="title block text-3xl md:text-5xl">{t.title}</span>
-					{/if}
-				</h1>
-			</div>
-			{#if facts.length || endsAt}
-				<p
-					class="text-ink-2 flex flex-wrap gap-x-3 gap-y-1 text-sm max-sm:justify-center"
-				>
-					{#each facts as fact (fact)}
-						<span>{fact}</span>
-					{/each}
-					{#if endsAt}
-						<span>Ends at {endsAt}</span>
-					{/if}
-				</p>
-			{/if}
-			{#if t.genres?.length}
-				<p class="text-ink-2 text-sm">{t.genres.join(", ")}</p>
-			{/if}
-			{#if ratings?.length}
-				<ul
-					class="flex flex-wrap gap-2 max-sm:justify-center"
-					aria-label="Ratings"
-				>
-					{#each ratings as rating (rating.site)}
-						<li
-							class="flex rounded-full bg-white/8 px-3 py-1.25 text-sm backdrop-blur-xl"
-						>
-							<RatingScore {rating} />
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			{#if t.tagline}
-				<p class="text-ink font-heading text-lg italic">{t.tagline}</p>
-			{/if}
-			{#if t.overview}
-				<div class="glass-plate max-w-2xl">
-					<Prose
-						text={t.overview}
-						lines={3}
-						title={titleWithShow(t)}
-						class="text-ink-2"
-					/>
+					{#key backdrop}
+						<Artwork
+							id={backdrop}
+							shape="backdrop"
+							loading="eager"
+							sizes="100vw"
+							fetchpriority="high"
+							class="size-full object-cover object-top transition-opacity duration-700 data-loading:opacity-0"
+						/>
+					{/key}
+					<div
+						class="from-ground via-(--accent)/35 absolute inset-0 bg-linear-to-t to-transparent"
+					></div>
+					<div
+						class="from-ground/90 absolute inset-0 bg-linear-to-r via-transparent to-transparent max-sm:hidden"
+					></div>
 				</div>
 			{/if}
-
-			{#if data.asking}
-				<!-- A title the server lacks: asked for in Play's place, and nothing
-					else of a title the server holds. -->
-				<div class="grid justify-items-start gap-2 max-sm:justify-items-center">
-					<Button
-						size="lg"
-						class="rounded-full px-5"
-						disabled={asking || asked}
-						onclick={ask}
+			<div
+				class={[
+					// Centred on a phone, as the apps' hero is at a compact width.
+					"relative grid gap-5 px-3 max-sm:justify-items-center max-sm:text-center sm:px-6",
+					backdrop ? "pt-[28svh]" : "pt-6",
+				]}
+			>
+				<!-- An episode's or season's lettering is its show's, which names it and leads to it. -->
+				{#if t.show && !logo}
+					<a
+						href="/titles/{t.show.id}"
+						class="text-ink-2 text-sm hover:underline"
 					>
-						{#if asked}
-							<CheckIcon />Asked for
+						{t.show.title}
+					</a>
+				{/if}
+				<div class="flex items-end gap-6 max-sm:justify-center">
+					{#if poster && !backdrop}
+						<Artwork
+							id={poster}
+							shape="poster"
+							loading="eager"
+							sizes="12rem"
+							class="hidden aspect-2/3 w-48 rounded-lg object-cover sm:block"
+							style={blurStyle(t.blurhashes?.[poster])}
+						/>
+					{/if}
+					<h1 class="max-w-3xl">
+						{#if logo}
+							{#key logo}
+								{#snippet lettering(alt: string)}
+									<Lettering
+										id={logo}
+										{alt}
+										class="[--lettering-h:9rem] [--lettering-w:min(24rem,80vw)] max-sm:[--lettering-align:center]"
+									/>
+								{/snippet}
+								{#if t.show}
+									<a href="/titles/{t.show.id}" class="block w-fit">
+										{@render lettering(t.show.title)}
+									</a>
+								{:else}
+									{@render lettering(t.title)}
+								{/if}
+							{/key}
 						{:else}
-							<HandIcon />Ask for it
+							<span class="title block text-3xl md:text-5xl">{t.title}</span>
 						{/if}
-					</Button>
-					<p class="text-ink-2 text-sm">
-						{asked
-							? "You'll be notified when it's added."
-							: "It isn't in the library yet. You'll be notified when it's added."}
-					</p>
+					</h1>
 				</div>
-			{:else}
-				<div class="flex flex-wrap items-center gap-2 max-sm:justify-center">
-					{#if playable && chosen}
+				{#if facts.length || endsAt}
+					<p
+						class="text-ink-2 flex flex-wrap gap-x-3 gap-y-1 text-sm max-sm:justify-center"
+					>
+						{#each facts as fact (fact)}
+							<span>{fact}</span>
+						{/each}
+						{#if endsAt}
+							<span>Ends at {endsAt}</span>
+						{/if}
+					</p>
+				{/if}
+				{#if t.genres?.length}
+					<p class="text-ink-2 text-sm">{t.genres.join(", ")}</p>
+				{/if}
+				{#if ratings?.length}
+					<ul
+						class="flex flex-wrap gap-2 max-sm:justify-center"
+						aria-label="Ratings"
+					>
+						{#each ratings as rating (rating.site)}
+							<li
+								class="flex rounded-full bg-white/8 px-3 py-1.25 text-sm backdrop-blur-xl"
+							>
+								<RatingScore {rating} />
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if t.tagline}
+					<p class="text-ink font-heading text-lg italic">{t.tagline}</p>
+				{/if}
+				{#if t.overview}
+					<div class="glass-plate max-w-2xl">
+						<Prose
+							text={t.overview}
+							lines={3}
+							title={titleWithShow(t)}
+							class="text-ink-2"
+						/>
+					</div>
+				{/if}
+
+				{#if data.asking}
+					<!-- A title the server lacks: asked for in Play's place, and nothing
+					else of a title the server holds. -->
+					<div
+						class="grid justify-items-start gap-2 max-sm:justify-items-center"
+					>
 						<Button
-							href={playHref(t.id, choice)}
 							size="lg"
 							class="rounded-full px-5"
+							disabled={asking || asked}
+							onclick={ask}
 						>
-							<PlayIcon class="fill-current" />
-							{position ? resumeLabel(position) : "Play"}
+							{#if asked}
+								<CheckIcon />Asked for
+							{:else}
+								<HandIcon />Ask for it
+							{/if}
 						</Button>
-						{#if position}
+						<p class="text-ink-2 text-sm">
+							{asked
+								? "You'll be notified when it's added."
+								: "It isn't in the library yet. You'll be notified when it's added."}
+						</p>
+					</div>
+				{:else}
+					<div class="flex flex-wrap items-center gap-2 max-sm:justify-center">
+						{#if playable && chosen}
 							<Button
-								href={playHref(t.id, { ...choice, t: 0 })}
-								variant="glass"
+								href={playHref(t.id, choice)}
 								size="lg"
+								class="rounded-full px-5"
 							>
-								<RotateCcwIcon />From the beginning
+								<PlayIcon class="fill-current" />
+								{position ? resumeLabel(position) : "Play"}
+							</Button>
+							{#if position}
+								<Button
+									href={playHref(t.id, { ...choice, t: 0 })}
+									variant="glass"
+									size="lg"
+								>
+									<RotateCcwIcon />From the beginning
+								</Button>
+							{/if}
+						{:else if t.fetching}
+							<!-- A remote title whose provider is fetching its version plays once it has it. -->
+							<p class="text-ink-2 text-sm">
+								Being fetched. It plays once its provider has it; look again in
+								a few minutes.
+							</p>
+						{:else if data.next}
+							{@const next = data.next}
+							<Button
+								href={playHref(next.id)}
+								size="lg"
+								class="rounded-full px-5"
+							>
+								<PlayIcon class="fill-current" />
+								{next.state?.position_ms ? "Resume" : "Play"}
+								{episodeLabel(
+									next.season_number,
+									next.episode_number,
+									next.episode_end,
+								)}
 							</Button>
 						{/if}
-					{:else if t.fetching}
-						<!-- A remote title whose provider is fetching its version plays once it has it. -->
-						<p class="text-ink-2 text-sm">
-							Being fetched. It plays once its provider has it; look again in a
-							few minutes.
-						</p>
-					{:else if data.next}
-						{@const next = data.next}
-						<Button
-							href={playHref(next.id)}
-							size="lg"
-							class="rounded-full px-5"
-						>
-							<PlayIcon class="fill-current" />
-							{next.state?.position_ms ? "Resume" : "Play"}
-							{episodeLabel(
-								next.season_number,
-								next.episode_number,
-								next.episode_end,
-							)}
-						</Button>
-					{/if}
-					{#if shuffles}
-						{@const id = shuffles}
-						<Button
-							variant="glass"
-							size="icon-lg"
-							aria-label="Shuffle"
-							title="Shuffle"
-							onclick={() => shuffle(id)}
-						>
-							<ShuffleIcon />
-						</Button>
-					{/if}
-					{#if trailer}
-						<Button href={playHref(trailer.id)} variant="glass" size="lg">
-							<FilmIcon />Trailer
-						</Button>
-					{/if}
-					{#if t.kind !== "collection"}
+						{#if shuffles}
+							{@const id = shuffles}
+							<Button
+								variant="glass"
+								size="icon-lg"
+								aria-label="Shuffle"
+								title="Shuffle"
+								onclick={() => shuffle(id)}
+							>
+								<ShuffleIcon />
+							</Button>
+						{/if}
+						{#if trailer}
+							<Button href={playHref(trailer.id)} variant="glass" size="lg">
+								<FilmIcon />Trailer
+							</Button>
+						{/if}
+						{#if t.kind !== "collection"}
+							<Button
+								variant="glass"
+								size="icon-lg"
+								aria-pressed={watched}
+								aria-label="Watched"
+								title={watched ? "Mark as unwatched" : "Mark as watched"}
+								onclick={() => setMark(t.id, "watched", !watched)}
+							>
+								<CheckIcon class={watched ? "stroke-3" : "text-ink-3"} />
+							</Button>
+						{/if}
 						<Button
 							variant="glass"
 							size="icon-lg"
-							aria-pressed={watched}
-							aria-label="Watched"
-							title={watched ? "Mark as unwatched" : "Mark as watched"}
-							onclick={() => setMark(t.id, "watched", !watched)}
+							aria-pressed={favourite}
+							aria-label="Favourite"
+							title={favourite ? "Remove from favourites" : "Add to favourites"}
+							onclick={() => setMark(t.id, "favourite", !favourite)}
 						>
-							<CheckIcon class={watched ? "stroke-3" : "text-ink-3"} />
+							<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
 						</Button>
-					{/if}
-					<Button
-						variant="glass"
-						size="icon-lg"
-						aria-pressed={favourite}
-						aria-label="Favourite"
-						title={favourite ? "Remove from favourites" : "Add to favourites"}
-						onclick={() => setMark(t.id, "favourite", !favourite)}
-					>
-						<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
-					</Button>
-					{#if t.kind !== "collection"}
-						<Button
-							variant="glass"
-							size="icon-lg"
-							aria-pressed={watchlisted}
-							aria-label="Watchlist"
-							title={watchlisted ? "Remove from watchlist" : "Add to watchlist"}
-							onclick={() => setMark(t.id, "watchlist", !watchlisted)}
-						>
-							<BookmarkIcon
-								class={watchlisted ? "fill-current" : "text-ink-3"}
-							/>
-						</Button>
-					{/if}
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button
-									variant="glass"
-									size="icon-lg"
-									aria-label="More"
-									{...props}
-								>
-									<EllipsisIcon />
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="start" class="w-56">
-							{#if t.kind !== "extra"}
-								<DropdownMenu.Item
-									onSelect={() => shell.pickPlaylist([t.id], titleWithShow(t))}
-								>
-									<ListPlusIcon />Add to playlist…
-								</DropdownMenu.Item>
-							{/if}
-							{#if playable && chosen}
-								<DropdownMenu.Item onSelect={() => (download = true)}>
-									<DownloadIcon />Download…
-								</DropdownMenu.Item>
-							{/if}
-							{#if chosen && (t.kind === "movie" || t.kind === "episode")}
-								<DropdownMenu.Item
-									onSelect={() => shell.findSubtitles(t.id, titleWithShow(t))}
-								>
-									<CaptionsIcon />Find subtitles…
-								</DropdownMenu.Item>
-							{/if}
-							{#if t.versions?.length}
-								<DropdownMenu.Item onSelect={() => (mediaInfo = true)}>
-									<InfoIcon />Media info
-								</DropdownMenu.Item>
-							{/if}
-							{#if admin}
-								<DropdownMenu.Separator />
-								<DropdownMenu.Group>
-									<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
-									{#if t.kind !== "collection" && t.kind !== "extra"}
-										<DropdownMenu.Item
-											onSelect={() =>
-												shell.pickCollection(t.id, titleWithShow(t))}
-										>
-											<LibraryBigIcon />Add to collection…
-										</DropdownMenu.Item>
-									{/if}
-									{#each adminTools as [tool, name] (tool)}
-										<DropdownMenu.Item
-											onSelect={() =>
-												goto(`/settings/server/titles/${t.id}#${tool}`)}
-										>
-											<WrenchIcon />{name}
-										</DropdownMenu.Item>
-									{/each}
-									{#if refreshable(t.kind)}
-										<DropdownMenu.Item
-											onSelect={() =>
-												shell.refreshMetadata("title", t.id, titleWithShow(t))}
-										>
-											<RefreshCwIcon />Refresh metadata…
-										</DropdownMenu.Item>
-									{/if}
-								</DropdownMenu.Group>
-							{/if}
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
-					{#if t.themes?.length}
-						{@const themes = t.themes}
-						<svelte:boundary>
-							{#if await data.themeMusic}
-								<!-- An episode of the same show goes on with the tune already playing. -->
-								<ThemeTune {themes} />
-							{/if}
-							{#snippet pending()}
-								<!-- Silent until the profile's answer comes. -->
-							{/snippet}
-						</svelte:boundary>
-					{/if}
-				</div>
-			{/if}
-
-			{#if playable && t.versions?.length}
-				<PlayChoices
-					versions={t.versions}
-					bind:version
-					bind:audio
-					bind:subtitle
-				/>
-			{/if}
-		</div>
-	</header>
-
-	{#if seasonCards.length}
-		<Rail title="Seasons" cards={seasonCards} caption={seasonCaption} />
-	{/if}
-
-	{#if t.season &&
-		episodes &&
-		(episodes.length > 1 || (data.seasons?.length ?? 0) > 1)}
-		<Rail
-			title={picked?.title ?? t.season.title}
-			cards={episodes}
-			resume="shown"
-			shape="still"
-			current={t.id}
-			caption={(i: number) =>
-				episodeLabel(
-					// A special placed in the season is labelled as the special it is.
-					episodes[i].season_number ?? picked?.number ?? t.season_number,
-					episodes[i].episode_number,
-					episodes[i].episode_end,
-				)}
-		>
-			{#snippet heading()}
-				{#if data.seasons && data.seasons.length > 1}
-					<span class="sr-only">{picked?.title ?? t.season?.title}</span>
-					<Choice
-						options={data.seasons.map((s) => ({ value: s.id, label: s.title }))}
-						value={picked?.id ?? t.season?.id}
-						aria-label={picked?.title ?? t.season?.title}
-						onchange={pick}
-						class="h-8 w-auto gap-2 rounded-full border-none bg-white/6 pr-2 pl-3 font-semibold hover:bg-white/12"
-					/>
-				{:else}
-					{t.season?.title}
+						{#if t.kind !== "collection"}
+							<Button
+								variant="glass"
+								size="icon-lg"
+								aria-pressed={watchlisted}
+								aria-label="Watchlist"
+								title={watchlisted
+									? "Remove from watchlist"
+									: "Add to watchlist"}
+								onclick={() => setMark(t.id, "watchlist", !watchlisted)}
+							>
+								<BookmarkIcon
+									class={watchlisted ? "fill-current" : "text-ink-3"}
+								/>
+							</Button>
+						{/if}
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button
+										variant="glass"
+										size="icon-lg"
+										aria-label="More"
+										{...props}
+									>
+										<EllipsisIcon />
+									</Button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="start" class="w-56">
+								{#if t.kind !== "extra"}
+									<DropdownMenu.Item
+										onSelect={() =>
+											shell.pickPlaylist([t.id], titleWithShow(t))}
+									>
+										<ListPlusIcon />Add to playlist…
+									</DropdownMenu.Item>
+								{/if}
+								{#if playable && chosen}
+									<DropdownMenu.Item onSelect={() => (download = true)}>
+										<DownloadIcon />Download…
+									</DropdownMenu.Item>
+								{/if}
+								{#if chosen && (t.kind === "movie" || t.kind === "episode")}
+									<DropdownMenu.Item
+										onSelect={() => shell.findSubtitles(t.id, titleWithShow(t))}
+									>
+										<CaptionsIcon />Find subtitles…
+									</DropdownMenu.Item>
+								{/if}
+								{#if t.versions?.length}
+									<DropdownMenu.Item onSelect={() => (mediaInfo = true)}>
+										<InfoIcon />Media info
+									</DropdownMenu.Item>
+								{/if}
+								{#if admin}
+									<DropdownMenu.Separator />
+									<DropdownMenu.Group>
+										<DropdownMenu.GroupHeading>Admin</DropdownMenu.GroupHeading>
+										{#if t.kind !== "collection" && t.kind !== "extra"}
+											<DropdownMenu.Item
+												onSelect={() =>
+													shell.pickCollection(t.id, titleWithShow(t))}
+											>
+												<LibraryBigIcon />Add to collection…
+											</DropdownMenu.Item>
+										{/if}
+										{#each adminTools as [tool, name] (tool)}
+											<DropdownMenu.Item
+												onSelect={() =>
+													goto(`/settings/server/titles/${t.id}#${tool}`)}
+											>
+												<WrenchIcon />{name}
+											</DropdownMenu.Item>
+										{/each}
+										{#if refreshable(t.kind)}
+											<DropdownMenu.Item
+												onSelect={() =>
+													shell.refreshMetadata(
+														"title",
+														t.id,
+														titleWithShow(t),
+													)}
+											>
+												<RefreshCwIcon />Refresh metadata…
+											</DropdownMenu.Item>
+										{/if}
+									</DropdownMenu.Group>
+								{/if}
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+						{#if t.themes?.length}
+							{@const themes = t.themes}
+							<svelte:boundary>
+								{#if await data.themeMusic}
+									<!-- An episode of the same show goes on with the tune already playing. -->
+									<ThemeTune {themes} />
+								{/if}
+								{#snippet pending()}
+									<!-- Silent until the profile's answer comes. -->
+								{/snippet}
+							</svelte:boundary>
+						{/if}
+					</div>
 				{/if}
-			{/snippet}
-		</Rail>
-	{/if}
 
-	{#if data.members}
-		<section aria-labelledby="members">
-			<h2 id="members" class="heading mb-3">
-				{count(data.members.length, "title")}
-			</h2>
-			<CardGrid cards={data.members} />
-		</section>
-	{/if}
+				{#if playable && t.versions?.length}
+					<PlayChoices
+						versions={t.versions}
+						bind:version
+						bind:audio
+						bind:subtitle
+					/>
+				{/if}
+			</div>
+		</header>
 
-	{#if credits.length}
-		<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
-			{#snippet card(credit: (typeof credits)[number])}
-				<PersonCard
-					id={credit.person_id}
-					name={credit.name}
-					photo={credit.photo}
-					blurhashes={credit.blurhashes}
-					caption={credit.said}
-				/>
-			{/snippet}
-		</Rail>
-	{/if}
+		{#if seasonCards.length}
+			<Rail title="Seasons" cards={seasonCards} caption={seasonCaption} />
+		{/if}
 
-	{#if extras.items.length}
-		<Rail
-			title="Extras"
-			shape="still"
-			items={extras.items}
-			href="/titles/{extras.of}/extras"
-		>
-			{#snippet card(item: Extra, sizes: string)}
-				<ExtraCard {item} {sizes} />
-			{/snippet}
-		</Rail>
-	{/if}
-
-	{#if collections.length}
-		<Rail
-			title="Collections"
-			cards={collections}
-			href="/titles/{about.id}/collections"
-		/>
-	{/if}
-
-	<svelte:boundary>
-		{@const similar = await data.similar}
-		{#if similar?.length}
+		{#if t.season &&
+			episodes &&
+			(episodes.length > 1 || (data.seasons?.length ?? 0) > 1)}
 			<Rail
-				title="More like this"
-				cards={similar}
-				href="/titles/{about.id}/similar"
+				title={picked?.title ?? t.season.title}
+				cards={episodes}
+				resume="shown"
+				shape="still"
+				current={t.id}
+				caption={(i: number) =>
+					episodeLabel(
+						// A special placed in the season is labelled as the special it is.
+						episodes[i].season_number ?? picked?.number ?? t.season_number,
+						episodes[i].episode_number,
+						episodes[i].episode_end,
+					)}
+			>
+				{#snippet heading()}
+					{#if data.seasons && data.seasons.length > 1}
+						<span class="sr-only">{picked?.title ?? t.season?.title}</span>
+						<Choice
+							options={data.seasons.map((s) => ({
+								value: s.id,
+								label: s.title,
+							}))}
+							value={picked?.id ?? t.season?.id}
+							aria-label={picked?.title ?? t.season?.title}
+							onchange={pick}
+							class="h-8 w-auto gap-2 rounded-full border-none bg-white/6 pr-2 pl-3 font-semibold hover:bg-white/12"
+						/>
+					{:else}
+						{t.season?.title}
+					{/if}
+				{/snippet}
+			</Rail>
+		{/if}
+
+		{#if data.members}
+			<section aria-labelledby="members">
+				<h2 id="members" class="heading mb-3">
+					{count(data.members.length, "title")}
+				</h2>
+				<CardGrid cards={data.members} />
+			</section>
+		{/if}
+
+		{#if credits.length}
+			<Rail title="Cast & crew" items={credits} href="/titles/{t.id}/cast">
+				{#snippet card(credit: (typeof credits)[number])}
+					<PersonCard
+						id={credit.person_id}
+						name={credit.name}
+						photo={credit.photo}
+						blurhashes={credit.blurhashes}
+						caption={credit.said}
+					/>
+				{/snippet}
+			</Rail>
+		{/if}
+
+		{#if extras.items.length}
+			<Rail
+				title="Extras"
+				shape="still"
+				items={extras.items}
+				href="/titles/{extras.of}/extras"
+			>
+				{#snippet card(item: Extra, sizes: string)}
+					<ExtraCard {item} {sizes} />
+				{/snippet}
+			</Rail>
+		{/if}
+
+		{#if collections.length}
+			<Rail
+				title="Collections"
+				cards={collections}
+				href="/titles/{about.id}/collections"
 			/>
 		{/if}
-		{#snippet pending()}
-			<!-- Nothing, until the server has looked. -->
-		{/snippet}
-		{#snippet failed()}
-			<!-- Nothing: the rest of the page is no less for it. -->
-		{/snippet}
-	</svelte:boundary>
 
-	{#if t.studios?.length ||
-		directors.length ||
-		writers.length ||
-		t.original_title ||
-		links.length}
-		<section aria-labelledby="details">
-			<h2 id="details" class="heading mb-3">Details</h2>
-			<dl class="grid max-w-3xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-				{#if t.original_title && t.original_title !== t.title}
-					<dt class="text-ink-3">Original title</dt>
-					<dd class="text-ink">{t.original_title}</dd>
-				{/if}
-				{#each [
-					["Directed by", directors],
-					["Written by", writers],
-				] as const as [name, people] (name)}
-					{#if people.length}
-						<dt class="text-ink-3">{name}</dt>
-						<dd class="text-ink">
-							{#each people as person, i (person.id)}
-								{i ? ", " : ""}
-								{#if person.person_id}
-									<a href="/people/{person.person_id}" class="hover:underline"
-										>{person.name}</a
-									>
-								{:else}
-									{person.name}
-								{/if}
+		<svelte:boundary>
+			{@const similar = await data.similar}
+			{#if similar?.length}
+				<Rail
+					title="More like this"
+					cards={similar}
+					href="/titles/{about.id}/similar"
+				/>
+			{/if}
+			{#snippet pending()}
+				<!-- Nothing, until the server has looked. -->
+			{/snippet}
+			{#snippet failed()}
+				<!-- Nothing: the rest of the page is no less for it. -->
+			{/snippet}
+		</svelte:boundary>
+
+		{#if t.studios?.length ||
+			directors.length ||
+			writers.length ||
+			t.original_title ||
+			links.length}
+			<section aria-labelledby="details">
+				<h2 id="details" class="heading mb-3">Details</h2>
+				<dl class="grid max-w-3xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+					{#if t.original_title && t.original_title !== t.title}
+						<dt class="text-ink-3">Original title</dt>
+						<dd class="text-ink">{t.original_title}</dd>
+					{/if}
+					{#each [
+						["Directed by", directors],
+						["Written by", writers],
+					] as const as [name, people] (name)}
+						{#if people.length}
+							<dt class="text-ink-3">{name}</dt>
+							<dd class="text-ink">
+								{#each people as person, i (person.id)}
+									{i ? ", " : ""}
+									{#if person.person_id}
+										<a href="/people/{person.person_id}" class="hover:underline"
+											>{person.name}</a
+										>
+									{:else}
+										{person.name}
+									{/if}
+								{/each}
+							</dd>
+						{/if}
+					{/each}
+					{#if t.studios?.length}
+						<dt class="text-ink-3">
+							{t.kind === "show" ? "Networks" : "Studios"}
+						</dt>
+						<dd class="text-ink">{t.studios.join(", ")}</dd>
+					{/if}
+					{#if links.length}
+						<dt class="text-ink-3">Elsewhere</dt>
+						<dd class="flex flex-wrap gap-x-3">
+							{#each links as link (link.name)}
+								<a
+									href={link.href}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="text-ink inline-flex items-center gap-1 hover:underline"
+								>
+									{link.name}
+									<ExternalLinkIcon class="size-3" aria-hidden="true" />
+									<span class="sr-only">(opens in a new tab)</span>
+								</a>
 							{/each}
 						</dd>
 					{/if}
-				{/each}
-				{#if t.studios?.length}
-					<dt class="text-ink-3">
-						{t.kind === "show" ? "Networks" : "Studios"}
-					</dt>
-					<dd class="text-ink">{t.studios.join(", ")}</dd>
-				{/if}
-				{#if links.length}
-					<dt class="text-ink-3">Elsewhere</dt>
-					<dd class="flex flex-wrap gap-x-3">
-						{#each links as link (link.name)}
-							<a
-								href={link.href}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="text-ink inline-flex items-center gap-1 hover:underline"
-							>
-								{link.name}
-								<ExternalLinkIcon class="size-3" aria-hidden="true" />
-								<span class="sr-only">(opens in a new tab)</span>
-							</a>
-						{/each}
-					</dd>
-				{/if}
-			</dl>
-		</section>
-	{/if}
-</article>
+				</dl>
+			</section>
+		{/if}
+	</article>
 
-{#if t.versions?.length}
-	<MediaInfo bind:open={mediaInfo} title={t.title} versions={t.versions} />
-{/if}
-{#if playable && chosen}
-	<DownloadDialog
-		bind:open={download}
-		id={t.id}
-		title={t.title}
-		version={chosen}
-	/>
+	{#if t.versions?.length}
+		<MediaInfo bind:open={mediaInfo} title={t.title} versions={t.versions} />
+	{/if}
+	{#if playable && chosen}
+		<DownloadDialog
+			bind:open={download}
+			id={t.id}
+			title={t.title}
+			version={chosen}
+		/>
+	{/if}
 {/if}
