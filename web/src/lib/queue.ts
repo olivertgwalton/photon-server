@@ -1,5 +1,6 @@
 import type { components } from "#lib/api/schema.d.ts";
 import { goto } from "$app/navigation";
+import { shuffled } from "./shuffle.ts";
 
 type Card = components["schemas"]["Card"];
 
@@ -15,13 +16,4 @@ export function playQueue(cards: Card[], shuffle = false) {
 
 export function queued(at: number): Card | undefined {
 	return queue[at];
-}
-
-export function shuffled<T>(items: T[]): T[] {
-	const out = [...items];
-	for (let i = out.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		[out[i], out[j]] = [out[j], out[i]];
-	}
-	return out;
 }

@@ -1,7 +1,5 @@
-import { expect, mock, test } from "bun:test";
-
-mock.module("$app/navigation", () => ({ goto: () => Promise.resolve() }));
-const { shuffled } = await import("./queue.ts");
+import { expect, test } from "bun:test";
+import { shuffled } from "./shuffle.ts";
 
 test("a shuffle plays every title once", () => {
 	const titles = Array.from({ length: 50 }, (_, n) => `t-${n}`);

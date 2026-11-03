@@ -5,7 +5,7 @@ import { client } from "#lib/api/client.ts";
 import { problemMessage } from "#lib/api/problem.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import { artworkURL } from "#lib/artwork.ts";
-import { shuffled } from "#lib/queue.ts";
+import { shuffled } from "#lib/shuffle.ts";
 import {
 	type AudioCapabilities,
 	audioProfile,
