@@ -113,7 +113,7 @@ func TestAnAppsProfileDecidesHowAVersionPlays(t *testing.T) {
 		t.Error("a version past the bitrate asked for plays as it is")
 	}
 
-	tp, segments, ok := p.hls(&audio)
+	tp, segments, ok := p.hls(&video, &audio)
 	if !ok || segments != domain.SegmentsFMP4 {
 		t.Fatalf("Swiftfin's HLS: %v in %s", ok, segments)
 	}
@@ -135,11 +135,11 @@ func TestRangesAnAppTakesNarrowWhatHLSCarries(t *testing.T) {
 			"ApplyConditions": [{"Condition": "EqualsAny", "Property": "VideoRangeType", "Value": "DOVI|DOVIWithHDR10|DOVIWithEL", "IsRequired": false}],
 			"Conditions": [{"Condition": "NotEquals", "Property": "VideoRangeType", "Value": "DOVI|DOVIWithEL", "IsRequired": false}]}]
 	}`)
-	tp, segments, ok := p.hls(nil)
+	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
+	tp, segments, ok := p.hls(&dv, nil)
 	if !ok {
 		t.Fatal("no HLS photon makes")
 	}
-	dv := domain.Stream{Kind: domain.StreamVideo, Codec: "hevc", Range: domain.RangeDV, DolbyVision: &domain.DolbyVision{Profile: 5}}
 	hp := p.hlsProfile(tp, segments, store.PlayVersion{Streams: []domain.Stream{dv}}, 0)
 	if slices.Contains(hp.Video[0].Ranges, domain.RangeDV) || !slices.Contains(hp.Video[0].Ranges, domain.RangeHDR10) {
 		t.Errorf("ranges for a Dolby Vision profile 5 version: %v", hp.Video[0].Ranges)
@@ -155,7 +155,7 @@ func TestAnAppsHLSIsInSegmentsThatCarryItsAudio(t *testing.T) {
 	for codec, want := range map[string]domain.SegmentFormat{
 		"aac": domain.SegmentsMPEGTS, "dts": domain.SegmentsFMP4, "flac": domain.SegmentsFMP4, "opus": domain.SegmentsMPEGTS,
 	} {
-		if _, got, ok := p.hls(&domain.Stream{Kind: domain.StreamAudio, Codec: codec}); !ok || got != want {
+		if _, got, ok := p.hls(&domain.Stream{Kind: domain.StreamVideo, Codec: "h264"}, &domain.Stream{Kind: domain.StreamAudio, Codec: codec}); !ok || got != want {
 			t.Errorf("%s audio: %s, want %s", codec, got, want)
 		}
 	}

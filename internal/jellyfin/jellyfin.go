@@ -209,7 +209,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.themeSongsResult, "GET /Items/{itemId}/ThemeSongs")
 	a.handle(a.themeVideos, "GET /Items/{itemId}/ThemeVideos")
 	a.handle(a.themeMedia, "GET /Items/{itemId}/ThemeMedia")
-	a.handle(a.themeSongFile, "GET /Audio/{itemId}/{file}")
+	a.handleMedia(a.audio, "GET /Audio/{itemId}/{file}")
 	// Photon plays nothing before a title. Jellyfin's web app asks before it plays, and its intros,
 	// unlike the lists above, are a query result.
 	a.handle(a.constant(`{"Items":[],"TotalRecordCount":0,"StartIndex":0}`),
