@@ -51,11 +51,16 @@ const (
 	SearchShow                  = SearchKind(ItemShow)
 	SearchCollection            = SearchKind(ItemCollection)
 	SearchEpisode               = SearchKind(ItemEpisode)
+	SearchArtist                = SearchKind(ItemArtist)
+	SearchAlbum                 = SearchKind(ItemAlbum)
+	SearchTrack                 = SearchKind(ItemTrack)
+	SearchAuthor                = SearchKind(ItemAuthor)
+	SearchBook                  = SearchKind(ItemBook)
 	SearchPerson     SearchKind = "person"
 )
 
 func SearchKinds() []SearchKind {
-	return []SearchKind{SearchMovie, SearchShow, SearchCollection, SearchEpisode, SearchPerson}
+	return []SearchKind{SearchMovie, SearchShow, SearchCollection, SearchEpisode, SearchArtist, SearchAlbum, SearchTrack, SearchAuthor, SearchBook, SearchPerson}
 }
 
 // CollectionOrigin is who made a collection: a provider that names its titles part of it, or an
