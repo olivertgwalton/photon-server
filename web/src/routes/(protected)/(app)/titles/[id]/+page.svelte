@@ -26,6 +26,7 @@ import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import AlbumPage from "#lib/components/AlbumPage.svelte";
 import ArtistPage from "#lib/components/ArtistPage.svelte";
 import Artwork from "#lib/components/Artwork.svelte";
+import AuthorPage from "#lib/components/AuthorPage.svelte";
 import BookPage from "#lib/components/BookPage.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
@@ -287,6 +288,8 @@ async function ask() {
 	<ArtistPage title={t} />
 {:else if t.kind === "book"}
 	<BookPage title={t} />
+{:else if t.kind === "author"}
+	<AuthorPage title={t} />
 {:else}
 	<article class="grid gap-10">
 		<header class="relative -mx-3 -mt-6 sm:-mx-6" style:--accent={accent}>
