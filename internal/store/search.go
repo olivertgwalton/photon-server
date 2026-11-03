@@ -13,7 +13,8 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
-// SearchQuery asks for the films, shows, collections and episodes whose title has words starting
+// SearchQuery asks for the films, shows, collections, episodes, artists, albums, tracks, authors and
+// books whose title has words starting
 // with each word typed, ignoring case and accents: "amel" finds Amélie, once however many libraries
 // hold it. Library narrows it to one library, and Kinds to those kinds of title. Limit of them are
 // answered from Offset.
@@ -41,8 +42,8 @@ const nearEnough = "0.4"
 const searchedText = `search_text(title || ' ' || coalesce(original_title, ''))`
 
 // Search answers a page of the matching titles, and what the page tells of the rest: one named
-// exactly what was typed, then those starting with it, then the closest matches; an episode after
-// the films, shows and collections matched as well, as Jellyfin ranks them. Where no title has the
+// exactly what was typed, then those starting with it, then the closest matches; an episode or a
+// track after the titles matched as well, which hold them, as Jellyfin ranks them. Where no title has the
 // words typed, those typed with a letter wrong are found by the trigrams they share, the nearest
 // first, as Plex finds them.
 func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, Extent, error) {
@@ -52,17 +53,20 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, Extent, erro
 	}
 	kinds := q.Kinds
 	if len(kinds) == 0 {
-		kinds = []domain.ItemKind{domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemEpisode}
+		kinds = []domain.ItemKind{
+			domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemEpisode,
+			domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook,
+		}
 	}
 	args := pgx.NamedArgs{
-		"kinds": kinds, "episode": domain.ItemEpisode,
+		"kinds": kinds, "parts": []domain.ItemKind{domain.ItemEpisode, domain.ItemTrack},
 		"query": prefixes(words), "text": q.Text, "library": optional(q.Library), "offset": q.Offset, "limit": q.Limit + 1, "profile": q.Profile,
 	}
 	const typed = `search @@ to_tsquery('simple', search_text(@query))`
 	page := Page{Offset: q.Offset, Limit: q.Limit, Count: q.Count}
 	cards, extent, err := s.titlesMatching(ctx, q.Profile, args, page, typed,
 		`search_text(title) = search_text(@text) DESC, starts_with(search_text(title), search_text(@text)) DESC,
-			kind = @episode, ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC`)
+			kind = ANY(@parts), ts_rank_cd(search, to_tsquery('simple', search_text(@query))) DESC`)
 	if err != nil || len(cards) > 0 || utf8.RuneCountInString(strings.Join(words, "")) < nearFrom {
 		return cards, extent, err
 	}
@@ -74,7 +78,7 @@ func (s *Store) Search(ctx context.Context, q SearchQuery) ([]Card, Extent, erro
 		}
 	}
 	return s.titlesMatching(ctx, q.Profile, args, page, `search_text(@text) <% `+searchedText,
-		`word_similarity(search_text(@text), `+searchedText+`) DESC, kind = @episode`)
+		`word_similarity(search_text(@text), `+searchedText+`) DESC, kind = ANY(@parts)`)
 }
 
 // titlesWhere is the FROM and WHERE of the titles args asks for among those matching where.
