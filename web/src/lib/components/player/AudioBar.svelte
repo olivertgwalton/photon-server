@@ -15,6 +15,7 @@ import {
 	showNowPlaying,
 } from "#lib/player/listening.svelte.ts";
 import NowPlaying from "./NowPlaying.svelte";
+import OptionsMenu from "./OptionsMenu.svelte";
 import PlayerControls from "./PlayerControls.svelte";
 import PlayerSettings from "./PlayerSettings.svelte";
 import QueuePanel from "./QueuePanel.svelte";
@@ -28,6 +29,7 @@ const chapter = $derived(chapterAt(listening.position, item?.chapters));
 
 let queueOpen = $state(false);
 let nowPlayingOpen = $state(false);
+let lyricsShown = $state(false);
 
 $effect(() => listening.start());
 $effect(() => mediaSession());
@@ -140,6 +142,13 @@ function onkeydown(e: KeyboardEvent) {
 		</div>
 
 		<div class="flex items-center justify-end gap-1 max-md:hidden">
+			<OptionsMenu
+				size="bar"
+				onlyrics={() => {
+					lyricsShown = true;
+					nowPlayingOpen = true;
+				}}
+			/>
 			<PlayerSettings />
 			<IconButton
 				label="Queue"
@@ -170,6 +179,7 @@ function onkeydown(e: KeyboardEvent) {
 	<QueuePanel bind:open={queueOpen} />
 	<NowPlaying
 		bind:open={nowPlayingOpen}
+		bind:lyrics={lyricsShown}
 		onqueue={() => {
 			nowPlayingOpen = false;
 			queueOpen = true;

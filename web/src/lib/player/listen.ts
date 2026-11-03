@@ -403,3 +403,27 @@ function listenOf(x: unknown): Listen | undefined {
 			: undefined,
 	};
 }
+
+const methodNames: Record<Schemas["PlayMethod"], string> = {
+	direct: "As it is",
+	remux: "Repackaged",
+	transcode: "Converted",
+};
+
+// How what plays is played, for its credits: the file as it is, its sound
+// repackaged, or converted; in what, and how many kilobits a second.
+export function playingAs(
+	playback: Pick<Schemas["Playback"], "method" | "audio">,
+	source: { codec: string; bitrate_kbps?: number } | undefined,
+): string {
+	const encoded = playback.audio?.decision === "transcode";
+	const codec = (encoded ? playback.audio?.codec : source?.codec) ?? "";
+	const kbps = encoded ? playback.audio?.bitrate_kbps : source?.bitrate_kbps;
+	return [
+		methodNames[playback.method],
+		codec.toUpperCase(),
+		kbps && `${kbps.toLocaleString()} kbps`,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}

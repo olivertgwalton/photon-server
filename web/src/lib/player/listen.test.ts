@@ -9,6 +9,7 @@ import {
 	lineAt,
 	movedTo,
 	nextAt,
+	playingAs,
 	playingNext,
 	previousAt,
 	type Queue,
@@ -244,4 +245,31 @@ test("a queue kept before each named its kind knows a book by its version", () =
 		original: [],
 	});
 	expect(readKept(kept)?.items.map((i) => i.kind)).toEqual(["track", "book"]);
+});
+
+test("credits say how a track is played: as it is, or converted to what", () => {
+	const flac = { codec: "flac", bitrate_kbps: 921 };
+	expect(
+		playingAs(
+			{ method: "direct", audio: { stream: 0, decision: "copy" } },
+			flac,
+		),
+	).toBe("As it is · FLAC · 921 kbps");
+	expect(
+		playingAs(
+			{
+				method: "transcode",
+				audio: {
+					stream: 0,
+					decision: "transcode",
+					codec: "aac",
+					bitrate_kbps: 192,
+				},
+			},
+			flac,
+		),
+	).toBe("Converted · AAC · 192 kbps");
+	expect(playingAs({ method: "remux" }, { codec: "flac" })).toBe(
+		"Repackaged · FLAC",
+	);
 });
