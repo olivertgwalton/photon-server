@@ -7716,7 +7716,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Keep where the profile is in a book, as its reader gives it, and how far through the book that is */
+        /** Record where the profile is in a book, as its reader gives it, how far through the book that is, and when: a place from before the title's state last changed is refused as a conflict */
         put: {
             parameters: {
                 query?: never;
@@ -7732,12 +7732,14 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description No Content */
-                204: {
+                /** @description OK */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Reached"];
+                    };
                 };
                 default: components["responses"]["Problem"];
             };
@@ -9835,6 +9837,8 @@ export interface components {
             reach: components["schemas"]["Reach"];
         };
         Reading: {
+            /** Format: date-time */
+            at?: string | null;
             locator: {
                 [key: string]: unknown;
             };
