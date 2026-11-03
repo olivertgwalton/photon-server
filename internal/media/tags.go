@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -75,8 +76,12 @@ func ReadTags(path string) (Tags, error) {
 	}
 	// Picard writes each artist apart in ARTISTS, and their credit as printed in ARTIST.
 	if len(t.Artists) == 0 {
-		t.Artists = names(raw[taglib.Artist])
+		for _, credit := range raw[taglib.Artist] {
+			t.Artists = append(t.Artists, credited(credit)...)
+		}
 	}
+	t.Title, t.Artists = featuring(t.Title, t.Artists)
+	t.Artists = names(t.Artists)
 	t.Released, t.Year = dated(first(taglib.Date))
 	t.Gain = replayGain(first)
 	props, err := taglib.ReadProperties(path)
@@ -127,6 +132,37 @@ func decibels(s string) (float64, bool) {
 	}
 	db, err := strconv.ParseFloat(s, 64)
 	return db, err == nil
+}
+
+// featured is a credit to artists a title or an artist's name marks as featured, "(feat. Justice)"
+// or "ft. A & B". In a title it is bracketed, so "Defeat" and "Left Behind" are titles alone.
+var (
+	featuredInTitle  = regexp.MustCompile(`(?i)\s*[(\[](?:feat\.?|ft\.?|featuring)\s+([^)\]]+)[)\]]`)
+	featuredInArtist = regexp.MustCompile(`(?i)\s+[(\[]?(?:feat\.?|ft\.?|featuring)\s+([^)\]]+)[)\]]?$`)
+	// together joins the featured, "A, B & C"; it is not read in a name alone, Simon & Garfunkel
+	// being one.
+	together = regexp.MustCompile(`\s*[,&]\s*`)
+)
+
+// featuring is a title less the credits it gives featured artists, and artists with them after,
+// as Apple Music and MusicBrainz credit them: "Wake Me Up (Feat. Justice)" by The Weeknd is "Wake
+// Me Up" by The Weeknd and Justice. What follows the credit stays, "Song (feat. A) [Remix]" being
+// "Song [Remix]".
+func featuring(title string, artists []string) (string, []string) {
+	for _, m := range featuredInTitle.FindAllStringSubmatch(title, -1) {
+		artists = append(artists, together.Split(m[1], -1)...)
+	}
+	return strings.TrimSpace(featuredInTitle.ReplaceAllString(title, "")), artists
+}
+
+// credited is the artists an artist's credit names, "The Weeknd feat. Justice" being The Weeknd
+// and Justice.
+func credited(credit string) []string {
+	m := featuredInArtist.FindStringSubmatchIndex(credit)
+	if m == nil {
+		return []string{credit}
+	}
+	return append([]string{credit[:m[0]]}, together.Split(credit[m[2]:m[3]], -1)...)
 }
 
 // names is values without blanks or repeats, in their order.
