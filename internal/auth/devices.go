@@ -26,10 +26,11 @@ func (s *Service) Devices(ctx context.Context, session domain.Session) ([]store.
 	return s.store.Devices(ctx, scope(session))
 }
 
-func (s *Service) SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) error {
-	found, err := s.store.DeleteDevice(ctx, device, scope(session))
-	if err == nil && !found {
-		return ErrDeviceNotFound
+// SignOutDevice signs a device out, answering the profile it was signed in to.
+func (s *Service) SignOutDevice(ctx context.Context, session domain.Session, device uuid.UUID) (uuid.UUID, error) {
+	profile, err := s.store.DeleteDevice(ctx, device, scope(session))
+	if errors.Is(err, store.ErrNotFound) {
+		return uuid.UUID{}, ErrDeviceNotFound
 	}
-	return err
+	return profile, err
 }

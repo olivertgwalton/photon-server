@@ -106,15 +106,23 @@ func (a *API) setProfile(r *http.Request, req profileChangeJSON) (profileJSON, e
 		}
 	}
 	p, err := a.svc.ProfileAdmin.SetProfile(r.Context(), pathUUID(r, "id"), change, keeper(r))
-	return profileOf(p), err
+	if err != nil {
+		return profileJSON{}, err
+	}
+	if change.Role != "" || change.PasswordHash != "" {
+		a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: p.ID})
+	}
+	return profileOf(p), nil
 }
 
 // removeProfile forgets a profile, its devices and what it has watched.
 func (a *API) removeProfile(r *http.Request, _ none) (none, error) {
-	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), pathUUID(r, "id"), keeper(r))
+	id := pathUUID(r, "id")
+	name, err := a.svc.ProfileAdmin.RemoveProfile(r.Context(), id, keeper(r))
 	if err != nil {
 		return none{}, err
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: id})
 	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventProfileRemoved, Details: domain.NameDetails{Name: name}})
 	return none{}, nil
 }

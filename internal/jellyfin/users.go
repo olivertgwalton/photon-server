@@ -171,6 +171,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 			a.internal(w, r, err)
 			return
 		}
+		a.svc.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: s.Profile.ID})
 	case domain.SessionKey:
 	}
 	w.WriteHeader(http.StatusNoContent)

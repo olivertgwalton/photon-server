@@ -26,10 +26,11 @@ func (s *Service) Keys(ctx context.Context) ([]store.KeyListing, error) {
 	return s.store.Keys(ctx)
 }
 
-func (s *Service) RevokeKey(ctx context.Context, id uuid.UUID) error {
-	found, err := s.store.DeleteKey(ctx, id)
-	if err == nil && !found {
-		return ErrKeyNotFound
+// RevokeKey revokes an API key, answering the profile it acted as.
+func (s *Service) RevokeKey(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	profile, err := s.store.DeleteKey(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return uuid.UUID{}, ErrKeyNotFound
 	}
-	return err
+	return profile, err
 }

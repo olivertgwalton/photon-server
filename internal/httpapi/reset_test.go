@@ -13,7 +13,7 @@ import (
 
 func resetAPI(log *bytes.Buffer) *API {
 	return New(slog.New(slog.NewTextHandler(log, nil)), domain.Info{}, Services{
-		Auth: fakeAuth{}, Network: fakeNetwork{}, Limits: &fakeLimiter{}, Placer: alone(nil, false),
+		Auth: fakeAuth{}, Network: fakeNetwork{}, Limits: &fakeLimiter{}, Placer: alone(nil, false), Events: &fakeEvents{},
 	})
 }
 

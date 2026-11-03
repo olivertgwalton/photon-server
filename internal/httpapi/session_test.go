@@ -137,8 +137,8 @@ func (fakeAuth) Devices(context.Context, domain.Session) ([]store.DeviceListing,
 	return nil, nil
 }
 
-func (fakeAuth) SignOutDevice(context.Context, domain.Session, uuid.UUID) error {
-	return auth.ErrDeviceNotFound
+func (fakeAuth) SignOutDevice(context.Context, domain.Session, uuid.UUID) (uuid.UUID, error) {
+	return uuid.UUID{}, auth.ErrDeviceNotFound
 }
 
 func (fakeAuth) CreateKey(context.Context, domain.Session, string) (uuid.UUID, string, error) {
@@ -147,7 +147,9 @@ func (fakeAuth) CreateKey(context.Context, domain.Session, string) (uuid.UUID, s
 
 func (fakeAuth) Keys(context.Context) ([]store.KeyListing, error) { return nil, nil }
 
-func (fakeAuth) RevokeKey(context.Context, uuid.UUID) error { return auth.ErrKeyNotFound }
+func (fakeAuth) RevokeKey(context.Context, uuid.UUID) (uuid.UUID, error) {
+	return uuid.UUID{}, auth.ErrKeyNotFound
+}
 
 func (fakeAuth) PollPairing(_ context.Context, deviceCode string) (kv.PairingState, string, domain.Profile, error) {
 	if deviceCode == "BCDFGHJK.secret" {

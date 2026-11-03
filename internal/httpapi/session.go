@@ -269,10 +269,12 @@ func (a *API) signedIn(w http.ResponseWriter, r *http.Request, keep domain.Keep,
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
-	if err := a.svc.Auth.SignOut(r.Context(), auth.SessionOf(r.Context()).ID); err != nil {
+	session := auth.SessionOf(r.Context())
+	if err := a.svc.Auth.SignOut(r.Context(), session.ID); err != nil {
 		a.internal(w, r, err)
 		return
 	}
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSessionsChanged, Profile: session.Profile.ID})
 	if _, err := r.Cookie(sessionCookie); err == nil {
 		a.keepSession(w, r, "")
 	}

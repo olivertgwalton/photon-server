@@ -276,13 +276,15 @@ func (s *Store) Devices(ctx context.Context, profile *uuid.UUID) ([]DeviceListin
 		ORDER BY d.last_seen_at DESC`, profile)
 }
 
-// DeleteDevice signs a device out, of those Devices lists for profile, and reports whether there
-// was such a device.
-func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (bool, error) {
-	info, err := s.pool.Exec(ctx, `
+// DeleteDevice signs a device out, of those Devices lists for profile, answering the profile it
+// was signed in to. ErrNotFound for no such device.
+func (s *Store) DeleteDevice(ctx context.Context, id uuid.UUID, profile *uuid.UUID) (uuid.UUID, error) {
+	var on uuid.UUID
+	err := s.pool.QueryRow(ctx, `
 		DELETE FROM device_sessions d USING profiles p
-		WHERE p.id = d.profile_id AND d.id = $2 AND d.kind = 'device' AND `+devicesOf, profile, id)
-	return info.RowsAffected() == 1, err
+		WHERE p.id = d.profile_id AND d.id = $2 AND d.kind = 'device' AND `+devicesOf+`
+		RETURNING d.profile_id`, profile, id).Scan(&on)
+	return on, found(err)
 }
 
 type KeyListing struct {
@@ -303,10 +305,11 @@ func (s *Store) Keys(ctx context.Context) ([]KeyListing, error) {
 		ORDER BY d.created_at DESC`)
 }
 
-// DeleteKey revokes an API key, reporting whether there was one.
-func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) (bool, error) {
-	info, err := s.pool.Exec(ctx, `DELETE FROM device_sessions WHERE id = $1 AND kind = 'key'`, id)
-	return info.RowsAffected() == 1, err
+// DeleteKey revokes an API key, answering the profile it acted as. ErrNotFound for no such key.
+func (s *Store) DeleteKey(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	var as uuid.UUID
+	err := s.pool.QueryRow(ctx, `DELETE FROM device_sessions WHERE id = $1 AND kind = 'key' RETURNING profile_id`, id).Scan(&as)
+	return as, found(err)
 }
 
 // ErrLastAdmin is a change that would leave the server with no admin.
