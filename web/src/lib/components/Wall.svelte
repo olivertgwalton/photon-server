@@ -2,6 +2,7 @@
 import type { Attachment } from "svelte/attachments";
 import { innerHeight } from "svelte/reactivity/window";
 import type { components } from "#lib/api/schema.d.ts";
+import { aspect } from "#lib/artwork.ts";
 import { cardMin } from "#lib/cardsize.svelte.ts";
 import { columnGap, columnsFor, gridColumns } from "#lib/grid.ts";
 import { onResize } from "#lib/size.ts";
@@ -20,6 +21,7 @@ let {
 	pageSize,
 	fetchPage,
 	view,
+	cover = "poster",
 	label,
 }: {
 	total: number;
@@ -27,6 +29,9 @@ let {
 	pageSize: number;
 	fetchPage: (offset: number) => Promise<Card[] | undefined>;
 	view: ViewStyle;
+	// What a card is drawn as where the wall is not of stills: an album's is
+	// square.
+	cover?: "poster" | "square";
 	label: string;
 } = $props();
 
@@ -70,15 +75,13 @@ const resized = onResize((_, box) => {
 	measure();
 });
 
-const shape = $derived(view === "still" ? "still" : "poster");
+const shape = $derived(view === "still" ? "still" : cover);
 const columns = $derived(
 	view === "list" ? 1 : columnsFor(width, cardMin(shape)),
 );
 const cardWidth = $derived((width - columnGap * (columns - 1)) / columns);
 const rowHeight = $derived(
-	view === "list"
-		? listRowHeight
-		: cardWidth * (shape === "poster" ? 1.5 : 9 / 16) + rowGap,
+	view === "list" ? listRowHeight : cardWidth * aspect[shape].height + rowGap,
 );
 const rows = $derived(Math.ceil(total / columns));
 
@@ -179,11 +182,7 @@ const sizes = $derived(`${Math.ceil(cardWidth) || 200}px`);
 					<div
 						class={[
 							"bg-raise rounded-xl",
-							view === "list"
-								? "h-18"
-								: shape === "poster"
-									? "aspect-2/3"
-									: "aspect-video",
+							view === "list" ? "h-18" : aspect[shape].class,
 						]}
 					></div>
 				{/if}

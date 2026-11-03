@@ -31,7 +31,7 @@ let {
 			<TitleCard
 				card={c}
 				{shape}
-				sizes={shape === "poster" ? "12rem" : "20rem"}
+				sizes={shape === "still" ? "20rem" : "12rem"}
 				caption={caption?.(i)}
 			/>
 		</li>
