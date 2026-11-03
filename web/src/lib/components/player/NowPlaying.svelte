@@ -1,6 +1,9 @@
 <script lang="ts">
 import ListMusicIcon from "@lucide/svelte/icons/list-music";
 import MicVocalIcon from "@lucide/svelte/icons/mic-vocal";
+import { cubicOut } from "svelte/easing";
+import { prefersReducedMotion } from "svelte/motion";
+import { fly, scale } from "svelte/transition";
 import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
@@ -28,6 +31,12 @@ const chapter = $derived(chapterAt(listening.position, item?.chapters));
 const tint = $derived(tintColour(item?.blurhash) ?? "transparent");
 // A track's lyrics in its cover's place; an audiobook has chapters instead.
 const sung = $derived(item?.kind === "track");
+// The cover sinks back as the lyrics rise over it, as Apple Music's do, both
+// in the one square so nothing below them moves.
+const swap = $derived({
+	duration: prefersReducedMotion.current ? 0 : 280,
+	easing: cubicOut,
+});
 </script>
 
 <Sheet.Root bind:open>
@@ -47,28 +56,33 @@ const sung = $derived(item?.kind === "track");
 				<Sheet.Header class="p-0">
 					<Sheet.Title class="sr-only">Now playing</Sheet.Title>
 				</Sheet.Header>
-				{#if sung && lyrics}
-					<div class="aspect-square w-full">
-						<Lyrics id={item.id} />
-					</div>
-				{:else}
-					<div
-						class="bg-raise aspect-square w-full overflow-hidden rounded-xl shadow-2xl"
-						style={blurStyle(item.blurhash)}
-					>
-						{#if item.artwork}
-							{#key item.artwork}
-								<Artwork
-									id={item.artwork}
-									shape="square"
-									loading="eager"
-									sizes="28rem"
-									class="size-full object-cover"
-								/>
-							{/key}
-						{/if}
-					</div>
-				{/if}
+				<div
+					class="grid aspect-square min-h-0 w-full grid-cols-1 grid-rows-[minmax(0,1fr)] *:col-start-1 *:row-start-1"
+				>
+					{#if sung && lyrics}
+						<div class="size-full" transition:fly={{ ...swap, y: 24 }}>
+							<Lyrics id={item.id} />
+						</div>
+					{:else}
+						<div
+							class="bg-raise size-full overflow-hidden rounded-xl shadow-2xl"
+							style={blurStyle(item.blurhash)}
+							transition:scale={{ ...swap, start: 0.9 }}
+						>
+							{#if item.artwork}
+								{#key item.artwork}
+									<Artwork
+										id={item.artwork}
+										shape="square"
+										loading="eager"
+										sizes="28rem"
+										class="size-full object-cover"
+									/>
+								{/key}
+							{/if}
+						</div>
+					{/if}
+				</div>
 				<div class="grid gap-1">
 					<p class="title text-ink text-2xl">{item.title}</p>
 					{#if chapter?.title}
