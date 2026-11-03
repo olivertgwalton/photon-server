@@ -54,25 +54,15 @@ export function bookListen(
 	const cover = book.artwork?.poster?.[0];
 	return {
 		id: book.id,
+		kind: "book",
 		version: version.id,
 		title: book.title,
 		by: book.author?.title,
+		creator: book.author ?? undefined,
 		artwork: cover,
 		blurhash: cover ? book.blurhashes?.[cover] : undefined,
 		duration_ms: version.duration_ms,
 		chapters: chaptersOf(version),
 		start_ms,
-	};
-}
-
-// The profile a play of an ebook's version is sent with, to be given its file
-// as it is: the server serves an ebook only ever as a download.
-export function ebookProfile(version: Version): Schemas["ClientProfile"] {
-	return {
-		containers: [version.container],
-		video: [],
-		audio: [],
-		max_bitrate_kbps: 0,
-		parts: "each",
 	};
 }

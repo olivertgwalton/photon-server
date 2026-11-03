@@ -9,6 +9,7 @@ import {
 	lineAt,
 	movedTo,
 	nextAt,
+	playingAs,
 	playingNext,
 	previousAt,
 	type Queue,
@@ -104,7 +105,7 @@ test("next goes to the next chapter, and past the last to the next in the queue"
 });
 
 const q = (...ids: string[]) =>
-	ids.map((id) => ({ id, title: id, key: `k-${id}` }));
+	ids.map((id) => ({ id, kind: "track" as const, title: id, key: `k-${id}` }));
 const ids = (queue: Queue) => queue.items.map((i) => i.id);
 
 test("play next goes straight after the one playing", () => {
@@ -229,4 +230,46 @@ test("what is not a queue kept by this page is none", () => {
 	expect(
 		readKept(JSON.stringify({ ...good, repeat: "sometimes" })),
 	).toBeUndefined();
+});
+
+test("a queue kept before each named its kind knows a book by its version", () => {
+	const kept = JSON.stringify({
+		items: [
+			{ id: "t", title: "Track" },
+			{ id: "b", title: "Book", version: "v" },
+		],
+		at: 0,
+		position: 0,
+		order: "in_order",
+		repeat: "off",
+		original: [],
+	});
+	expect(readKept(kept)?.items.map((i) => i.kind)).toEqual(["track", "book"]);
+});
+
+test("credits say how a track is played: as it is, or converted to what", () => {
+	const flac = { codec: "flac", bitrate_kbps: 921 };
+	expect(
+		playingAs(
+			{ method: "direct", audio: { stream: 0, decision: "copy" } },
+			flac,
+		),
+	).toBe("As it is · FLAC · 921 kbps");
+	expect(
+		playingAs(
+			{
+				method: "transcode",
+				audio: {
+					stream: 0,
+					decision: "transcode",
+					codec: "aac",
+					bitrate_kbps: 192,
+				},
+			},
+			flac,
+		),
+	).toBe("Converted · AAC · 192 kbps");
+	expect(playingAs({ method: "remux" }, { codec: "flac" })).toBe(
+		"Repackaged · FLAC",
+	);
 });

@@ -90,6 +90,8 @@ class Listening {
 	buffered = $state(0);
 
 	current = $derived<Queued | undefined>(this.queue[this.at]);
+	// The playback of what plays: its file as it is, or converted, and how.
+	playback = $state.raw<Playback | undefined>();
 
 	#started = false;
 	#deck: Deck | undefined;
@@ -445,6 +447,7 @@ class Listening {
 		void this.#reporter?.stop();
 		deck.key = key;
 		deck.playback = playback;
+		this.playback = playback;
 		this.at = to;
 		this.duration = (this.queue[to].duration_ms ?? 0) / 1000;
 		this.#setUp(deck);
@@ -541,6 +544,7 @@ class Listening {
 		this.#drop(this.#deck);
 		this.#ready = undefined;
 		this.#deck = ready;
+		this.playback = ready.playback;
 		ready.off = this.#listen(ready);
 		this.#setUp(ready);
 		const item = this.current;
@@ -616,6 +620,7 @@ class Listening {
 		const deck = await this.#deckOf(item.key, data, at, join);
 		if (!deck || mine !== this.#opening) return;
 		this.#deck = deck;
+		this.playback = data;
 		deck.off = this.#listen(deck);
 		this.#setUp(deck);
 		this.#reporter = new ProgressReporter(
@@ -707,6 +712,7 @@ class Listening {
 
 	#drop(deck: Deck | undefined) {
 		if (!deck) return;
+		if (deck === this.#deck) this.playback = undefined;
 		deck.off();
 		deck.hls?.destroy();
 		deck.joined?.close();

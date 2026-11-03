@@ -82,10 +82,13 @@ export function probeAudio(): AudioCapabilities {
 // One thing the audio player plays: a track, or an audiobook's version.
 export type Listen = {
 	id: string;
+	kind: ListenKind;
 	version?: string;
 	title: string;
 	// Who made it: a track's artists, a book's author.
 	by?: string;
+	// The artist or author it is under, which its menu leads to.
+	creator?: { id: string; title: string };
 	// What it is from, its album, which the bar leads to.
 	from?: { id: string; title: string };
 	artwork?: string;
@@ -97,11 +100,15 @@ export type Listen = {
 	start_ms?: number;
 };
 
+export type ListenKind = "track" | "book";
+
 export function trackListen(card: Schemas["Card"]): Listen {
 	return {
 		id: card.id,
+		kind: "track",
 		title: card.title,
 		by: card.artists?.join(", ") || card.artist?.title,
+		creator: card.artist ?? undefined,
 		from: card.album ?? undefined,
 		artwork: card.poster,
 		blurhash: card.poster ? card.blurhashes?.[card.poster] : undefined,
@@ -367,16 +374,20 @@ function listenOf(x: unknown): Listen | undefined {
 		return undefined;
 	const text = (v: unknown) => (typeof v === "string" ? v : undefined);
 	const count = (v: unknown) => (typeof v === "number" ? v : undefined);
-	const from = isRecord(x.from) ? x.from : undefined;
+	const ref = (v: unknown) =>
+		isRecord(v) && typeof v.id === "string" && typeof v.title === "string"
+			? { id: v.id, title: v.title }
+			: undefined;
 	return {
 		id: x.id,
+		// Kept before a queue named what each was, a book by its version.
+		kind:
+			x.kind === "book" || (x.kind !== "track" && x.version) ? "book" : "track",
 		title: x.title,
 		version: text(x.version),
 		by: text(x.by),
-		from:
-			from && typeof from.id === "string" && typeof from.title === "string"
-				? { id: from.id, title: from.title }
-				: undefined,
+		creator: ref(x.creator),
+		from: ref(x.from),
 		artwork: text(x.artwork),
 		blurhash: text(x.blurhash),
 		duration_ms: count(x.duration_ms),
@@ -391,4 +402,28 @@ function listenOf(x: unknown): Listen | undefined {
 				)
 			: undefined,
 	};
+}
+
+const methodNames: Record<Schemas["PlayMethod"], string> = {
+	direct: "As it is",
+	remux: "Repackaged",
+	transcode: "Converted",
+};
+
+// How what plays is played, for its credits: the file as it is, its sound
+// repackaged, or converted; in what, and how many kilobits a second.
+export function playingAs(
+	playback: Pick<Schemas["Playback"], "method" | "audio">,
+	source: { codec: string; bitrate_kbps?: number } | undefined,
+): string {
+	const encoded = playback.audio?.decision === "transcode";
+	const codec = (encoded ? playback.audio?.codec : source?.codec) ?? "";
+	const kbps = encoded ? playback.audio?.bitrate_kbps : source?.bitrate_kbps;
+	return [
+		methodNames[playback.method],
+		codec.toUpperCase(),
+		kbps && `${kbps.toLocaleString()} kbps`,
+	]
+		.filter(Boolean)
+		.join(" · ");
 }

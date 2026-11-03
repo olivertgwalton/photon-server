@@ -10,6 +10,7 @@ import { timecode } from "#lib/format.ts";
 import { chapterAt } from "#lib/player/listen.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
 import Lyrics from "./Lyrics.svelte";
+import OptionsMenu from "./OptionsMenu.svelte";
 import PlayerControls from "./PlayerControls.svelte";
 import PlayerSettings from "./PlayerSettings.svelte";
 import SeekBar from "./SeekBar.svelte";
@@ -18,15 +19,15 @@ import SeekBar from "./SeekBar.svelte";
 // Playing screens are.
 let {
 	open = $bindable(false),
+	lyrics = $bindable(false),
 	onqueue,
-}: { open: boolean; onqueue: () => void } = $props();
+}: { open: boolean; lyrics: boolean; onqueue: () => void } = $props();
 
 const item = $derived(listening.current);
 const chapter = $derived(chapterAt(listening.position, item?.chapters));
 const tint = $derived(tintColour(item?.blurhash) ?? "transparent");
 // A track's lyrics in its cover's place; an audiobook has chapters instead.
-const sung = $derived(!!item && !item.chapters?.length);
-let lyrics = $state(false);
+const sung = $derived(item?.kind === "track");
 </script>
 
 <Sheet.Root bind:open>
@@ -117,6 +118,11 @@ let lyrics = $state(false);
 						</Toggle>
 					{/if}
 					<PlayerSettings />
+					<OptionsMenu
+						size="large"
+						onlyrics={() => (lyrics = true)}
+						onleave={() => (open = false)}
+					/>
 				</div>
 			</div>
 		{/if}
