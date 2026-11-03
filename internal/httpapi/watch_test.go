@@ -70,11 +70,11 @@ func (f fakeWatching) Unwatchlist(ctx context.Context, p, i uuid.UUID) error {
 }
 
 // The one film is no book, which a reader reads; any other title is none.
-func (fakeWatching) SaveReading(_ context.Context, _, item uuid.UUID, _ jsontext.Value, _ float64) error {
+func (fakeWatching) SaveReading(_ context.Context, _, item uuid.UUID, _ jsontext.Value, _ float64, _ *time.Time) (domain.Reach, error) {
 	if item == films {
-		return store.ErrNotRead
+		return "", store.ErrNotRead
 	}
-	return store.ErrNotFound
+	return "", store.ErrNotFound
 }
 
 func TestWatching(t *testing.T) {
@@ -112,6 +112,7 @@ func TestWatching(t *testing.T) {
 		{http.MethodPut, title + "/reading", `{"locator": {"type": "application/xhtml+xml"}, "progression": 0.4}`, http.StatusBadRequest, ""},
 		{http.MethodPut, title + "/reading", `{"locator": {"href": "/c1.xhtml"}, "progression": 1.5}`, http.StatusBadRequest, ""},
 		{http.MethodPut, title + "/reading", `{"locator": "/c1.xhtml", "progression": 0.4}`, http.StatusBadRequest, ""},
+		{http.MethodPut, title + "/reading", `{"locator": {"href": "/c1.xhtml"}, "progression": 0.4, "at": "` + later + `"}`, http.StatusBadRequest, ""},
 	} {
 		rec := serve(t, tc.method, tc.target, goodToken, tc.body)
 		if rec.Code != tc.want {
