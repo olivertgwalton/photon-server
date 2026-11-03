@@ -9543,6 +9543,7 @@ export interface components {
             /** Format: uri-reference */
             playlist?: string;
             reasons?: components["schemas"]["TranscodeReason"][];
+            replay_gain?: components["schemas"]["ReplayGain"] | null;
             subtitles?: components["schemas"]["Subtitle"][];
             /** Format: uuid */
             version_id: string;
@@ -9865,6 +9866,12 @@ export interface components {
         };
         /** @enum {string} */
         ReleaseCheck: "on" | "off";
+        ReplayGain: {
+            album_gain_db?: number | null;
+            album_peak?: number | null;
+            track_gain_db?: number | null;
+            track_peak?: number | null;
+        };
         Request: {
             /** Format: date-time */
             asked_at: string;
@@ -10442,6 +10449,7 @@ export interface components {
             /** Format: date-time */
             missing_since?: string | null;
             parts: number;
+            replay_gain?: components["schemas"]["ReplayGain"] | null;
             /** Format: int64 */
             size_bytes: number;
             streams: components["schemas"]["StreamPage"][];

@@ -141,6 +141,7 @@ type versionPageJSON struct {
 	BitrateKbps  int               `json:"bitrate_kbps,omitzero"`
 	Parts        int               `json:"parts"`
 	MissingSince *time.Time        `json:"missing_since,omitzero"`
+	ReplayGain   *replayGainJSON   `json:"replay_gain,omitzero"`
 	Streams      []streamPageJSON  `json:"streams"`
 	Subtitles    []subtitleRefJSON `json:"subtitles,omitzero"`
 	Chapters     []chapterRefJSON  `json:"chapters,omitzero"`
@@ -367,7 +368,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 func versionPageOf(v store.VersionPage, w words.Words) versionPageJSON {
 	return versionPageJSON{
 		ID: v.ID, DisplayTitle: w.Version(v), Edition: v.Edition, Label: v.Label, Container: domain.ContainerName(v.Container), DurationMS: v.DurationMS,
-		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince,
+		SizeBytes: v.SizeBytes, BitrateKbps: v.BitrateKbps, Parts: v.Parts, MissingSince: v.MissingSince, ReplayGain: replayGainOf(v.Gain),
 		Streams: each(v.Streams, func(s domain.Stream) streamPageJSON { return streamPageOf(s, w) }),
 		Subtitles: each(v.Subtitles, func(s store.SubtitleRef) subtitleRefJSON {
 			return subtitleRefJSON{
