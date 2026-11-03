@@ -13,7 +13,7 @@ import { aspect, type Shape } from "#lib/artwork.ts";
 import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Progress } from "#lib/components/ui/progress/index.ts";
-import { showLine } from "#lib/format.ts";
+import { showLine, titleHref } from "#lib/format.ts";
 import { trackArtists } from "#lib/music.ts";
 import { hidesSpoiler } from "#lib/spoilers.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
@@ -84,7 +84,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 		is the height of its pictures. The blur is the frame's, under a picture
 		that fades in over it. -->
 	<a
-		href="/titles/{card.id}"
+		href={titleHref(card)}
 		aria-current={current ? "page" : undefined}
 		class="group block outline-none"
 	>

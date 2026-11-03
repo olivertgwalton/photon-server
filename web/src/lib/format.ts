@@ -257,6 +257,16 @@ export function onDisk(
 	);
 }
 
+// Where a title's card leads: its own page, but for a track, which has none and
+// leads to the album it is on, as the apps' cards do.
+export function titleHref(t: {
+	id: string;
+	kind: Schemas["ItemKind"];
+	album?: Schemas["TitleRef"] | null;
+}): string {
+	return `/titles/${t.kind === "track" && t.album ? t.album.id : t.id}`;
+}
+
 // Where a title is played. The player reads the version, the tracks and where to
 // start from the address; with no `t` it resumes where the profile stopped.
 export function playHref(

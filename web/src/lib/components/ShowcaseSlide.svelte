@@ -39,6 +39,7 @@ import {
 	playHref,
 	resumeLabel,
 	runtime,
+	titleHref,
 	titleWithShow,
 } from "#lib/format.ts";
 
@@ -219,7 +220,7 @@ const creditsMs = 60_000;
 						<span class="sr-only">{titleWithShow(card)}</span>
 					</Button>
 				{/if}
-				<Button href="/titles/{card.id}" size="lg" variant="glass">
+				<Button href={titleHref(card)} size="lg" variant="glass">
 					<span class="inline-flex items-center gap-1.5 {appear}">
 						<InfoIcon />More Info
 						<span class="sr-only">about {titleWithShow(card)}</span>

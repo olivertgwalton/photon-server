@@ -10,7 +10,7 @@ import { refusal } from "#lib/api/client.ts";
 import Rail from "#lib/components/Rail.svelte";
 import Showcase from "#lib/components/Showcase.svelte";
 import { homeRows } from "#lib/rows.ts";
-import { readShowcase, showcasePool } from "#lib/showcase.ts";
+import { readShowcase, showcasePool, shows } from "#lib/showcase.ts";
 import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
@@ -98,7 +98,7 @@ function title(r: (typeof data.rails)[number]) {
 						? "shown"
 						: "hidden"}
 					onrest={(card) => {
-						resting.id = card.id;
+						if (shows(card)) resting.id = card.id;
 					}}
 				/>
 			{/if}
