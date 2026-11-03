@@ -289,3 +289,106 @@ export function lineAt(
 ): number {
 	return lines.findLastIndex((l) => (l.start_ms ?? 0) <= ms);
 }
+
+// The queue as this browser keeps it, to come back to after a reload, as
+// Finamp and Plexamp keep theirs on each device: what is queued, where in it
+// the player is and how far through, how it plays, and the order it was
+// queued in, as places in it.
+export type Kept = {
+	items: Listen[];
+	at: number;
+	position: number;
+	order: "in_order" | "shuffled";
+	repeat: Repeat;
+	original: number[];
+};
+
+export function keptOf(
+	items: Queued[],
+	at: number,
+	position: number,
+	order: Kept["order"],
+	repeat: Repeat,
+	original: Queued[],
+): Kept {
+	const place = new Map(items.map((item, i) => [item.key, i]));
+	return {
+		items: items.map(({ key: _, ...item }) => item),
+		at,
+		position,
+		order,
+		repeat,
+		original: original.flatMap((o) => place.get(o.key) ?? []),
+	};
+}
+
+// A kept queue read back, or none where what was kept is not one: written
+// by an older page, or by hand.
+export function readKept(text: string | null): Kept | undefined {
+	if (!text) return undefined;
+	let raw: unknown;
+	try {
+		raw = JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+	if (!isRecord(raw) || !Array.isArray(raw.items)) return undefined;
+	const items = raw.items.map(listenOf);
+	if (!items.length || items.some((i) => !i)) return undefined;
+	const listens = items.filter((i) => i !== undefined);
+	const { at, position, order, repeat, original } = raw;
+	if (typeof at !== "number" || !Number.isInteger(at) || at < 0)
+		return undefined;
+	if (at >= listens.length) return undefined;
+	if (order !== "in_order" && order !== "shuffled") return undefined;
+	if (repeat !== "off" && repeat !== "all" && repeat !== "one")
+		return undefined;
+	return {
+		items: listens,
+		at,
+		position: typeof position === "number" && position > 0 ? position : 0,
+		order,
+		repeat,
+		original: Array.isArray(original)
+			? original.filter(
+					(i): i is number =>
+						Number.isInteger(i) && i >= 0 && i < listens.length,
+				)
+			: [],
+	};
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+	return typeof x === "object" && x !== null && !Array.isArray(x);
+}
+
+function listenOf(x: unknown): Listen | undefined {
+	if (!isRecord(x) || typeof x.id !== "string" || typeof x.title !== "string")
+		return undefined;
+	const text = (v: unknown) => (typeof v === "string" ? v : undefined);
+	const count = (v: unknown) => (typeof v === "number" ? v : undefined);
+	const from = isRecord(x.from) ? x.from : undefined;
+	return {
+		id: x.id,
+		title: x.title,
+		version: text(x.version),
+		by: text(x.by),
+		from:
+			from && typeof from.id === "string" && typeof from.title === "string"
+				? { id: from.id, title: from.title }
+				: undefined,
+		artwork: text(x.artwork),
+		blurhash: text(x.blurhash),
+		duration_ms: count(x.duration_ms),
+		start_ms: count(x.start_ms),
+		chapters: Array.isArray(x.chapters)
+			? x.chapters.flatMap((c) =>
+					isRecord(c) &&
+					typeof c.start_ms === "number" &&
+					typeof c.end_ms === "number"
+						? [{ start_ms: c.start_ms, end_ms: c.end_ms, title: text(c.title) }]
+						: [],
+				)
+			: undefined,
+	};
+}
