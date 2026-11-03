@@ -297,6 +297,37 @@ func TestALibraryThatForgetsLosesARemovedFilesTitle(t *testing.T) {
 	}
 }
 
+// A folder that is there but cannot be read, as one on a mount that has dropped, keeps what it held,
+// as Jellyfin keeps a folder it cannot list, even in a library that forgets its versions on no disk.
+func TestAFolderThatCannotBeReadKeepsItsTitles(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a folder whatever its mode")
+	}
+	f := newFixture(t, domain.LibraryMovies)
+	f.put("Heat (1995)/Heat (1995).mkv", "heat")
+	f.put("Alien (1979)/Alien (1979).mkv", "alien")
+	f.scan()
+	if err := f.st.SetLibrary(t.Context(), f.lib.ID, store.LibraryChange{MissingVersions: domain.MissingForgotten}); err != nil {
+		t.Fatal(err)
+	}
+	heat := filepath.Join(f.root, "Heat (1995)")
+	if err := os.Chmod(heat, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(heat, 0o755); err != nil {
+			t.Error(err)
+		}
+	})
+	f.scan()
+	if n := f.count(`SELECT count(*) FROM items WHERE title = 'Heat'`); n != 1 {
+		t.Error("a folder that could not be read lost its title")
+	}
+	if n := f.count(`SELECT count(*) FROM versions WHERE missing_since IS NULL`); n != 2 {
+		t.Errorf("%d versions on disk, want 2", n)
+	}
+}
+
 // A library of links into another mount, as Riven and other debrid setups make them, scans as
 // the files behind the links; a link the mount no longer answers is left out and counted, and a
 // root that cannot be read fails the scan rather than emptying the library.

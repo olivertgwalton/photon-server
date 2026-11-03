@@ -83,7 +83,7 @@ func TestTheLongestVersionOnDiskPlaysUnlessOneIsAskedFor(t *testing.T) {
 	if len(got.Streams) != 2 || !reflect.DeepEqual(got.Streams[0], video) || got.Streams[1].Channels != 8 {
 		t.Errorf("its streams: %+v, want the Dolby Vision video as probed and TrueHD 7.1", got.Streams)
 	}
-	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"L"}, []string{}); err != nil {
+	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"L"}, []string{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{}); !errors.Is(err, ErrNotFound) {

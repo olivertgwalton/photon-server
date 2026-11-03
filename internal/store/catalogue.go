@@ -274,9 +274,10 @@ func knownItem(ctx context.Context, tx db, lib uuid.UUID, kind domain.ItemKind, 
 // part, or is a subtitle no longer there; a version with a part left nowhere is marked missing
 // (kept, so an unmounted disk does not cost its titles), and one whose every part is somewhere is
 // not. A title left with no version is removed, then a season
-// and a show left with nothing in them. A folder in scope the walk did not visit is forgotten. It
-// answers the titles whose versions went missing or came back, and those removed.
-func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present []string) (Changed, error) {
+// and a show left with nothing in them. A folder in scope the walk did not visit is forgotten.
+// Nothing at or under a path of unread, there but not read, is taken away. It answers the titles
+// whose versions went missing or came back, and those removed.
+func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, present, unread []string) (Changed, error) {
 	var changed Changed
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		changed = Changed{}
@@ -293,8 +294,8 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 		}
 		// A fetched subtitle is kept in no folder of the library.
 		for _, from := range []string{"part_files WHERE", "subtitle_files WHERE body IS NULL AND"} {
-			_, err := tx.Exec(ctx, `DELETE FROM `+from+` library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3"),
-				lib, present, scopes)
+			_, err := tx.Exec(ctx, `DELETE FROM `+from+` library_id = $1 AND `+notIn("rel_path", "$2")+` AND `+inScope("rel_path", "$3")+
+				` AND NOT `+inScope("rel_path", "$4"), lib, present, scopes, unread)
 			if err != nil {
 				return err
 			}
@@ -330,8 +331,8 @@ func (s *Store) FinishScan(ctx context.Context, lib uuid.UUID, scopes, folders, 
 				changed.add(domain.TitleUpdated, id)
 			}
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3"),
-			lib, folders, scopes)
+		_, err = tx.Exec(ctx, `DELETE FROM folders WHERE library_id = $1 AND `+notIn("path", "$2")+` AND `+inScope("path", "$3")+
+			` AND NOT `+inScope("path", "$4"), lib, folders, scopes, unread)
 		return err
 	})
 	return changed, err

@@ -41,7 +41,7 @@ func TestAFetchedSubtitleOutlivesAScanAndIsServedFromPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The scan finds no such file in the library, and keeps it all the same.
-	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, []string{"H/heat.mkv"}); err != nil {
+	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, []string{"H/heat.mkv"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	c, err := s.Playable(ctx, uuid.UUID{}, item, uuid.UUID{})
