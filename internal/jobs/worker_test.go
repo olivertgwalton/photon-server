@@ -148,6 +148,28 @@ func TestWorkerReportsFailures(t *testing.T) {
 	})
 }
 
+// A handler that panics fails its job, which is then retired by its attempts like any other,
+// rather than ending the node and coming back to end the next.
+func TestAJobWhoseHandlerPanicsFails(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobKeyframes}}}
+		panicking := func(context.Context, uuid.UUID) error { panic("no video stream") }
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		w := NewWorker(q, slog.New(slog.DiscardHandler), uuid.NewV7(), 1, map[domain.JobKind]Handler{domain.JobKeyframes: panicking}, ignore{}, nil, NewFinished())
+		go func() {
+			w.Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(10 * time.Second)
+		cancel()
+		<-done
+		if len(q.failed) != 1 || q.failed[0] != 7 {
+			t.Errorf("failed %v, want job 7 failed once", q.failed)
+		}
+	})
+}
+
 func TestAJobWithNoRoomIsPostponedNotFailed(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := &memoryQueue{pending: []domain.Job{{ID: 7, Kind: domain.JobConvert}}}

@@ -3,7 +3,9 @@ package task
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -186,11 +188,22 @@ func (s *Scheduler) Request(ctx context.Context, key domain.TaskKey) error {
 	return ErrNoTask
 }
 
+// perform runs task, a panic in it failing the run as an error does rather than ending the node.
+func perform(ctx context.Context, log *slog.Logger, task Task, start Start) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			log.ErrorContext(ctx, "task panicked", slog.Any("panic", p), slog.String("stack", string(debug.Stack())))
+			err = fmt.Errorf("panic: %v", p)
+		}
+	}()
+	return task.Run(ctx, start)
+}
+
 func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
 	log := s.log.With(slog.String("task", string(task.Key)))
 	log.InfoContext(ctx, "task started")
 	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: task.Key}})
-	err := task.Run(ctx, start)
+	err := perform(ctx, log, task, start)
 	result, kind := domain.TaskSucceeded, domain.EventTaskFinished
 	switch {
 	case errors.Is(err, context.Canceled):

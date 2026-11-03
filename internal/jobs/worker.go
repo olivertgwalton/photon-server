@@ -3,8 +3,10 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -122,7 +124,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	done := make(chan struct{})
 	go w.renew(ctx, log, job.ID, lose, done)
 	w.tell.Raise(ctx, event(domain.EventJobStarted, job, nil))
-	runErr := w.handlers[job.Kind](jobCtx, job.Subject)
+	runErr := handle(jobCtx, log, w.handlers[job.Kind], job.Subject)
 	close(done)
 	// Another node may hold it now, so what this run made of it is not the job's outcome.
 	if errors.Is(context.Cause(jobCtx), domain.ErrLeaseLost) {
@@ -165,6 +167,18 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	if ended {
 		w.tell.JobEnded(record, job.Kind)
 	}
+}
+
+// handle runs h, a panic in it failing the job as an error does: left to end the node, it would
+// come back as its lease ran out and end every node that took it after.
+func handle(ctx context.Context, log *slog.Logger, h Handler, subject uuid.UUID) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			log.ErrorContext(ctx, "job panicked", slog.Any("panic", p), slog.String("stack", string(debug.Stack())))
+			err = fmt.Errorf("panic: %v", p)
+		}
+	}()
+	return h(ctx, subject)
 }
 
 // open answers the kinds of job its gate lets start now, all of them where it has none, and of
