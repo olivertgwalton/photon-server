@@ -158,6 +158,9 @@ func Carried(f domain.SegmentFormat) (video, audio []string) {
 // server allows it, else to H.264. ErrNoCompatibleStream, with the reasons it could not play as it
 // is, where the client takes none of these.
 //
+// A version of sound alone, a track, plays as it is where it can, and else in HLS with its sound
+// copied or encoded (see soundAlone).
+//
 // A subtitle asked for, a stream of the file or a text file beside it, reaches the client as it
 // draws it: from the file played as it is, or from a file of its own beside the video. Where it
 // cannot, plain text is carried in HLS as WebVTT, and a picture (PGS, DVD) or styled text (ASS) is
@@ -223,7 +226,7 @@ func Decide(p Profile, c Version, tracks domain.ChosenTracks, enc Encoding) (Dec
 		return d, nil
 	}
 	if video == nil {
-		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+		return p.soundAlone(d, sound, audioReasons, tooMuch)
 	}
 	d.Method = domain.PlayRemux
 	carriedVideo, carriedAudio := Carried(p.Segments)
@@ -259,6 +262,31 @@ func Decide(p Profile, c Version, tracks domain.ChosenTracks, enc Encoding) (Dec
 	}
 	if e := d.Video.Encode; e != nil && p.MaxBitrateKbps > 0 {
 		e.BitrateKbps = max(min(e.BitrateKbps, p.MaxBitrateKbps-d.audioKbps(sound)), 64)
+	}
+	return d, nil
+}
+
+// soundAlone decides how a version of sound alone the client cannot play as it is plays in HLS: its
+// sound copied where the client plays it and fMP4 carries it, else encoded, within the client's
+// limit where it is over it. MPEG-TS, which is cut at a picture's keyframes, carries none.
+func (p Profile) soundAlone(d Decision, sound *domain.Stream, reasons []domain.TranscodeReason, tooMuch bool) (Decision, error) {
+	if sound == nil || p.Segments == domain.SegmentsMPEGTS {
+		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+	}
+	_, carried := Carried(domain.SegmentsFMP4)
+	if tooMuch {
+		reasons = append(reasons, domain.BitrateExceedsLimit)
+	}
+	enc, ok := p.hlsAudio(*sound, reasons, carried, domain.PlayRemux)
+	if !ok {
+		return Decision{Reasons: d.Reasons}, ErrNoCompatibleStream
+	}
+	d.Method, d.Audio.Encode = domain.PlayRemux, enc
+	if enc != nil {
+		d.Method = domain.PlayTranscode
+		if tooMuch {
+			enc.BitrateKbps = min(enc.BitrateKbps, p.MaxBitrateKbps)
+		}
 	}
 	return d, nil
 }
