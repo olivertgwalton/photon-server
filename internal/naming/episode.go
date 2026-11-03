@@ -79,20 +79,18 @@ func atoi(s string) int {
 var (
 	sxxeyy       = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{1,4})[ ._-]*e(\d{1,4})`)
 	nxnn         = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s?(\d{1,4})x(\d{1,3})(?:[^0-9]|$)`)
-	continuation = regexp.MustCompile(`(?i)^(?:\s*-\s*|-?)(?:s\d{1,4})?[ex]?(\d{1,4})`)
+	continuation = regexp.MustCompile(`(?i)^(?:-(?:s\d{1,4})?[ex]?|\s*-\s*(?:s\d{1,4})?[ex]|(?:s\d{1,4})?[ex])(\d{1,4})`)
 )
 
 // moreEpisodes reads the episodes that continue a canonical match: E01E02, E23-E24-E26, 02x03-04.
 // A number followed by p, i or another digit is a resolution, not an episode, and a number lower
-// than the first belongs to the title ("S03E21 - E2").
+// than the first belongs to the title ("S03E21 - E2"), as does a bare number after a spaced hyphen,
+// which Sonarr puts before every title ("S03E07 - 42"), so it needs its e or x.
 func moreEpisodes(first int, rest string) ([]int, string) {
 	last := first
 	for {
 		m := continuation.FindStringSubmatchIndex(rest)
 		if m == nil || m[1] == 0 {
-			break
-		}
-		if !strings.ContainsAny(rest[:m[2]], "-eExX") {
 			break
 		}
 		if next := rest[m[1]:]; next != "" && strings.ContainsRune("0123456789pPiI", rune(next[0])) {
