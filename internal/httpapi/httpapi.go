@@ -101,6 +101,7 @@ type route struct {
 
 type authenticator interface {
 	auth.Authenticator
+	Session(ctx context.Context, id uuid.UUID) (domain.Session, error)
 	SetUp(ctx context.Context, name, password string, device auth.Device) (string, domain.Profile, error)
 	HashPassword(ctx context.Context, password string) (string, error)
 	SignInAs(ctx context.Context, profile domain.Profile, identity domain.SignInIdentity, device auth.Device) (string, error)

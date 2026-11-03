@@ -94,6 +94,10 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 
 func (fakeAuth) SignOut(context.Context, uuid.UUID) error { return nil }
 
+func (fakeAuth) Session(context.Context, uuid.UUID) (domain.Session, error) {
+	return domain.Session{}, auth.ErrUnauthenticated
+}
+
 func (fakeAuth) StartPairing(context.Context, auth.Device, auth.CodeStyle, domain.ClientNetwork) (auth.PairingStart, error) {
 	return auth.PairingStart{DeviceCode: "BCDFGHJK.secret", UserCode: "BCDF-GHJK", ExpiresIn: 10 * time.Minute}, nil
 }
