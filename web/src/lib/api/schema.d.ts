@@ -8251,6 +8251,8 @@ export interface components {
         AdminSignInProviderList: {
             items: components["schemas"]["AdminSignInProvider"][];
         };
+        /** @enum {string} */
+        Advisory: "explicit" | "clean";
         Approval: {
             user_code: string;
         };
@@ -8392,6 +8394,7 @@ export interface components {
         Card: {
             /** Format: date-time */
             added_at: string;
+            advisory?: components["schemas"]["Advisory"];
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
@@ -8544,6 +8547,7 @@ export interface components {
         Credit: {
             /** Format: date-time */
             added_at: string;
+            advisory?: components["schemas"]["Advisory"];
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
@@ -8731,6 +8735,7 @@ export interface components {
         Entry: {
             /** Format: date-time */
             added_at: string;
+            advisory?: components["schemas"]["Advisory"];
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
@@ -10334,6 +10339,7 @@ export interface components {
         TitlePage: {
             /** Format: date-time */
             added_at: string;
+            advisory?: components["schemas"]["Advisory"];
             airs_after_season?: number | null;
             airs_before_episode?: number | null;
             airs_before_season?: number | null;

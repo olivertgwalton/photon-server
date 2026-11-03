@@ -159,11 +159,13 @@ func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, alb
 
 // MusicPage is what only an artist's, an album's or a track's page has: an album's or a track's
 // album artist, and a track's album, which lists Tracks as an artist lists Albums. DiscNumber and
-// TrackNumber place a track on its album, and Artists are the track's own.
+// TrackNumber place a track on its album, Artists are the track's own, and Advisory says whether it
+// is explicit or clean.
 type MusicPage struct {
 	Artist, Album           *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
+	Advisory                domain.Advisory
 	Albums                  []Card
 	Tracks                  []Card
 }

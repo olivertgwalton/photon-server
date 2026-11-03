@@ -49,6 +49,7 @@ type Card struct {
 	Artist, Album, Author   *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
+	Advisory                domain.Advisory
 	Series                  string
 	SeriesIndex             *float64
 	Thumb                   uuid.UUID
@@ -429,7 +430,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Origin: sets[r.ID].Origin, Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 			Artist: music[r.ID].artist, Album: music[r.ID].album, Author: music[r.ID].author, DiscNumber: r.DiscNumber, TrackNumber: r.TrackNumber,
-			Artists: r.Artists, Series: deref(r.Series), SeriesIndex: r.SeriesIndex,
+			Artists: r.Artists, Advisory: deref(r.Advisory), Series: deref(r.Series), SeriesIndex: r.SeriesIndex,
 		}
 		c := &cards[n]
 		if set, ok := sets[r.ID]; ok {

@@ -93,12 +93,14 @@ type titlePageJSON struct {
 	Show              *titleRefJSON `json:"show,omitzero"`
 	Season            *titleRefJSON `json:"season,omitzero"`
 	// Artist is an album's or a track's album artist, and Album a track's album. DiscNumber and
-	// TrackNumber are a track's place on it, and Artists the track's own, which may be others.
+	// TrackNumber are a track's place on it, Artists the track's own, which may be others, and
+	// Advisory whether it is explicit or clean, where its tags say.
 	Artist      *titleRefJSON     `json:"artist,omitzero"`
 	Album       *titleRefJSON     `json:"album,omitzero"`
 	DiscNumber  *int              `json:"disc_number,omitzero"`
 	TrackNumber *int              `json:"track_number,omitzero"`
 	Artists     []string          `json:"artists,omitzero"`
+	Advisory    domain.Advisory   `json:"advisory,omitzero"`
 	Versions    []versionPageJSON `json:"versions,omitzero"`
 	Seasons     []seasonCardJSON  `json:"seasons,omitzero"`
 	Episodes    []episodeCardJSON `json:"episodes,omitzero"`
@@ -334,7 +336,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		AirsBeforeEpisode: p.AirsBeforeEpisode, AirsAfterSeason: p.AirsAfterSeason,
 		Show: (*titleRefJSON)(p.Show), Season: (*titleRefJSON)(p.Season),
 		Artist: (*titleRefJSON)(p.Artist), Album: (*titleRefJSON)(p.Album),
-		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
+		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists, Advisory: p.Advisory,
 		Albums: each(p.Albums, cardOf), Tracks: each(p.Tracks, cardOf),
 		Author: (*titleRefJSON)(p.Author), Series: p.Series, SeriesIndex: p.SeriesIndex, Books: each(p.Books, cardOf),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
