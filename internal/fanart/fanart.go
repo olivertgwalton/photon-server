@@ -1,7 +1,7 @@
 // Package fanart reads fanart.tv, which pictures a film by its TMDB or IMDb id and a show by its
 // TheTVDB id: posters, backdrops, logos, banners, and the landscape pictures lettered with the
-// title's name that a wide card wears, as Jellyfin's fanart.tv plugin reads them. It describes
-// nothing else. Every server asks with photon's own project key; an admin may add a personal key.
+// title's name that a wide card wears, as Jellyfin's fanart.tv plugin reads them; and an artist and
+// an album by their MusicBrainz ids. It describes nothing else. Every server asks with photon's own project key; an admin may add a personal key.
 package fanart
 
 import (
@@ -38,16 +38,20 @@ func New(settings provider.Settings, pauses provider.Pauses) *Client {
 
 func (c *Client) Info() provider.Info {
 	return provider.Info{
-		ID: domain.SourceFanart, Name: "fanart.tv", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow},
+		ID: domain.SourceFanart, Name: "fanart.tv", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow, domain.ItemArtist, domain.ItemAlbum},
 		Settings: []provider.Setting{{Key: clientSetting, Name: "Personal API key", Secret: true}},
 	}
 }
 
-// Match answers the id fanart.tv knows the title by: a film's TMDB id, else its IMDb id, and a
-// show's TheTVDB id. fanart.tv is asked by nothing else, so a title with none is not matched.
+// Match answers the id fanart.tv knows the title by: a film's TMDB id, else its IMDb id, a show's
+// TheTVDB id, and an artist's or an album's MusicBrainz id. fanart.tv is asked by nothing else, so
+// a title with none is not matched.
 func (c *Client) Match(_ context.Context, _ domain.Locale, kind domain.ItemKind, h provider.Hints) (string, error) {
-	if kind == domain.ItemMovie {
+	switch {
+	case kind == domain.ItemMovie:
 		return cmp.Or(h.IDs[domain.ProviderTMDB], h.IDs[domain.ProviderIMDb]), nil
+	case kind.Music():
+		return h.IDs[domain.ProviderMusicBrainz], nil
 	}
 	return h.IDs[domain.ProviderTVDB], nil
 }
@@ -72,6 +76,23 @@ type film struct {
 	Logos     []image `json:"movielogo"`
 	Thumbs    []image `json:"moviethumb"`
 	Banners   []image `json:"moviebanner"`
+}
+
+// music is fanart.tv's answer for an artist, and for an album its covers among albums, each by
+// its release group's MusicBrainz id. An artist's thumb is its square photograph, which its card
+// wears.
+type music struct {
+	Backdrops []image `json:"artistbackground"`
+	Thumbs    []image `json:"artistthumb"`
+	HDLogos   []image `json:"hdmusiclogo"`
+	Logos     []image `json:"musiclogo"`
+	Banners   []image `json:"musicbanner"`
+	Albums    []album `json:"albums"`
+}
+
+type album struct {
+	ReleaseGroup string  `json:"release_group_id"`
+	Covers       []image `json:"albumcover"`
 }
 
 type show struct {
@@ -120,7 +141,28 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 			{domain.ArtworkThumb, s.Thumbs},
 			{domain.ArtworkBanner, s.Banners},
 		}
-	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemArtist:
+		var m music
+		if found, err := c.get(ctx, "music/"+url.PathEscape(id), q, &m); err != nil || !found {
+			return domain.Metadata{}, nil, err
+		}
+		kinds = []pictured{
+			{domain.ArtworkPoster, m.Thumbs},
+			{domain.ArtworkBackdrop, m.Backdrops},
+			{domain.ArtworkLogo, append(m.HDLogos, m.Logos...)},
+			{domain.ArtworkBanner, m.Banners},
+		}
+	case domain.ItemAlbum:
+		var m music
+		if found, err := c.get(ctx, "music/albums/"+url.PathEscape(id), q, &m); err != nil || !found {
+			return domain.Metadata{}, nil, err
+		}
+		for _, a := range m.Albums {
+			if a.ReleaseGroup == id {
+				kinds = append(kinds, pictured{domain.ArtworkPoster, a.Covers})
+			}
+		}
+	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra, domain.ItemTrack:
 		return domain.Metadata{}, nil, nil
 	}
 	var m domain.Metadata

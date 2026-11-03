@@ -83,10 +83,12 @@ const (
 	// an entry of its own.
 	ProviderAniDB   Provider = "anidb"
 	ProviderAniList Provider = "anilist"
+	// ProviderMusicBrainz files an artist and an album, its release group, by MBID.
+	ProviderMusicBrainz Provider = "musicbrainz"
 )
 
 func Providers() []Provider {
-	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB, ProviderAniDB, ProviderAniList}
+	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB, ProviderAniDB, ProviderAniList, ProviderMusicBrainz}
 }
 
 // KeptList is a list kept on a provider, which a collection could follow.
@@ -165,13 +167,15 @@ const (
 	// IDFromMatch is an id the server found by matching a title to a provider.
 	IDFromMatch IDSource = "match"
 	IDFromNFO   IDSource = "nfo"
-	IDFromPath  IDSource = "path"
+	// IDFromTags is an id a sound file's tags carry, as Picard writes them.
+	IDFromTags IDSource = "tags"
+	IDFromPath IDSource = "path"
 	// IDFromUser is an id an admin pinned the title to, fixing a match.
 	IDFromUser IDSource = "user"
 )
 
 func IDSources() []IDSource {
-	return []IDSource{IDFromMatch, IDFromNFO, IDFromPath, IDFromUser}
+	return []IDSource{IDFromMatch, IDFromNFO, IDFromTags, IDFromPath, IDFromUser}
 }
 
 // Rank puts an id an admin pinned above all, then one the reader typed into a folder or file name
@@ -180,7 +184,7 @@ func (s IDSource) Rank() int {
 	switch s {
 	case IDFromMatch:
 		return 1
-	case IDFromNFO:
+	case IDFromNFO, IDFromTags:
 		return 2
 	case IDFromPath:
 		return 3

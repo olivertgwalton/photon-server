@@ -73,7 +73,7 @@ func Handler(st *store.Store, providers *provider.Registry, pictures *artwork.Ca
 }
 
 func describe(ctx context.Context, st *store.Store, d provider.Describer, loc domain.Locale, id uuid.UUID, sub *store.Subject, log *slog.Logger) error {
-	match, err := d.Match(ctx, loc, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs})
+	match, err := d.Match(ctx, loc, sub.Kind, provider.Hints{Title: sub.Title, Year: sub.Year, IDs: sub.IDs, Artist: sub.Artist})
 	if passedOver(ctx, err, log) {
 		return nil
 	}

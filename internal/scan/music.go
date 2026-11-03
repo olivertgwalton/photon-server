@@ -162,6 +162,8 @@ func albumsOf(folder string, plans []trackPlan, read [][]store.Version) []store.
 			a.Artist = cmp.Or(a.Artist, variousArtists)
 		}
 		a.SortTitle = cmp.Or(a.SortTitle, t.tags.AlbumSort)
+		a.IDs = musicBrainz(a.IDs, t.tags.ReleaseGroupMBID)
+		a.ArtistIDs = musicBrainz(a.ArtistIDs, t.tags.AlbumArtistMBID)
 		a.Year = cmp.Or(a.Year, t.tags.Year)
 		if a.Released.IsZero() {
 			a.Released = t.tags.Released
@@ -183,6 +185,14 @@ func albumsOf(folder string, plans []trackPlan, read [][]store.Version) []store.
 		}
 	}
 	return albums
+}
+
+// musicBrainz is ids with the MusicBrainz id mbid, where they have none yet and it is one.
+func musicBrainz(ids map[domain.Provider]string, mbid string) map[domain.Provider]string {
+	if mbid == "" || ids[domain.ProviderMusicBrainz] != "" {
+		return ids
+	}
+	return map[domain.Provider]string{domain.ProviderMusicBrainz: mbid}
 }
 
 // sharedArtist is the first artist every track names, variousArtists where they differ, and

@@ -53,11 +53,12 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // Jellyfin lists only the providers that support a type: an NFO describes whatever it sits beside
 // but holds no pictures, TheTVDB knows only shows, MDBList rates films and shows alone, and OMDb
 // describes no season and has a poster only for a film or a show, AniList knows no episode,
-// AniDB pictures no episode, and fanart.tv pictures films and shows alone. None of them knows
-// music, which its files' tags describe. A plugin may be ranked for anything.
+// AniDB pictures no episode, and fanart.tv pictures films, shows, artists and albums alone.
+// MusicBrainz alone describes music, an artist and an album but no track, which its file's tags
+// describe, and pictures an album by its cover. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 	if kind.Music() {
-		return nil
+		return musicFetchable(f, kind)
 	}
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
@@ -92,6 +93,18 @@ func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 	return out
 }
 
+func musicFetchable(f Fetcher, kind ItemKind) []FieldSource {
+	switch {
+	case kind == ItemTrack:
+		return nil
+	case f == FetcherMetadata:
+		return []FieldSource{SourceMusicBrainz}
+	case kind == ItemAlbum:
+		return []FieldSource{SourceMusicBrainz, SourceFanart}
+	}
+	return []FieldSource{SourceFanart}
+}
+
 // RankedSource is a source in a library's ranking. One not enabled keeps its place but is not
 // asked.
 type RankedSource struct {
@@ -118,12 +131,25 @@ func (k KindSources) Of(f Fetcher) []RankedSource {
 }
 
 // DefaultSources trust an NFO beside the file over TMDB, as Jellyfin's default order does, and
-// take TMDB's pictures, for each kind a library holds that they know.
+// take TMDB's pictures, for each kind a library holds; and for music, take whatever MusicBrainz
+// and fanart.tv may say, as Jellyfin's music providers are on by default.
 func DefaultSources(lib LibraryKind) []KindSources {
 	var out []KindSources
 	for _, kind := range lib.ItemKinds() {
 		sources := KindSources{Kind: kind}
-		if !kind.Music() {
+		switch {
+		case kind.Music():
+			for _, f := range Fetchers() {
+				for _, src := range Fetchable(f, kind) {
+					switch f {
+					case FetcherMetadata:
+						sources.Metadata = append(sources.Metadata, RankedSource{src, true})
+					case FetcherImages:
+						sources.Images = append(sources.Images, RankedSource{src, true})
+					}
+				}
+			}
+		default:
 			sources.Metadata = []RankedSource{{SourceNFO, true}, {SourceTMDB, true}}
 			sources.Images = []RankedSource{{SourceTMDB, true}}
 		}

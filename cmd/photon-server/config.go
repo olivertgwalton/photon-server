@@ -22,6 +22,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/kv"
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/musicbrainz"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
 	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
@@ -66,7 +67,7 @@ func logTools(ctx context.Context, logger *slog.Logger, tools media.Tools) {
 }
 
 // metadataProviders runs TMDB before TheTVDB, AniList, AniDB, OMDb and fanart.tv, as its match may
-// give them an id to find a title by.
+// give them an id to find a title by, and MusicBrainz before fanart.tv for the same of music.
 func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *provider.Registry {
 	settingsOf := func(source domain.FieldSource) provider.Settings {
 		return func(ctx context.Context) (map[string]string, error) { return st.ProviderSettings(ctx, source) }
@@ -78,6 +79,7 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 		anidb.New(settingsOf(domain.SourceAniDB), st, cache),
 		mdblist.New(settingsOf(domain.SourceMDBList), cache),
 		omdb.New(settingsOf(domain.SourceOMDb), cache),
+		musicbrainz.New(version, cache),
 		fanart.New(settingsOf(domain.SourceFanart), cache),
 		opensubtitles.New(settingsOf(domain.SourceOpenSubtitles), cache),
 		riven.New(settingsOf(domain.SourceRiven)),

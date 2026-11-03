@@ -130,3 +130,40 @@ func TestAMusicCardNamesWhoseItIs(t *testing.T) {
 		t.Errorf("Timeless wears poster %v, its album has %v; want the album's cover", track.Poster, album.Poster)
 	}
 }
+
+// A refresh of a music library asks its providers of its artists and albums again, and not of its
+// tracks, which their tags alone describe.
+func TestAMusicLibrarysRefreshAsksAgainOfItsArtistsAndAlbums(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow", Tracks: []Track{track("Timeless", 2, 2)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	var kinds []domain.ItemKind
+	rows, err := s.pool.Query(ctx, `SELECT i.kind FROM jobs j JOIN items i ON i.id = j.subject WHERE j.kind = 'identify' ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var k domain.ItemKind
+		if err := rows.Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		kinds = append(kinds, k)
+	}
+	if want := []domain.ItemKind{domain.ItemAlbum, domain.ItemArtist}; !cmp.Equal(kinds, want) {
+		t.Errorf("refresh asked of %v, want %v", kinds, want)
+	}
+}
