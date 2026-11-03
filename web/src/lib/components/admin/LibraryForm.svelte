@@ -1,5 +1,9 @@
 <script lang="ts">
-import { offeredSources, serverLocale } from "#lib/admin/library.ts";
+import {
+	offeredSources,
+	playsVideo,
+	serverLocale,
+} from "#lib/admin/library.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import Choice from "#lib/components/Choice.svelte";
 import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
@@ -54,6 +58,7 @@ const countries = $derived([
 
 // A new library's kind changes the sources offered; a library's own is fixed.
 let kind = $derived<Schemas["LibraryKind"]>(library?.kind ?? "movies");
+const video = $derived(playsVideo(kind));
 
 // Where its media is: files under a folder, or what a provider streams of the
 // titles of a list, as a remote library plays; fixed once it is made.
@@ -336,24 +341,28 @@ const refreshOptions = $derived(
 					{@const fetchable = options?.fetchable.find((x) => x.kind === item)}
 					{#each fetchers as { f, title, said } (f)}
 						{@const id = `sources-${item}-${f}`}
-						<Field.Set>
-							<Field.Legend id="{id}-legend"
-								>{title}
-								({words.kinds[item]})</Field.Legend
-							>
-							<Field.Description>{said}</Field.Description>
-							<SourceRanker
-								name={id}
-								labelledby="{id}-legend"
-								offered={offeredSources(
-									providers,
-									fetchable?.[f] ?? [],
-									f,
-									item,
-								)}
-								chosen={chosen(made)[f]}
-							/>
-						</Field.Set>
+						{@const offered = offeredSources(
+							providers,
+							fetchable?.[f] ?? [],
+							f,
+							item,
+						)}
+						<!-- A track is described with its album, and ranks nothing of its own. -->
+						{#if offered.length}
+							<Field.Set>
+								<Field.Legend id="{id}-legend"
+									>{title}
+									({words.kinds[item]})</Field.Legend
+								>
+								<Field.Description>{said}</Field.Description>
+								<SourceRanker
+									name={id}
+									labelledby="{id}-legend"
+									{offered}
+									chosen={chosen(made)[f]}
+								/>
+							</Field.Set>
+						{/if}
 					{/each}
 				{/each}
 				<Field.Description>
@@ -361,59 +370,65 @@ const refreshOptions = $derived(
 				</Field.Description>
 			{/key}
 
-			<Field.Set>
-				<Field.Legend>Videos to link from the providers</Field.Legend>
-				<div class="grid gap-2 sm:grid-cols-3">
-					{#each Object.entries(words.extras) as [value, label] (value)}
-						<div class="flex items-center gap-2">
-							<Checkbox
-								id="{id}-extra-{value}"
-								name="remote_extras"
-								{value}
-								checked={extras.includes(value)}
-							/>
-							<Label for="{id}-extra-{value}">{label}</Label>
-						</div>
-					{/each}
-				</div>
-			</Field.Set>
+			<!-- Music and books have no videos, subtitles, pictures to preview or
+				ratings, and are named as they are. -->
+			{#if video}
+				<Field.Set>
+					<Field.Legend>Videos to link from the providers</Field.Legend>
+					<div class="grid gap-2 sm:grid-cols-3">
+						{#each Object.entries(words.extras) as [value, label] (value)}
+							<div class="flex items-center gap-2">
+								<Checkbox
+									id="{id}-extra-{value}"
+									name="remote_extras"
+									{value}
+									checked={extras.includes(value)}
+								/>
+								<Label for="{id}-extra-{value}">{label}</Label>
+							</div>
+						{/each}
+					</div>
+				</Field.Set>
 
-			<Field.Set>
-				<Field.Legend>Subtitles to download</Field.Legend>
-				<Field.Description>
-					Versions with no subtitle in a language ticked have one fetched from
-					the subtitle providers when they are added, and daily after.
-				</Field.Description>
-				<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-					{#each offeredLanguages as { value: tag, label } (tag)}
-						<div class="flex items-center gap-2">
-							<Checkbox
-								id="{id}-subtitle-{tag}"
-								name="subtitle_languages"
-								value={tag}
-								checked={fetching.includes(tag)}
-							/>
-							<Label for="{id}-subtitle-{tag}">{label}</Label>
-						</div>
-					{/each}
-				</div>
-				<Field.Field>
-					<Field.Label for="{id}-library-subtitle-match">Download</Field.Label>
-					<Choice
-						id="{id}-library-subtitle-match"
-						name="subtitle_match"
-						value={kept?.subtitle_match}
-						options={[
-							{ value: "release", label: "Only those made for the file" },
-							{ value: "any", label: "The best found" },
-						]}
-					/>
+				<Field.Set>
+					<Field.Legend>Subtitles to download</Field.Legend>
 					<Field.Description>
-						One made for another release of the title may be out of time with
-						this one.
+						Versions with no subtitle in a language ticked have one fetched from
+						the subtitle providers when they are added, and daily after.
 					</Field.Description>
-				</Field.Field>
-			</Field.Set>
+					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+						{#each offeredLanguages as { value: tag, label } (tag)}
+							<div class="flex items-center gap-2">
+								<Checkbox
+									id="{id}-subtitle-{tag}"
+									name="subtitle_languages"
+									value={tag}
+									checked={fetching.includes(tag)}
+								/>
+								<Label for="{id}-subtitle-{tag}">{label}</Label>
+							</div>
+						{/each}
+					</div>
+					<Field.Field>
+						<Field.Label for="{id}-library-subtitle-match"
+							>Download</Field.Label
+						>
+						<Choice
+							id="{id}-library-subtitle-match"
+							name="subtitle_match"
+							value={kept?.subtitle_match}
+							options={[
+								{ value: "release", label: "Only those made for the file" },
+								{ value: "any", label: "The best found" },
+							]}
+						/>
+						<Field.Description>
+							One made for another release of the title may be out of time with
+							this one.
+						</Field.Description>
+					</Field.Field>
+				</Field.Set>
+			{/if}
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				{#if !remote}
@@ -441,156 +456,160 @@ const refreshOptions = $derived(
 						options={refreshOptions}
 					/>
 				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-previews">Previews</Field.Label>
-					<Choice
-						id="{id}-library-previews"
-						name="previews"
-						value={kept?.previews}
-						options={[
-							{ value: "all", label: "Chapters and seeking" },
-							{ value: "chapters", label: "Chapter images only" },
-							{ value: "off", label: "None" },
-						]}
-					/>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-markers"
-						>Intros and credits</Field.Label
-					>
-					<Choice
-						id="{id}-library-markers"
-						name="markers"
-						value={kept?.markers}
-						options={[
-							{ value: "all", label: "From chapters, sound and picture" },
-							{ value: "chapters", label: "From chapters only" },
-							{ value: "off", label: "Not looked for" },
-						]}
-					/>
-					<Field.Description>
-						Comparing sound reads the start and end of every episode; a film's
-						credits are found where its picture goes dark near its end.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-keyframes">Keyframes</Field.Label>
-					<Choice
-						id="{id}-library-keyframes"
-						name="keyframes"
-						value={kept?.keyframes}
-						options={[
-							{ value: "index", label: "From the file's index" },
-							{ value: "full", label: "Read every file through" },
-							{ value: "off", label: "Not looked for" },
-						]}
-					/>
-					<Field.Description>
-						The index is a few small reads, right for a network share; reading
-						through, in the maintenance window, gives exact segments from a
-						local disk.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-themes">Theme music</Field.Label>
-					<Choice
-						id="{id}-library-themes"
-						name="themes"
-						value={kept?.themes}
-						options={[
-							{ value: "local", label: "Local files only" },
-							{ value: "themerr", label: "Local files and ThemerrDB's" },
-							{ value: "off", label: "None" },
-						]}
-					/>
-					<Field.Description>
-						A theme.mp3 or a theme-music folder beside a title. With
-						ThemerrDB's, a film or show with neither downloads the theme audio
-						from the YouTube link ThemerrDB lists for it, which needs yt-dlp on
-						the server.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-language"
-						>Metadata language</Field.Label
-					>
-					<Choice
-						id="{id}-library-language"
-						name="metadata_language"
-						value={library?.metadata_language ?? serverLocale}
-						options={languages}
-					/>
-					<Field.Description>
-						What its titles' names, write-ups and pictures are asked for in.
-						Changing it describes them all again.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-titles">Titles</Field.Label>
-					<Choice
-						id="{id}-library-titles"
-						name="title_language"
-						value={kept?.title_language}
-						options={[
-							{ value: "localized", label: "In its language" },
-							{ value: "original", label: "As first named" },
-						]}
-					/>
-					<Field.Description>
-						As first named keeps a film's or show's original title, its write-up
-						still in its language.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-box-sets">Box sets</Field.Label>
-					<Choice
-						id="{id}-library-box-sets"
-						name="box_sets"
-						value={kept?.box_sets}
-						options={[
-							{ value: "expanded", label: "Each title on its own" },
-							{ value: "collapsed", label: "One tile for the set" },
-							{ value: "beside", label: "The set and each title" },
-						]}
-					/>
-					<Field.Description>
-						One tile for the set shows two or more titles of a collection, such
-						as a film series, as the collection in their place. The set and each
-						title adds the collection beside them. A filtered library shows each
-						title.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-artwork">Pictures</Field.Label>
-					<Choice
-						id="{id}-library-artwork"
-						name="artwork_language"
-						value={kept?.artwork_language}
-						options={[
-							{ value: "localized", label: "In its language first" },
-							{ value: "any", label: "The most liked, any language" },
-						]}
-					/>
-					<Field.Description>
-						In its language first takes posters and logos in it, else English,
-						else with no words on them.
-					</Field.Description>
-				</Field.Field>
-				<Field.Field>
-					<Field.Label for="{id}-library-country"
-						>Certification country</Field.Label
-					>
-					<Choice
-						id="{id}-library-country"
-						name="certification_country"
-						value={library?.certification_country ?? serverLocale}
-						options={countries}
-					/>
-					<Field.Description>
-						Whose certificates its titles carry, and parental controls read them
-						by. Automatic is its language's country, else the server's.
-					</Field.Description>
-				</Field.Field>
+				{#if video}
+					<Field.Field>
+						<Field.Label for="{id}-library-previews">Previews</Field.Label>
+						<Choice
+							id="{id}-library-previews"
+							name="previews"
+							value={kept?.previews}
+							options={[
+								{ value: "all", label: "Chapters and seeking" },
+								{ value: "chapters", label: "Chapter images only" },
+								{ value: "off", label: "None" },
+							]}
+						/>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-markers"
+							>Intros and credits</Field.Label
+						>
+						<Choice
+							id="{id}-library-markers"
+							name="markers"
+							value={kept?.markers}
+							options={[
+								{ value: "all", label: "From chapters, sound and picture" },
+								{ value: "chapters", label: "From chapters only" },
+								{ value: "off", label: "Not looked for" },
+							]}
+						/>
+						<Field.Description>
+							Comparing sound reads the start and end of every episode; a film's
+							credits are found where its picture goes dark near its end.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-keyframes">Keyframes</Field.Label>
+						<Choice
+							id="{id}-library-keyframes"
+							name="keyframes"
+							value={kept?.keyframes}
+							options={[
+								{ value: "index", label: "From the file's index" },
+								{ value: "full", label: "Read every file through" },
+								{ value: "off", label: "Not looked for" },
+							]}
+						/>
+						<Field.Description>
+							The index is a few small reads, right for a network share; reading
+							through, in the maintenance window, gives exact segments from a
+							local disk.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-themes">Theme music</Field.Label>
+						<Choice
+							id="{id}-library-themes"
+							name="themes"
+							value={kept?.themes}
+							options={[
+								{ value: "local", label: "Local files only" },
+								{ value: "themerr", label: "Local files and ThemerrDB's" },
+								{ value: "off", label: "None" },
+							]}
+						/>
+						<Field.Description>
+							A theme.mp3 or a theme-music folder beside a title. With
+							ThemerrDB's, a film or show with neither downloads the theme audio
+							from the YouTube link ThemerrDB lists for it, which needs yt-dlp
+							on the server.
+						</Field.Description>
+					</Field.Field>
+				{/if}
+				{#if video}
+					<Field.Field>
+						<Field.Label for="{id}-library-language"
+							>Metadata language</Field.Label
+						>
+						<Choice
+							id="{id}-library-language"
+							name="metadata_language"
+							value={library?.metadata_language ?? serverLocale}
+							options={languages}
+						/>
+						<Field.Description>
+							What its titles' names, write-ups and pictures are asked for in.
+							Changing it describes them all again.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-titles">Titles</Field.Label>
+						<Choice
+							id="{id}-library-titles"
+							name="title_language"
+							value={kept?.title_language}
+							options={[
+								{ value: "localized", label: "In its language" },
+								{ value: "original", label: "As first named" },
+							]}
+						/>
+						<Field.Description>
+							As first named keeps a film's or show's original title, its
+							write-up still in its language.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-box-sets">Box sets</Field.Label>
+						<Choice
+							id="{id}-library-box-sets"
+							name="box_sets"
+							value={kept?.box_sets}
+							options={[
+								{ value: "expanded", label: "Each title on its own" },
+								{ value: "collapsed", label: "One tile for the set" },
+								{ value: "beside", label: "The set and each title" },
+							]}
+						/>
+						<Field.Description>
+							One tile for the set shows two or more titles of a collection,
+							such as a film series, as the collection in their place. The set
+							and each title adds the collection beside them. A filtered library
+							shows each title.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-artwork">Pictures</Field.Label>
+						<Choice
+							id="{id}-library-artwork"
+							name="artwork_language"
+							value={kept?.artwork_language}
+							options={[
+								{ value: "localized", label: "In its language first" },
+								{ value: "any", label: "The most liked, any language" },
+							]}
+						/>
+						<Field.Description>
+							In its language first takes posters and logos in it, else English,
+							else with no words on them.
+						</Field.Description>
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{id}-library-country"
+							>Certification country</Field.Label
+						>
+						<Choice
+							id="{id}-library-country"
+							name="certification_country"
+							value={library?.certification_country ?? serverLocale}
+							options={countries}
+						/>
+						<Field.Description>
+							Whose certificates its titles carry, and parental controls read
+							them by. Automatic is its language's country, else the server's.
+						</Field.Description>
+					</Field.Field>
+				{/if}
 				{#if !remote}
 					<Field.Field>
 						<Field.Label for="{id}-library-deletion"
