@@ -8,7 +8,7 @@ import (
 
 // LibraryKind is what a library holds: films, shows, or both, as Jellyfin's and Emby's mixed
 // libraries hold them, each folder of one being a show's or else films'; or music, its artists'
-// albums.
+// albums; or books, its authors' books, each read or listened to.
 type LibraryKind string
 
 const (
@@ -16,10 +16,11 @@ const (
 	LibraryShows  LibraryKind = "shows"
 	LibraryMixed  LibraryKind = "mixed"
 	LibraryMusic  LibraryKind = "music"
+	LibraryBooks  LibraryKind = "books"
 )
 
 func LibraryKinds() []LibraryKind {
-	return []LibraryKind{LibraryMovies, LibraryShows, LibraryMixed, LibraryMusic}
+	return []LibraryKind{LibraryMovies, LibraryShows, LibraryMixed, LibraryMusic, LibraryBooks}
 }
 
 // LibraryMedia is where a library's media is: files under a folder, or, of a remote library,
@@ -234,9 +235,9 @@ func NewLibrary(kind LibraryKind, media LibraryMedia) Library {
 	if media == MediaRemote {
 		l.Monitor, l.Previews, l.Markers = MonitorOff, PreviewsOff, MarkersOff
 	}
-	// Music has no pictures to preview, no intros to skip, no keyframes to seek by and no
-	// trailers: its library reads its files and nothing more.
-	if kind == LibraryMusic {
+	// Music and books have no pictures to preview, no intros to skip, no keyframes to seek by and
+	// no trailers: their libraries read their files and nothing more.
+	if kind == LibraryMusic || kind == LibraryBooks {
 		l.Previews, l.Markers, l.Keyframes, l.Themes, l.RemoteExtras = PreviewsOff, MarkersOff, KeyframesOff, ThemesOff, []ExtraKind{}
 	}
 	return l
@@ -266,5 +267,7 @@ type TitleCounts struct {
 	Artists     int
 	Albums      int
 	Tracks      int
+	Authors     int
+	Books       int
 	Collections int
 }

@@ -683,6 +683,8 @@ export async function admin(
 							artists: 0,
 							albums: 0,
 							tracks: 0,
+							authors: 0,
+							books: 0,
 							collections: 1,
 						},
 					},

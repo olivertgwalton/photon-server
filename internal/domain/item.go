@@ -23,15 +23,24 @@ const (
 	ItemArtist ItemKind = "artist"
 	ItemAlbum  ItemKind = "album"
 	ItemTrack  ItemKind = "track"
+	// ItemAuthor holds the books it wrote, as an artist holds albums. A book's versions are its
+	// formats: an ebook's file, an audiobook's.
+	ItemAuthor ItemKind = "author"
+	ItemBook   ItemKind = "book"
 )
 
 func ItemKinds() []ItemKind {
-	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack}
+	return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode, ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack, ItemAuthor, ItemBook}
 }
 
 // Music is whether the kind is an artist, an album or a track.
 func (k ItemKind) Music() bool {
 	return k == ItemArtist || k == ItemAlbum || k == ItemTrack
+}
+
+// Books is whether the kind is an author or a book.
+func (k ItemKind) Books() bool {
+	return k == ItemAuthor || k == ItemBook
 }
 
 // SearchKind is what a search can be narrowed to: a kind of title it finds, or people.

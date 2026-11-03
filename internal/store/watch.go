@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"time"
 	"uuid"
@@ -16,7 +17,11 @@ import (
 // TitleState is what a profile has made of a title. A show's and a season's are their episodes':
 // watched once every one is, with how many are left.
 type TitleState struct {
-	PositionMS   int64
+	PositionMS int64
+	// Locator is where a reader is in a book, as its reader says it, and Progression how far
+	// through it that is.
+	Locator      jsontext.Value
+	Progression  *float64
 	Plays        int
 	WatchedAt    *time.Time
 	LastPlayedAt *time.Time
@@ -232,7 +237,7 @@ func (s *Store) listable(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 		return row.ID, nil
 	case domain.ItemSeason, domain.ItemEpisode:
 		return s.listable(ctx, *row.ParentID)
-	case domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	return uuid.UUID{}, ErrNotListable
 }
@@ -258,8 +263,8 @@ func keyTitle(ctx context.Context, tx db, title uuid.UUID) error {
 	return err
 }
 
-// leaves answers the films, episodes or tracks a title is watched by: itself, a season's or show's
-// episodes, or an album's or artist's tracks. ErrNotFound for no title.
+// leaves answers the films, episodes, tracks or books a title is watched by: itself, a season's or
+// show's episodes, an album's or artist's tracks, or an author's books. ErrNotFound for no title.
 func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error) {
 	row, err := readItem(ctx, s.pool, id)
 	if err != nil {
@@ -267,8 +272,10 @@ func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error)
 	}
 	parents := []*model.Item{row}
 	switch row.Kind {
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemBook:
 		return parents, nil
+	case domain.ItemAuthor:
+		return queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'book'`, row.ID)
 	case domain.ItemShow, domain.ItemArtist:
 		parents, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind IN ('season', 'album')`, row.ID)
 		if err != nil {
@@ -303,14 +310,14 @@ func (s *Store) states(ctx context.Context, profile uuid.UUID, items []*model.It
 		return out, nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT item_id, position_ms, plays, watched_at, last_played_at FROM watch_state
+		SELECT item_id, position_ms, locator, progression, plays, watched_at, last_played_at FROM watch_state
 		WHERE profile_id = $1 AND item_id = ANY($2)`, profile, ids(items))
 	if err != nil {
 		return nil, err
 	}
 	var item uuid.UUID
 	var st TitleState
-	_, err = pgx.ForEachRow(rows, []any{&item, &st.PositionMS, &st.Plays, &st.WatchedAt, &st.LastPlayedAt}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&item, &st.PositionMS, &st.Locator, &st.Progression, &st.Plays, &st.WatchedAt, &st.LastPlayedAt}, func() error {
 		out[item] = st
 		return nil
 	})

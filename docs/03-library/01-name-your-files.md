@@ -184,6 +184,35 @@ An album's cover is `cover.jpg`, `folder.jpg` or `poster.jpg` in its folder, els
 tracks hold. A music library supports FLAC, MP3, AAC and M4A, Ogg and Opus, WAV and AIFF, WMA,
 Monkey's Audio and WavPack files.
 
+## Books
+
+A books library holds ebooks and audiobooks. Each book goes under its author, so a folder per
+author, then one per book, is the tidiest:
+
+```text
+/media/Books
+├── Ursula K. Le Guin
+│   └── A Wizard of Earthsea
+│       ├── A Wizard of Earthsea.epub
+│       └── cover.jpg
+└── J.K. Rowling
+    └── Harry Potter and the Deathly Hallows
+        ├── Part 01.mp3
+        ├── Part 02.mp3
+        └── Harry Potter and the Deathly Hallows.epub
+```
+
+- **Ebooks** can be EPUB, PDF or CBZ comic archives. An EPUB's own details give its title, author,
+  series and cover, and so does a comic's `ComicInfo.xml`. A PDF is named by its file.
+- **Audiobooks** are a folder's sound files, played in the order their disc and track tags give,
+  else by name. Their tags give the title, author and series. A single file's cue sheet gives its
+  chapters, as a chapter list does in an M4B.
+- **One book, two formats:** an ebook and an audiobook of the same title in one folder are one book
+  you can read or listen to.
+- A book whose files name no author belongs to the author's folder it's in.
+
+CBR and CB7 comics, which are RAR and 7-Zip archives, aren't read: convert them to CBZ.
+
 ## Extras
 
 Trailers, featurettes and other extras go beside their title, either in a folder named for their

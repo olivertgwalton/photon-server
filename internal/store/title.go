@@ -68,6 +68,7 @@ type TitlePage struct {
 	Show                                                 *TitleRef
 	Season                                               *TitleRef
 	MusicPage
+	BookPage
 	Versions []VersionPage
 	Seasons  []SeasonCard
 	Episodes []EpisodeCard
@@ -178,6 +179,7 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
 		EpisodeEnd: item.EpisodeEnd, AirsBeforeSeason: item.AirsBeforeSeason, AirsBeforeEpisode: item.AirsBeforeEpisode,
 		AirsAfterSeason: item.AirsAfterSeason, DiscNumber: item.DiscNumber, TrackNumber: item.TrackNumber, Artists: item.Artists,
+		Series: deref(item.Series), SeriesIndex: item.SeriesIndex,
 	}
 	var credits, showCredits []CreditRef
 	g, gctx = errgroup.WithContext(ctx)
@@ -286,7 +288,9 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 		p.Albums, err = s.Albums(ctx, profile, item.ID)
 	case domain.ItemAlbum:
 		p.Tracks, err = s.Tracks(ctx, profile, item.ID)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
+	case domain.ItemAuthor:
+		p.Books, err = s.Books(ctx, profile, item.ID)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemBook:
 		var versions map[uuid.UUID][]VersionPage
 		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
 		p.Versions = versions[item.ID]
@@ -442,29 +446,22 @@ func (s *Store) Episodes(ctx context.Context, profile, of uuid.UUID) ([]Card, er
 	return s.cards(ctx, profile, rows)
 }
 
-// parents names the show a season belongs to, and the season and show an episode does; the artist
-// an album belongs to, and the album and artist a track does.
+// parents names what a title is under: a season's show, an episode's season and show, an album's
+// artist, a track's album and artist, and a book's author.
 func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) error {
-	parent := item.ParentID
-	for parent != nil && slices.Contains([]domain.ItemKind{domain.ItemSeason, domain.ItemEpisode, domain.ItemAlbum, domain.ItemTrack}, item.Kind) {
+	refs := map[domain.ItemKind]**TitleRef{
+		domain.ItemSeason: &p.Season, domain.ItemShow: &p.Show, domain.ItemAlbum: &p.Album, domain.ItemArtist: &p.Artist, domain.ItemAuthor: &p.Author,
+	}
+	for parent := item.ParentID; parent != nil && item.Kind != domain.ItemExtra; {
 		row, err := readItem(ctx, s.pool, *parent)
 		if err != nil {
 			return err
 		}
-		ref := &TitleRef{ID: row.ID, Title: row.Title}
+		if ref, ok := refs[row.Kind]; ok {
+			*ref = &TitleRef{ID: row.ID, Title: row.Title}
+		}
 		// A season or episode with no certificate of its own wears the nearest it is under.
 		p.Certificate = cmp.Or(p.Certificate, deref(row.Certificate))
-		switch row.Kind {
-		case domain.ItemSeason:
-			p.Season = ref
-		case domain.ItemShow:
-			p.Show = ref
-		case domain.ItemAlbum:
-			p.Album = ref
-		case domain.ItemArtist:
-			p.Artist = ref
-		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack:
-		}
 		parent = row.ParentID
 	}
 	return nil

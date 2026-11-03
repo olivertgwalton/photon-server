@@ -45,10 +45,12 @@ type Card struct {
 	// show's seasons.
 	AirsBeforeSeason, AirsBeforeEpisode, AirsAfterSeason *int
 	// An album's card names its artist, and a track's its album and artist, its place on the album
-	// and the artists it names.
-	Artist, Album           *TitleRef
+	// and the artists it names; a book's its author, and its series and place in it.
+	Artist, Album, Author   *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
+	Series                  string
+	SeriesIndex             *float64
 	Thumb                   uuid.UUID
 	// ShowThumb is an episode's show's thumb, the landscape picture lettered with its name, which a
 	// row of what is watched draws the episode by where the profile chose it. It is not answered
@@ -426,7 +428,8 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			AirsBeforeSeason: r.AirsBeforeSeason, AirsBeforeEpisode: r.AirsBeforeEpisode, AirsAfterSeason: r.AirsAfterSeason,
 			Origin: sets[r.ID].Origin, Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
-			Artist: music[r.ID].artist, Album: music[r.ID].album, DiscNumber: r.DiscNumber, TrackNumber: r.TrackNumber, Artists: r.Artists,
+			Artist: music[r.ID].artist, Album: music[r.ID].album, Author: music[r.ID].author, DiscNumber: r.DiscNumber, TrackNumber: r.TrackNumber,
+			Artists: r.Artists, Series: deref(r.Series), SeriesIndex: r.SeriesIndex,
 		}
 		c := &cards[n]
 		if set, ok := sets[r.ID]; ok {
@@ -526,7 +529,7 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 			return r.ParentID
 		case domain.ItemSeason:
 			return &r.ID
-		case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+		case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 		}
 		return nil
 	}

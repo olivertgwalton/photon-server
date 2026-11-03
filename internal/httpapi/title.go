@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json/jsontext"
 	"time"
 	"uuid"
 
@@ -102,11 +103,17 @@ type titlePageJSON struct {
 	Seasons     []seasonCardJSON  `json:"seasons,omitzero"`
 	Episodes    []episodeCardJSON `json:"episodes,omitzero"`
 	// Albums are an artist's, the earliest first, and Tracks an album's, in its order.
-	Albums []cardJSON      `json:"albums,omitzero"`
-	Tracks []cardJSON      `json:"tracks,omitzero"`
-	Extras []extraCardJSON `json:"extras,omitzero"`
-	Videos []videoLinkJSON `json:"videos,omitzero"`
-	State  titleStateJSON  `json:"state,omitzero"`
+	Albums []cardJSON `json:"albums,omitzero"`
+	Tracks []cardJSON `json:"tracks,omitzero"`
+	// Author is a book's, and Series the series it is in and SeriesIndex its place there; Books are
+	// an author's, by series and place.
+	Author      *titleRefJSON   `json:"author,omitzero"`
+	Series      string          `json:"series,omitzero"`
+	SeriesIndex *float64        `json:"series_index,omitzero"`
+	Books       []cardJSON      `json:"books,omitzero"`
+	Extras      []extraCardJSON `json:"extras,omitzero"`
+	Videos      []videoLinkJSON `json:"videos,omitzero"`
+	State       titleStateJSON  `json:"state,omitzero"`
 	// Artwork is the title's best picture of each kind, by id: /api/v1/artwork/{id}. Every picture a
 	// provider offers for it is an admin's to choose from at /api/v1/admin/titles/{id}/artwork/candidates.
 	Artwork    map[domain.ArtworkKind][]uuid.UUID `json:"artwork,omitzero"`
@@ -298,13 +305,17 @@ type creditRefJSON struct {
 }
 
 type titleStateJSON struct {
-	PositionMS    int64      `json:"position_ms,omitzero"`
-	Plays         int        `json:"plays,omitzero"`
-	WatchedAt     *time.Time `json:"watched_at,omitzero"`
-	LastPlayedAt  *time.Time `json:"last_played_at,omitzero"`
-	FavouriteAt   *time.Time `json:"favourite_at,omitzero"`
-	WatchlistedAt *time.Time `json:"watchlisted_at,omitzero"`
-	Unwatched     int        `json:"unwatched,omitzero"`
+	PositionMS int64 `json:"position_ms,omitzero"`
+	// Locator is where the profile is in a book, as its reader gave it, and Progression how far
+	// through the book that is, from 0 to 1.
+	Locator       jsontext.Value `json:"locator,omitzero"`
+	Progression   *float64       `json:"progression,omitzero"`
+	Plays         int            `json:"plays,omitzero"`
+	WatchedAt     *time.Time     `json:"watched_at,omitzero"`
+	LastPlayedAt  *time.Time     `json:"last_played_at,omitzero"`
+	FavouriteAt   *time.Time     `json:"favourite_at,omitzero"`
+	WatchlistedAt *time.Time     `json:"watchlisted_at,omitzero"`
+	Unwatched     int            `json:"unwatched,omitzero"`
 }
 
 func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
@@ -324,6 +335,7 @@ func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {
 		Artist: (*titleRefJSON)(p.Artist), Album: (*titleRefJSON)(p.Album),
 		DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
 		Albums: each(p.Albums, cardOf), Tracks: each(p.Tracks, cardOf),
+		Author: (*titleRefJSON)(p.Author), Series: p.Series, SeriesIndex: p.SeriesIndex, Books: each(p.Books, cardOf),
 		Versions: each(p.Versions, func(v store.VersionPage) versionPageJSON { return versionPageOf(v, w) }),
 		Seasons: each(p.Seasons, func(s store.SeasonCard) seasonCardJSON {
 			return seasonCardJSON{

@@ -64,7 +64,7 @@ func ownerOf(ctx context.Context, tx db, lib uuid.UUID, o Owner) (uuid.UUID, err
 			args = append(args, o.Title)
 		}
 		return one(ctx, tx, sql, args...)
-	case domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 		return uuid.UUID{}, ErrNotFound
 	case domain.ItemShow, domain.ItemSeason, domain.ItemEpisode:
 		show, err := one(ctx, tx, `SELECT id FROM items WHERE library_id = $1 AND kind = 'show' AND folder = $2`, lib, o.Folder)

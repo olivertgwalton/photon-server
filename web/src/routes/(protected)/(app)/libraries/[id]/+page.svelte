@@ -68,6 +68,10 @@ const kinds = $derived(
 				["titles", "Artists"],
 				["albums", "Albums"],
 			],
+			books: [
+				["titles", "Authors"],
+				["books", "Books"],
+			],
 		} satisfies Record<
 			components["schemas"]["LibraryKind"],
 			[components["schemas"]["WallKind"], string][]

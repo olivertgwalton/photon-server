@@ -203,8 +203,10 @@ func (a *API) newItem(id uuid.UUID, kind domain.ItemKind, name string) item {
 	switch kind {
 	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
 		it.MediaType, it.VideoType = "Video", "VideoFile"
-	case domain.ItemShow, domain.ItemSeason, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum:
+	case domain.ItemShow, domain.ItemSeason, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemAuthor:
 		it.IsFolder = true
+	case domain.ItemBook:
+		it.MediaType = "Book"
 	case domain.ItemTrack:
 		it.MediaType = "Audio"
 	}
@@ -241,7 +243,7 @@ func (a *API) fromCard(c store.Card) item {
 		it.SeriesPrimaryImageTag = tag(c.Poster)
 	case domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		it.music(c)
-	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection:
+	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection, domain.ItemAuthor, domain.ItemBook:
 		it.pictures(c.Poster, c.Backdrop, c.Logo, c.Thumb, c.Blurhashes)
 		it.PrimaryImageAspectRatio = posterAspect
 	}
@@ -406,7 +408,7 @@ func (a *API) userData(id uuid.UUID, s store.TitleState, lengthMS int64, kind do
 	switch kind {
 	case domain.ItemShow, domain.ItemSeason:
 		u.UnplayedItemCount = &s.Unwatched
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	return u
 }

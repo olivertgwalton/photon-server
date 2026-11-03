@@ -13,6 +13,6 @@ func (w Words) LibraryRow(k domain.HomeRow) string { return libraryRows[k] }
 
 var libraryRows = map[domain.HomeRow]string{
 	domain.RowRecentFilms: "Recently Added in {library}", domain.RowRecentShows: "Recently Added in {library}",
-	domain.RowRecentAlbums:     "Recently Added in {library}",
+	domain.RowRecentAlbums: "Recently Added in {library}", domain.RowRecentBooks: "Recently Added in {library}",
 	domain.RowRecentlyReleased: "Recently Released in {library}", domain.RowTopRatedUnwatched: "Top Rated in {library}",
 }

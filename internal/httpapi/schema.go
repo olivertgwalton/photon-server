@@ -269,8 +269,10 @@ type (
 	uriReference string
 )
 
-// formats are the types that write themselves as a string.
+// formats are the types that write themselves: as a string, or a locator as the object a reader
+// gave, of any properties.
 var formats = map[reflect.Type]jsonSchema{
+	reflect.TypeFor[jsontext.Value]():     {Type: schemaType{name: "object"}, AdditionalProperties: &jsonSchema{}},
 	reflect.TypeFor[domain.LanguageTag](): {Type: schemaType{name: "string"}, Pattern: `^([A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*)?$`},
 	reflect.TypeFor[domain.CountryCode](): {Type: schemaType{name: "string"}, Pattern: `^([A-Z]{2})?$`},
 	reflect.TypeFor[uri]():                {Type: schemaType{name: "string"}, Format: "uri"},

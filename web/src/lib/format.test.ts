@@ -114,6 +114,8 @@ test("a library says what it holds as its kind counts it", () => {
 		artists: 1,
 		albums: 2,
 		tracks: 22,
+		authors: 2,
+		books: 9,
 		collections: 0,
 	};
 	expect(holding("movies", c)).toBe("1,204 films");
@@ -122,4 +124,5 @@ test("a library says what it holds as its kind counts it", () => {
 		"1,204 films · 1 show · 4 seasons · 40 episodes",
 	);
 	expect(holding("music", c)).toBe("1 artist · 2 albums · 22 tracks");
+	expect(holding("books", c)).toBe("2 authors · 9 books");
 });

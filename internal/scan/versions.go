@@ -6,12 +6,14 @@ import (
 	"errors"
 	"path"
 	"slices"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 	"github.com/olivertgwalton/photon-server/internal/store"
 )
 
@@ -88,6 +90,11 @@ func (s *Scanner) readVersion(ctx context.Context, r reading, c *store.Version) 
 		return err == nil, err
 	}
 	for i, p := range c.Parts {
+		// An ebook holds no stream for ffprobe to read: it is its file, in its format.
+		if format, ok := ebookFormat(p.RelPath); ok {
+			c.Parts[i].Facts = &domain.Facts{Container: format, Size: p.Size}
+			continue
+		}
 		var in media.Input
 		if i == 0 {
 			in, err = library.Media(p.RelPath, first)
@@ -129,12 +136,21 @@ var (
 )
 
 // heldBy is the kind of stream a version of a library of kind must hold, and the reason one is
-// refused without it.
+// refused without it: sound, of a music library's or a books library's, whose audiobooks are
+// sound.
 func heldBy(kind domain.LibraryKind) (domain.StreamKind, error) {
-	if kind == domain.LibraryMusic {
+	if kind == domain.LibraryMusic || kind == domain.LibraryBooks {
 		return domain.StreamAudio, errNoSound
 	}
 	return domain.StreamVideo, errNoPicture
+}
+
+// ebookFormat is an ebook's format by its name, its extension's, for a file that is one.
+func ebookFormat(name string) (string, bool) {
+	if !naming.IsBook(name) {
+		return "", false
+	}
+	return strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."), true
 }
 
 // describe is a planned version's parts and subtitles, its bytes not yet read.

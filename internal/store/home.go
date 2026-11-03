@@ -23,6 +23,12 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))
 		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
+	// A book read or listened to part way, and not finished.
+	domain.RowContinueReading: `
+		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
+		WHERE w.profile_id = @profile AND i.kind = 'book' AND w.watched_at IS NULL AND (w.progression > 0 OR w.position_ms > 0)
+			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
+		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and the specials placed in no season aside, unless it is under way already and so in Continue Watching; the shows
 	// in the order that episode was last played. The shows are put in that order before each one's
@@ -61,6 +67,10 @@ var rowQueries = map[domain.HomeRow]string{
 	domain.RowRecentAlbums: `
 		SELECT ` + itemColumns + ` FROM items
 		WHERE library_id = @lib AND kind = 'album' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
+		ORDER BY added_at DESC, id DESC LIMIT @limit`,
+	domain.RowRecentBooks: `
+		SELECT ` + itemColumns + ` FROM items
+		WHERE library_id = @lib AND kind = 'book' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	// A show by its newest episode. The episodes are walked newest first, one step to the next
 	// show not yet found, so only the newest are read rather than every episode of every show.

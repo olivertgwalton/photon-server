@@ -193,6 +193,8 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 	switch {
 	case r.lib.Kind == domain.LibraryMusic:
 		saved, err = s.saveAlbums(ctx, rd, folder)
+	case r.lib.Kind == domain.LibraryBooks:
+		saved, err = s.saveBooks(ctx, rd, folder)
 	// A shows library's root holds its series' folders, and no films.
 	case series != "" || r.lib.Kind == domain.LibraryShows:
 		saved, err = s.saveEpisodes(ctx, rd, folder, series)
@@ -236,8 +238,8 @@ func (s *Scanner) unreadable(ctx context.Context, r reading, rel string, err err
 	s.skip(ctx, r.run, rel, err)
 }
 
-// mediaIn is the paths of a folder's files that are a library's media: its videos, or a music
-// library's sound files.
+// mediaIn is the paths of a folder's files that are a library's media: its videos, a music
+// library's sound files, or a books library's ebooks and sound files.
 func mediaIn(kind domain.LibraryKind, f library.Folder) []string {
 	var paths []string
 	for _, file := range f.Files {
@@ -249,8 +251,12 @@ func mediaIn(kind domain.LibraryKind, f library.Folder) []string {
 }
 
 func isMedia(kind domain.LibraryKind, name string) bool {
-	if kind == domain.LibraryMusic {
+	switch kind {
+	case domain.LibraryMusic:
 		return naming.IsAudio(name)
+	case domain.LibraryBooks:
+		return naming.IsAudio(name) || naming.IsBook(name)
+	case domain.LibraryMovies, domain.LibraryShows, domain.LibraryMixed:
 	}
 	return naming.IsVideo(name)
 }

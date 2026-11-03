@@ -1,3 +1,4 @@
+import BookOpenIcon from "@lucide/svelte/icons/book-open";
 import ClapperboardIcon from "@lucide/svelte/icons/clapperboard";
 import FilmIcon from "@lucide/svelte/icons/film";
 import MusicIcon from "@lucide/svelte/icons/music";
@@ -14,4 +15,5 @@ export const libraryIcons: Record<
 	shows: TvIcon,
 	mixed: ClapperboardIcon,
 	music: MusicIcon,
+	books: BookOpenIcon,
 };

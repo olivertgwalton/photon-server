@@ -9,6 +9,7 @@ const name = $derived(
 		shows: "Networks",
 		mixed: "Studios and networks",
 		music: "Labels",
+		books: "Publishers",
 	}[data.library.kind],
 );
 </script>

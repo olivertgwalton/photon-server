@@ -48,6 +48,22 @@ func IsAudio(name string) bool {
 	return ok
 }
 
+// bookTypes are the ebooks a books library reads, and the content type each is served as.
+var bookTypes = map[string]string{
+	".epub": "application/epub+zip", ".pdf": "application/pdf", ".cbz": "application/vnd.comicbook+zip",
+}
+
+// BookType answers the content type of an ebook by its name, and false for any other file.
+func BookType(name string) (string, bool) {
+	t, ok := bookTypes[strings.ToLower(path.Ext(name))]
+	return t, ok
+}
+
+func IsBook(name string) bool {
+	_, ok := BookType(name)
+	return ok
+}
+
 func IsSubtitle(name string) bool { return hasExt(subtitleExtensions, name) }
 
 // IsShortcut reports whether a video file is a .strm, as Kodi, Jellyfin and Emby read one: a text

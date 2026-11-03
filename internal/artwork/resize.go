@@ -19,7 +19,6 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/blob"
 	"github.com/olivertgwalton/photon-server/internal/domain"
-	"github.com/olivertgwalton/photon-server/internal/naming"
 
 	// Decoders for the pictures providers and libraries hold.
 	_ "image/gif"
@@ -48,11 +47,11 @@ const maxPixels = 50_000_000
 var ErrNotResizable = errors.New("picture cannot be resized")
 
 // Open opens picture id, or with width or height a copy that fits inside them where it can be
-// made, and answers the name its format is known by: "" for a copy or a sound file's cover, whose
+// made, and answers the name its format is known by: "" for a copy or the cover a file holds, whose
 // content says.
 func (c *Cache) Open(ctx context.Context, id uuid.UUID, p domain.Picture, width, height int) (blob.Object, string, error) {
 	name := path.Base(p.Path + p.URL)
-	if naming.IsAudio(p.Path) {
+	if holdsPicture(p.Path) {
 		name = ""
 	}
 	original := func(ctx context.Context) (blob.Object, error) { return c.original(ctx, id, p) }

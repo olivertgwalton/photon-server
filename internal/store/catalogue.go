@@ -154,10 +154,11 @@ func insertItem(ctx context.Context, tx db, row *model.Item) error {
 	row.ID = uuid.NewV7()
 	_, err := tx.Exec(ctx, `
 		INSERT INTO items (id, library_id, kind, parent_id, season_number, episode_number, episode_end, air_date,
-			extra_kind, scan_title, title, sort_title, folder, disc_number, track_number, artists)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+			extra_kind, scan_title, title, sort_title, folder, disc_number, track_number, artists, series, series_index)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		row.ID, row.LibraryID, row.Kind, row.ParentID, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, row.AirDate,
-		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder, row.DiscNumber, row.TrackNumber, row.Artists)
+		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder, row.DiscNumber, row.TrackNumber, row.Artists,
+		row.Series, row.SeriesIndex)
 	return err
 }
 
@@ -380,17 +381,17 @@ func (s *Store) ForgetMissingVersions(ctx context.Context, lib uuid.UUID) (int64
 	return forgotten, changed, err
 }
 
-// removeEmptied removes a library's films, episodes, extras and tracks left with no version, the
-// seasons, shows, albums and artists left with nothing in them, and a provider's box set left empty,
-// whichever library's titles it held, answering every title that went.
+// removeEmptied removes a library's films, episodes, extras, tracks and books left with no version,
+// the seasons, shows, albums, artists and authors left with nothing in them, and a provider's box
+// set left empty, whichever library's titles it held, answering every title that went.
 func removeEmptied(ctx context.Context, tx db, lib uuid.UUID) ([]uuid.UUID, error) {
 	var removed []uuid.UUID
 	for _, sql := range []string{
-		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra', 'track')
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('movie', 'episode', 'extra', 'track', 'book')
 			AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.item_id = i.id)`,
 		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('season', 'album')
 			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
-		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('show', 'artist')
+		`DELETE FROM items i WHERE i.library_id = $1 AND i.kind IN ('show', 'artist', 'author')
 			AND NOT EXISTS (SELECT 1 FROM items c WHERE c.parent_id = i.id)`,
 	} {
 		gone, err := queryColumn[uuid.UUID](ctx, tx, sql+` RETURNING i.id`, lib)

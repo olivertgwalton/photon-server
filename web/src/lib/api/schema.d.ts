@@ -7708,6 +7708,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/titles/{id}/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record where the profile is in a book, as its reader gives it, how far through the book that is, and when: a place from before the title's state last changed is refused as a conflict */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Reading"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Reached"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/titles/{id}/similar": {
         parameters: {
             query?: never;
@@ -8313,6 +8356,7 @@ export interface components {
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
+            author?: components["schemas"]["TitleRef"] | null;
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
@@ -8341,6 +8385,8 @@ export interface components {
             season_number?: number | null;
             /** Format: uuid */
             season_poster?: string;
+            series?: string;
+            series_index?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
@@ -8433,6 +8479,8 @@ export interface components {
         Counts: {
             albums: number;
             artists: number;
+            authors: number;
+            books: number;
             collections: number;
             episodes: number;
             movies: number;
@@ -8460,6 +8508,7 @@ export interface components {
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
+            author?: components["schemas"]["TitleRef"] | null;
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
@@ -8490,6 +8539,8 @@ export interface components {
             season_number?: number | null;
             /** Format: uuid */
             season_poster?: string;
+            series?: string;
+            series_index?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
@@ -8644,6 +8695,7 @@ export interface components {
             album?: components["schemas"]["TitleRef"] | null;
             artist?: components["schemas"]["TitleRef"] | null;
             artists?: string[];
+            author?: components["schemas"]["TitleRef"] | null;
             /** Format: uuid */
             backdrop?: string;
             blurhashes?: {
@@ -8674,6 +8726,8 @@ export interface components {
             season_number?: number | null;
             /** Format: uuid */
             season_poster?: string;
+            series?: string;
+            series_index?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             /** Format: uuid */
@@ -8858,7 +8912,7 @@ export interface components {
             next?: string;
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_added_albums" | "recently_released" | "top_rated_unwatched";
+        HomeRowKind: "continue_watching" | "continue_reading" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_added_albums" | "recently_added_books" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
             library_kinds?: components["schemas"]["LibraryKind"][];
             row: components["schemas"]["HomeRowKind"];
@@ -8922,7 +8976,7 @@ export interface components {
             item_ids: string[];
         };
         /** @enum {string} */
-        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection" | "artist" | "album" | "track";
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "collection" | "artist" | "album" | "track" | "author" | "book";
         /** @enum {string} */
         JellyfinMode: "on" | "off";
         JobCount: {
@@ -9044,7 +9098,7 @@ export interface components {
             root: string;
         };
         /** @enum {string} */
-        LibraryKind: "movies" | "shows" | "mixed" | "music";
+        LibraryKind: "movies" | "shows" | "mixed" | "music" | "books";
         LibraryKindOptions: {
             defaults: components["schemas"]["NewLibrary"][];
             fetchable: components["schemas"]["Fetchable"][];
@@ -9782,6 +9836,14 @@ export interface components {
         Reached: {
             reach: components["schemas"]["Reach"];
         };
+        Reading: {
+            /** Format: date-time */
+            at?: string | null;
+            locator: {
+                [key: string]: unknown;
+            };
+            progression: number;
+        };
         /** @enum {string} */
         Recheck: "hourly" | "at_sign_in";
         Redemption: {
@@ -10224,9 +10286,11 @@ export interface components {
             artwork?: {
                 [key: string]: string[];
             };
+            author?: components["schemas"]["TitleRef"] | null;
             blurhashes?: {
                 [key: string]: string;
             };
+            books?: components["schemas"]["Card"][];
             box_set?: components["schemas"]["CollectionBoxSet"];
             certificate?: string;
             certification_country?: string;
@@ -10266,6 +10330,8 @@ export interface components {
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             seasons?: components["schemas"]["SeasonCard"][];
+            series?: string;
+            series_index?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             studios?: string[];
@@ -10289,9 +10355,13 @@ export interface components {
             favourite_at?: string | null;
             /** Format: date-time */
             last_played_at?: string | null;
+            locator?: {
+                [key: string]: unknown;
+            };
             plays?: number;
             /** Format: int64 */
             position_ms?: number;
+            progression?: number | null;
             unwatched?: number;
             /** Format: date-time */
             watched_at?: string | null;
@@ -10541,7 +10611,7 @@ export interface components {
             years?: number[];
         };
         /** @enum {string} */
-        WallKind: "titles" | "films" | "shows" | "episodes" | "albums";
+        WallKind: "titles" | "films" | "shows" | "episodes" | "albums" | "books";
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
         Watched: {

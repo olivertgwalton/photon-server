@@ -18,6 +18,7 @@ export const homeRows: Record<
 	}
 > = {
 	continue_watching: { shape: "still" },
+	continue_reading: { shape: "poster" },
 	next_up: { shape: "still" },
 	watchlist: {
 		shape: "poster",
@@ -28,6 +29,7 @@ export const homeRows: Record<
 	recently_added_films: { shape: "poster" },
 	recently_added_shows: { shape: "poster" },
 	recently_added_albums: { shape: "poster" },
+	recently_added_books: { shape: "poster" },
 	recently_released: { shape: "poster" },
 	top_rated_unwatched: { shape: "poster" },
 };

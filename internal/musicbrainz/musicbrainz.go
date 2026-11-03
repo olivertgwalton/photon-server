@@ -118,7 +118,7 @@ func (c *Client) Match(ctx context.Context, _ domain.Locale, kind domain.ItemKin
 		if len(named) == 1 {
 			return named[0].ID, nil
 		}
-	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	return "", nil
 }
@@ -148,7 +148,7 @@ func (c *Client) Describe(ctx context.Context, _ domain.Locale, kind domain.Item
 			return domain.Metadata{}, nil, err
 		}
 		m.Title, m.SortTitle, m.Genres = a.Name, a.SortName, genres(a.Genres)
-	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	return m, nil, nil
 }

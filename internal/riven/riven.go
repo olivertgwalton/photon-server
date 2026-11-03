@@ -93,7 +93,7 @@ func (c *Client) Request(ctx context.Context, w domain.Wanted) error {
 		if in.TVDBID == "" && in.IMDbID == "" {
 			return errors.New("riven knows a show by its TheTVDB or IMDb id, and this one has neither")
 		}
-	case domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemSeason, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 		return fmt.Errorf("riven fetches films and shows, not a %s", w.Kind)
 	}
 	q := query{
