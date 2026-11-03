@@ -64,10 +64,10 @@ func (a *API) audio(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// universal answers Jellyfin's /Audio/{itemId}/universal for a track, which an app such as Finamp
-// plays at without asking for its PlaybackInfo, naming what it plays in its query: the file as it
-// is where a container and codec it names take it, else the HLS photon makes of it, which the app
-// is sent to as Jellyfin's universal sends it.
+// universal answers Jellyfin's /Audio/{itemId}/universal for a track, which an app plays at, or
+// Finamp downloads a transcode from, without asking for its PlaybackInfo, naming what it plays in
+// its query: the file as it is where a container and codec it names take it, else the HLS photon
+// makes of it, which the app is sent to as Jellyfin's universal sends it.
 func (a *API) universal(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	c, err := a.svc.Playing.Playable(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, uuid.UUID{})
 	if isNotFound(err) {
