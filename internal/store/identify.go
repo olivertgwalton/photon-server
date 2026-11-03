@@ -43,6 +43,10 @@ type Subject struct {
 	Titles domain.TitleLanguage
 }
 
+// matchedKinds are the kinds of title a provider is asked to match, whose match describes what is
+// under them: a film, a show, an artist and an album.
+const matchedKinds = `('movie', 'show', 'artist', 'album')`
+
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
 func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, bool, error) {
 	item, err := readItem(ctx, s.pool, id)
