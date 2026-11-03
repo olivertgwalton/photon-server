@@ -37,8 +37,9 @@ let {
 	// The page's own title, outlined among the rest of its set.
 	current?: boolean;
 	menu?: "title" | "none";
-	// How far the reader is through it, which only Continue Watching's cards
-	// and an episode's season row show, as the apps' cards do.
+	// How far the reader is through it, which only Continue Watching's and
+	// Continue Reading's cards and an episode's season row show, as the apps'
+	// cards do.
 	resume?: "shown" | "hidden";
 } = $props();
 
@@ -58,11 +59,15 @@ const caption = $derived.by(() => {
 	return card.year ? String(card.year) : "";
 });
 
-const progress = $derived(
-	resume === "shown" && card.state?.position_ms && card.duration_ms
-		? Math.min(card.state.position_ms / card.duration_ms, 1)
-		: 0,
-);
+// A book read says how far through it is; anything played, where it stopped.
+const progress = $derived.by(() => {
+	const state = card.state;
+	if (resume === "hidden" || !state) return 0;
+	if (state.progression != null) return state.progression;
+	return state.position_ms && card.duration_ms
+		? Math.min(state.position_ms / card.duration_ms, 1)
+		: 0;
+});
 const unwatched = $derived(card.state?.unwatched ?? 0);
 // A spoiler is drawn by the frame's blurhash alone, not a blurred picture: a
 // blur that wide is drawn blocky, and the picture itself need not be sent.
