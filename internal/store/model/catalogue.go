@@ -101,6 +101,10 @@ type Version struct {
 	SizeBytes    int64
 	DurationMS   int64
 	MissingSince *time.Time
+	TrackGainDB  *float64
+	TrackPeak    *float64
+	AlbumGainDB  *float64
+	AlbumPeak    *float64
 }
 
 type Part struct {

@@ -27,6 +27,7 @@ type VersionPage struct {
 	BitrateKbps  int
 	Parts        int
 	MissingSince *time.Time
+	Gain         domain.ReplayGain
 	// Streams are the first part's; the parts of one version are cut from one master.
 	Streams   []domain.Stream
 	Subtitles []SubtitleRef
@@ -187,7 +188,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 	vp := VersionPage{
 		ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 		DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
-		Parts: len(in.byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []domain.Stream{},
+		Parts: len(in.byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []domain.Stream{}, Gain: replayGainOf(r),
 	}
 	for k, p := range in.byVersion[r.ID] {
 		vp.Files = append(vp.Files, PartRef{

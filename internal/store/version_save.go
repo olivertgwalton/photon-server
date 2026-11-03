@@ -22,6 +22,8 @@ type Version struct {
 	Label      string
 	Parts      []Part
 	Subtitles  []Subtitle
+	// Gain is a track's, as its tags give it.
+	Gain domain.ReplayGain
 }
 
 // Subtitle is a subtitle file beside a version.
@@ -61,10 +63,11 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 	}
 	if err == nil {
 		// A version an admin split off stays on its own title.
+		trackGain, trackPeak, albumGain, albumPeak := gainColumns(c.Gain)
 		_, err := tx.Exec(ctx, `
 			UPDATE versions SET item_id = CASE WHEN split_at IS NULL THEN $2 ELSE item_id END, edition = $3, label = $4,
-				missing_since = NULL
-			WHERE id = $1`, known, itemID, edition, label)
+				missing_since = NULL, track_gain_db = $5, track_peak = $6, album_gain_db = $7, album_peak = $8
+			WHERE id = $1`, known, itemID, edition, label, trackGain, trackPeak, albumGain, albumPeak)
 		if err != nil {
 			return err
 		}
@@ -77,6 +80,7 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 	version := model.Version{
 		ItemID: itemID, LibraryID: lib, Fingerprint: c.ContentKey, Edition: edition, Label: label,
 	}
+	version.TrackGainDB, version.TrackPeak, version.AlbumGainDB, version.AlbumPeak = gainColumns(c.Gain)
 	var offset int64
 	for _, part := range c.Parts {
 		version.SizeBytes += part.Facts.Size
@@ -99,11 +103,13 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 	version.ID = uuid.NewV7()
 	_, err = tx.Exec(ctx, `
 		INSERT INTO versions (id, item_id, library_id, fingerprint, edition, label, container, width, height,
-			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
+			album_gain_db, album_peak)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
 		version.ID, version.ItemID, version.LibraryID, version.Fingerprint, version.Edition, version.Label, version.Container,
 		version.Width, version.Height, version.VideoCodec, version.VideoRange, version.DVProfile,
-		version.BitrateKbps, version.SizeBytes, version.DurationMS)
+		version.BitrateKbps, version.SizeBytes, version.DurationMS, version.TrackGainDB, version.TrackPeak,
+		version.AlbumGainDB, version.AlbumPeak)
 	if err != nil {
 		return err
 	}
@@ -134,6 +140,33 @@ func saveVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, i
 	return saveSubtitles(ctx, tx, lib, version.ID, c.Subtitles)
 }
 
+// gainColumns is a track's ReplayGain as its version's columns: nil for what its tags do not give.
+func gainColumns(g domain.ReplayGain) (trackGain, trackPeak, albumGain, albumPeak *float64) {
+	columns := func(gain *domain.Gain) (*float64, *float64) {
+		if gain == nil {
+			return nil, nil
+		}
+		if gain.Peak == 0 {
+			return &gain.DB, nil
+		}
+		return &gain.DB, &gain.Peak
+	}
+	trackGain, trackPeak = columns(g.Track)
+	albumGain, albumPeak = columns(g.Album)
+	return trackGain, trackPeak, albumGain, albumPeak
+}
+
+// replayGainOf is a version's ReplayGain from its columns.
+func replayGainOf(r *model.Version) domain.ReplayGain {
+	gain := func(db, peak *float64) *domain.Gain {
+		if db == nil {
+			return nil
+		}
+		return &domain.Gain{DB: *db, Peak: deref(peak)}
+	}
+	return domain.ReplayGain{Track: gain(r.TrackGainDB, r.TrackPeak), Album: gain(r.AlbumGainDB, r.AlbumPeak)}
+}
+
 // indexVideo queues what a library asks to be made of a new part holding video.
 func indexVideo(ctx context.Context, tx db, settings analysis, part uuid.UUID) error {
 	if settings.Keyframes != domain.KeyframesOff {
@@ -154,9 +187,11 @@ func cloneVersion(ctx context.Context, tx db, lib uuid.UUID, settings analysis, 
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO versions (item_id, library_id, fingerprint, edition, label, container, width, height,
-			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms)
+			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
+			album_gain_db, album_peak)
 		SELECT $2, library_id, fingerprint, $3, $4, container, width, height,
-			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms
+			video_codec, video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, track_gain_db, track_peak,
+			album_gain_db, album_peak
 		FROM versions WHERE id = $1 RETURNING id`, from, itemID, optional(c.Edition), optional(c.Label)).Scan(&id)
 	if err != nil {
 		return err
