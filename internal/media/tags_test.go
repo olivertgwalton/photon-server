@@ -67,6 +67,9 @@ func TestATracksCoverIsTheOneItHolds(t *testing.T) {
 	with, without := filepath.Join(dir, "with.flac"), filepath.Join(dir, "without.flac")
 	testtool.Audio(t, with, map[string][]string{"TITLE": {"With"}}, cover.Bytes())
 	testtool.Audio(t, without, map[string][]string{"TITLE": {"Without"}}, nil)
+	if tags, err := ReadTags(with); err != nil || !tags.Pictured {
+		t.Errorf("ReadTags(with) = %+v, %v; want it pictured", tags, err)
+	}
 	if got, err := Picture(with); err != nil || !bytes.Equal(got, cover.Bytes()) {
 		t.Errorf("Picture(with) = %d bytes, %v; want the %d it holds", len(got), err, cover.Len())
 	}

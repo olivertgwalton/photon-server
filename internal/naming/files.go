@@ -15,12 +15,13 @@ var videoExtensions = []string{
 
 var subtitleExtensions = []string{".ass", ".idx", ".mks", ".sami", ".smi", ".srt", ".ssa", ".sub", ".sup", ".vtt"}
 
-// audioTypes are the sound files a theme tune may be, as Jellyfin reads them, and the content type
-// each is served as.
+// audioTypes are the sound files a theme tune or a track may be, as Jellyfin reads them, and the
+// content type each is served as.
 var audioTypes = map[string]string{
-	".aac": "audio/aac", ".flac": "audio/flac", ".m4a": "audio/mp4", ".mp3": "audio/mpeg",
+	".aac": "audio/aac", ".aif": "audio/aiff", ".aiff": "audio/aiff", ".ape": "audio/x-ape",
+	".flac": "audio/flac", ".m4a": "audio/mp4", ".m4b": "audio/mp4", ".mp3": "audio/mpeg",
 	".oga": "audio/ogg", ".ogg": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav",
-	".wma": "audio/x-ms-wma",
+	".wma": "audio/x-ms-wma", ".wv": "audio/x-wavpack",
 }
 
 // AudioType answers the content type of a sound file by its name, and false for any other file.
@@ -41,6 +42,11 @@ func Theme(name string) bool {
 }
 
 func IsVideo(name string) bool { return hasExt(videoExtensions, name) }
+
+func IsAudio(name string) bool {
+	_, ok := AudioType(name)
+	return ok
+}
 
 func IsSubtitle(name string) bool { return hasExt(subtitleExtensions, name) }
 

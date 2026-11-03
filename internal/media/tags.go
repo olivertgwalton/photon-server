@@ -1,6 +1,8 @@
 package media
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,11 +30,19 @@ type Tags struct {
 	Disc, Track int
 	// Compilation is an album of several artists' tracks, as iTunes marks one.
 	Compilation bool
+	// Pictured is a file holding a picture, which Picture reads.
+	Pictured bool
 }
+
+// ErrNotTagged is a file TagLib reads as no sound file it knows.
+var ErrNotTagged = errors.New("not a sound file taglib reads")
 
 // ReadTags reads the tags of the audio file at path, an absolute path on this machine.
 func ReadTags(path string) (Tags, error) {
 	raw, err := taglib.ReadTags(path)
+	if errors.Is(err, taglib.ErrInvalidFile) {
+		return Tags{}, fmt.Errorf("%w: %w", ErrNotTagged, err)
+	}
 	if err != nil {
 		return Tags{}, err
 	}
@@ -55,7 +65,9 @@ func ReadTags(path string) (Tags, error) {
 		t.Artists = names(raw[taglib.Artist])
 	}
 	t.Released, t.Year = dated(first(taglib.Date))
-	return t, nil
+	props, err := taglib.ReadProperties(path)
+	t.Pictured = len(props.Images) > 0
+	return t, err
 }
 
 // Picture is the picture an audio file at path holds: the one its tags mark as the front cover,

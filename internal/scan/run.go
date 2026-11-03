@@ -27,7 +27,7 @@ type run struct {
 	mu     sync.Mutex
 	report Report
 	told   domain.ScanProgress
-	// folders and present are every folder read and every video and subtitle file in them.
+	// folders and present are every folder read and every media and subtitle file in them.
 	folders, present []string
 	// unread is every folder, and every entry of one, that is there and could not be read: a
 	// mount's passing failure, which leaves what the library held under it as it was.

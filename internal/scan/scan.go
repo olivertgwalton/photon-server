@@ -168,7 +168,7 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 	r.report.Folders++
 	r.folders = append(r.folders, folder.Path)
 	for _, f := range folder.Files {
-		if naming.IsVideo(f.Name) || naming.IsSubtitle(f.Name) {
+		if isMedia(r.lib.Kind, f.Name) || naming.IsSubtitle(f.Name) {
 			r.present = append(r.present, path.Join(folder.Path, f.Name))
 		}
 	}
@@ -186,14 +186,17 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 		r.count(func(rep *Report) { rep.Unchanged++ })
 		return nil
 	}
-	if rd.known, err = s.store.KnownFiles(ctx, r.lib.ID, videosIn(folder)); err != nil {
+	if rd.known, err = s.store.KnownFiles(ctx, r.lib.ID, mediaIn(r.lib.Kind, folder)); err != nil {
 		return err
 	}
 	var saved store.Saved
+	switch {
+	case r.lib.Kind == domain.LibraryMusic:
+		saved, err = s.saveAlbums(ctx, rd, folder)
 	// A shows library's root holds its series' folders, and no films.
-	if series != "" || r.lib.Kind == domain.LibraryShows {
+	case series != "" || r.lib.Kind == domain.LibraryShows:
 		saved, err = s.saveEpisodes(ctx, rd, folder, series)
-	} else {
+	default:
 		saved, err = s.saveFilms(ctx, rd, folder)
 	}
 	if err != nil {
@@ -233,14 +236,23 @@ func (s *Scanner) unreadable(ctx context.Context, r reading, rel string, err err
 	s.skip(ctx, r.run, rel, err)
 }
 
-func videosIn(f library.Folder) []string {
+// mediaIn is the paths of a folder's files that are a library's media: its videos, or a music
+// library's sound files.
+func mediaIn(kind domain.LibraryKind, f library.Folder) []string {
 	var paths []string
 	for _, file := range f.Files {
-		if naming.IsVideo(file.Name) {
+		if isMedia(kind, file.Name) {
 			paths = append(paths, path.Join(f.Path, file.Name))
 		}
 	}
 	return paths
+}
+
+func isMedia(kind domain.LibraryKind, name string) bool {
+	if kind == domain.LibraryMusic {
+		return naming.IsAudio(name)
+	}
+	return naming.IsVideo(name)
 }
 
 func (s *Scanner) saveFilms(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
