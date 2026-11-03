@@ -9187,7 +9187,6 @@ export interface components {
         };
         Lyrics: {
             lines: components["schemas"]["LyricLine"][];
-            synced: boolean;
         };
         Maintenance: {
             end_hour: number;
