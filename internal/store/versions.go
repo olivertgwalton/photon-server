@@ -28,6 +28,8 @@ type VersionPage struct {
 	Parts        int
 	MissingSince *time.Time
 	Gain         domain.ReplayGain
+	// Lyrics is how the lyrics its own file carries are timed, "" for none.
+	Lyrics domain.LyricsTiming
 	// Streams are the first part's; the parts of one version are cut from one master.
 	Streams   []domain.Stream
 	Subtitles []SubtitleRef
@@ -189,6 +191,7 @@ func (in versionRows) page(r *model.Version) VersionPage {
 		ID: r.ID, Edition: deref(r.Edition), Label: deref(r.Label), Container: r.Container,
 		DurationMS: r.DurationMS, SizeBytes: r.SizeBytes, BitrateKbps: r.BitrateKbps,
 		Parts: len(in.byVersion[r.ID]), MissingSince: r.MissingSince, Streams: []domain.Stream{}, Gain: replayGainOf(r),
+		Lyrics: deref(r.Lyrics),
 	}
 	for k, p := range in.byVersion[r.ID] {
 		vp.Files = append(vp.Files, PartRef{

@@ -166,6 +166,7 @@ var jobKinds = map[domain.JobKind]string{
 	domain.JobImportHistory: "Import watch history", domain.JobSegments: "Ask plugins for intros and credits",
 	domain.JobPush:        "Push notifications",
 	domain.JobSendRequest: "Send requests",
+	domain.JobLyrics:      "Fetch lyrics",
 }
 
 // Kept is how the activity log's filter names a kind of event it keeps: "Plays started".

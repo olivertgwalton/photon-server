@@ -251,6 +251,12 @@ func (s *Store) SetLibrary(ctx context.Context, id uuid.UUID, change LibraryChan
 				return err
 			}
 		}
+		if change.Sources != nil {
+			err := askLyrics(ctx, tx, `SELECT id FROM items WHERE library_id = @lib AND kind = 'track'`, pgx.NamedArgs{"lib": id})
+			if err != nil {
+				return err
+			}
+		}
 		titles, err := queryColumn[uuid.UUID](ctx, tx, `SELECT id FROM items WHERE library_id = $1 AND kind IN `+matchedKinds, id)
 		if err != nil {
 			return err

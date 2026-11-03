@@ -107,6 +107,7 @@ type Version struct {
 	TrackPeak    *float64
 	AlbumGainDB  *float64
 	AlbumPeak    *float64
+	Lyrics       *domain.LyricsTiming
 }
 
 type Part struct {

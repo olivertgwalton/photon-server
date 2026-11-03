@@ -37,10 +37,12 @@ const (
 	JobPush JobKind = "push"
 	// JobSendRequest sends an approved request to where its library's requests go.
 	JobSendRequest JobKind = "send_request"
+	// JobLyrics asks the sources a track's library ranks for its lyrics, in their order.
+	JobLyrics JobKind = "lyrics"
 )
 
 func JobKinds() []JobKind {
-	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush, JobSendRequest}
+	return []JobKind{JobKeyframes, JobKeyframeWalk, JobIdentify, JobScanLibrary, JobMarkers, JobPreviews, JobConvert, JobDeliverWebhook, JobTheme, JobProbe, JobImportHistory, JobSegments, JobPush, JobSendRequest, JobLyrics}
 }
 
 type JobState string
@@ -95,7 +97,7 @@ type Job struct {
 // are neither.
 func (j Job) About() (item, library uuid.UUID) {
 	switch j.Kind {
-	case JobIdentify, JobMarkers, JobTheme, JobSegments:
+	case JobIdentify, JobMarkers, JobTheme, JobSegments, JobLyrics:
 		return j.Subject, uuid.UUID{}
 	case JobScanLibrary:
 		return uuid.UUID{}, j.Subject

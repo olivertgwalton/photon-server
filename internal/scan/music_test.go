@@ -142,3 +142,34 @@ func TestAnAlbumKeepsTheMusicBrainzIdsItsTagsCarry(t *testing.T) {
 		t.Errorf("%d identify jobs for the artist and album, want 2", n)
 	}
 }
+
+// A track's lyrics in an LRC file beside it, or else in its tags, are its own, timed as they are
+// written; only a track carrying none is asked of its library's lyrics source.
+func TestATrackCarriesItsOwnLyricsOrAsksForThem(t *testing.T) {
+	f := newFixture(t, domain.LibraryMusic)
+	f.track("Album/01.flac", "TITLE=Timed", "ARTIST=A", "ALBUM=Album", "LYRICS=Not these")
+	if err := os.WriteFile(filepath.Join(f.root, "Album/01.lrc"), []byte("[00:01.00]Hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.track("Album/02.flac", "TITLE=Tagged", "ARTIST=A", "ALBUM=Album", "LYRICS=Hello")
+	f.track("Album/03.flac", "TITLE=Bare", "ARTIST=A", "ALBUM=Album")
+	f.scan()
+	rows, err := f.db.Query(t.Context(), `
+		SELECT i.title || ' ' || coalesce(v.lyrics, 'none') || ' ' || count(j.subject)
+		FROM items i JOIN versions v ON v.item_id = i.id LEFT JOIN jobs j ON j.subject = i.id AND j.kind = 'lyrics'
+		WHERE i.kind = 'track' GROUP BY i.title, v.lyrics ORDER BY i.title`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, s)
+	}
+	if want := "Bare none 1\nTagged untimed 0\nTimed line 0"; strings.Join(got, "\n") != want {
+		t.Errorf("tracks' own lyrics and fetches:\n%s\nwant:\n%s", strings.Join(got, "\n"), want)
+	}
+}
