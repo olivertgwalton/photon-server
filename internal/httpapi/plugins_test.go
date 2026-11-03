@@ -145,7 +145,7 @@ func TestAPluginDescribesTheTitlesOfALibraryThatTakesIt(t *testing.T) {
 	rec := do(http.MethodGet, "/api/v1/admin/providers", "")
 	if !strings.Contains(rec.Body.String(), `{"id":"plugin:films","name":"Films","kinds":["movie"],"capabilities":["describe","rate"],`+
 		`"settings":[{"key":"api_key","name":"API key","secret":true,"required":true,"set":false}],"ready":false,`+
-		`"metadata_kinds":["movie"],"image_kinds":["movie"]}`) {
+		`"metadata_kinds":["movie"],"image_kinds":["movie"],"lyrics_kinds":[]}`) {
 		t.Errorf("providers: %s", rec.Body)
 	}
 	rec = do(http.MethodPatch, "/api/v1/admin/providers/plugin:films", `{"settings": {"api_key": "s3cret"}}`)
