@@ -76,6 +76,8 @@ type cardJSON struct {
 	DiscNumber  *int          `json:"disc_number,omitzero"`
 	TrackNumber *int          `json:"track_number,omitzero"`
 	Artists     []string      `json:"artists,omitzero"`
+	// Lyrics is how a track's lyrics are timed, left out where none are known.
+	Lyrics domain.LyricsTiming `json:"lyrics,omitzero"`
 	// A book's card names its author, and the series it is in and its place there, which may be 1.5.
 	Author      *titleRefJSON `json:"author,omitzero"`
 	Series      string        `json:"series,omitzero"`
@@ -194,7 +196,7 @@ func cardOf(c store.Card) cardJSON {
 		SeasonPoster: c.SeasonPoster, SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: domain.Bare(c.Certificate),
 		Artist: (*titleRefJSON)(c.Artist), Album: (*titleRefJSON)(c.Album), DiscNumber: c.DiscNumber, TrackNumber: c.TrackNumber,
-		Artists: c.Artists, Author: (*titleRefJSON)(c.Author), Series: c.Series, SeriesIndex: c.SeriesIndex, Blurhashes: c.Blurhashes,
+		Artists: c.Artists, Lyrics: c.Lyrics, Author: (*titleRefJSON)(c.Author), Series: c.Series, SeriesIndex: c.SeriesIndex, Blurhashes: c.Blurhashes,
 	}
 	for _, r := range c.Ratings {
 		out.Ratings = append(out.Ratings, ratingRefJSON(r))
@@ -496,6 +498,7 @@ func (a *API) catalogueRoutes() []route {
 		a.handles(route{
 			pattern: "GET /api/v1/titles/{id}/lyrics", access: signedIn,
 			summary: "A track's lyrics, each line where it is sung where they are timed",
+			query:   []param{{"version_id", uuid.UUID{}, "The version; the one that plays unasked where none is named."}},
 			status:  http.StatusOK,
 		}, a.lyrics),
 		a.handles(route{

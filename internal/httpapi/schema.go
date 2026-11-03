@@ -106,6 +106,7 @@ var enums, enumReader = indexEnums(
 	enumOf(plugin.PageAccesses()),
 	enumOf(domain.TaskResults()),
 	enumOf(domain.Timings()),
+	enumOf(domain.LyricsTimings()),
 	enumOf(domain.SecureConnectionModes()),
 	enumOf(domain.NodeAvailabilities()),
 	enumOf(domain.NodeRoles()),

@@ -35,6 +35,7 @@ type musicItem struct {
 	Artists           []string
 	IndexNumber       *int `json:"IndexNumber"`
 	ParentIndexNumber *int `json:"ParentIndexNumber"`
+	HasLyrics         bool `json:"HasLyrics"`
 }
 
 // A music app browses a music library as Jellyfin's: its artists, its albums, an artist's albums
@@ -67,9 +68,11 @@ func TestAMusicAppBrowsesAMusicLibrary(t *testing.T) {
 			}}},
 		}}
 	}
+	sung := track("Wake Me Up", 1, 1, "The Weeknd")
+	sung.Version.Lyrics = domain.TimedByLine
 	if _, err := st.SaveMusicFolder(ctx, music.ID, "Hurry Up Tomorrow", []byte("v"), []store.Album{{
 		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Year: 2025, Folder: "Hurry Up Tomorrow",
-		Tracks: []store.Track{track("Timeless", 2, 2, "The Weeknd", "Playboi Carti"), track("Wake Me Up", 1, 1, "The Weeknd")},
+		Tracks: []store.Track{track("Timeless", 2, 2, "The Weeknd", "Playboi Carti"), sung},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +116,7 @@ func TestAMusicAppBrowsesAMusicLibrary(t *testing.T) {
 	}
 	tracks := items("/Items?ParentId=" + albums[0].ID + "&SortBy=ParentIndexNumber,IndexNumber,SortName")
 	want := []musicItem{
-		{Name: "Wake Me Up", Type: "Audio", MediaType: "Audio", Album: "Hurry Up Tomorrow", AlbumArtist: "The Weeknd", Artists: []string{"The Weeknd"}, IndexNumber: n(1), ParentIndexNumber: n(1)},
+		{Name: "Wake Me Up", Type: "Audio", MediaType: "Audio", Album: "Hurry Up Tomorrow", AlbumArtist: "The Weeknd", Artists: []string{"The Weeknd"}, IndexNumber: n(1), ParentIndexNumber: n(1), HasLyrics: true},
 		{Name: "Timeless", Type: "Audio", MediaType: "Audio", Album: "Hurry Up Tomorrow", AlbumArtist: "The Weeknd", Artists: []string{"The Weeknd", "Playboi Carti"}, IndexNumber: n(2), ParentIndexNumber: n(2)},
 	}
 	if diff := cmp.Diff(want, tracks, cmp.FilterPath(func(p cmp.Path) bool { return p.Last().String() == ".ID" }, cmp.Ignore())); diff != "" {
