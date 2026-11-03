@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,6 +92,27 @@ func TestAnAdminIsToldHowANewLibraryOfEachKindIsKept(t *testing.T) {
 	} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("%d %s\nwant %s", rec.Code, rec.Body, want)
+		}
+	}
+}
+
+// A music or books library's admin is offered the providers that describe and picture its items,
+// as a films and shows library's is: otherwise the form saves its sources as none.
+func TestMusicAndBooksProvidersAreOfferedForTheirKinds(t *testing.T) {
+	for _, c := range []struct {
+		id             domain.FieldSource
+		metadata, imgs []domain.ItemKind
+	}{
+		{domain.SourceMusicBrainz, []domain.ItemKind{domain.ItemArtist, domain.ItemAlbum}, []domain.ItemKind{domain.ItemAlbum}},
+		{domain.SourceFanart, nil, []domain.ItemKind{domain.ItemMovie, domain.ItemShow, domain.ItemArtist, domain.ItemAlbum}},
+		{domain.SourceOpenLibrary, []domain.ItemKind{domain.ItemAuthor, domain.ItemBook}, []domain.ItemKind{domain.ItemAuthor, domain.ItemBook}},
+	} {
+		info := provider.Info{ID: c.id}
+		if got := rankedFor(info, nil, domain.FetcherMetadata); !slices.Equal(got, c.metadata) {
+			t.Errorf("%s ranked for metadata of %v, want %v", c.id, got, c.metadata)
+		}
+		if got := rankedFor(info, nil, domain.FetcherImages); !slices.Equal(got, c.imgs) {
+			t.Errorf("%s ranked for images of %v, want %v", c.id, got, c.imgs)
 		}
 	}
 }

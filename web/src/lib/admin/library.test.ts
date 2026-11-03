@@ -210,3 +210,50 @@ test("a library of files sends who may ask for what, and where it goes, where th
 	expect(off.discover).toBe("");
 	expect(off.requests).toBeUndefined();
 });
+
+// A music library's form asks only what music has: its sources as ranked,
+// and nothing of the videos, subtitles, previews or names a film's has.
+test("a music library's change says nothing of what only video has", () => {
+	const music: Schemas["AdminLibrary"] = {
+		...tv,
+		id: "l-music",
+		name: "Music",
+		kind: "music",
+		previews: "off",
+		markers: "off",
+		keyframes: "off",
+		themes: "off",
+		remote_extras: [],
+		sources: [
+			{
+				kind: "artist",
+				metadata: [{ source: "musicbrainz", enabled: true }],
+				images: [{ source: "fanart", enabled: true }],
+			},
+			{ kind: "track", metadata: [], images: [] },
+		],
+	};
+	const change = libraryChange(
+		form([
+			["name", "Music"],
+			["monitor", "realtime"],
+			["refresh_days", "30"],
+			["deletion", "off"],
+			[
+				"sources-artist-metadata",
+				JSON.stringify([{ source: "musicbrainz", enabled: true }]),
+			],
+			[
+				"sources-artist-images",
+				JSON.stringify([{ source: "fanart", enabled: true }]),
+			],
+		]),
+		music,
+	);
+	expect(change).toEqual({
+		name: "Music",
+		monitor: "realtime",
+		deletion: "off",
+		refresh_days: 30,
+	});
+});

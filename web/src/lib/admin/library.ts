@@ -42,9 +42,17 @@ function same(a: readonly string[], b: readonly string[]) {
 	return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
+// Whether a library of a kind holds films and shows, whose videos, subtitles,
+// previews, ratings and names in other languages a library's settings say
+// what to do with; music and books have none of them.
+export function playsVideo(kind: Schemas["LibraryKind"]): boolean {
+	return kind !== "music" && kind !== "books";
+}
+
 // A library form's fields as a change to the library. The sources and the
 // extras are sent only where they differ from what it has, since sending them
-// identifies every title in it again.
+// identifies every title in it again. A music or books library's form asks
+// nothing of what only video has, which is left as it is.
 export function libraryChange(
 	form: FormData,
 	current: Schemas["AdminLibrary"],
@@ -59,31 +67,35 @@ export function libraryChange(
 		monitor: (form.get("monitor") ?? undefined) as
 			| Schemas["Monitor"]
 			| undefined,
-		previews: String(form.get("previews")) as Schemas["PreviewLevel"],
-		markers: String(form.get("markers")) as Schemas["MarkerDetection"],
-		keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
-		themes: String(form.get("themes")) as Schemas["ThemeLookup"],
 		deletion: (form.get("deletion") ?? undefined) as
 			| Schemas["MediaDeletion"]
 			| undefined,
 		missing_versions: (form.get("missing_versions") ?? undefined) as
 			| Schemas["MissingVersion"]
 			| undefined,
-		metadata_language: localeChoice(form.get("metadata_language")),
-		certification_country: localeChoice(form.get("certification_country")),
-		artwork_language: String(
-			form.get("artwork_language"),
-		) as Schemas["ArtworkLanguage"],
-		title_language: String(
-			form.get("title_language"),
-		) as Schemas["TitleLanguage"],
-		box_sets: String(form.get("box_sets")) as Schemas["BoxSetMode"],
 		refresh_days: Number(form.get("refresh_days")),
-		subtitle_languages: form.getAll("subtitle_languages").map(String),
-		subtitle_match: String(
-			form.get("subtitle_match"),
-		) as Schemas["SubtitleMatch"],
 	};
+	if (playsVideo(current.kind)) {
+		Object.assign(change, {
+			previews: String(form.get("previews")) as Schemas["PreviewLevel"],
+			markers: String(form.get("markers")) as Schemas["MarkerDetection"],
+			keyframes: String(form.get("keyframes")) as Schemas["KeyframeMode"],
+			themes: String(form.get("themes")) as Schemas["ThemeLookup"],
+			metadata_language: localeChoice(form.get("metadata_language")),
+			certification_country: localeChoice(form.get("certification_country")),
+			artwork_language: String(
+				form.get("artwork_language"),
+			) as Schemas["ArtworkLanguage"],
+			title_language: String(
+				form.get("title_language"),
+			) as Schemas["TitleLanguage"],
+			box_sets: String(form.get("box_sets")) as Schemas["BoxSetMode"],
+			subtitle_languages: form.getAll("subtitle_languages").map(String),
+			subtitle_match: String(
+				form.get("subtitle_match"),
+			) as Schemas["SubtitleMatch"],
+		} satisfies Schemas["LibraryChange"]);
+	}
 	const sources: Schemas["KindSourcesChange"][] = [];
 	for (const has of current.sources) {
 		const asked: Schemas["KindSourcesChange"] = { kind: has.kind };
