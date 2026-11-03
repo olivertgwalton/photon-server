@@ -37,6 +37,7 @@ var ErrStarted = errors.New("the playback is started already")
 
 type sessionStore interface {
 	ClaimPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error)
+	RenewPlayback(ctx context.Context, p domain.Playback, ttl time.Duration) (bool, error)
 	SavePlayback(ctx context.Context, p domain.Playback, ttl time.Duration) error
 	Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool, error)
 	Playbacks(ctx context.Context) ([]domain.Playback, error)
@@ -146,8 +147,14 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 	p.Last = reach
 	was := p.State
 	p.Position, p.State, p.Updated = position, state, time.Now()
-	if err := s.live.SavePlayback(ctx, p, keptFor); err != nil {
+	// Written only if still going on: a playback stopped, ended or swept while its place was saved
+	// is not let back in, to be swept and kept in the history again.
+	renewed, err := s.live.RenewPlayback(ctx, p, keptFor)
+	if err != nil {
 		return "", err
+	}
+	if !renewed {
+		return "", ErrNoPlayback
 	}
 	switch {
 	case was == state:

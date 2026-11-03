@@ -34,6 +34,14 @@ func (m memory) ClaimPlayback(_ context.Context, p domain.Playback, _ time.Durat
 	return true, nil
 }
 
+func (m memory) RenewPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
+	if _, ok := m[p.ID]; !ok {
+		return false, nil
+	}
+	m[p.ID] = p
+	return true, nil
+}
+
 func (m memory) SavePlayback(_ context.Context, p domain.Playback, _ time.Duration) error {
 	m[p.ID] = p
 	return nil
@@ -294,6 +302,67 @@ func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
 	}
 	if _, ok := live[p.ID]; ok || told[len(told)-1].Kind != domain.EventPlaybackStopped {
 		t.Errorf("after the sweep: still live %v, last told %v; want it stopped and gone", ok, told[len(told)-1].Kind)
+	}
+}
+
+// endsMeanwhile has the playback ended, once, while a report's place is being saved, and counts
+// the plays kept in the history.
+type endsMeanwhile struct {
+	positions
+	end   func()
+	plays int
+}
+
+func (e *endsMeanwhile) SaveProgress(ctx context.Context, profile, item uuid.UUID, at, length time.Duration, before domain.Reach, when *time.Time) (domain.Reach, error) {
+	if end := e.end; end != nil {
+		e.end = nil
+		end()
+	}
+	return e.positions.SaveProgress(ctx, profile, item, at, length, before, when)
+}
+
+func (e *endsMeanwhile) RecordPlay(ctx context.Context, p domain.Playback, stopped time.Time, at time.Duration) error {
+	e.plays++
+	return e.positions.RecordPlay(ctx, p, stopped, at)
+}
+
+// A report racing an admin's end does not bring the playback back, to be swept and kept in the
+// history a second time.
+func TestAPlaybackEndedWhileItReportsStaysEnded(t *testing.T) {
+	live, saved := memory{}, &endsMeanwhile{positions: positions{}}
+	var stopped int
+	s := NewSessions(live, saved, served{}, func(_ context.Context, e domain.Event) {
+		if e.Kind == domain.EventPlaybackStopped {
+			stopped++
+		}
+	}, thisNode)
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), 0, thisNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.end = func() {
+		if err := s.End(ctx, p.ID); err != nil {
+			t.Error(err)
+		}
+	}
+	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
+		t.Errorf("reporting as it is ended: %v, want ErrNoPlayback", err)
+	}
+	if _, ok := live[p.ID]; ok {
+		t.Error("the report brought the ended playback back")
+	}
+	// Were it back, its player's silence would see it swept in time.
+	for id, p := range live {
+		p.Updated = time.Now().Add(-time.Hour)
+		live[id] = p
+	}
+	if err := s.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if saved.plays != 1 || stopped != 1 {
+		t.Errorf("kept %d plays and told %d stops, want one of each", saved.plays, stopped)
 	}
 }
 
