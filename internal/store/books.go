@@ -10,6 +10,8 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
@@ -124,19 +126,37 @@ func (s *Store) Books(ctx context.Context, profile, author uuid.UUID) ([]Card, e
 var ErrNotRead = errors.New("only a book is read")
 
 // SaveReading keeps where the profile is in a book, as its reader says it, and how far through the
-// book that is. ErrNotRead for any other title, ErrNotFound for none.
-func (s *Store) SaveReading(ctx context.Context, profile, book uuid.UUID, locator jsontext.Value, progression float64) error {
+// book that is, at a time or now for none, wherever the book is listed, and answers how far that
+// got: a reader at its end has read it, counted as a play. ErrSuperseded if the state has changed
+// since, ErrNotRead for any other title, ErrNotFound for none.
+func (s *Store) SaveReading(ctx context.Context, profile, book uuid.UUID, locator jsontext.Value, progression float64, at *time.Time) (domain.Reach, error) {
+	reach := domain.ReadOf(progression)
 	var kind domain.ItemKind
 	if err := s.pool.QueryRow(ctx, `SELECT kind FROM items WHERE id = $1`, book).Scan(&kind); err != nil {
-		return found(err)
+		return reach, found(err)
 	}
 	if kind != domain.ItemBook {
-		return ErrNotRead
+		return reach, ErrNotRead
 	}
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO watch_state (profile_id, item_id, locator, progression, last_played_at, changed_at)
-		VALUES ($1, $2, $3, $4, now(), now())
-		ON CONFLICT (profile_id, item_id) DO UPDATE SET locator = excluded.locator, progression = excluded.progression,
-			last_played_at = now(), changed_at = now()`, profile, book, locator, progression)
-	return err
+	var tag pgconn.CommandTag
+	var err error
+	if reach == domain.ReachEnd {
+		tag, err = s.played(ctx, profile, book, at)
+	} else {
+		// A reader opened at the cover has read nothing: it moves nothing up Continue Reading.
+		tag, err = s.pool.Exec(ctx, `
+			INSERT INTO watch_state (profile_id, item_id, locator, progression, last_played_at, changed_at)
+			SELECT $1, t, $3::jsonb, $4::real, CASE WHEN $4::real > 0 THEN w END, w
+			FROM same_title($2) t, least($5::timestamptz, now()) w ORDER BY t
+			ON CONFLICT (profile_id, item_id) DO UPDATE SET locator = excluded.locator, progression = excluded.progression,
+				last_played_at = coalesce(excluded.last_played_at, watch_state.last_played_at),
+				changed_at = excluded.changed_at`+newest, profile, book, locator, progression, at)
+	}
+	switch {
+	case violates(err, foreignKeyViolation):
+		return reach, ErrNotFound
+	case err == nil && tag.RowsAffected() == 0:
+		return reach, ErrSuperseded
+	}
+	return reach, err
 }
