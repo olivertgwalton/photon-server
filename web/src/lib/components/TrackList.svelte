@@ -1,10 +1,15 @@
 <script lang="ts">
 import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
+import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { components } from "#lib/api/schema.d.ts";
+import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
+import { Button } from "#lib/components/ui/button/index.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
 import * as Table from "#lib/components/ui/table/index.ts";
 import { timecode } from "#lib/format.ts";
 import { discs, guests } from "#lib/music.ts";
+import { trackListen } from "#lib/player/listen.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
 
 type Card = components["schemas"]["Card"];
@@ -29,19 +34,21 @@ const split = $derived(discs(tracks));
 		<col class="w-12">
 		<col>
 		<col class="w-20">
+		<col class="w-12">
 	</colgroup>
 	<Table.Header class="sr-only">
 		<Table.Row>
 			<Table.Head>Number</Table.Head>
 			<Table.Head>Title</Table.Head>
 			<Table.Head>Length</Table.Head>
+			<Table.Head>More</Table.Head>
 		</Table.Row>
 	</Table.Header>
 	{#each split as { disc, tracks: on } (disc)}
 		<Table.Body>
 			{#if split.length > 1}
 				<Table.Row class="hover:bg-transparent">
-					<Table.Cell colspan={3} class="text-ink-3 pt-6 text-sm font-semibold">
+					<Table.Cell colspan={4} class="text-ink-3 pt-6 text-sm font-semibold">
 						Disc {disc}
 					</Table.Cell>
 				</Table.Row>
@@ -81,6 +88,30 @@ const split = $derived(discs(tracks));
 					</Table.Cell>
 					<Table.Cell class="text-ink-3 w-20 text-right font-mono tabular-nums">
 						{track.duration_ms ? timecode(track.duration_ms) : ""}
+					</Table.Cell>
+					<Table.Cell class="relative z-1 text-right">
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-sm"
+										class="text-ink-3 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+										aria-label="More for {track.title}"
+									>
+										<EllipsisIcon />
+									</Button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="end" class="w-56">
+								<QueueMenuItems
+									ids={[track.id]}
+									name={track.title}
+									tracks={async () => [trackListen(track)]}
+								/>
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
 					</Table.Cell>
 				</Table.Row>
 			{/each}

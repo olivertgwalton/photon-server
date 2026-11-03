@@ -15,6 +15,8 @@ import { Button } from "#lib/components/ui/button/index.ts";
 import * as Field from "#lib/components/ui/field/index.ts";
 import { Input } from "#lib/components/ui/input/index.ts";
 import { count, runtime, titleWithShow } from "#lib/format.ts";
+import { trackListen } from "#lib/player/listen.ts";
+import { listening, type Order } from "#lib/player/listening.svelte.ts";
 import { playQueue } from "#lib/queue.ts";
 import { getShell } from "#lib/shell.svelte.ts";
 import { ruleQuery, wallSearch } from "#lib/wall.ts";
@@ -39,6 +41,17 @@ const filters = $derived(
 			)
 		: undefined,
 );
+// A playlist of tracks plays in the audio player, as Plexamp's do; one with
+// any film or episode in it, in the video player.
+const music = $derived(
+	data.entries.length > 0 && data.entries.every((e) => e.kind === "track"),
+);
+
+function play(order: Order) {
+	if (music) listening.play(data.entries.map(trackListen), { order });
+	else playQueue(data.entries, order === "shuffled");
+}
+
 let renaming = $state(false);
 let newName = $state("");
 
@@ -113,10 +126,10 @@ function drop(entry: string) {
 
 	<div class="flex flex-wrap gap-2">
 		{#if data.entries.length}
-			<Button onclick={() => playQueue(data.entries)}>
+			<Button onclick={() => play("in_order")}>
 				<PlayIcon class="fill-current" />Play all
 			</Button>
-			<Button onclick={() => playQueue(data.entries, true)} variant="outline">
+			<Button onclick={() => play("shuffled")} variant="outline">
 				<ShuffleIcon />Shuffle
 			</Button>
 		{/if}
