@@ -120,13 +120,18 @@ func (a *API) provider(ctx context.Context, p provider.Provider) (metadataProvid
 // where it describes them, or for the titles' metadata alone where it only rates them.
 func rankedFor(info provider.Info, can []domain.Capability, f domain.Fetcher) []domain.ItemKind {
 	var out []domain.ItemKind
-	for _, kind := range domain.LibraryMixed.ItemKinds() {
-		if _, plugin := info.ID.Plugin(); !plugin {
-			if slices.Contains(domain.Fetchable(f, kind), info.ID) {
-				out = append(out, kind)
+	if _, plugin := info.ID.Plugin(); !plugin {
+		// Every kind any library ranks sources for: a music library's and a books library's too.
+		for _, lib := range domain.LibraryKinds() {
+			for _, kind := range lib.ItemKinds() {
+				if !slices.Contains(out, kind) && slices.Contains(domain.Fetchable(f, kind), info.ID) {
+					out = append(out, kind)
+				}
 			}
-			continue
 		}
+		return out
+	}
+	for _, kind := range domain.LibraryMixed.ItemKinds() {
 		title := domain.ItemShow
 		if kind == domain.ItemMovie {
 			title = domain.ItemMovie
