@@ -5,6 +5,7 @@ import {
 	audioProfile,
 	gainFactor,
 	keyAction,
+	lineAt,
 	movedTo,
 	nextAt,
 	playingNext,
@@ -188,4 +189,11 @@ test("a gain up goes no higher than full, nor past the loudest sample", () => {
 	expect(
 		gainFactor({ track_gain_db: -1, track_peak: 1.2 }, "track"),
 	).toBeCloseTo(1 / 1.2, 3);
+});
+
+test("the line sung is the last to have started", () => {
+	const lines = [{ start_ms: 1000 }, { start_ms: 4000 }, { start_ms: 9000 }];
+	expect(lineAt(lines, 500)).toBe(-1);
+	expect(lineAt(lines, 4000)).toBe(1);
+	expect(lineAt(lines, 60_000)).toBe(2);
 });

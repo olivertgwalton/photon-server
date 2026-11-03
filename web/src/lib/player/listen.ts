@@ -280,3 +280,12 @@ export function gainFactor(
 	const ceiling = peak ? 1 / peak : 1;
 	return Math.min(10 ** (db / 20), ceiling, 1);
 }
+
+// The line of timed lyrics being sung at ms: the last to have started, -1
+// before the first.
+export function lineAt(
+	lines: { start_ms?: number | null }[],
+	ms: number,
+): number {
+	return lines.findLastIndex((l) => (l.start_ms ?? 0) <= ms);
+}
