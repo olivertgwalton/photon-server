@@ -30,7 +30,7 @@ type adverts interface {
 }
 
 type opener interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video *domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error
 }
 
 // delivering are the playbacks a node delivers, of at most as many as it may at once.
@@ -205,7 +205,7 @@ type Opening struct {
 	Profile  uuid.UUID            `json:"profile"`
 	Item     uuid.UUID            `json:"item"`
 	Version  uuid.UUID            `json:"version"`
-	Video    domain.VideoPlan     `json:"video"`
+	Video    *domain.VideoPlan    `json:"video,omitzero"`
 	Audio    *domain.AudioPlan    `json:"audio,omitzero"`
 	Segments domain.SegmentFormat `json:"segments"`
 	StartMS  int64                `json:"start_ms"`

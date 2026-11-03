@@ -342,8 +342,8 @@ func newFakeRemuxes() *fakeRemuxes {
 	return &fakeRemuxes{opened: map[uuid.UUID]domain.VideoPlan{}, audio: map[uuid.UUID]*domain.AudioPlan{}, segments: map[uuid.UUID]domain.SegmentFormat{}}
 }
 
-func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
-	f.opened[id], f.audio[id], f.segments[id] = video, audio, segments
+func (f *fakeRemuxes) Open(_ context.Context, id uuid.UUID, _ store.PlayVersion, video *domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, _ time.Duration, _ playback.Renditions) error {
+	f.opened[id], f.audio[id], f.segments[id] = *video, audio, segments
 	return nil
 }
 
@@ -764,7 +764,7 @@ func TestInfuseIsGivenHLSInMPEGTS(t *testing.T) {
 
 // alone places every playback on this node, as a server of one does.
 func alone(local interface {
-	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions playback.Renditions) error
+	Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video *domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions playback.Renditions) error
 },
 ) *playback.Placer {
 	self := domain.Node{ID: uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1"), Role: domain.NodeAll, Availability: domain.NodeActive, Limit: 4, Encoder: domain.Encoder{

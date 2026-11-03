@@ -209,7 +209,7 @@ func TestAConversionWaitsForASlotAndGivesItUpToAPlay(t *testing.T) {
 	transcode := hls.Version{Parts: []hls.Source{{
 		Open:  func() (media.Input, error) { return media.Input{}, os.ErrNotExist },
 		Part:  hls.Part{Duration: time.Minute, Keyframes: hls.Forced(time.Minute)},
-		Video: domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
+		Video: &domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
 	}}}
 	state := func() store.Download {
 		t.Helper()

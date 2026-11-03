@@ -60,7 +60,7 @@ const (
 // Open starts a playback's HLS of a version at start, in segments of the format asked for, carrying
 // its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
 // subtitles as WebVTT, as renditions says.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video *domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))
@@ -68,7 +68,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVers
 		open := func() (media.Input, error) { return r.parts.Open(opening, p.ID) }
 		duration := time.Duration(p.DurationMS) * time.Millisecond
 		keyframes := hls.Forced(duration)
-		if video.Encode == nil {
+		if video != nil && video.Encode == nil {
 			known, err := r.keyframes(ctx, p.ID)
 			if err != nil {
 				return err
@@ -81,7 +81,7 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVers
 			Open: open, Video: video, Audio: audio,
 			Part: hls.Part{Duration: duration, Keyframes: keyframes},
 		}
-		if e := video.Encode; e != nil {
+		if e := encodes(video); e != nil {
 			switch {
 			case e.BurnFile != nil:
 				sources[i].Styled = r.file(opening, c, *e.BurnFile)
@@ -91,16 +91,19 @@ func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVers
 		}
 	}
 	kbps := c.BitrateKbps
-	if e := video.Encode; e != nil {
+	switch e := encodes(video); {
+	case e != nil:
 		kbps = e.BitrateKbps
 		if audio != nil && audio.Encode != nil {
 			kbps += audio.Encode.BitrateKbps
 		}
+	case video == nil && audio != nil && audio.Encode != nil:
+		kbps = audio.Encode.BitrateKbps
 	}
 	h := hls.Version{Parts: sources, Variant: variant(c.Streams, video, audio, kbps), Start: start, Segments: segments}
 	// A subtitle drawn into the picture is the only one offered, as Jellyfin's master playlist
 	// has it: another turned on by a player would be drawn over it.
-	if video.Burns() {
+	if video != nil && video.Burns() {
 		return r.hls.Open(ctx, playback, h)
 	}
 	// The parts of a version are cut from one master, so each holds the first's streams.
@@ -181,4 +184,12 @@ func openFile(ctx context.Context, where func(context.Context, uuid.UUID) (strin
 		return media.Input{}, err
 	}
 	return library.OpenMedia(root, rel)
+}
+
+// encodes is the encode a video plan asks for, nil for none or for no video.
+func encodes(video *domain.VideoPlan) *domain.VideoEncode {
+	if video == nil {
+		return nil
+	}
+	return video.Encode
 }

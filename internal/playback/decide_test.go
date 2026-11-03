@@ -583,3 +583,54 @@ func TestMPEGTSSegmentsCarryWhatPlayersTakeFromThem(t *testing.T) {
 		}
 	}
 }
+
+// A track of sound alone plays as it is where it can; else in HLS, its sound copied where the
+// client plays it, encoded where it does not or within the client's limit, and never in MPEG-TS,
+// which is cut by a picture.
+func TestATrackOfSoundAlonePlaysAsItIsOrInHLS(t *testing.T) {
+	track := func(container, codec string, kbps int) Version {
+		return Version{Container: container, BitrateKbps: kbps, Parts: 1, Streams: []domain.Stream{
+			{Index: 0, Kind: domain.StreamAudio, Codec: codec, Channels: 2, BitrateKbps: kbps},
+		}}
+	}
+	phone := Profile{Containers: []string{"flac", "mp3", "mov"}, Audio: []AudioSupport{{Codec: "aac"}, {Codec: "flac"}, {Codec: "mp3"}}}
+	capped := phone
+	capped.MaxBitrateKbps = 320
+	opensNoOgg := phone
+	opensNoOgg.Audio = append(opensNoOgg.Audio, AudioSupport{Codec: "opus"})
+	tsOnly := phone
+	tsOnly.Segments = domain.SegmentsMPEGTS
+	aac := func(kbps int) *domain.AudioEncode {
+		return &domain.AudioEncode{Codec: "aac", Channels: 2, BitrateKbps: kbps}
+	}
+	for _, tc := range []struct {
+		name    string
+		p       Profile
+		c       Version
+		method  domain.PlayMethod
+		encode  *domain.AudioEncode
+		refused bool
+	}{
+		{"FLAC it plays", phone, track("flac", "flac", 900), domain.PlayDirect, nil, false},
+		{"WMA it does not", phone, track("asf", "wmav2", 192), domain.PlayTranscode, aac(256), false},
+		{"FLAC over its limit", capped, track("flac", "flac", 900), domain.PlayTranscode, aac(256), false},
+		{"MP3 within its limit", capped, track("mp3", "mp3", 320), domain.PlayDirect, nil, false},
+		{"Opus in Ogg it does not open", opensNoOgg, track("ogg", "opus", 160), domain.PlayRemux, nil, false},
+		{"WMA to MPEG-TS", tsOnly, track("asf", "wmav2", 192), "", nil, true},
+	} {
+		d, err := Decide(tc.p, tc.c, domain.ChosenTracks{}, Encoding{})
+		if tc.refused {
+			if !errors.Is(err, ErrNoCompatibleStream) {
+				t.Errorf("%s: %v, want ErrNoCompatibleStream", tc.name, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+			continue
+		}
+		if d.Method != tc.method || d.Video != nil || d.Audio == nil || !cmp.Equal(d.Audio.Encode, tc.encode) {
+			t.Errorf("%s: %s, video %+v, audio %+v; want %s, no video, audio encoded to %+v", tc.name, d.Method, d.Video, d.Audio, tc.method, tc.encode)
+		}
+	}
+}

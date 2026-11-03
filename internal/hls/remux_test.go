@@ -92,7 +92,7 @@ func TestEachSegmentIsExactlyWhatThePlaylistSays(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: open, Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestAVersionWithNoLengthIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	playback := uuid.NewV7()
-	err = r.Open(t.Context(), playback, Version{Parts: []Source{{Open: unplayed, Video: domain.VideoPlan{Codec: "h264"}}}})
+	err = r.Open(t.Context(), playback, Version{Parts: []Source{{Open: unplayed, Video: &domain.VideoPlan{Codec: "h264"}}}})
 	if !errors.Is(err, ErrNoSegments) {
 		t.Fatalf("opening a version with no length: %v, want ErrNoSegments", err)
 	}
@@ -164,8 +164,8 @@ func TestAPartWithNoSegmentsIsRefusedItsInit(t *testing.T) {
 	}
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{
-		{Open: unplayed, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: domain.VideoPlan{Codec: "h264"}},
-		{Open: unplayed, Video: domain.VideoPlan{Codec: "h264"}},
+		{Open: unplayed, Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)}, Video: &domain.VideoPlan{Codec: "h264"}},
+		{Open: unplayed, Video: &domain.VideoPlan{Codec: "h264"}},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestSegmentsFarBehindThePlayerAreRemoved(t *testing.T) {
 	part := Source{
 		Open:  opening("testdata/fragments.mp4"),
 		Part:  Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}
 	// Five parts of five segments each.
 	playback := uuid.NewV7()
@@ -267,7 +267,7 @@ func TestASegmentPastAShortFilesEndFails(t *testing.T) {
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open:  opening("testdata/fragments.mp4"),
 		Part:  Part{Duration: time.Minute, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func TestArgsCarryWhatWasDecided(t *testing.T) {
 			[]string{"-map 0:1 -af volume=2 -c:a aac -ac 2 -b:a 256k"},
 		},
 	} {
-		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: domain.AccelSoftware}, 12*time.Second, tc.video, tc.audio, tc.layer, domain.SegmentsFMP4, nil), " ")
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: domain.AccelSoftware}, 12*time.Second, &tc.video, tc.audio, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)
@@ -418,7 +418,7 @@ func TestEachDeviceDrawsASubtitleIn(t *testing.T) {
 			layer *styledLayer
 		}{{picture, nil}, {file, layer}} {
 			video := domain.VideoPlan{Codec: "hevc", Encode: &tc.e}
-			got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+			got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, &video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
 			for _, w := range []string{want[i], "-c:v " + hw.encoder(domain.VideoHEVC)} {
 				if !strings.Contains(got, w) {
 					t.Errorf("%s, styled %t: %q lacks %q", accel, tc.layer != nil, got, w)
@@ -491,7 +491,7 @@ func TestEachVAAPIDriverDrawsASubtitleIn(t *testing.T) {
 	} {
 		hw := Hardware{Accel: domain.AccelVAAPI, Device: "/dev/dri/renderD128", Overlay: tc.overlay, ToneMapper: ToneMapperOf(tc.overlay)}
 		video := domain.VideoPlan{Codec: tc.codec, Encode: &tc.e}
-		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, hw, 12*time.Second, &video, nil, tc.layer, domain.SegmentsFMP4, nil), " ")
 		for _, w := range append(tc.want, "-c:v hevc_vaapi") {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q lacks %q", tc.name, got, w)
@@ -508,7 +508,7 @@ func TestASubtitleLaidOverOnTheCPUKeepsHDRInTenBits(t *testing.T) {
 		domain.AccelVAAPI:    "[main][sub]overlay=eof_action=pass:repeatlast=0:format=yuv420p10,format=p010,hwupload=derive_device=vaapi[v]",
 	} {
 		video := domain.VideoPlan{Codec: "hevc", Encode: &e}
-		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: accel}, 0, video, nil, nil, domain.SegmentsFMP4, nil), " ")
+		got := strings.Join(args(media.Input{URL: &url.URL{Scheme: "https", Host: "media.example"}}, Hardware{Accel: accel}, 0, &video, nil, nil, domain.SegmentsFMP4, nil), " ")
 		if !strings.Contains(got, want) {
 			t.Errorf("%s: %q lacks %q", accel, got, want)
 		}
@@ -530,7 +530,7 @@ func opening(name string) func() (media.Input, error) {
 var transcode = Version{Parts: []Source{{
 	Open:  unplayed,
 	Part:  Part{Duration: time.Minute, Keyframes: Forced(time.Minute)},
-	Video: domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
+	Video: &domain.VideoPlan{Codec: "hevc", Encode: &domain.VideoEncode{Codec: "h264", Width: 1280, Height: 720, BitrateKbps: 4000}},
 }}}
 
 func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
@@ -565,7 +565,7 @@ func TestTranscodesAtOnceNeverPassTheLimit(t *testing.T) {
 		t.Fatalf("20 at once: %d opened, %d refused, %d/%d active; want 3 and 17", len(opened), refused, active, limit)
 	}
 
-	remux := Version{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
+	remux := Version{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: &domain.VideoPlan{Codec: "h264"}}}}
 	if err := r.Open(t.Context(), uuid.NewV7(), remux); err != nil {
 		t.Errorf("a remux at the limit: %v, want it opened, as its video is copied", err)
 	}
@@ -681,7 +681,7 @@ func TestARemuxWaitsAheadOfAPlayerThatSeeksBack(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening(src), Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"},
+		Video: &domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -733,7 +733,7 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening(fixture), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
-		Video: domain.VideoPlan{Codec: "h264"},
+		Video: &domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -776,7 +776,7 @@ func TestAClosedRemuxHasEndedAndLeftNothing(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening(fixture), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
-		Video: domain.VideoPlan{Codec: "h264"},
+		Video: &domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -819,7 +819,7 @@ func TestARemuxIsUnderWayWhereThePlayerStarts(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Start: 13 * time.Second, Parts: []Source{{
 		Open: opening("testdata/fragments.mp4"), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -863,7 +863,7 @@ func TestARunNobodyAsksOfStopsUntilAskedAgain(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening(src), Part: Part{Duration: 240 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"},
+		Video: &domain.VideoPlan{Codec: "h264"},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -944,7 +944,7 @@ func TestMPEGTSSegmentsAreExactlyWhatThePlaylistSays(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Segments: domain.SegmentsMPEGTS, Subtitles: []Subtitle{{Language: "en"}}, Parts: []Source{{
 		Open: opening("testdata/segments.ts"), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -1019,7 +1019,7 @@ func TestMPEGTSSegmentsEachPlayAlone(t *testing.T) {
 			playback := uuid.NewV7()
 			if err := r.Open(t.Context(), playback, Version{Segments: domain.SegmentsMPEGTS, Parts: []Source{{
 				Open: opening(src), Part: Part{Duration: 20 * time.Second, Keyframes: keyframes},
-				Video: domain.VideoPlan{Codec: "h264"},
+				Video: &domain.VideoPlan{Codec: "h264"},
 				Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
 			}}}); err != nil {
 				t.Fatal(err)
@@ -1109,7 +1109,7 @@ func TestTakingOrGivingBackASlotIsTold(t *testing.T) {
 	told("a conversion giving its slot back", true)
 	copied := uuid.NewV7()
 	video := domain.VideoPlan{Codec: "h264"}
-	whole := Version{Parts: []Source{{Open: unplayed, Part: Part{Duration: time.Minute, Keyframes: Forced(time.Minute)}, Video: video}}}
+	whole := Version{Parts: []Source{{Open: unplayed, Part: Part{Duration: time.Minute, Keyframes: Forced(time.Minute)}, Video: &video}}}
 	if err := r.Open(t.Context(), copied, whole); err != nil {
 		t.Fatal(err)
 	}
@@ -1125,7 +1125,7 @@ func TestATranscodeIsRefusedWhereTheCacheIsShortOfSpace(t *testing.T) {
 	if err := r.Open(t.Context(), uuid.NewV7(), transcode); !errors.Is(err, ErrNoSpace) || !errors.Is(err, ErrTranscodeLimit) {
 		t.Errorf("a transcode with 1 GiB free: %v, want ErrNoSpace, which passes it to the next node", err)
 	}
-	remux := Version{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: domain.VideoPlan{Codec: "h264"}}}}
+	remux := Version{Parts: []Source{{Open: unplayed, Part: transcode.Parts[0].Part, Video: &domain.VideoPlan{Codec: "h264"}}}}
 	if err := r.Open(t.Context(), uuid.NewV7(), remux); err != nil {
 		t.Errorf("a remux with 1 GiB free: %v, want it opened, as no other node would make it", err)
 	}
@@ -1159,7 +1159,7 @@ func TestASegmentSeekedToBeginsOnItsKeyframe(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening(src), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"},
+		Video: &domain.VideoPlan{Codec: "h264"},
 		Audio: &domain.AudioPlan{Stream: 1, Encode: &domain.AudioEncode{Codec: "aac", Channels: 1, BitrateKbps: 64}},
 	}}, Start: 12 * time.Second}); err != nil {
 		t.Fatal(err)
@@ -1222,7 +1222,7 @@ func TestASegmentTheRemuxMovesAwayFromIsAnsweredToAskAgain(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening("testdata/fragments.mp4"), Part: Part{Duration: 60 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}

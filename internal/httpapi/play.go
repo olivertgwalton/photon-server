@@ -374,7 +374,7 @@ func (a *API) openRemote(w http.ResponseWriter, r *http.Request) {
 	}
 	// A node set to serve only, or drained, since another placed this on it, takes nothing new.
 	self := a.svc.Placer.Self()
-	if o.Video.Encode != nil && !self.Role.Encodes() || !self.Availability.Takes() {
+	if o.Video != nil && o.Video.Encode != nil && !self.Role.Encodes() || !self.Availability.Takes() {
 		writeProblem(w, a.logger, codeTranscodeLimit, "this node takes nothing new of this")
 		return
 	}

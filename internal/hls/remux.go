@@ -74,12 +74,12 @@ var errIdle = errors.New("hls: no segment asked for")
 // Unlimited is a remuxer that encodes as many videos at once as it is asked to.
 const Unlimited = 0
 
-// Source is one file of a version to remux: how to open it, its plan input, its video, and its audio
-// if it has any.
+// Source is one file of a version to remux: how to open it, its plan input, and its video and its
+// audio, each if it has one.
 type Source struct {
 	Open  func() (media.Input, error)
 	Part  Part
-	Video domain.VideoPlan
+	Video *domain.VideoPlan
 	Audio *domain.AudioPlan
 	// Styled is styled text drawn into its video (see VideoEncode's Burn): a stream of the file,
 	// or a file beside the version timed on the version's timeline.
@@ -331,7 +331,9 @@ func (r *Remuxer) SetHardware(hw Hardware) {
 }
 
 // encodes is whether a remux encodes video; every part of a version is played to the same plan.
-func (s *session) encodes() bool { return len(s.sources) > 0 && s.sources[0].Video.Encode != nil }
+func (s *session) encodes() bool {
+	return len(s.sources) > 0 && s.sources[0].Video != nil && s.sources[0].Video.Encode != nil
+}
 
 // Close ends a playback's remux and removes its segments.
 func (r *Remuxer) Close(playback uuid.UUID) {

@@ -32,6 +32,9 @@ func Fits(c Version, q domain.Quality) bool {
 // the bitrate and width, HDR kept or tone mapped to SDR as the client shows it, and audio AAC.
 // ErrNoCompatibleStream for a version with no video, or none plays can be made of.
 func Conversion(c Version, q domain.Quality, plays []VideoSupport, hevc domain.HEVCEncoding) (Decision, error) {
+	if video, _ := Pick(c.Streams, nil); video == nil {
+		return Decision{}, ErrNoCompatibleStream
+	}
 	c.BitrateKbps = cmp.Or(c.BitrateKbps, sourceKbps)
 	video := make([]VideoSupport, len(plays))
 	for i, v := range plays {

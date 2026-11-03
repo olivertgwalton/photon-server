@@ -19,9 +19,11 @@ const maxBox = 256 << 20
 var errNotFMP4 = errors.New("hls: not fragmented MP4")
 
 // stream reads the fragmented MP4 ffmpeg writes: its initialisation (ftyp and moov), then one
-// fragment (moof and mdat) per video keyframe.
+// fragment (moof and mdat) per video keyframe, or of a version of sound alone, per segment.
 type stream struct {
-	r     io.Reader
+	r io.Reader
+	// video is the track fragments are timed by, the sound's where there is no video, and scale
+	// its timescale.
 	video uint32
 	scale uint32
 	// rewrite, where it is set, rewrites each video sample as it is written, appending it to dst.
@@ -179,8 +181,10 @@ func versioned(b []byte, v0, v1 int) (uint32, error) {
 	return be32(b, v0)
 }
 
-// tracks finds the video track in moov and its timescale.
+// tracks finds the video track in moov and its timescale, or the first sound track where there is
+// no video.
 func (s *stream) tracks(moov []byte) error {
+	var sound, soundScale uint32
 	err := children(moov, func(typ string, trak []byte) error {
 		if typ != "trak" {
 			return nil
@@ -208,18 +212,25 @@ func (s *stream) tracks(moov []byte) error {
 			}
 			return err
 		})
-		if err == nil && handler == "vide" && s.video == 0 {
+		switch {
+		case err != nil:
+		case handler == "vide" && s.video == 0:
 			s.video, s.scale = id, scale
+		case handler == "soun" && sound == 0:
+			sound, soundScale = id, scale
 		}
 		return err
 	})
+	if s.video == 0 {
+		s.video, s.scale = sound, soundScale
+	}
 	if err == nil && (s.video == 0 || s.scale == 0) {
-		err = fmt.Errorf("%w: no video track", errNotFMP4)
+		err = fmt.Errorf("%w: no video or sound track", errNotFMP4)
 	}
 	return err
 }
 
-// firstShown reads when a fragment's first video sample is shown: its decode time (tfdt) plus its
+// firstShown reads when a fragment's first sample of the track it is timed by is shown: its decode time (tfdt) plus its
 // composition offset (trun), less the clock offset.
 func (s *stream) firstShown(moof []byte) (time.Duration, error) {
 	found := false
@@ -256,7 +267,7 @@ func (s *stream) firstShown(moof []byte) (time.Duration, error) {
 		return err
 	})
 	if err == nil && !found {
-		err = fmt.Errorf("%w: a fragment with no video", errNotFMP4)
+		err = fmt.Errorf("%w: a fragment without the track it is timed by", errNotFMP4)
 	}
 	return shown, err
 }
