@@ -43,7 +43,10 @@ type authenticator interface {
 // parts opens the parts of versions for players to fetch.
 type parts interface {
 	Open(ctx context.Context, part uuid.UUID) (media.Input, error)
-	Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error)
+}
+
+type lyricsFinder interface {
+	Find(ctx context.Context, item, part uuid.UUID) (media.Lyrics, error)
 }
 
 // remoteVersions give a remote library's films and episodes the remoteVersions their provider offers, as one is
@@ -81,6 +84,7 @@ type Services struct {
 	Pictures       pictureFiles
 	Playing        playing
 	Parts          parts
+	Lyrics         lyricsFinder
 	RemoteVersions remoteVersions
 	Discover       discover
 	Playbacks      playbacks

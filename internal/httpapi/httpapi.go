@@ -196,6 +196,7 @@ type Services struct {
 	Watching       watching
 	Playing        playing
 	Parts          parts
+	Lyrics         lyricsFinder
 	RemoteVersions remoteVersions
 	Discover       discover
 	// Subtitles are the subtitles fetched from providers for versions.

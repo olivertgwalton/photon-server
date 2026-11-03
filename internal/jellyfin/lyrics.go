@@ -35,7 +35,7 @@ func (a *API) lyrics(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		a.internal(w, r, err)
 		return
 	}
-	l, err := a.svc.Parts.Lyrics(ctx, c.Parts[0].ID)
+	l, err := a.svc.Lyrics.Find(ctx, id, c.Parts[0].ID)
 	if errors.Is(err, library.ErrNoLyrics) {
 		a.refuse(w, http.StatusNotFound)
 		return

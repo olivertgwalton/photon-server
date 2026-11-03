@@ -21,14 +21,15 @@ type lyricLineJSON struct {
 }
 
 // lyrics answers the lyrics of the version of a track that plays: an LRC file beside it, else its
-// tags'.
+// tags', else what its library's lyrics sources find.
 func (a *API) lyrics(r *http.Request, _ none) (lyricsJSON, error) {
 	ctx := r.Context()
-	v, err := a.svc.Playing.Playable(ctx, auth.SessionOf(ctx).Profile.ID, pathUUID(r, "id"), uuid.UUID{})
+	id := pathUUID(r, "id")
+	v, err := a.svc.Playing.Playable(ctx, auth.SessionOf(ctx).Profile.ID, id, uuid.UUID{})
 	if err != nil {
 		return lyricsJSON{}, err
 	}
-	l, err := a.svc.Parts.Lyrics(ctx, v.Parts[0].ID)
+	l, err := a.svc.Lyrics.Find(ctx, id, v.Parts[0].ID)
 	if errors.Is(err, library.ErrNoLyrics) {
 		return lyricsJSON{}, refuse(codeNotFound, "it has no lyrics")
 	}
