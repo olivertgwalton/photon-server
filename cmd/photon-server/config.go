@@ -20,6 +20,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/httpapi"
 	"github.com/olivertgwalton/photon-server/internal/kv"
+	"github.com/olivertgwalton/photon-server/internal/lrclib"
 	"github.com/olivertgwalton/photon-server/internal/mdblist"
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/musicbrainz"
@@ -82,6 +83,7 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 		omdb.New(settingsOf(domain.SourceOMDb), cache),
 		musicbrainz.New(version, cache),
 		openlibrary.New(version, cache),
+		lrclib.New(version, cache),
 		fanart.New(settingsOf(domain.SourceFanart), cache),
 		opensubtitles.New(settingsOf(domain.SourceOpenSubtitles), cache),
 		riven.New(settingsOf(domain.SourceRiven)),
