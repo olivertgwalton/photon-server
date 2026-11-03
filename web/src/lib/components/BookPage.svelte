@@ -3,15 +3,11 @@ import BookOpenIcon from "@lucide/svelte/icons/book-open";
 import DownloadIcon from "@lucide/svelte/icons/download";
 import HeadphonesIcon from "@lucide/svelte/icons/headphones";
 import HeartIcon from "@lucide/svelte/icons/heart";
-import { toast } from "svelte-sonner";
 import { setMark } from "#lib/actions.ts";
-import { client } from "#lib/api/client.ts";
-import { problemMessage } from "#lib/api/problem.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import {
 	bookListen,
 	chaptersOf,
-	ebookProfile,
 	formatNames,
 	formatOf,
 	seriesLine,
@@ -20,6 +16,7 @@ import CoverHero from "#lib/components/CoverHero.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
 import * as Item from "#lib/components/ui/item/index.ts";
 import * as Table from "#lib/components/ui/table/index.ts";
+import { downloadFile } from "#lib/download.ts";
 import { bytes, resumeLabel, runtime, timecode } from "#lib/format.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
 
@@ -46,25 +43,12 @@ function listen(version: Version, from?: number) {
 	listening.play([bookListen(t, version, from)]);
 }
 
-// An ebook's file comes from a playback of it, as every other file does; it
-// is a download its address alone opens, which the browser saves.
+// The ebook being fetched, whose button waits.
 let fetching = $state<string>();
 async function read(version: Version) {
 	fetching = version.id;
-	const { data, error } = await client().POST("/api/v1/titles/{id}/play", {
-		params: { path: { id: t.id } },
-		body: { version_id: version.id, profile: ebookProfile(version) },
-	});
+	await downloadFile(t.id, version);
 	fetching = undefined;
-	const url = data?.parts?.[0]?.url;
-	if (!url) {
-		toast.error(problemMessage(error));
-		return;
-	}
-	const link = document.createElement("a");
-	link.href = url;
-	link.download = "";
-	link.click();
 }
 </script>
 

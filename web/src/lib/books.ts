@@ -66,15 +66,3 @@ export function bookListen(
 		start_ms,
 	};
 }
-
-// The profile a play of an ebook's version is sent with, to be given its file
-// as it is: the server serves an ebook only ever as a download.
-export function ebookProfile(version: Version): Schemas["ClientProfile"] {
-	return {
-		containers: [version.container],
-		video: [],
-		audio: [],
-		max_bitrate_kbps: 0,
-		parts: "each",
-	};
-}
