@@ -11,6 +11,9 @@ import {
 	after,
 	audioProfile,
 	chapterAt,
+	type GainMode,
+	gainFactor,
+	gainModes,
 	type Listen,
 	movedTo,
 	nextAt,
@@ -53,6 +56,7 @@ type Deck = {
 // The next is asked for this long before the one playing ends.
 const readyAhead = 20;
 const qualityKey = "photon:audio-quality";
+const gainKey = "photon:audio-gain";
 
 // The audio player: one queue for the tab, played for as long as the shell's
 // bar is drawn, so it goes on from page to page. Seconds throughout, on the
@@ -64,7 +68,8 @@ class Listening {
 	at = $state(0);
 	order = $state<Order>("in_order");
 	repeat = $state<Repeat>("off");
-	quality = $state<Quality>(storedQuality());
+	quality = $state<Quality>(stored(qualityKey, qualities, "original"));
+	gainMode = $state<GainMode>(stored(gainKey, gainModes, "track"));
 	sleep = $state<Sleep>({ kind: "off" });
 	playing = $state(false);
 	position = $state(0);
@@ -174,11 +179,7 @@ class Listening {
 
 	setQuality = (quality: Quality) => {
 		this.quality = quality;
-		try {
-			localStorage.setItem(qualityKey, quality);
-		} catch {
-			// Kept for this page alone where storage is refused.
-		}
+		keep(qualityKey, quality);
 		this.#discardReady();
 		if (this.#deck) void this.#open(this.position);
 	};
@@ -261,9 +262,15 @@ class Listening {
 		if (this.#deck) this.#deck.audio.playbackRate = rate;
 	};
 
+	setGainMode = (mode: GainMode) => {
+		this.gainMode = mode;
+		keep(gainKey, mode);
+		if (this.#deck) this.#setUp(this.#deck);
+	};
+
 	setVolume = (volume: number) => {
 		this.volume = volume;
-		if (this.#deck) this.#deck.audio.volume = volume;
+		if (this.#deck) this.#setUp(this.#deck);
 	};
 
 	toggleMute = () => {
@@ -414,7 +421,7 @@ class Listening {
 		this.#ready = undefined;
 		this.#deck = ready;
 		ready.off = this.#listen(ready);
-		this.#setUp(ready.audio);
+		this.#setUp(ready);
 		const item = this.current;
 		this.position = 0;
 		this.duration = (item?.duration_ms ?? 0) / 1000;
@@ -474,7 +481,7 @@ class Listening {
 		if (!deck || mine !== this.#opening) return;
 		this.#deck = deck;
 		deck.off = this.#listen(deck);
-		this.#setUp(deck.audio);
+		this.#setUp(deck);
 		this.#reporter = new ProgressReporter(
 			() => this.position * 1000,
 			send(data.playback_id),
@@ -530,8 +537,10 @@ class Listening {
 		return deck;
 	}
 
-	#setUp(audio: HTMLAudioElement) {
-		audio.volume = this.volume;
+	// The listener's volume, turned by the track's ReplayGain.
+	#setUp({ audio, playback }: Deck) {
+		audio.volume =
+			this.volume * gainFactor(playback.replay_gain, this.gainMode);
 		audio.muted = this.muted;
 		audio.playbackRate = this.rate;
 	}
@@ -564,12 +573,25 @@ function startOf(item: Listen): number {
 	return item.start_ms ? item.start_ms / 1000 : 0;
 }
 
-function storedQuality(): Quality {
+// A setting this browser keeps, one of options.
+function stored<T extends string>(
+	key: string,
+	options: readonly T[],
+	otherwise: T,
+): T {
 	try {
-		const kept = localStorage.getItem(qualityKey);
-		return qualities.find((q) => q === kept) ?? "original";
+		const kept = localStorage.getItem(key);
+		return options.find((o) => o === kept) ?? otherwise;
 	} catch {
-		return "original";
+		return otherwise;
+	}
+}
+
+function keep(key: string, value: string) {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		// Kept for this page alone where storage is refused.
 	}
 }
 

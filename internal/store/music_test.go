@@ -167,3 +167,55 @@ func TestAMusicLibrarysRefreshAsksAgainOfItsArtistsAndAlbums(t *testing.T) {
 		t.Errorf("refresh asked of %v, want %v", kinds, want)
 	}
 }
+
+// A track keeps the ReplayGain its tags give, which its page and its playback answer, and takes the
+// gain they give when it is tagged again.
+func TestATrackKeepsItsReplayGain(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	save := func(gain domain.ReplayGain) {
+		t.Helper()
+		tagged := track("Timeless", 1, 1, "The Weeknd")
+		tagged.Version.Gain = gain
+		_, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+			Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow", Tracks: []Track{tagged},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	gained := domain.ReplayGain{Track: &domain.Gain{DB: -6.48, Peak: 0.988556}, Album: &domain.Gain{DB: -7.1}}
+	save(gained)
+	var id uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(gained, page.Versions[0].Gain); diff != "" {
+		t.Errorf("the page's gain (-want +got):\n%s", diff)
+	}
+	played, err := s.Playable(ctx, uuid.UUID{}, id, uuid.UUID{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(gained, played.Gain); diff != "" {
+		t.Errorf("the playback's gain (-want +got):\n%s", diff)
+	}
+
+	again := domain.ReplayGain{Track: &domain.Gain{DB: -5}}
+	save(again)
+	played, err = s.Playable(ctx, uuid.UUID{}, id, uuid.UUID{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(again, played.Gain); diff != "" {
+		t.Errorf("tagged again (-want +got):\n%s", diff)
+	}
+}

@@ -167,6 +167,19 @@ type Chapter struct {
 	Title      string
 }
 
+// ReplayGain is how far a track is turned to play as loud as any other, and as loud as the rest of
+// its album, as its tags say: nil for either they do not give. The client turns it, so loudness
+// never costs an encode.
+type ReplayGain struct {
+	Track, Album *Gain
+}
+
+// Gain is a turn in decibels, and the loudest sample as a fraction of full scale, 0 where unknown,
+// which a client keeps a turn up from clipping past.
+type Gain struct {
+	DB, Peak float64
+}
+
 // TagOf is a language's BCP 47 tag, or nothing for none.
 func TagOf(l language.Tag) LanguageTag {
 	if l == language.Und {

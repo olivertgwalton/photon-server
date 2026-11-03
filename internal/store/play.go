@@ -27,6 +27,7 @@ type PlayVersion struct {
 	DurationMS  int64
 	Container   string
 	BitrateKbps int
+	Gain        domain.ReplayGain
 	Parts       []PlayPart
 	Streams     []domain.Stream
 	Subtitles   []SubtitleRef
@@ -71,7 +72,7 @@ func (s *Store) Playable(ctx context.Context, profile, item, version uuid.UUID) 
 	}
 	c := PlayVersion{
 		Version: row.ID, Edition: deref(row.Edition), Label: deref(row.Label), DurationMS: row.DurationMS,
-		Container: row.Container, BitrateKbps: row.BitrateKbps, Streams: streams,
+		Container: row.Container, BitrateKbps: row.BitrateKbps, Gain: replayGainOf(row), Streams: streams,
 	}
 	for _, f := range subs {
 		c.Subtitles = append(c.Subtitles, subtitleRef(f))

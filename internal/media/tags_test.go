@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
@@ -110,5 +111,43 @@ func TestATracksCoverIsTheOneItHolds(t *testing.T) {
 	}
 	if got, err := Picture(without); err != nil || got != nil {
 		t.Errorf("Picture(without) = %d bytes, %v; want none", len(got), err)
+	}
+}
+
+// A track's ReplayGain is read from its tags in FLAC and MP3 alike, and Opus's R128 gain is taken
+// to ReplayGain's loudness.
+func TestATracksReplayGainIsReadFromItsTags(t *testing.T) {
+	tags := map[string][]string{
+		"REPLAYGAIN_TRACK_GAIN": {"-6.48 dB"}, "REPLAYGAIN_TRACK_PEAK": {"0.988556"},
+		"REPLAYGAIN_ALBUM_GAIN": {"-7.10 dB"}, "REPLAYGAIN_ALBUM_PEAK": {"1.000000"},
+	}
+	want := domain.ReplayGain{Track: &domain.Gain{DB: -6.48, Peak: 0.988556}, Album: &domain.Gain{DB: -7.10, Peak: 1}}
+	for _, name := range []string{"track.flac", "track.mp3"} {
+		path := filepath.Join(t.TempDir(), name)
+		testtool.Audio(t, path, tags, nil)
+		got, err := ReadTags(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(want, got.Gain); diff != "" {
+			t.Errorf("%s (-want +got):\n%s", name, diff)
+		}
+	}
+	r128 := replayGain(func(key string) string { return map[string]string{"R128_TRACK_GAIN": "-1280"}[key] })
+	if diff := cmp.Diff(domain.ReplayGain{Track: &domain.Gain{DB: 0}}, r128); diff != "" {
+		t.Errorf("R128 (-want +got):\n%s", diff)
+	}
+}
+
+// A track tagged with no gain has none, rather than a gain of nothing.
+func TestATrackWithoutReplayGainHasNone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "track.flac")
+	testtool.Audio(t, path, map[string][]string{"TITLE": {"Untagged"}}, nil)
+	got, err := ReadTags(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Gain != (domain.ReplayGain{}) {
+		t.Errorf("gain = %+v, want none", got.Gain)
 	}
 }

@@ -154,7 +154,39 @@ type playbackJSON struct {
 	Parts      []partJSON               `json:"parts,omitzero"`
 	Subtitles  []subtitleJSON           `json:"subtitles,omitzero"`
 	Playlist   uriReference             `json:"playlist,omitzero"`
-	ExpiresAt  time.Time                `json:"expires_at"`
+	// ReplayGain is what the client turns the sound by to play it as loud as any other.
+	ReplayGain *replayGainJSON `json:"replay_gain,omitzero"`
+	ExpiresAt  time.Time       `json:"expires_at"`
+}
+
+// replayGainJSON is a track's ReplayGain as its tags give it: a gain in decibels and the loudest
+// sample as a fraction of full scale, for the track alone and for its album.
+type replayGainJSON struct {
+	TrackGainDB *float64 `json:"track_gain_db,omitzero"`
+	TrackPeak   *float64 `json:"track_peak,omitzero"`
+	AlbumGainDB *float64 `json:"album_gain_db,omitzero"`
+	AlbumPeak   *float64 `json:"album_peak,omitzero"`
+}
+
+// replayGainOf is nil for a version whose tags give no gain.
+func replayGainOf(g domain.ReplayGain) *replayGainJSON {
+	if g.Track == nil && g.Album == nil {
+		return nil
+	}
+	var out replayGainJSON
+	if t := g.Track; t != nil {
+		out.TrackGainDB = &t.DB
+		if t.Peak > 0 {
+			out.TrackPeak = &t.Peak
+		}
+	}
+	if a := g.Album; a != nil {
+		out.AlbumGainDB = &a.DB
+		if a.Peak > 0 {
+			out.AlbumPeak = &a.Peak
+		}
+	}
+	return &out
 }
 
 // refusalJSON is a version nothing the client plays can be made of, and why.
@@ -282,7 +314,7 @@ func (a *API) playRequest(w http.ResponseWriter, r *http.Request) (playJSON, boo
 func (a *API) opened(p playback.Profile, c store.PlayVersion, d playback.Decision, session domain.Playback, origin string) playbackJSON {
 	until := time.Now().Add(streamFor)
 	answer := playbackJSON{
-		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons,
+		PlaybackID: session.ID, Method: d.Method, VersionID: c.Version, Reasons: d.Reasons, ReplayGain: replayGainOf(c.Gain),
 		ExpiresAt: until.UTC().Truncate(time.Second),
 	}
 	if v := d.Video; v != nil {

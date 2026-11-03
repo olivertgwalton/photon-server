@@ -93,7 +93,8 @@ const versionOrder = `missing_since IS NOT NULL, duration_ms DESC, id`
 // The columns of the other rows read whole.
 const (
 	versionColumns = `id, item_id, library_id, fingerprint, edition, label, container, width, height, video_codec,
-		video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, missing_since`
+		video_range, dv_profile, bitrate_kbps, size_bytes, duration_ms, missing_since, track_gain_db, track_peak,
+		album_gain_db, album_peak`
 	partColumns   = `id, version_id, idx, size_bytes, duration_ms, offset_ms`
 	streamColumns = `part_id, idx, kind, codec, profile, language, title, is_default, forced, hearing_impaired,
 		commentary, width, height, frame_rate, bit_depth, level, video_range, interlaced, dv_profile, dv_level,
