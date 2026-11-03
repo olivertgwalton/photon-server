@@ -4,6 +4,7 @@ import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import ListXIcon from "@lucide/svelte/icons/list-x";
 import XIcon from "@lucide/svelte/icons/x";
 import Artwork from "#lib/components/Artwork.svelte";
+import ExplicitMark from "#lib/components/ExplicitMark.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
 import { ScrollArea } from "#lib/components/ui/scroll-area/index.ts";
 import * as Sheet from "#lib/components/ui/sheet/index.ts";
@@ -72,11 +73,12 @@ function save() {
 			<span class="min-w-0">
 				<span
 					class={[
-						"block truncate text-sm",
+						"flex min-w-0 items-center gap-1.5 text-sm",
 						tone === "playing" ? "text-signal" : "text-ink",
 					]}
 				>
-					{q.title}
+					<span class="truncate">{q.title}</span>
+					<ExplicitMark advisory={q.advisory} />
 				</span>
 				{#if q.by}
 					<span class="text-ink-3 block truncate text-xs">{q.by}</span>

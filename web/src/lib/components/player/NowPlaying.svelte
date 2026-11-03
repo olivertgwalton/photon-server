@@ -6,6 +6,7 @@ import { prefersReducedMotion } from "svelte/motion";
 import { fly, scale } from "svelte/transition";
 import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
+import ExplicitMark from "#lib/components/ExplicitMark.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
 import * as Sheet from "#lib/components/ui/sheet/index.ts";
 import { Toggle } from "#lib/components/ui/toggle/index.ts";
@@ -84,7 +85,10 @@ const swap = $derived({
 					{/if}
 				</div>
 				<div class="grid gap-1">
-					<p class="title text-ink text-2xl">{item.title}</p>
+					<p class="title text-ink flex items-center gap-2 text-2xl">
+						{item.title}
+						<ExplicitMark advisory={item.advisory} />
+					</p>
 					{#if chapter?.title}
 						<p class="text-ink-2">{chapter.title}</p>
 					{/if}

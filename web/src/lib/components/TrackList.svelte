@@ -2,6 +2,7 @@
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { components } from "#lib/api/schema.d.ts";
+import ExplicitMark from "#lib/components/ExplicitMark.svelte";
 import FavouriteMenuItem from "#lib/components/FavouriteMenuItem.svelte";
 import PlayingBars from "#lib/components/player/PlayingBars.svelte";
 import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
@@ -73,12 +74,13 @@ const split = $derived(discs(tracks));
 						<button
 							type="button"
 							class={[
-								"block w-full truncate text-left outline-none after:absolute after:inset-0 focus-visible:underline",
+								"flex w-full min-w-0 items-center gap-1.5 text-left outline-none after:absolute after:inset-0 focus-visible:underline",
 								playing ? "text-signal" : "text-ink",
 							]}
 							onclick={() => onplay(track)}
 						>
-							{track.title}
+							<span class="truncate">{track.title}</span>
+							<ExplicitMark advisory={track.advisory} />
 						</button>
 						{#if also}
 							<span class="text-ink-3 block truncate text-xs">{also}</span>
