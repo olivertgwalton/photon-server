@@ -96,6 +96,8 @@ export type Listen = {
 	// The artwork's blurhash, whose colour the Now Playing view takes.
 	blurhash?: string;
 	duration_ms?: number;
+	// How a track's lyrics are timed, where it has any.
+	lyrics?: Schemas["LyricsTiming"];
 	// A track's parental advisory, which its title is marked by where explicit.
 	advisory?: Schemas["Advisory"];
 	chapters?: Schemas["ChapterRef"][];
@@ -116,6 +118,7 @@ export function trackListen(card: Schemas["Card"]): Listen {
 		artwork: card.poster,
 		blurhash: card.poster ? card.blurhashes?.[card.poster] : undefined,
 		duration_ms: card.duration_ms,
+		lyrics: card.lyrics,
 		advisory: card.advisory,
 	};
 }
@@ -395,6 +398,8 @@ function listenOf(x: unknown): Listen | undefined {
 		artwork: text(x.artwork),
 		blurhash: text(x.blurhash),
 		duration_ms: count(x.duration_ms),
+		lyrics:
+			x.lyrics === "line" || x.lyrics === "untimed" ? x.lyrics : undefined,
 		advisory:
 			x.advisory === "explicit" || x.advisory === "clean"
 				? x.advisory
