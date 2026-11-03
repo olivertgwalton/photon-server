@@ -21,71 +21,73 @@ const ticksPerMS = 10_000
 // item is Jellyfin's BaseItemDto, as much of it as photon has to say. Jellyfin writes what it has
 // and leaves out what it has not, so an app decodes whichever it needs.
 type item struct {
-	Name                    string              `json:"Name"`
-	OriginalTitle           string              `json:"OriginalTitle,omitempty"`
-	ServerID                string              `json:"ServerId"`
-	ID                      string              `json:"Id"`
-	Etag                    string              `json:"Etag,omitempty"`
-	DateCreated             *time.Time          `json:"DateCreated,omitzero"`
-	CanDelete               bool                `json:"CanDelete"`
-	CanDownload             *bool               `json:"CanDownload,omitzero"`
-	Container               string              `json:"Container,omitempty"`
-	SortName                string              `json:"SortName,omitempty"`
-	PremiereDate            *time.Time          `json:"PremiereDate,omitzero"`
-	EndDate                 *time.Time          `json:"EndDate,omitzero"`
-	MediaSources            []mediaSource       `json:"MediaSources,omitempty"`
-	Path                    string              `json:"Path,omitempty"`
-	CriticRating            *float64            `json:"CriticRating,omitzero"`
-	OfficialRating          string              `json:"OfficialRating,omitempty"`
-	Overview                string              `json:"Overview,omitempty"`
-	Taglines                []string            `json:"Taglines,omitempty"`
-	Genres                  []string            `json:"Genres,omitempty"`
-	CommunityRating         *float64            `json:"CommunityRating,omitzero"`
-	RunTimeTicks            int64               `json:"RunTimeTicks,omitzero"`
-	ProductionYear          int                 `json:"ProductionYear,omitzero"`
-	ProductionLocations     []string            `json:"ProductionLocations,omitempty"`
-	IndexNumber             *int                `json:"IndexNumber,omitzero"`
-	IndexNumberEnd          *int                `json:"IndexNumberEnd,omitzero"`
-	ParentIndexNumber       *int                `json:"ParentIndexNumber,omitzero"`
-	AirsBeforeSeasonNumber  *int                `json:"AirsBeforeSeasonNumber,omitzero"`
-	AirsBeforeEpisodeNumber *int                `json:"AirsBeforeEpisodeNumber,omitzero"`
-	AirsAfterSeasonNumber   *int                `json:"AirsAfterSeasonNumber,omitzero"`
-	ProviderIDs             map[string]string   `json:"ProviderIds,omitempty"`
-	IsFolder                bool                `json:"IsFolder"`
-	ParentID                string              `json:"ParentId,omitempty"`
-	Type                    string              `json:"Type"`
-	People                  []person            `json:"People,omitempty"`
-	ParentLogoItemID        string              `json:"ParentLogoItemId,omitempty"`
-	ParentBackdropItemID    string              `json:"ParentBackdropItemId,omitempty"`
-	ParentBackdropImageTags []string            `json:"ParentBackdropImageTags,omitempty"`
-	UserData                *userData           `json:"UserData,omitzero"`
-	ChildCount              *int                `json:"ChildCount,omitzero"`
-	MovieCount              int                 `json:"MovieCount,omitzero"`
-	SeriesCount             int                 `json:"SeriesCount,omitzero"`
-	SeriesName              string              `json:"SeriesName,omitempty"`
-	SeriesID                string              `json:"SeriesId,omitempty"`
-	SeasonID                string              `json:"SeasonId,omitempty"`
-	DisplayPreferencesID    string              `json:"DisplayPreferencesId,omitempty"`
-	PrimaryImageAspectRatio float64             `json:"PrimaryImageAspectRatio,omitzero"`
-	CollectionType          string              `json:"CollectionType,omitempty"`
-	SeriesPrimaryImageTag   string              `json:"SeriesPrimaryImageTag,omitempty"`
-	SeasonName              string              `json:"SeasonName,omitempty"`
-	Album                   string              `json:"Album,omitempty"`
-	AlbumID                 string              `json:"AlbumId,omitempty"`
-	AlbumPrimaryImageTag    string              `json:"AlbumPrimaryImageTag,omitempty"`
-	AlbumArtist             string              `json:"AlbumArtist,omitempty"`
-	AlbumArtists            []nameGUID          `json:"AlbumArtists,omitempty"`
-	Artists                 []string            `json:"Artists,omitempty"`
-	ArtistItems             []nameGUID          `json:"ArtistItems,omitempty"`
-	MediaStreams            []mediaStream       `json:"MediaStreams,omitempty"`
-	VideoType               string              `json:"VideoType,omitempty"`
-	ImageTags               map[string]string   `json:"ImageTags"`
-	BackdropImageTags       []string            `json:"BackdropImageTags"`
-	ParentLogoImageTag      string              `json:"ParentLogoImageTag,omitempty"`
-	ImageBlurHashes         map[string]blurhash `json:"ImageBlurHashes"`
-	LocationType            string              `json:"LocationType"`
-	MediaType               string              `json:"MediaType"`
-	PlaylistItemID          string              `json:"PlaylistItemId,omitempty"`
+	Name                    string            `json:"Name"`
+	OriginalTitle           string            `json:"OriginalTitle,omitempty"`
+	ServerID                string            `json:"ServerId"`
+	ID                      string            `json:"Id"`
+	Etag                    string            `json:"Etag,omitempty"`
+	DateCreated             *time.Time        `json:"DateCreated,omitzero"`
+	CanDelete               bool              `json:"CanDelete"`
+	CanDownload             *bool             `json:"CanDownload,omitzero"`
+	Container               string            `json:"Container,omitempty"`
+	SortName                string            `json:"SortName,omitempty"`
+	PremiereDate            *time.Time        `json:"PremiereDate,omitzero"`
+	EndDate                 *time.Time        `json:"EndDate,omitzero"`
+	MediaSources            []mediaSource     `json:"MediaSources,omitempty"`
+	Path                    string            `json:"Path,omitempty"`
+	CriticRating            *float64          `json:"CriticRating,omitzero"`
+	OfficialRating          string            `json:"OfficialRating,omitempty"`
+	Overview                string            `json:"Overview,omitempty"`
+	Taglines                []string          `json:"Taglines,omitempty"`
+	Genres                  []string          `json:"Genres,omitempty"`
+	CommunityRating         *float64          `json:"CommunityRating,omitzero"`
+	RunTimeTicks            int64             `json:"RunTimeTicks,omitzero"`
+	ProductionYear          int               `json:"ProductionYear,omitzero"`
+	ProductionLocations     []string          `json:"ProductionLocations,omitempty"`
+	IndexNumber             *int              `json:"IndexNumber,omitzero"`
+	IndexNumberEnd          *int              `json:"IndexNumberEnd,omitzero"`
+	ParentIndexNumber       *int              `json:"ParentIndexNumber,omitzero"`
+	AirsBeforeSeasonNumber  *int              `json:"AirsBeforeSeasonNumber,omitzero"`
+	AirsBeforeEpisodeNumber *int              `json:"AirsBeforeEpisodeNumber,omitzero"`
+	AirsAfterSeasonNumber   *int              `json:"AirsAfterSeasonNumber,omitzero"`
+	ProviderIDs             map[string]string `json:"ProviderIds,omitempty"`
+	IsFolder                bool              `json:"IsFolder"`
+	ParentID                string            `json:"ParentId,omitempty"`
+	Type                    string            `json:"Type"`
+	People                  []person          `json:"People,omitempty"`
+	ParentLogoItemID        string            `json:"ParentLogoItemId,omitempty"`
+	ParentBackdropItemID    string            `json:"ParentBackdropItemId,omitempty"`
+	ParentBackdropImageTags []string          `json:"ParentBackdropImageTags,omitempty"`
+	UserData                *userData         `json:"UserData,omitzero"`
+	ChildCount              *int              `json:"ChildCount,omitzero"`
+	MovieCount              int               `json:"MovieCount,omitzero"`
+	SeriesCount             int               `json:"SeriesCount,omitzero"`
+	SeriesName              string            `json:"SeriesName,omitempty"`
+	SeriesID                string            `json:"SeriesId,omitempty"`
+	SeasonID                string            `json:"SeasonId,omitempty"`
+	DisplayPreferencesID    string            `json:"DisplayPreferencesId,omitempty"`
+	PrimaryImageAspectRatio float64           `json:"PrimaryImageAspectRatio,omitzero"`
+	CollectionType          string            `json:"CollectionType,omitempty"`
+	SeriesPrimaryImageTag   string            `json:"SeriesPrimaryImageTag,omitempty"`
+	SeasonName              string            `json:"SeasonName,omitempty"`
+	Album                   string            `json:"Album,omitempty"`
+	AlbumID                 string            `json:"AlbumId,omitempty"`
+	AlbumPrimaryImageTag    string            `json:"AlbumPrimaryImageTag,omitempty"`
+	AlbumArtist             string            `json:"AlbumArtist,omitempty"`
+	AlbumArtists            []nameGUID        `json:"AlbumArtists,omitempty"`
+	Artists                 []string          `json:"Artists,omitempty"`
+	ArtistItems             []nameGUID        `json:"ArtistItems,omitempty"`
+	// HasLyrics is what Jellyfin's apps from 10.9 show their lyrics button by.
+	HasLyrics          bool                `json:"HasLyrics,omitzero"`
+	MediaStreams       []mediaStream       `json:"MediaStreams,omitempty"`
+	VideoType          string              `json:"VideoType,omitempty"`
+	ImageTags          map[string]string   `json:"ImageTags"`
+	BackdropImageTags  []string            `json:"BackdropImageTags"`
+	ParentLogoImageTag string              `json:"ParentLogoImageTag,omitempty"`
+	ImageBlurHashes    map[string]blurhash `json:"ImageBlurHashes"`
+	LocationType       string              `json:"LocationType"`
+	MediaType          string              `json:"MediaType"`
+	PlaylistItemID     string              `json:"PlaylistItemId,omitempty"`
 
 	// Trickplay is each version's thumbnail sheets, by the version's id and their width.
 	Trickplay map[string]map[int]trickplayInfo `json:"Trickplay,omitempty"`
@@ -271,6 +273,7 @@ func (it *item) music(c store.Card) {
 		return
 	}
 	it.ParentIndexNumber, it.IndexNumber, it.Artists = c.DiscNumber, c.TrackNumber, c.Artists
+	it.HasLyrics = c.Lyrics != ""
 	for _, name := range c.Artists {
 		if c.Artist != nil && strings.EqualFold(name, c.Artist.Title) {
 			it.ArtistItems = append(it.ArtistItems, it.AlbumArtists[0])
@@ -322,7 +325,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		Logo: first(p.Artwork[domain.ArtworkLogo]), Thumb: first(p.Artwork[domain.ArtworkThumb]), State: p.State,
 		Show: p.Show, Season: p.Season, SeasonNumber: p.SeasonNumber, EpisodeNumber: p.EpisodeNumber,
 		Artist: p.Artist, Album: p.Album, DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
-		Author: p.Author, Series: p.Series, SeriesIndex: p.SeriesIndex, DurationMS: longest(p.Versions),
+		Lyrics: p.Lyrics, Author: p.Author, Series: p.Series, SeriesIndex: p.SeriesIndex, DurationMS: longest(p.Versions),
 		EpisodeEnd: p.EpisodeEnd, Overview: p.Overview, Genres: p.Genres, Certificate: p.Certificate,
 		Ratings: p.Ratings, Blurhashes: p.Blurhashes,
 	})
