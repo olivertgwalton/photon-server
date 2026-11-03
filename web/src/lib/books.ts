@@ -51,12 +51,14 @@ export function bookListen(
 	version: Version,
 	start_ms = book.state?.position_ms ?? 0,
 ): Listen {
+	const cover = book.artwork?.poster?.[0];
 	return {
 		id: book.id,
 		version: version.id,
 		title: book.title,
 		by: book.author?.title,
-		artwork: book.artwork?.poster?.[0],
+		artwork: cover,
+		blurhash: cover ? book.blurhashes?.[cover] : undefined,
 		duration_ms: version.duration_ms,
 		chapters: chaptersOf(version),
 		start_ms,

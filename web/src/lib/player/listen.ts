@@ -1,4 +1,5 @@
 import type { components } from "#lib/api/schema.d.ts";
+import { shuffled } from "#lib/shuffle.ts";
 
 type Schemas = components["schemas"];
 
@@ -88,6 +89,8 @@ export type Listen = {
 	// What it is from, its album, which the bar leads to.
 	from?: { id: string; title: string };
 	artwork?: string;
+	// The artwork's blurhash, whose colour the Now Playing view takes.
+	blurhash?: string;
 	duration_ms?: number;
 	chapters?: Schemas["ChapterRef"][];
 	// Where it opens: an audiobook, where the reader stopped.
@@ -101,6 +104,7 @@ export function trackListen(card: Schemas["Card"]): Listen {
 		by: card.artists?.join(", ") || card.artist?.title,
 		from: card.album ?? undefined,
 		artwork: card.poster,
+		blurhash: card.poster ? card.blurhashes?.[card.poster] : undefined,
 		duration_ms: card.duration_ms,
 	};
 }
@@ -139,4 +143,116 @@ export function chapterAt(
 	chapters: Schemas["ChapterRef"][] = [],
 ): Schemas["ChapterRef"] | undefined {
 	return chapters.findLast((c) => c.start_ms <= seconds * 1000);
+}
+
+// One place in the queue. A track may be queued twice, so each has a key of
+// its own: a count, as a page served over plain HTTP has no crypto.randomUUID.
+export type Queued = Listen & { key: string };
+
+let keys = 0;
+
+export function queued(items: Listen[]): Queued[] {
+	return items.map((item) => ({ ...item, key: `q${++keys}` }));
+}
+
+// A queue and where in it the player is: what played before, what plays
+// after.
+export type Queue = { items: Queued[]; at: number };
+
+// Things put straight after the one playing, as Plexamp's and Finamp's Play
+// Next do.
+export function playingNext(q: Queue, items: Queued[]): Queue {
+	return { items: q.items.toSpliced(q.at + 1, 0, ...items), at: q.at };
+}
+
+// One moved from where it was to where it is dropped, the one playing still
+// playing.
+export function movedTo(q: Queue, from: number, to: number): Queue {
+	const playing = q.items[q.at];
+	const items = q.items.toSpliced(from, 1);
+	items.splice(Math.max(0, Math.min(to, items.length)), 0, q.items[from]);
+	return { items, at: items.findIndex((i) => i.key === playing.key) };
+}
+
+// One taken out. Taking out the one playing leaves the player at the one
+// after it, or, where it was the last, the one before.
+export function without(q: Queue, index: number): Queue {
+	const items = q.items.toSpliced(index, 1);
+	const at = index < q.at ? q.at - 1 : q.at;
+	return { items, at: Math.min(at, Math.max(items.length - 1, 0)) };
+}
+
+// What is still to play, shuffled or put back in the order it was queued in,
+// what played and the one playing staying where they are.
+export function reshuffled(
+	q: Queue,
+	order: "shuffled" | "in_order",
+	original: Queued[],
+): Queue {
+	const done = q.items.slice(0, q.at + 1);
+	const left = q.items.slice(q.at + 1);
+	const leftKeys = new Set(left.map((i) => i.key));
+	const next =
+		order === "shuffled"
+			? shuffled(left)
+			: original.filter((i) => leftKeys.has(i.key));
+	return { items: [...done, ...next], at: q.at };
+}
+
+// What plays after the end of one: the next, or with the queue played
+// through, its first again where it repeats.
+export type Repeat = "off" | "all" | "one";
+
+export function after(q: Queue, repeat: Repeat): number | null {
+	if (repeat === "one") return q.at;
+	if (q.at < q.items.length - 1) return q.at + 1;
+	return repeat === "all" && q.items.length ? 0 : null;
+}
+
+// How music is sent: each file as it is, or no more than a bitrate, encoded
+// where it is more, as Finamp's transcoding setting has it.
+export const qualities = ["original", "320", "192", "128"] as const;
+export type Quality = (typeof qualities)[number];
+
+export function qualityKbps(quality: Quality): number {
+	return quality === "original" ? 0 : Number(quality);
+}
+
+// The keys the player answers anywhere in the shell, as YouTube's and
+// Plexamp's: k or Space to play and pause, j and l to go back and on ten
+// seconds, Shift+N and Shift+P for the next and the one before, m to mute.
+export type KeyAction =
+	| "toggle"
+	| "back"
+	| "forward"
+	| "next"
+	| "previous"
+	| "mute";
+
+export function keyAction(e: {
+	key: string;
+	shiftKey: boolean;
+	ctrlKey: boolean;
+	metaKey: boolean;
+	altKey: boolean;
+}): KeyAction | undefined {
+	if (e.ctrlKey || e.metaKey || e.altKey) return undefined;
+	if (e.shiftKey) {
+		if (e.key === "N") return "next";
+		if (e.key === "P") return "previous";
+		return undefined;
+	}
+	switch (e.key) {
+		case " ":
+		case "k":
+			return "toggle";
+		case "j":
+			return "back";
+		case "l":
+			return "forward";
+		case "m":
+			return "mute";
+		default:
+			return undefined;
+	}
 }

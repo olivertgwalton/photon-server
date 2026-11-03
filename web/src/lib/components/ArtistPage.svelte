@@ -1,18 +1,18 @@
 <script lang="ts">
+import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import HeartIcon from "@lucide/svelte/icons/heart";
 import PlayIcon from "@lucide/svelte/icons/play";
 import ShuffleIcon from "@lucide/svelte/icons/shuffle";
-import { toast } from "svelte-sonner";
 import { setMark } from "#lib/actions.ts";
-import { client } from "#lib/api/client.ts";
-import { problemMessage } from "#lib/api/problem.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import CoverHero from "#lib/components/CoverHero.svelte";
+import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
+import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
 import { count } from "#lib/format.ts";
-import { trackListen } from "#lib/player/listen.ts";
 import { listening, type Order } from "#lib/player/listening.svelte.ts";
+import { tracksOf } from "#lib/player/tracks.ts";
 
 type Schemas = components["schemas"];
 
@@ -26,16 +26,7 @@ const albums = $derived(
 const favourite = $derived(!!t.state?.favourite_at);
 
 async function play(order: Order) {
-	const { data, error } = await client().GET("/api/v1/titles/{id}/playable", {
-		params: { path: { id: t.id } },
-	});
-	if (error) toast.error(problemMessage(error));
-	else
-		listening.play(
-			data.items.map(trackListen),
-			order === "shuffled" ? Math.floor(Math.random() * data.items.length) : 0,
-			order,
-		);
+	listening.play(await tracksOf(t.id), { order });
 }
 </script>
 
@@ -72,6 +63,22 @@ async function play(order: Order) {
 			>
 				<HeartIcon class={favourite ? "fill-current" : "text-ink-3"} />
 			</Button>
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="glass" size="icon-lg" aria-label="More">
+							<EllipsisIcon />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="start" class="w-56">
+					<QueueMenuItems
+						ids={[t.id]}
+						name={t.title}
+						tracks={() => tracksOf(t.id)}
+					/>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 		{/snippet}
 	</CoverHero>
 

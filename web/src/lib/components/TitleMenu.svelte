@@ -21,6 +21,7 @@ import SearchCheckIcon from "@lucide/svelte/icons/search-check";
 import SearchXIcon from "@lucide/svelte/icons/search-x";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import Share2Icon from "@lucide/svelte/icons/share-2";
+import ShuffleIcon from "@lucide/svelte/icons/shuffle";
 import SplitIcon from "@lucide/svelte/icons/split";
 import TrashIcon from "@lucide/svelte/icons/trash";
 import TvIcon from "@lucide/svelte/icons/tv";
@@ -32,8 +33,11 @@ import {
 	unmatchTitle,
 } from "#lib/actions.ts";
 import { matchable, refreshable } from "#lib/admin/edit.ts";
+import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
 import { playHref, titleWithShow } from "#lib/format.ts";
+import { listening, type Order } from "#lib/player/listening.svelte.ts";
+import { tracksOf } from "#lib/player/tracks.ts";
 import { getShell } from "#lib/shell.svelte.ts";
 import { goto } from "$app/navigation";
 import { page } from "$app/state";
@@ -56,6 +60,15 @@ const admin = $derived(page.data.me?.role === "admin");
 const matched = $derived(card ? matchable(card.kind) : false);
 const refreshes = $derived(card ? refreshable(card.kind) : false);
 const name = $derived(card ? titleWithShow(card) : "");
+// Music plays in the audio player, from its card as from its page, and is
+// neither watched nor kept to watch.
+const music = $derived(
+	card?.kind === "track" || card?.kind === "album" || card?.kind === "artist",
+);
+
+async function listen(id: string, order: Order) {
+	listening.play(await tracksOf(id), { order });
+}
 </script>
 
 <DropdownMenu.Root bind:open={shell.titleMenu.open}>
@@ -74,6 +87,24 @@ const name = $derived(card ? titleWithShow(card) : "");
 		}}
 	>
 		{#if card}
+			{#if music}
+				{@const id = card.id}
+				<DropdownMenu.Item onSelect={() => listen(id, "in_order")}>
+					<PlayIcon />Play
+				</DropdownMenu.Item>
+				{#if card.kind !== "track"}
+					<DropdownMenu.Item onSelect={() => listen(id, "shuffled")}>
+						<ShuffleIcon />Shuffle
+					</DropdownMenu.Item>
+				{/if}
+				<QueueMenuItems
+					ids={[id]}
+					{name}
+					tracks={() => tracksOf(id)}
+					playlist="hidden"
+				/>
+				<DropdownMenu.Separator />
+			{/if}
 			{#if playable}
 				<DropdownMenu.Item onSelect={() => goto(playHref(card.id))}>
 					<PlayIcon />{started ? "Resume" : "Play"}
@@ -91,7 +122,7 @@ const name = $derived(card ? titleWithShow(card) : "");
 					<LayersIcon />Play version…
 				</DropdownMenu.Item>
 			{/if}
-			{#if card.kind !== "collection"}
+			{#if card.kind !== "collection" && !music}
 				<DropdownMenu.Item
 					onSelect={() => setMark(card.id, "watched", !watched)}
 				>
@@ -111,7 +142,7 @@ const name = $derived(card ? titleWithShow(card) : "");
 					<HeartIcon />Add to favourites
 				{/if}
 			</DropdownMenu.Item>
-			{#if card.kind !== "collection" && card.kind !== "extra"}
+			{#if card.kind !== "collection" && card.kind !== "extra" && !music}
 				<DropdownMenu.Item
 					onSelect={() => setMark(card.id, "watchlist", !watchlisted)}
 				>

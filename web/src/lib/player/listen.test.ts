@@ -1,9 +1,17 @@
 import { expect, test } from "bun:test";
 import {
 	type AudioCapabilities,
+	after,
 	audioProfile,
+	keyAction,
+	movedTo,
 	nextAt,
+	playingNext,
 	previousAt,
+	type Queue,
+	qualityKbps,
+	reshuffled,
+	without,
 } from "./listen.ts";
 
 const a = (codecs: string) => `audio/mp4; codecs="${codecs}"`;
@@ -89,4 +97,76 @@ test("next goes to the next chapter, and past the last to the next in the queue"
 	expect(nextAt(10, chapters)).toBe(60);
 	expect(nextAt(130, chapters)).toBeNull();
 	expect(nextAt(10)).toBeNull();
+});
+
+const q = (...ids: string[]) =>
+	ids.map((id) => ({ id, title: id, key: `k-${id}` }));
+const ids = (queue: Queue) => queue.items.map((i) => i.id);
+
+test("play next goes straight after the one playing", () => {
+	const next = playingNext({ items: q("a", "b", "c"), at: 1 }, q("x", "y"));
+	expect(ids(next)).toEqual(["a", "b", "x", "y", "c"]);
+	expect(next.at).toBe(1);
+});
+
+test("moving one keeps the one playing playing", () => {
+	const moved = movedTo({ items: q("a", "b", "c", "d"), at: 1 }, 3, 0);
+	expect(ids(moved)).toEqual(["d", "a", "b", "c"]);
+	expect(moved.items[moved.at].id).toBe("b");
+	const self = movedTo({ items: q("a", "b", "c"), at: 0 }, 0, 2);
+	expect(ids(self)).toEqual(["b", "c", "a"]);
+	expect(self.at).toBe(2);
+});
+
+test("taking one out leaves the player where it was", () => {
+	expect(without({ items: q("a", "b", "c"), at: 2 }, 0)).toMatchObject({
+		at: 1,
+	});
+	// The one playing gone, the one after plays.
+	const gone = without({ items: q("a", "b", "c"), at: 1 }, 1);
+	expect(gone.items[gone.at].id).toBe("c");
+	// The last gone, the one before.
+	expect(without({ items: q("a", "b"), at: 1 }, 1).at).toBe(0);
+});
+
+test("shuffling leaves what played, and in order puts the rest back", () => {
+	const original = q("a", "b", "c", "d", "e");
+	const shuffled = reshuffled({ items: original, at: 1 }, "shuffled", original);
+	expect(ids(shuffled).slice(0, 2)).toEqual(["a", "b"]);
+	expect(ids(shuffled).toSorted()).toEqual(["a", "b", "c", "d", "e"]);
+	const back = reshuffled(
+		{ items: [original[0], original[1], original[4], original[2]], at: 1 },
+		"in_order",
+		original,
+	);
+	expect(ids(back)).toEqual(["a", "b", "c", "e"]);
+});
+
+test("the queue played through ends, or starts again where it repeats", () => {
+	const end = { items: q("a", "b"), at: 1 };
+	expect(after(end, "off")).toBeNull();
+	expect(after(end, "all")).toBe(0);
+	expect(after(end, "one")).toBe(1);
+	expect(after({ items: q("a", "b"), at: 0 }, "off")).toBe(1);
+});
+
+test("the original quality sends no limit", () => {
+	expect(qualityKbps("original")).toBe(0);
+	expect(qualityKbps("192")).toBe(192);
+});
+
+test("the player's keys, and none with a modifier the browser keeps", () => {
+	const key = (k: string, shift = false) => ({
+		key: k,
+		shiftKey: shift,
+		ctrlKey: false,
+		metaKey: false,
+		altKey: false,
+	});
+	expect(keyAction(key(" "))).toBe("toggle");
+	expect(keyAction(key("N", true))).toBe("next");
+	expect(keyAction(key("P", true))).toBe("previous");
+	expect(keyAction(key("l"))).toBe("forward");
+	expect(keyAction({ ...key("k"), metaKey: true })).toBeUndefined();
+	expect(keyAction(key("x"))).toBeUndefined();
 });
