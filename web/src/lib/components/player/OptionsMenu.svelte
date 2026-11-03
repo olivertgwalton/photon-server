@@ -23,6 +23,7 @@ import { downloadFile } from "#lib/download.ts";
 import { isFavourite, setFavourite } from "#lib/favourites.svelte.ts";
 import { timecode } from "#lib/format.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
+import { lyricsOf } from "#lib/player/lyrics.ts";
 import { tracksOf } from "#lib/player/tracks.ts";
 import { getShell } from "#lib/shell.svelte.ts";
 import { goto } from "$app/navigation";
@@ -35,7 +36,7 @@ type Schemas = components["schemas"];
 // What can be done with what plays, as Apple Music's Now Playing "⋯" offers:
 // keep, favour and share it, queue its album, go to its album and artist,
 // see its credits and lyrics, and stop on a timer; an audiobook's speed and
-// chapters. Its title's page and lyrics are asked for as it is first opened.
+// chapters. Its title's page is asked for as it is first opened.
 let {
 	size,
 	onlyrics,
@@ -54,7 +55,6 @@ const item = $derived(listening.current);
 type Details = {
 	id: string;
 	page: Schemas["TitlePage"];
-	lyrics: Schemas["Lyrics"] | null;
 };
 let details = $state<Details>();
 const known = $derived(
@@ -63,7 +63,8 @@ const known = $derived(
 const favourite = $derived(
 	!!known && isFavourite(known.id, known.page.state?.favourite_at),
 );
-const lyrics = $derived(known?.lyrics?.lines ?? []);
+// A track says whether it has lyrics; its page, once read, says so afresh.
+const sung = $derived(!!(known?.page.lyrics ?? item?.lyrics));
 // The version playing, saved whole where it is one file: an audiobook in
 // several has no one file to give.
 const version = $derived(
@@ -74,12 +75,11 @@ const downloadable = $derived(version?.parts === 1);
 let credits = $state(false);
 
 async function load(id: string) {
-	const [page, sung] = await Promise.all([
-		client().GET("/api/v1/titles/{id}", { params: { path: { id } } }),
-		client().GET("/api/v1/titles/{id}/lyrics", { params: { path: { id } } }),
-	]);
+	const page = await client().GET("/api/v1/titles/{id}", {
+		params: { path: { id } },
+	});
 	if (page.data && listening.current?.id === id) {
-		details = { id, page: page.data, lyrics: sung.data ?? null };
+		details = { id, page: page.data };
 	}
 }
 
@@ -135,7 +135,12 @@ function go(id: string) {
 }
 
 async function copyLyrics() {
-	await navigator.clipboard.writeText(lyrics.map((l) => l.text).join("\n"));
+	if (!item) return;
+	const lyrics = await lyricsOf(item.id, item.version);
+	if (!lyrics) return;
+	await navigator.clipboard.writeText(
+		lyrics.lines.map((l) => l.text).join("\n"),
+	);
 	toast.success("Lyrics copied.");
 }
 </script>
@@ -238,7 +243,7 @@ async function copyLyrics() {
 				<DropdownMenu.Item disabled={!known} onSelect={() => (credits = true)}>
 					<InfoIcon />View credits
 				</DropdownMenu.Item>
-				{#if lyrics.length}
+				{#if sung}
 					<DropdownMenu.Item onSelect={onlyrics}>
 						<MicVocalIcon />Show lyrics
 					</DropdownMenu.Item>

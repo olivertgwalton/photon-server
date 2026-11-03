@@ -247,6 +247,26 @@ test("a queue kept before each named its kind knows a book by its version", () =
 	expect(readKept(kept)?.items.map((i) => i.kind)).toEqual(["track", "book"]);
 });
 
+test("a kept track remembers how its lyrics are timed, and nothing else", () => {
+	const kept = JSON.stringify({
+		items: [
+			{ id: "a", title: "Timed", lyrics: "line" },
+			{ id: "b", title: "Plain", lyrics: "untimed" },
+			{ id: "c", title: "Odd", lyrics: "karaoke" },
+		],
+		at: 0,
+		position: 0,
+		order: "in_order",
+		repeat: "off",
+		original: [],
+	});
+	expect(readKept(kept)?.items.map((i) => i.lyrics)).toEqual([
+		"line",
+		"untimed",
+		undefined,
+	]);
+});
+
 test("credits say how a track is played: as it is, or converted to what", () => {
 	const flac = { codec: "flac", bitrate_kbps: 921 };
 	expect(

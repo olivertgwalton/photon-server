@@ -7485,7 +7485,10 @@ export interface paths {
         /** A track's lyrics, each line where it is sung where they are timed */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description The version; the one that plays unasked where none is named. */
+                    version_id?: string;
+                };
                 header?: never;
                 path: {
                     id: string;
@@ -8413,6 +8416,7 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             /** Format: uuid */
             logo?: string;
+            lyrics?: components["schemas"]["LyricsTiming"];
             origin?: components["schemas"]["CollectionOrigin"];
             overview?: string;
             /** Format: uuid */
@@ -8566,6 +8570,7 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             /** Format: uuid */
             logo?: string;
+            lyrics?: components["schemas"]["LyricsTiming"];
             origin?: components["schemas"]["CollectionOrigin"];
             overview?: string;
             /** Format: uuid */
@@ -8754,6 +8759,7 @@ export interface components {
             kind: components["schemas"]["ItemKind"];
             /** Format: uuid */
             logo?: string;
+            lyrics?: components["schemas"]["LyricsTiming"];
             origin?: components["schemas"]["CollectionOrigin"];
             overview?: string;
             /** Format: uuid */
@@ -9025,7 +9031,7 @@ export interface components {
             state: components["schemas"]["JobState"];
         };
         /** @enum {string} */
-        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push" | "send_request";
+        JobKind: "keyframes" | "keyframe_walk" | "identify" | "scan_library" | "markers" | "previews" | "convert" | "deliver_webhook" | "theme" | "probe" | "import_history" | "segments" | "push" | "send_request" | "lyrics";
         JobQueue: {
             counts: components["schemas"]["JobCount"][];
             dead: components["schemas"]["DeadJob"][];
@@ -9193,6 +9199,8 @@ export interface components {
         Lyrics: {
             lines: components["schemas"]["LyricLine"][];
         };
+        /** @enum {string} */
+        LyricsTiming: "line" | "untimed";
         Maintenance: {
             end_hour: number;
             markers: components["schemas"]["Timing"];
@@ -10375,6 +10383,7 @@ export interface components {
             library_ids?: string[];
             list?: components["schemas"]["ListRef"] | null;
             locked_fields?: components["schemas"]["Field"][];
+            lyrics?: components["schemas"]["LyricsTiming"];
             metadata_language?: string;
             origin?: components["schemas"]["CollectionOrigin"];
             original_title?: string;
@@ -10500,6 +10509,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             label?: string;
+            lyrics?: components["schemas"]["LyricsTiming"];
             markers?: components["schemas"]["MarkerRef"][];
             /** Format: date-time */
             missing_since?: string | null;

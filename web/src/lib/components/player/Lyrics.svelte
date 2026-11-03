@@ -1,28 +1,19 @@
 <script lang="ts">
 import { untrack } from "svelte";
 import type { Attachment } from "svelte/attachments";
-import { client } from "#lib/api/client.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import { lineAt } from "#lib/player/listen.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
+import { lyricsOf } from "#lib/player/lyrics.ts";
 
 type Lyrics = components["schemas"]["Lyrics"];
 
 // A track's lyrics, as Plexamp and Finamp show them: timed ones follow the
 // track, the line sung lit and kept in the middle, and choosing one plays
 // from it.
-let { id }: { id: string } = $props();
+let { id, version }: { id: string; version?: string } = $props();
 
-async function load(id: string): Promise<Lyrics | null> {
-	const { data, response } = await client().GET("/api/v1/titles/{id}/lyrics", {
-		params: { path: { id } },
-	});
-	if (response.status === 404) return null;
-	if (!data) throw new Error(`lyrics: ${response.status}`);
-	return data;
-}
-
-const lyrics = $derived(load(id));
+const lyrics = $derived(lyricsOf(id, version));
 
 // Lyrics are timed where their lines say where they are sung.
 function timed(l: Lyrics): boolean {

@@ -96,6 +96,8 @@ export type Listen = {
 	// The artwork's blurhash, whose colour the Now Playing view takes.
 	blurhash?: string;
 	duration_ms?: number;
+	// How a track's lyrics are timed, where it has any.
+	lyrics?: Schemas["LyricsTiming"];
 	chapters?: Schemas["ChapterRef"][];
 	// Where it opens: an audiobook, where the reader stopped.
 	start_ms?: number;
@@ -114,6 +116,7 @@ export function trackListen(card: Schemas["Card"]): Listen {
 		artwork: card.poster,
 		blurhash: card.poster ? card.blurhashes?.[card.poster] : undefined,
 		duration_ms: card.duration_ms,
+		lyrics: card.lyrics,
 	};
 }
 
@@ -392,6 +395,8 @@ function listenOf(x: unknown): Listen | undefined {
 		artwork: text(x.artwork),
 		blurhash: text(x.blurhash),
 		duration_ms: count(x.duration_ms),
+		lyrics:
+			x.lyrics === "line" || x.lyrics === "untimed" ? x.lyrics : undefined,
 		start_ms: count(x.start_ms),
 		chapters: Array.isArray(x.chapters)
 			? x.chapters.flatMap((c) =>
