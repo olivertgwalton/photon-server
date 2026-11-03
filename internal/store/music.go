@@ -186,13 +186,14 @@ func (s *Store) Tracks(ctx context.Context, profile, album uuid.UUID) ([]Card, e
 	return s.cards(ctx, profile, rows)
 }
 
-// musicPlace is the album a track is on, and the artist an album or a track is under.
+// musicPlace is the album a track is on, the artist an album or a track is under, and the author
+// of a book.
 type musicPlace struct {
-	artist, album *TitleRef
+	artist, album, author *TitleRef
 }
 
 // placesOf answers what each title among rows is under: an episode's or a season's show and
-// season, and an album's or a track's artist and album.
+// season, an album's or a track's artist and album, and a book's author.
 func (s *Store) placesOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]episodeShow, map[uuid.UUID]musicPlace, error) {
 	shows, err := s.showsOf(ctx, rows)
 	if err != nil {
@@ -202,11 +203,11 @@ func (s *Store) placesOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID
 	return shows, music, err
 }
 
-// musicOf answers where each album and track among rows is, read in one lookup.
+// musicOf answers where each album, track and book among rows is, read in one lookup.
 func (s *Store) musicOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]musicPlace, error) {
 	var asked []uuid.UUID
 	for _, r := range rows {
-		if r.Kind == domain.ItemAlbum || r.Kind == domain.ItemTrack {
+		if r.Kind == domain.ItemAlbum || r.Kind == domain.ItemTrack || r.Kind == domain.ItemBook {
 			asked = append(asked, r.ID)
 		}
 	}
@@ -227,8 +228,16 @@ func (s *Store) musicOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 		LEFT JOIN items al ON i.kind = 'track' AND al.id = i.parent_id
 		JOIN items ar ON ar.id = CASE WHEN i.kind = 'track' THEN al.parent_id ELSE i.parent_id END
 		WHERE i.id = ANY($1)`, asked)
+	kinds := map[uuid.UUID]domain.ItemKind{}
+	for _, r := range rows {
+		kinds[r.ID] = r.Kind
+	}
 	for _, f := range found {
-		p := musicPlace{artist: &TitleRef{ID: f.ArtistID, Title: f.ArtistTitle}}
+		above := &TitleRef{ID: f.ArtistID, Title: f.ArtistTitle}
+		p := musicPlace{artist: above}
+		if kinds[f.ID] == domain.ItemBook {
+			p = musicPlace{author: above}
+		}
 		if f.AlbumID != nil {
 			p.album = &TitleRef{ID: *f.AlbumID, Title: deref(f.AlbumTitle)}
 		}

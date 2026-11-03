@@ -76,6 +76,10 @@ type cardJSON struct {
 	DiscNumber  *int          `json:"disc_number,omitzero"`
 	TrackNumber *int          `json:"track_number,omitzero"`
 	Artists     []string      `json:"artists,omitzero"`
+	// A book's card names its author, and the series it is in and its place there, which may be 1.5.
+	Author      *titleRefJSON `json:"author,omitzero"`
+	Series      string        `json:"series,omitzero"`
+	SeriesIndex *float64      `json:"series_index,omitzero"`
 	// Thumb is the picture a card is drawn by where it is drawn wide: the still, or on a row
 	// about where the profile is, the picture its card_art chose.
 	Thumb uuid.UUID `json:"thumb,omitzero"`
@@ -190,7 +194,7 @@ func cardOf(c store.Card) cardJSON {
 		SeasonPoster: c.SeasonPoster, SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: domain.Bare(c.Certificate),
 		Artist: (*titleRefJSON)(c.Artist), Album: (*titleRefJSON)(c.Album), DiscNumber: c.DiscNumber, TrackNumber: c.TrackNumber,
-		Artists: c.Artists, Blurhashes: c.Blurhashes,
+		Artists: c.Artists, Author: (*titleRefJSON)(c.Author), Series: c.Series, SeriesIndex: c.SeriesIndex, Blurhashes: c.Blurhashes,
 	}
 	for _, r := range c.Ratings {
 		out.Ratings = append(out.Ratings, ratingRefJSON(r))

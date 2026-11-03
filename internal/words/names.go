@@ -98,12 +98,12 @@ var itemKinds = map[domain.ItemKind]string{
 	domain.ItemMovie: "Films", domain.ItemShow: "Shows", domain.ItemSeason: "Seasons",
 	domain.ItemEpisode: "Episodes", domain.ItemExtra: "Extras",
 	domain.ItemCollection: "Collections", domain.ItemArtist: "Artists", domain.ItemAlbum: "Albums",
-	domain.ItemTrack: "Tracks",
+	domain.ItemTrack: "Tracks", domain.ItemAuthor: "Authors", domain.ItemBook: "Books",
 }
 
 var libraryKinds = map[domain.LibraryKind]string{
 	domain.LibraryMovies: "Films", domain.LibraryShows: "Shows", domain.LibraryMixed: "Films and shows",
-	domain.LibraryMusic: "Music",
+	domain.LibraryMusic: "Music", domain.LibraryBooks: "Books",
 }
 
 var marks = map[domain.Mark]string{
@@ -152,7 +152,8 @@ var rows = map[domain.HomeRow]string{
 	domain.RowContinueWatching: "Continue Watching", domain.RowNextUp: "Next Up",
 	domain.RowWatchlist: "Watchlist", domain.RowFavourites: "Favourites",
 	domain.RowRecentFilms: "Recently Added Films", domain.RowRecentShows: "Recently Added Shows",
-	domain.RowRecentAlbums:     "Recently Added Albums",
+	domain.RowRecentAlbums: "Recently Added Albums", domain.RowRecentBooks: "Recently Added Books",
+	domain.RowContinueReading:  "Continue Reading",
 	domain.RowRecentlyReleased: "Recently Released", domain.RowTopRatedUnwatched: "Top Rated",
 }
 

@@ -232,7 +232,7 @@ func (s *Store) listable(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 		return row.ID, nil
 	case domain.ItemSeason, domain.ItemEpisode:
 		return s.listable(ctx, *row.ParentID)
-	case domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	return uuid.UUID{}, ErrNotListable
 }
@@ -258,8 +258,8 @@ func keyTitle(ctx context.Context, tx db, title uuid.UUID) error {
 	return err
 }
 
-// leaves answers the films, episodes or tracks a title is watched by: itself, a season's or show's
-// episodes, or an album's or artist's tracks. ErrNotFound for no title.
+// leaves answers the films, episodes, tracks or books a title is watched by: itself, a season's or
+// show's episodes, an album's or artist's tracks, or an author's books. ErrNotFound for no title.
 func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error) {
 	row, err := readItem(ctx, s.pool, id)
 	if err != nil {
@@ -267,8 +267,10 @@ func (s *Store) leaves(ctx context.Context, id uuid.UUID) ([]*model.Item, error)
 	}
 	parents := []*model.Item{row}
 	switch row.Kind {
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemBook:
 		return parents, nil
+	case domain.ItemAuthor:
+		return queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind = 'book'`, row.ID)
 	case domain.ItemShow, domain.ItemArtist:
 		parents, err = queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE parent_id = $1 AND kind IN ('season', 'album')`, row.ID)
 		if err != nil {

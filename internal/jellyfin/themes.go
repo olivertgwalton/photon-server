@@ -52,7 +52,7 @@ func (a *API) themeSongs(w http.ResponseWriter, r *http.Request) (uuid.UUID, the
 			return id, themesOf(guid(id), nil), true
 		}
 		owner, name = p.Show.ID, p.Show.Title
-	case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 	}
 	songs := make([]item, len(p.Themes))
 	for n, theme := range p.Themes {

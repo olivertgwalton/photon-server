@@ -85,6 +85,7 @@ const holds = $derived(
 			shows: ["show"],
 			mixed: ["movie", "show"],
 			music: ["artist"],
+			books: ["author"],
 		} as const
 	)[kind],
 );

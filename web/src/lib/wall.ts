@@ -61,6 +61,7 @@ const kinds: Schemas["WallKind"][] = [
 	"shows",
 	"episodes",
 	"albums",
+	"books",
 ];
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

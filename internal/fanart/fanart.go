@@ -162,7 +162,7 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 				kinds = append(kinds, pictured{domain.ArtworkPoster, a.Covers})
 			}
 		}
-	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra, domain.ItemTrack:
+	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 		return domain.Metadata{}, nil, nil
 	}
 	var m domain.Metadata

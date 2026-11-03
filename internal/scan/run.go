@@ -36,13 +36,13 @@ type run struct {
 	shows map[string]bool
 }
 
-// seriesOf is the folder of the series a folder of the library is in, none for a folder of films
-// or of music:
+// seriesOf is the folder of the series a folder of the library is in, none for a folder of films,
+// music or books:
 // a shows library's first folder down from its root, and a mixed library's first one down that
 // isShow says is a show's, those below it being its seasons, as Jellyfin's are.
 func (r *run) seriesOf(folder library.Folder) (string, error) {
 	switch r.lib.Kind {
-	case domain.LibraryMovies, domain.LibraryMusic:
+	case domain.LibraryMovies, domain.LibraryMusic, domain.LibraryBooks:
 		return "", nil
 	case domain.LibraryShows:
 		return firstFolder(folder.Path), nil

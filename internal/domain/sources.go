@@ -29,14 +29,18 @@ func (k LibraryKind) ItemKinds() []ItemKind {
 		return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode}
 	case LibraryMusic:
 		return []ItemKind{ItemArtist, ItemAlbum, ItemTrack}
+	case LibraryBooks:
+		return []ItemKind{ItemAuthor, ItemBook}
 	}
 	return nil
 }
 
 // Titles are the kinds of title a library holds, which its wall lists: a music library's artists,
-// as Plex's lists them.
+// as Plex's lists them, and a books library's authors.
 func (k LibraryKind) Titles() []ItemKind {
-	return slices.DeleteFunc(k.ItemKinds(), func(i ItemKind) bool { return i != ItemMovie && i != ItemShow && i != ItemArtist })
+	return slices.DeleteFunc(k.ItemKinds(), func(i ItemKind) bool {
+		return i != ItemMovie && i != ItemShow && i != ItemArtist && i != ItemAuthor
+	})
 }
 
 // RankedAs is the kind whose sources an item takes: its own, or for a collection or an extra, its
@@ -57,8 +61,11 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // MusicBrainz alone describes music, an artist and an album but no track, which its file's tags
 // describe, and pictures an album by its cover. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
-	if kind.Music() {
+	switch {
+	case kind.Music():
 		return musicFetchable(f, kind)
+	case kind.Books():
+		return nil
 	}
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
@@ -138,7 +145,7 @@ func DefaultSources(lib LibraryKind) []KindSources {
 	for _, kind := range lib.ItemKinds() {
 		sources := KindSources{Kind: kind}
 		switch {
-		case kind.Music():
+		case kind.Music(), kind.Books():
 			for _, f := range Fetchers() {
 				for _, src := range Fetchable(f, kind) {
 					switch f {

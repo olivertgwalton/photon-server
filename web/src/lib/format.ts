@@ -17,7 +17,7 @@ export function count(n: number, thing: string): string {
 }
 
 // "1,204 films", "12 shows · 40 seasons · 512 episodes", "3 artists · 5 albums ·
-// 61 tracks": what a library holds, as its kind counts it.
+// 61 tracks", "2 authors · 9 books": what a library holds, as its kind counts it.
 export function holding(
 	kind: Schemas["LibraryKind"],
 	c: Schemas["Counts"],
@@ -41,6 +41,8 @@ export function holding(
 				count(c.albums, "album"),
 				count(c.tracks, "track"),
 			].join(" · ");
+		case "books":
+			return [count(c.authors, "author"), count(c.books, "book")].join(" · ");
 	}
 }
 

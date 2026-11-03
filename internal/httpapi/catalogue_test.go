@@ -178,7 +178,7 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 		}, extentOf(2, 0, 2, page.Count), nil
 	case domain.RowFavourites:
 		return []store.Card{}, extentOf(0, 0, 0, page.Count), nil
-	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentAlbums, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
+	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentAlbums, domain.RowRecentBooks, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched, domain.RowContinueReading:
 	}
 	return nil, store.Extent{}, store.ErrNotFound
 }

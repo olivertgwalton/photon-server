@@ -29,6 +29,9 @@ type Item struct {
 	DiscNumber  *int
 	TrackNumber *int
 	Artists     []string
+	// Series is the series a book is in, and SeriesIndex its place there, which may be 1.5.
+	Series      *string
+	SeriesIndex *float64
 
 	ScanTitle     string
 	OriginalTitle *string

@@ -385,7 +385,7 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 		}
 		page, total := paged(cards, cardID, l)
 		a.writeList(w, r, page, total, l.start, l)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemAuthor, domain.ItemBook:
 		a.writeJSON(w, queryResult{StartIndex: l.start})
 	}
 }
