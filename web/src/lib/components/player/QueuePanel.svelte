@@ -1,5 +1,4 @@
 <script lang="ts">
-import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
 import GripVerticalIcon from "@lucide/svelte/icons/grip-vertical";
 import ListPlusIcon from "@lucide/svelte/icons/list-plus";
 import ListXIcon from "@lucide/svelte/icons/list-x";
@@ -14,6 +13,7 @@ import { chapterAt, type Queued } from "#lib/player/listen.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
 import { reorder } from "#lib/reorder.svelte.ts";
 import { getShell } from "#lib/shell.svelte.ts";
+import PlayingBars from "./PlayingBars.svelte";
 
 // The queue, as Plexamp's and Finamp's: what played, what plays, and what is
 // next, put in order by dragging; an audiobook's chapters beside it.
@@ -65,7 +65,7 @@ function save() {
 				{/if}
 				{#if tone === "playing"}
 					<span class="absolute inset-0 grid place-items-center bg-black/50">
-						<AudioLinesIcon class="text-signal size-4" aria-label="Playing" />
+						<PlayingBars class="text-signal size-4" />
 					</span>
 				{/if}
 			</span>
