@@ -41,6 +41,7 @@ type Tags struct {
 	// An audiobook's tags, as Audible's and AAXClean's: its series and its place there, what it is
 	// about, and a cue sheet of its chapters.
 	Series, SeriesPart, Comment, CueSheet string
+	Gain                                  domain.ReplayGain
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -77,6 +78,7 @@ func ReadTags(path string) (Tags, error) {
 		t.Artists = names(raw[taglib.Artist])
 	}
 	t.Released, t.Year = dated(first(taglib.Date))
+	t.Gain = replayGain(first)
 	props, err := taglib.ReadProperties(path)
 	t.Pictured = len(props.Images) > 0
 	return t, err
@@ -91,6 +93,40 @@ func Picture(path string) ([]byte, error) {
 	}
 	front := max(slices.IndexFunc(props.Images, func(i taglib.ImageDesc) bool { return i.Type == "Front Cover" }), 0)
 	return taglib.ReadImageOptions(path, front)
+}
+
+// replayGain reads ReplayGain's tags, or Opus's R128 gains where it has none: R128 is in 1/256 dB
+// from EBU R128's -23 LUFS, five decibels under ReplayGain 2's -18.
+func replayGain(first func(string) string) domain.ReplayGain {
+	gain := func(gainKey, peakKey, r128Key string) *domain.Gain {
+		db, ok := decibels(first(gainKey))
+		if !ok {
+			q, err := strconv.Atoi(first(r128Key))
+			if err != nil {
+				return nil
+			}
+			db = float64(q)/256 + 5
+		}
+		peak, err := strconv.ParseFloat(first(peakKey), 64)
+		if err != nil || peak < 0 {
+			peak = 0
+		}
+		return &domain.Gain{DB: db, Peak: peak}
+	}
+	return domain.ReplayGain{
+		Track: gain("REPLAYGAIN_TRACK_GAIN", "REPLAYGAIN_TRACK_PEAK", "R128_TRACK_GAIN"),
+		Album: gain("REPLAYGAIN_ALBUM_GAIN", "REPLAYGAIN_ALBUM_PEAK", "R128_ALBUM_GAIN"),
+	}
+}
+
+// decibels reads a gain as taggers write it, "-6.48 dB".
+func decibels(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if len(s) > 2 && strings.EqualFold(s[len(s)-2:], "db") {
+		s = strings.TrimSpace(s[:len(s)-2])
+	}
+	db, err := strconv.ParseFloat(s, 64)
+	return db, err == nil
 }
 
 // names is values without blanks or repeats, in their order.
