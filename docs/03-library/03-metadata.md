@@ -20,12 +20,14 @@ need a key, and how each library chooses between them.
 | **AniDB** | Anime | Descriptions, voice cast, scores, a poster, and episode names. |
 | **MusicBrainz** | Artists and albums | An album's release date and genres, and its cover from the Cover Art Archive; an artist's genres and how to sort its name. Needs no key. |
 | **fanart.tv** | Films, shows, artists and albums | Pictures: an artist's photo, backdrop and logo, and album covers. |
+| **Open Library** | Authors and books | What a book is about, its subjects and cover; an author's biography and photo. Needs no key. |
 
 TMDB is all most people need. Add the others for Rotten Tomatoes scores, for anime, or for shows
 whose episodes TMDB numbers differently from your files. A music library asks MusicBrainz and
 fanart.tv from the start. It finds an album by the MusicBrainz ids that tagging tools such as
 MusicBrainz Picard write into its files, else by its name and artist. A track's details always
-come from its own tags.
+come from its own tags. A books library asks Open Library from the start, and finds a book by the
+ISBN its ebook carries, else by its title and author.
 
 **OpenSubtitles** is listed with them, but it only finds subtitles: see
 [subtitles](10-subtitles.md). Plugins and Stremio addons you add appear here too: see
