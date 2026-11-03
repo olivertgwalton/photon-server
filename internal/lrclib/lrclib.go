@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -21,9 +22,14 @@ const baseURL = "https://lrclib.net/api/"
 // as LRCLIB's own exact lookup allows.
 const near = 2
 
+// every is how often LRCLIB is asked: a library's tracks are fetched as a scan finds them, and
+// LRCLIB, run by one person on goodwill, answers a burst with 503s.
+const every = time.Second
+
 type Client struct {
 	api    provider.Client
 	header http.Header
+	pace   provider.Pace
 }
 
 // New is a client naming the server, at version, as LRCLIB asks of every client.
@@ -31,6 +37,7 @@ func New(version string, pauses provider.Pauses) *Client {
 	return &Client{
 		api:    provider.Client{Name: "lrclib", Base: baseURL, Pauses: pauses},
 		header: http.Header{"User-Agent": {"photon-server/" + version + " ( https://github.com/olivertgwalton/photon-server )"}},
+		pace:   provider.Pace{Every: every},
 	}
 }
 
@@ -90,6 +97,9 @@ func (c *Client) Lyrics(ctx context.Context, q domain.LyricsQuery) (string, erro
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, into any) (bool, error) {
+	if err := c.pace.Wait(ctx); err != nil {
+		return false, err
+	}
 	err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q, Header: c.header}, into)
 	if errors.Is(err, provider.ErrNotFound) {
 		return false, nil
