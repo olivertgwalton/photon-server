@@ -53,8 +53,7 @@ func (p Parts) Open(ctx context.Context, part uuid.UUID) (media.Input, error) {
 // ErrNoLyrics is a track no lyrics are found for.
 var ErrNoLyrics = errors.New("no lyrics")
 
-// Lyrics are a part's lyrics: an LRC file of its name beside it, as Jellyfin and Navidrome read
-// one, else what its own tags hold. A version a provider streams has none.
+// Lyrics are a part's lyrics: its LyricsFile, else what its own tags hold. A version a provider streams has none.
 func (p Parts) Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error) {
 	place, err := p.Places.PartPlace(ctx, part)
 	if err != nil {
@@ -63,14 +62,8 @@ func (p Parts) Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error)
 	if place.Media != domain.MediaFolder {
 		return media.Lyrics{}, ErrNoLyrics
 	}
-	sidecar := strings.TrimSuffix(place.Rel, path.Ext(place.Rel)) + ".lrc"
-	if f, err := Open(place.Root, sidecar); err == nil {
-		defer f.Close()
-		text, err := io.ReadAll(io.LimitReader(f, maxLyrics))
-		if err != nil {
-			return media.Lyrics{}, err
-		}
-		return found(media.ParseLyrics(string(text)))
+	if text, err := ReadLyricsFile(place.Root, place.Rel); err == nil {
+		return found(media.ParseLyrics(text))
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return media.Lyrics{}, err
 	}
@@ -82,6 +75,23 @@ func (p Parts) Lyrics(ctx context.Context, part uuid.UUID) (media.Lyrics, error)
 		return media.Lyrics{}, err
 	}
 	return found(media.ParseLyrics(text))
+}
+
+// LyricsFile is the LRC file of a track's name beside it, as Jellyfin and Navidrome read one.
+func LyricsFile(rel string) string {
+	return strings.TrimSuffix(rel, path.Ext(rel)) + ".lrc"
+}
+
+// ReadLyricsFile reads the LRC file beside the track rel of the library at root: fs.ErrNotExist
+// for none.
+func ReadLyricsFile(root, rel string) (string, error) {
+	f, err := Open(root, LyricsFile(rel))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	text, err := io.ReadAll(io.LimitReader(f, maxLyrics))
+	return string(text), err
 }
 
 // maxLyrics is the most of an LRC file read: a long song's timed lines are a few kilobytes.

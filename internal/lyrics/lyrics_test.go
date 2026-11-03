@@ -70,7 +70,7 @@ func TestATracksLyricsAreAskedOfItsSourceOnce(t *testing.T) {
 	f, k := finder([]domain.FieldSource{domain.SourceLRCLIB}, l)
 	for range 2 {
 		got, err := f.Find(t.Context(), uuid.NewV7(), uuid.NewV7())
-		if err != nil || got.Timing != media.TimedByLine || got.Lines[0].Text != "Timeless" {
+		if err != nil || got.Timing != domain.TimedByLine || got.Lines[0].Text != "Timeless" {
 			t.Fatalf("lyrics: %+v, %v", got, err)
 		}
 	}

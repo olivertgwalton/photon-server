@@ -42,6 +42,8 @@ type Tags struct {
 	// about, and a cue sheet of its chapters.
 	Series, SeriesPart, Comment, CueSheet string
 	Gain                                  domain.ReplayGain
+	// Lyrics is how the lyrics the tags hold are timed, "" for none.
+	Lyrics domain.LyricsTiming
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -79,6 +81,7 @@ func ReadTags(path string) (Tags, error) {
 	}
 	t.Released, t.Year = dated(first(taglib.Date))
 	t.Gain = replayGain(first)
+	t.Lyrics = TimingOf(strings.Join(raw[taglib.Lyrics], "\n"))
 	props, err := taglib.ReadProperties(path)
 	t.Pictured = len(props.Images) > 0
 	return t, err

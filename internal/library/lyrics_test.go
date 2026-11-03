@@ -32,11 +32,11 @@ func TestATracksLyricsAreItsLRCFileElseItsTags(t *testing.T) {
 	}
 
 	got, err := lyrics("01 Timeless.flac")
-	if err != nil || got.Timing != media.Untimed || got.Lines[0].Text != "From the tags" {
+	if err != nil || got.Timing != domain.Untimed || got.Lines[0].Text != "From the tags" {
 		t.Errorf("Timeless: %+v, %v; want its tags' lyrics", got, err)
 	}
 	got, err = lyrics("02 Cry for Me.flac")
-	if err != nil || got.Timing != media.TimedByLine || got.Lines[0] != (media.LyricLine{Start: time.Second, Text: "From the file"}) {
+	if err != nil || got.Timing != domain.TimedByLine || got.Lines[0] != (media.LyricLine{Start: time.Second, Text: "From the file"}) {
 		t.Errorf("Cry for Me: %+v, %v; want its LRC file's", got, err)
 	}
 	if _, err := lyrics("03 Untold.flac"); !errors.Is(err, ErrNoLyrics) {
