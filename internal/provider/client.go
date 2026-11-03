@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,8 +32,8 @@ var Foreign = json.JoinOptions(
 // builtinHTTP is the built-in providers' HTTP client.
 var builtinHTTP = &http.Client{Timeout: 30 * time.Second}
 
-// Client asks a provider for JSON, as every provider is asked: again after a 429 once the provider
-// says it may (send), and reading at most MaxAnswer. A request goes to Base and nowhere else: what
+// Client asks a provider for JSON, as every provider is asked: again after a 429, or a 503 saying
+// when, once the provider says it may (send), and reading at most MaxAnswer. A request goes to Base and nowhere else: what
 // a caller names is a path under it. An error names Name and the path, never the address, which
 // may carry a key.
 type Client struct {
@@ -167,9 +168,11 @@ func (c Client) request(ctx context.Context, r Request) (*http.Request, error) {
 // request; one asking longer fails it with ErrLimited, and its job is tried again later.
 const maxRetryAfter = 30 * time.Second
 
-// send sends req once the provider has no pause on it, and again once a provider answering 429 Too
-// Many Requests says it may, so a burst of identifying waits a moment rather than failing titles
-// into their backoff. What it asked for is kept in Pauses, so no node asks before then.
+// send sends req once the provider has no pause on it, and again once a provider that asked for time
+// says it may, so a burst of identifying waits a moment rather than failing titles into their
+// backoff. What it asked for is kept in Pauses, so no node asks before then. Each wait is drawn out
+// by a little at random, so the nodes and clients a provider held back together do not all ask
+// again in the same instant, as LRCLIB asks of its clients.
 func (c Client) send(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	var waited time.Duration
@@ -182,12 +185,12 @@ func (c Client) send(req *http.Request) (*http.Response, error) {
 			if waited += wait; waited > maxRetryAfter {
 				return nil, fmt.Errorf("%w for %v", ErrLimited, wait.Round(time.Second))
 			}
-			if err := sleep(ctx, wait); err != nil {
+			if err := sleep(ctx, jittered(wait)); err != nil {
 				return nil, err
 			}
 		}
 		resp, err := cmp.Or(c.HTTP, builtinHTTP).Do(req) //nolint:gosec // G704: Base, a provider's own address or one an admin registered
-		if err != nil || resp.StatusCode != http.StatusTooManyRequests {
+		if err != nil || !asksForTime(resp) {
 			return resp, err
 		}
 		wait = retryAfter(resp.Header.Get("Retry-After"))
@@ -207,10 +210,23 @@ func (c Client) send(req *http.Request) (*http.Response, error) {
 				return nil, err
 			}
 		}
-		if err := sleep(ctx, wait); err != nil {
+		if err := sleep(ctx, jittered(wait)); err != nil {
 			return nil, err
 		}
 	}
+}
+
+// asksForTime is an answer asking to be asked again later: 429 Too Many Requests, or 503 Service
+// Unavailable saying when, as an overloaded LRCLIB does (RFC 9110, 10.2.3). A 503 that says nothing
+// of when is a failure.
+func asksForTime(resp *http.Response) bool {
+	return resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode == http.StatusServiceUnavailable && resp.Header.Get("Retry-After") != ""
+}
+
+// jittered is d and up to 30% more, at random.
+func jittered(d time.Duration) time.Duration {
+	return d + rand.N(d*3/10+1) //nolint:gosec // G404: a jitter, which nothing could gain by guessing
 }
 
 // paused answers how long the provider has asked every node to wait still.
