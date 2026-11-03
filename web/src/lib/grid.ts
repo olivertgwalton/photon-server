@@ -11,10 +11,12 @@ export const cardSizes: CardSize[] = ["compact", "standard", "large"];
 const standard: Record<Shape, { phone: number; wider: number }> = {
 	poster: { phone: 108, wider: 132 },
 	still: { phone: 165, wider: 320 },
+	square: { phone: 132, wider: 160 },
 };
 const scale: Record<Shape, Record<CardSize, number>> = {
 	poster: { compact: 0.72, standard: 1, large: 1.3 },
 	still: { compact: 0.87, standard: 1, large: 1.3 },
+	square: { compact: 0.8, standard: 1, large: 1.3 },
 };
 export const columnGap = 12;
 

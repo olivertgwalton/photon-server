@@ -70,9 +70,14 @@ const restMs = 150;
 // Each card's width, and what its picture is asked for at.
 // Each card's width at Standard, which the card size takes further.
 const width = $derived(
-	shape === "poster"
-		? "[--rail-card:8rem] sm:[--rail-card:9rem] lg:[--rail-card:10rem] 2xl:[--rail-card:12rem]"
-		: "[--rail-card:15rem] sm:[--rail-card:16rem] lg:[--rail-card:18rem] 2xl:[--rail-card:20rem]",
+	{
+		poster:
+			"[--rail-card:8rem] sm:[--rail-card:9rem] lg:[--rail-card:10rem] 2xl:[--rail-card:12rem]",
+		square:
+			"[--rail-card:9rem] sm:[--rail-card:10rem] lg:[--rail-card:11rem] 2xl:[--rail-card:13rem]",
+		still:
+			"[--rail-card:15rem] sm:[--rail-card:16rem] lg:[--rail-card:18rem] 2xl:[--rail-card:20rem]",
+	}[shape],
 );
 const scale = $derived(cardRailScale());
 // Which ways there is more to scroll to, for the arrows.
@@ -159,18 +164,23 @@ function hold(event: MouseEvent) {
 }
 
 const sizes = $derived(
-	(shape === "poster"
-		? [
-				["(min-width: 1536px) ", 12],
-				["(min-width: 1024px) ", 10],
-				["", 9],
-			]
-		: [
-				["(min-width: 1536px) ", 20],
-				["(min-width: 1024px) ", 18],
-				["", 16],
-			]
-	)
+	{
+		poster: [
+			["(min-width: 1536px) ", 12],
+			["(min-width: 1024px) ", 10],
+			["", 9],
+		],
+		square: [
+			["(min-width: 1536px) ", 13],
+			["(min-width: 1024px) ", 11],
+			["", 10],
+		],
+		still: [
+			["(min-width: 1536px) ", 20],
+			["(min-width: 1024px) ", 18],
+			["", 16],
+		],
+	}[shape]
 		.map(([when, rem]) => `${when}${(rem as number) * scale}rem`)
 		.join(", "),
 );

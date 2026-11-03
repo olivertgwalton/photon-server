@@ -9,7 +9,7 @@ export type CardLike = Pick<Card, "id" | "kind" | "title"> & Partial<Card>;
 <script lang="ts">
 import CheckIcon from "@lucide/svelte/icons/check";
 import PlayIcon from "@lucide/svelte/icons/play";
-import type { Shape } from "#lib/artwork.ts";
+import { aspect, type Shape } from "#lib/artwork.ts";
 import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Progress } from "#lib/components/ui/progress/index.ts";
@@ -45,7 +45,7 @@ let {
 // An episode drawn as a poster wears its season's art, as Infuse draws one
 // among a search's results, not the show's poster its card otherwise carries.
 const picture = $derived(
-	shape === "poster"
+	shape !== "still"
 		? (card.season_poster ?? card.poster ?? card.thumb)
 		: (card.thumb ?? card.backdrop),
 );
@@ -67,7 +67,7 @@ const unwatched = $derived(card.state?.unwatched ?? 0);
 // A spoiler is drawn by the frame's blurhash alone, not a blurred picture: a
 // blur that wide is drawn blocky, and the picture itself need not be sent.
 // Drawn as a poster, an episode wears its season's art, which tells nothing.
-const hidden = $derived(shape !== "poster" && hidesSpoiler(card));
+const hidden = $derived(shape === "still" && hidesSpoiler(card));
 // Watched again part way, it is the progress that shows.
 const watched = $derived(!!card.state?.watched_at && !progress);
 </script>
@@ -82,11 +82,7 @@ const watched = $derived(!!card.state?.watched_at && !progress);
 		class="group block outline-none"
 	>
 		<div
-			class={[
-				"card-frame",
-				current && "ring-ink ring-2",
-				shape === "poster" ? "aspect-2/3" : "aspect-video",
-			]}
+			class={["card-frame", current && "ring-ink ring-2", aspect[shape].class]}
 			style={picture ? blurStyle(card.blurhashes?.[picture]) : undefined}
 		>
 			{#if picture && !hidden}
