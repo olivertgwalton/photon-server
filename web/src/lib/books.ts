@@ -54,9 +54,11 @@ export function bookListen(
 	const cover = book.artwork?.poster?.[0];
 	return {
 		id: book.id,
+		kind: "book",
 		version: version.id,
 		title: book.title,
 		by: book.author?.title,
+		creator: book.author ?? undefined,
 		artwork: cover,
 		blurhash: cover ? book.blurhashes?.[cover] : undefined,
 		duration_ms: version.duration_ms,

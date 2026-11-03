@@ -104,7 +104,7 @@ test("next goes to the next chapter, and past the last to the next in the queue"
 });
 
 const q = (...ids: string[]) =>
-	ids.map((id) => ({ id, title: id, key: `k-${id}` }));
+	ids.map((id) => ({ id, kind: "track" as const, title: id, key: `k-${id}` }));
 const ids = (queue: Queue) => queue.items.map((i) => i.id);
 
 test("play next goes straight after the one playing", () => {
@@ -229,4 +229,19 @@ test("what is not a queue kept by this page is none", () => {
 	expect(
 		readKept(JSON.stringify({ ...good, repeat: "sometimes" })),
 	).toBeUndefined();
+});
+
+test("a queue kept before each named its kind knows a book by its version", () => {
+	const kept = JSON.stringify({
+		items: [
+			{ id: "t", title: "Track" },
+			{ id: "b", title: "Book", version: "v" },
+		],
+		at: 0,
+		position: 0,
+		order: "in_order",
+		repeat: "off",
+		original: [],
+	});
+	expect(readKept(kept)?.items.map((i) => i.kind)).toEqual(["track", "book"]);
 });
