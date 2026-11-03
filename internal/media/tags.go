@@ -4,6 +4,9 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -42,6 +45,7 @@ type Tags struct {
 	// about, and a cue sheet of its chapters.
 	Series, SeriesPart, Comment, CueSheet string
 	Gain                                  domain.ReplayGain
+	Advisory                              domain.Advisory
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -79,6 +83,10 @@ func ReadTags(path string) (Tags, error) {
 	}
 	t.Released, t.Year = dated(first(taglib.Date))
 	t.Gain = replayGain(first)
+	t.Advisory = advisory(first(itunesAdvisory))
+	if t.Advisory == "" && isMP4(path) {
+		t.Advisory = mp4Advisory(path)
+	}
 	props, err := taglib.ReadProperties(path)
 	t.Pictured = len(props.Images) > 0
 	return t, err
@@ -93,6 +101,59 @@ func Picture(path string) ([]byte, error) {
 	}
 	front := max(slices.IndexFunc(props.Images, func(i taglib.ImageDesc) bool { return i.Type == "Front Cover" }), 0)
 	return taglib.ReadImageOptions(path, front)
+}
+
+// itunesAdvisory is iTunes's advisory as Vorbis comments and ID3 frames carry it, and as TagLib
+// names an MP4's freeform atom of it.
+const itunesAdvisory = "ITUNESADVISORY"
+
+// advisory reads iTunes's advisory: 1, or 4 as older iTunes wrote it, is explicit, and 2 clean.
+func advisory(s string) domain.Advisory {
+	switch strings.TrimSpace(s) {
+	case "1", "4":
+		return domain.AdvisoryExplicit
+	case "2":
+		return domain.AdvisoryClean
+	}
+	return ""
+}
+
+func isMP4(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".m4a", ".m4b", ".m4p", ".mp4":
+		return true
+	}
+	return false
+}
+
+// mp4Advisory is the advisory of an MP4 as iTunes Store files carry it, in the rtng atom, which
+// TagLib gives no property: "" where it has none or cannot be read.
+func mp4Advisory(path string) domain.Advisory {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	r := io.NewSectionReader(f, 0, st.Size())
+	meta, ok, err := within(r, box{end: st.Size()}, "moov", "udta", "meta")
+	if err != nil || !ok {
+		return ""
+	}
+	// meta is a full box, its version and flags before what it holds; data holds its type and
+	// locale before its value.
+	data, ok, err := within(r, box{body: meta.body + 4, end: meta.end}, "ilst", "rtng", "data")
+	if err != nil || !ok || data.end-data.body < 9 {
+		return ""
+	}
+	var value [1]byte
+	if readAt(r, value[:], data.body+8) != nil {
+		return ""
+	}
+	return advisory(strconv.Itoa(int(value[0])))
 }
 
 // replayGain reads ReplayGain's tags, or Opus's R128 gains where it has none: R128 is in 1/256 dB

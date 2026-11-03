@@ -2,9 +2,11 @@ package media
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -54,6 +56,68 @@ func TestATracksArtistsAreTakenApartWhereTheTagsSplitThem(t *testing.T) {
 	want := Tags{Artists: []string{"The Weeknd", "Playboi Carti"}, Year: 2025, Compilation: true}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("(-want +got):\n%s", diff)
+	}
+}
+
+// A track marked explicit or clean says so, whether its tags carry iTunes's advisory as a comment
+// or frame or, as a file from the iTunes Store does, in its rtng atom; one marked neither says
+// nothing.
+func TestATracksAdvisoryIsWhatItsTagsMark(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		tags map[string][]string
+		rtng byte
+		want domain.Advisory
+	}{
+		{"explicit.flac", map[string][]string{"ITUNESADVISORY": {"1"}}, 0, domain.AdvisoryExplicit},
+		{"clean.mp3", map[string][]string{"ITUNESADVISORY": {"2"}}, 0, domain.AdvisoryClean},
+		{"store.m4a", map[string][]string{"TITLE": {"Timeless"}}, 1, domain.AdvisoryExplicit},
+		{"unmarked.flac", map[string][]string{"TITLE": {"Timeless"}}, 0, ""},
+	} {
+		path := filepath.Join(dir, tc.name)
+		testtool.Audio(t, path, tc.tags, nil)
+		if tc.rtng != 0 {
+			withRating(t, path, tc.rtng)
+		}
+		got, err := ReadTags(path)
+		if err != nil || got.Advisory != tc.want {
+			t.Errorf("%s: %q, %v; want %q", tc.name, got.Advisory, err, tc.want)
+		}
+	}
+}
+
+// withRating adds an rtng atom of rating to the MP4 at path, as iTunes writes one, at the end of
+// its moov/udta/meta/ilst, growing each box that holds it.
+func withRating(t *testing.T, path string, rating byte) {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := []byte{0, 0, 0, 25, 'r', 't', 'n', 'g', 0, 0, 0, 17, 'd', 'a', 't', 'a', 0, 0, 0, 21, 0, 0, 0, 0, rating}
+	var holders []int
+	off, end := 0, len(b)
+	for _, typ := range []string{"moov", "udta", "meta", "ilst"} {
+		for off < end && string(b[off+4:off+8]) != typ {
+			off += int(binary.BigEndian.Uint32(b[off:]))
+		}
+		if off >= end {
+			t.Fatalf("%s holds no %s", path, typ)
+		}
+		holders = append(holders, off)
+		end = off + int(binary.BigEndian.Uint32(b[off:]))
+		off += 8
+		if typ == "meta" {
+			off += 4
+		}
+	}
+	for _, h := range holders {
+		binary.BigEndian.PutUint32(b[h:], binary.BigEndian.Uint32(b[h:])+uint32(len(item)))
+	}
+	b = append(b[:end], append(item, b[end:]...)...)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

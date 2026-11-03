@@ -187,6 +187,19 @@ type Gain struct {
 	DB, Peak float64
 }
 
+// Advisory is what a track's tags say of its words, as iTunes marks them: explicit, or the clean
+// version of a track that has an explicit one. Most tracks say neither.
+type Advisory string
+
+const (
+	AdvisoryExplicit Advisory = "explicit"
+	AdvisoryClean    Advisory = "clean"
+)
+
+func Advisories() []Advisory {
+	return []Advisory{AdvisoryExplicit, AdvisoryClean}
+}
+
 // TagOf is a language's BCP 47 tag, or nothing for none.
 func TagOf(l language.Tag) LanguageTag {
 	if l == language.Und {
