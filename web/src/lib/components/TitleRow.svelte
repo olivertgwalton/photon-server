@@ -4,7 +4,7 @@ import type { Snippet } from "svelte";
 import type { components } from "#lib/api/schema.d.ts";
 import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
-import { runtime, showLine } from "#lib/format.ts";
+import { runtime, showLine, titleHref } from "#lib/format.ts";
 import { trackArtists } from "#lib/music.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
@@ -33,7 +33,7 @@ const line = $derived(
 
 <div class="flex items-center gap-3">
 	<a
-		href="/titles/{card.id}"
+		href={titleHref(card)}
 		class="group flex min-w-0 flex-1 items-center gap-3 rounded-lg outline-none"
 	>
 		<span

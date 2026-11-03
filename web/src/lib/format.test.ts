@@ -12,6 +12,7 @@ import {
 	score,
 	showLine,
 	timecode,
+	titleHref,
 } from "./format.ts";
 
 test("a running time reads as a listing prints it", () => {
@@ -125,4 +126,11 @@ test("a library says what it holds as its kind counts it", () => {
 	);
 	expect(holding("music", c)).toBe("1 artist · 2 albums · 22 tracks");
 	expect(holding("books", c)).toBe("2 authors · 9 books");
+});
+
+test("a track's card leads to its album, anything else to its own page", () => {
+	const album = { id: "a-1", title: "Hurry Up Tomorrow" };
+	expect(titleHref({ id: "t-1", kind: "track", album })).toBe("/titles/a-1");
+	expect(titleHref({ id: "t-1", kind: "track" })).toBe("/titles/t-1");
+	expect(titleHref({ id: "a-1", kind: "album" })).toBe("/titles/a-1");
 });
