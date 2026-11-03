@@ -23,7 +23,7 @@ Libraries live at Settings › Server › Libraries, which only an admin can see
 
 1. Open Settings › Server › Libraries and choose **Add a library**.
 2. Type a **Name**. This is what you see in the sidebar and on Home.
-3. Choose what it **Holds**: **Films**, **Shows**, **Films and shows**, or **Music**.
+3. Choose what it **Holds**: **Films**, **Shows**, **Films and shows**, **Music**, or **Books**.
 4. Leave **Its media** at **Files in a folder**.
 5. Choose the **Folder**. You can browse the server's folders from here.
 6. To change any of the settings below now, open **More settings**. Otherwise leave the defaults;
