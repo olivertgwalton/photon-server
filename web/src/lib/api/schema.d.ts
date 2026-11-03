@@ -8787,7 +8787,7 @@ export interface components {
         };
         /** @enum {string} */
         Field: "title" | "sort_title" | "original_title" | "overview" | "tagline" | "certificate" | "release_date" | "year" | "genres" | "studios" | "airs_before_season" | "airs_before_episode" | "airs_after_season";
-        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "upload" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr");
+        FieldSource: string | ("file" | "tmdb" | "tvdb" | "nfo" | "user" | "upload" | "mdblist" | "omdb" | "opensubtitles" | "anilist" | "anidb" | "fanart" | "riven" | "radarr" | "sonarr" | "musicbrainz");
         Folder: {
             /** Format: int64 */
             free_bytes?: number | null;
@@ -9740,7 +9740,7 @@ export interface components {
             /** Format: int64 */
             position_ms: number;
         };
-        Provider: string | ("tmdb" | "imdb" | "tvdb" | "anidb" | "anilist");
+        Provider: string | ("tmdb" | "imdb" | "tvdb" | "anidb" | "anilist" | "musicbrainz");
         ProviderChange: {
             settings: {
                 [key: string]: string;
