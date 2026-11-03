@@ -14,7 +14,7 @@ import (
 // times, an enhanced file's word times left out, and its offset taken off.
 func TestLyricsAreTimedAsAnLRCFileTimesThem(t *testing.T) {
 	got := ParseLyrics("[ar:The Weeknd]\r\n[offset:+500]\n[00:12.00]Wake me up\n[01:02.5][00:20.250]When it's <00:21.00>over\n\n[00:30]\n")
-	want := Lyrics{Synced: true, Lines: []LyricLine{
+	want := Lyrics{Timing: TimedByLine, Lines: []LyricLine{
 		{Start: 11500 * time.Millisecond, Text: "Wake me up"},
 		{Start: 19750 * time.Millisecond, Text: "When it's over"},
 		{Start: 29500 * time.Millisecond, Text: ""},
@@ -28,7 +28,7 @@ func TestLyricsAreTimedAsAnLRCFileTimesThem(t *testing.T) {
 // Lyrics no line of which is timed are shown as they are written.
 func TestUntimedLyricsAreLinesAsWritten(t *testing.T) {
 	got := ParseLyrics("Wake me up\n\nWhen it's over\n")
-	want := Lyrics{Lines: []LyricLine{{Text: "Wake me up"}, {Text: "When it's over"}}}
+	want := Lyrics{Timing: Untimed, Lines: []LyricLine{{Text: "Wake me up"}, {Text: "When it's over"}}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("(-want +got):\n%s", diff)
 	}

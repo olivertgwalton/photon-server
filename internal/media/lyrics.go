@@ -14,9 +14,17 @@ import (
 // Lyrics are a track's words, line by line, each where it is sung when they are timed, as an LRC
 // file times them.
 type Lyrics struct {
-	Synced bool
+	Timing Timing
 	Lines  []LyricLine
 }
+
+// Timing is how far lyrics say where they are sung: line by line, or not at all.
+type Timing string
+
+const (
+	TimedByLine Timing = "line"
+	Untimed     Timing = "none"
+)
 
 // LyricLine is a line of lyrics, and where it starts where they are timed.
 type LyricLine struct {
@@ -71,13 +79,13 @@ func ParseLyrics(text string) Lyrics {
 		}
 	}
 	if len(timed) == 0 {
-		return Lyrics{Lines: plain}
+		return Lyrics{Timing: Untimed, Lines: plain}
 	}
 	for i := range timed {
 		timed[i].Start = max(timed[i].Start-offset, 0)
 	}
 	slices.SortStableFunc(timed, func(a, b LyricLine) int { return cmp.Compare(a.Start, b.Start) })
-	return Lyrics{Synced: true, Lines: timed}
+	return Lyrics{Timing: TimedByLine, Lines: timed}
 }
 
 // lrcTime is an LRC stamp's minutes, seconds and fraction of a second, which is in hundredths

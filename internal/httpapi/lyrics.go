@@ -11,13 +11,11 @@ import (
 )
 
 type lyricsJSON struct {
-	// Synced is lyrics each line of which says where it is sung.
-	Synced bool            `json:"synced"`
-	Lines  []lyricLineJSON `json:"lines"`
+	Lines []lyricLineJSON `json:"lines"`
 }
 
 type lyricLineJSON struct {
-	// StartMS is where the line is sung, in synced lyrics alone.
+	// StartMS is where the line is sung, in lyrics timed line by line alone.
 	StartMS *int64 `json:"start_ms,omitzero"`
 	Text    string `json:"text"`
 }
@@ -37,11 +35,13 @@ func (a *API) lyrics(r *http.Request, _ none) (lyricsJSON, error) {
 	if err != nil {
 		return lyricsJSON{}, err
 	}
-	return lyricsJSON{Synced: l.Synced, Lines: each(l.Lines, func(line media.LyricLine) lyricLineJSON {
+	return lyricsJSON{Lines: each(l.Lines, func(line media.LyricLine) lyricLineJSON {
 		out := lyricLineJSON{Text: line.Text}
-		if l.Synced {
+		switch l.Timing {
+		case media.TimedByLine:
 			ms := line.Start.Milliseconds()
 			out.StartMS = &ms
+		case media.Untimed:
 		}
 		return out
 	})}, nil
