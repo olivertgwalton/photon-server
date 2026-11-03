@@ -1,12 +1,12 @@
 <script lang="ts">
 import CardGrid from "#lib/components/CardGrid.svelte";
-import { byKind } from "#lib/rows.ts";
+import { byKind, everyKind, kindShape } from "#lib/rows.ts";
 import { vocabulary } from "#lib/vocabulary.ts";
 
 let { data } = $props();
 const words = vocabulary();
 
-const groups = $derived(byKind(data.cards, words.kinds));
+const groups = $derived(byKind(data.cards, words.kinds, everyKind));
 </script>
 
 <svelte:head><title>Favourites · Photon</title></svelte:head>
@@ -17,7 +17,7 @@ const groups = $derived(byKind(data.cards, words.kinds));
 		<section aria-labelledby="favourite-{group.kind}">
 			<h2 id="favourite-{group.kind}" class="heading mb-3">{group.name}</h2>
 			<!-- An episode too, wearing its season's art, as the apps draw it. -->
-			<CardGrid cards={group.cards} />
+			<CardGrid cards={group.cards} shape={kindShape(group.kind)} />
 		</section>
 	{:else}
 		<p class="text-ink-3">

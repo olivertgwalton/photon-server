@@ -93,10 +93,7 @@ function title(r: (typeof data.rails)[number]) {
 					shape={homeRows[r.kind].shape}
 					href={r.href}
 					pill="always"
-					resume={r.kind === "continue_watching" ||
-					r.kind === "continue_reading"
-						? "shown"
-						: "hidden"}
+					resume={r.kind === "continue_watching" ? "shown" : "hidden"}
 					onrest={(card) => {
 						if (shows(card)) resting.id = card.id;
 					}}

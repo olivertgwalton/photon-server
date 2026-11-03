@@ -6112,6 +6112,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profile/favourites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page every title the profile marked as a favourite, its music and books among them */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Where the page starts, from 0. */
+                    offset?: number;
+                    /** @description How many to answer, from 1 to 200. */
+                    limit?: number;
+                    /** @description Whether to count how many there are in all, which reads every one: none by default. */
+                    total?: components["schemas"]["Counting"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardPage"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/library-order": {
         parameters: {
             query?: never;
@@ -6602,7 +6646,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Page one of the profile's own rows: continue watching, next up, its watchlist or its favourites */
+        /** Page one of the profile's own rows: continue watching, next up, its watchlist or its favourite films and shows */
         get: {
             parameters: {
                 query?: {
@@ -8963,7 +9007,7 @@ export interface components {
             next?: string;
         };
         /** @enum {string} */
-        HomeRowKind: "continue_watching" | "continue_reading" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_added_albums" | "recently_added_books" | "recently_released" | "top_rated_unwatched";
+        HomeRowKind: "continue_watching" | "next_up" | "favourites" | "watchlist" | "recently_added_films" | "recently_added_shows" | "recently_released" | "top_rated_unwatched";
         HomeSection: {
             library_kinds?: components["schemas"]["LibraryKind"][];
             row: components["schemas"]["HomeRowKind"];

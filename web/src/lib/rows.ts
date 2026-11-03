@@ -18,7 +18,6 @@ export const homeRows: Record<
 	}
 > = {
 	continue_watching: { shape: "still" },
-	continue_reading: { shape: "poster" },
 	next_up: { shape: "still" },
 	watchlist: {
 		shape: "poster",
@@ -28,8 +27,6 @@ export const homeRows: Record<
 	favourites: { shape: "poster" },
 	recently_added_films: { shape: "poster" },
 	recently_added_shows: { shape: "poster" },
-	recently_added_albums: { shape: "square" },
-	recently_added_books: { shape: "poster" },
 	recently_released: { shape: "poster" },
 	top_rated_unwatched: { shape: "poster" },
 };
@@ -63,7 +60,9 @@ export function rail(row: Row): { key: string; href: string } {
 	};
 }
 
-const kinds: components["schemas"]["ItemKind"][] = [
+type ItemKind = components["schemas"]["ItemKind"];
+
+const screenKinds: ItemKind[] = [
 	"movie",
 	"show",
 	"season",
@@ -72,11 +71,30 @@ const kinds: components["schemas"]["ItemKind"][] = [
 	"extra",
 ];
 
-// A mixed list of titles as sections, one per kind, in the order above, each
-// headed by its kind's name.
+// Every kind of title, the screen's first, then music's and books'.
+export const everyKind: ItemKind[] = [
+	...screenKinds,
+	"artist",
+	"album",
+	"track",
+	"author",
+	"book",
+];
+
+// How a card of a kind is drawn among others of its kind: music square, as
+// its own pages draw it, and everything else as a poster.
+export function kindShape(kind: ItemKind): Shape {
+	return kind === "artist" || kind === "album" || kind === "track"
+		? "square"
+		: "poster";
+}
+
+// A mixed list of titles as sections, one per kind, in the order of kinds,
+// each headed by its kind's name.
 export function byKind(
 	cards: components["schemas"]["Card"][],
 	names: components["schemas"]["Vocabulary"]["kinds"],
+	kinds: ItemKind[] = screenKinds,
 ) {
 	return kinds
 		.map((kind) => ({

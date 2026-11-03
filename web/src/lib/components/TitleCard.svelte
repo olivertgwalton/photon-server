@@ -38,9 +38,8 @@ let {
 	// The page's own title, outlined among the rest of its set.
 	current?: boolean;
 	menu?: "title" | "none";
-	// How far the reader is through it, which only Continue Watching's and
-	// Continue Reading's cards and an episode's season row show, as the apps'
-	// cards do.
+	// How far the reader is through it, which only Continue Watching's cards
+	// and an episode's season row show, as the apps' cards do.
 	resume?: "shown" | "hidden";
 } = $props();
 
