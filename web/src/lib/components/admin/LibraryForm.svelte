@@ -120,6 +120,11 @@ const fetchers = [
 		title: "Image fetchers",
 		said: "Enable and rank your preferred image fetchers in order of priority.",
 	},
+	{
+		f: "lyrics",
+		title: "Lyrics fetchers",
+		said: "Asked for a track's lyrics where neither a .lrc file beside it nor its tags hold any. What one finds is kept.",
+	},
 ] as const;
 
 // What a library of its kind ranks sources for, and how the server keeps a

@@ -23,6 +23,7 @@ const tv: Schemas["AdminLibrary"] = {
 			{ source: "tmdb", enabled: true },
 		],
 		images: [{ source: "tmdb", enabled: true }],
+		lyrics: [],
 	})),
 	remote_extras: ["trailer", "featurette"],
 	monitor: "realtime",
@@ -138,6 +139,7 @@ const provider = (
 	ready: true,
 	metadata_kinds,
 	image_kinds,
+	lyrics_kinds: [],
 });
 
 const providers = [
@@ -229,8 +231,9 @@ test("a music library's change says nothing of what only video has", () => {
 				kind: "artist",
 				metadata: [{ source: "musicbrainz", enabled: true }],
 				images: [{ source: "fanart", enabled: true }],
+				lyrics: [],
 			},
-			{ kind: "track", metadata: [], images: [] },
+			{ kind: "track", metadata: [], images: [], lyrics: [] },
 		],
 	};
 	const change = libraryChange(
@@ -256,4 +259,30 @@ test("a music library's change says nothing of what only video has", () => {
 		deletion: "off",
 		refresh_days: 30,
 	});
+});
+
+test("turning a music library's lyrics source off is sent as its ranking", () => {
+	const music: Schemas["AdminLibrary"] = {
+		...tv,
+		kind: "music",
+		remote_extras: [],
+		sources: [
+			{
+				kind: "track",
+				metadata: [],
+				images: [],
+				lyrics: [{ source: "lrclib", enabled: true }],
+			},
+		],
+	};
+	const off = [{ source: "lrclib", enabled: false }];
+	const change = libraryChange(
+		form([
+			["name", "Music"],
+			["refresh_days", "30"],
+			["sources-track-lyrics", JSON.stringify(off)],
+		]),
+		music,
+	);
+	expect(change.sources).toEqual([{ kind: "track", lyrics: off }]);
 });
