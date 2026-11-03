@@ -189,6 +189,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	// Someone is found by name and opened by id: /Persons/{name} is not answered, as two people
 	// here may share a name, and apps open a cast member by the id an item gives.
 	a.handle(a.persons, "GET /Persons")
+	a.handle(a.artists, "GET /Artists", "GET /Artists/AlbumArtists")
 	a.handle(a.genres, "GET /Genres")
 	a.handle(a.studios, "GET /Studios")
 	a.handle(a.filters, "GET /Items/Filters")
@@ -208,7 +209,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.themeSongsResult, "GET /Items/{itemId}/ThemeSongs")
 	a.handle(a.themeVideos, "GET /Items/{itemId}/ThemeVideos")
 	a.handle(a.themeMedia, "GET /Items/{itemId}/ThemeMedia")
-	a.handle(a.themeSongFile, "GET /Audio/{itemId}/{file}")
+	a.handleMedia(a.audio, "GET /Audio/{itemId}/{file}")
 	// Photon plays nothing before a title. Jellyfin's web app asks before it plays, and its intros,
 	// unlike the lists above, are a query result.
 	a.handle(a.constant(`{"Items":[],"TotalRecordCount":0,"StartIndex":0}`),

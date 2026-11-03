@@ -183,6 +183,17 @@ type musicPlace struct {
 	artist, album *TitleRef
 }
 
+// placesOf answers what each title among rows is under: an episode's or a season's show and
+// season, and an album's or a track's artist and album.
+func (s *Store) placesOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]episodeShow, map[uuid.UUID]musicPlace, error) {
+	shows, err := s.showsOf(ctx, rows)
+	if err != nil {
+		return nil, nil, err
+	}
+	music, err := s.musicOf(ctx, rows)
+	return shows, music, err
+}
+
 // musicOf answers where each album and track among rows is, read in one lookup.
 func (s *Store) musicOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]musicPlace, error) {
 	var asked []uuid.UUID

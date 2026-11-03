@@ -260,6 +260,15 @@ func (d deviceProfile) codecAllows(kind string, s domain.Stream, containers []st
 	return true
 }
 
+// mediaTypes are the DlnaProfileType a version's profiles are of, and the CodecProfileType its audio
+// is judged by: a video's, or of sound alone, a track's.
+func mediaTypes(video *domain.Stream) (media, audio string) {
+	if video == nil {
+		return "Audio", "Audio"
+	}
+	return "Video", "VideoAudio"
+}
+
 // playsDirectly is whether the app plays a version as it is, its video and audio the tracks chosen:
 // one of its direct-play profiles takes the version's container and the tracks' codecs, and every
 // condition its container and codec profiles set holds of them; the version is one file within the
@@ -272,14 +281,15 @@ func (d deviceProfile) playsDirectly(c store.PlayVersion, video, audio *domain.S
 		return false
 	}
 	containers := containerNames(c.Container)
+	media, audioKind := mediaTypes(video)
 	for _, dp := range d.DirectPlayProfiles {
-		if !strings.EqualFold(dp.Type, "Video") || !matches(dp.Container, containers...) {
+		if !strings.EqualFold(dp.Type, media) || !matches(dp.Container, containers...) {
 			continue
 		}
 		if video != nil && (!matches(dp.VideoCodec, codecNames(video.Codec)...) || !d.codecAllows("Video", *video, containers) || !d.containerAllows(*video, containers)) {
 			continue
 		}
-		if audio != nil && (!matches(dp.AudioCodec, codecNames(audio.Codec)...) || !d.codecAllows("VideoAudio", *audio, containers)) {
+		if audio != nil && (!matches(dp.AudioCodec, codecNames(audio.Codec)...) || !d.codecAllows(audioKind, *audio, containers)) {
 			continue
 		}
 		return true
@@ -390,18 +400,24 @@ func subtitleFormats(codec string) []string {
 // names.
 var hlsCodecs = []string{"h264", "hevc", "av1", "vp9"}
 
-// hls is the HLS transcoding profile the app is given HLS by, and its segments: of its video
-// profiles over HLS in fragmented MP4 or MPEG-TS, in the app's order, the first whose segments
-// carry the version's audio as it is, as Jellyfin ranks them, else the first. ok is false where it
-// takes no HLS photon makes.
-func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.SegmentFormat, bool) {
+// hls is the HLS transcoding profile the app is given HLS by, and its segments: of its profiles of
+// the version's kind over HLS in fragmented MP4 or MPEG-TS, in the app's order, the first whose
+// segments carry the version's audio as it is, as Jellyfin ranks them, else the first. Sound alone
+// is cut into fragmented MP4 whatever its profile names, as photon cuts MPEG-TS by its picture and
+// a player takes the segments its playlist names. ok is false where it takes no HLS photon makes.
+func (d deviceProfile) hls(video, audio *domain.Stream) (transcodingProfile, domain.SegmentFormat, bool) {
 	type candidate struct {
 		profile transcodingProfile
 		format  domain.SegmentFormat
 	}
 	var candidates []candidate
+	media, _ := mediaTypes(video)
 	for _, t := range d.TranscodingProfiles {
-		if !strings.EqualFold(t.Type, "Video") || !strings.EqualFold(t.Protocol, "hls") {
+		if !strings.EqualFold(t.Type, media) || !strings.EqualFold(t.Protocol, "hls") {
+			continue
+		}
+		if video == nil {
+			candidates = append(candidates, candidate{t, domain.SegmentsFMP4})
 			continue
 		}
 		for _, c := range list(t.Container) {
@@ -433,13 +449,12 @@ func (d deviceProfile) hls(audio *domain.Stream) (transcodingProfile, domain.Seg
 // HLS of the version, copying what the app plays and encoding the rest.
 func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentFormat, c store.PlayVersion, maxBitrate int64) playback.Profile {
 	p := playback.Profile{MaxBitrateKbps: int(maxBitrate / 1000), Parts: domain.PartsJoined, Segments: segments}
+	picture, _ := playback.Pick(c.Streams, nil)
 	var video domain.Stream
-	for _, s := range c.Streams {
-		if s.Kind == domain.StreamVideo {
-			video = s
-			break
-		}
+	if picture != nil {
+		video = *picture
 	}
+	_, audioKind := mediaTypes(picture)
 	containers := append(list(t.Container), "hls")
 	for _, codec := range list(t.VideoCodec) {
 		if slices.Contains(hlsCodecs, codec) {
@@ -462,7 +477,7 @@ func (d deviceProfile) hlsProfile(t transcodingProfile, segments domain.SegmentF
 	for _, codec := range list(t.AudioCodec) {
 		a := playback.AudioSupport{Codec: strings.ReplaceAll(codec, "dca", "dts"), MaxChannels: channels}
 		for _, cp := range d.CodecProfiles {
-			if strings.EqualFold(cp.Type, "VideoAudio") && matches(cp.Codec, codecNames(a.Codec)...) && matches(cp.Container, containers...) {
+			if strings.EqualFold(cp.Type, audioKind) && matches(cp.Codec, codecNames(a.Codec)...) && matches(cp.Container, containers...) {
 				for _, cond := range cp.Conditions {
 					if strings.EqualFold(cond.Property, "AudioChannels") && strings.EqualFold(cond.Condition, "LessThanEqual") {
 						if n, err := strconv.Atoi(cond.Value); err == nil && (a.MaxChannels == 0 || n < a.MaxChannels) {

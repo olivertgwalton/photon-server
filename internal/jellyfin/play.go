@@ -185,7 +185,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	if req.SubtitleStreamIndex != nil {
 		src.DefaultSubtitleStreamIndex = (*int)(req.SubtitleStreamIndex)
 	}
-	t, segments, takesHLS := p.hls(sound)
+	t, segments, takesHLS := p.hls(video, sound)
 	if (req.EnableDirectPlay == nil || *req.EnableDirectPlay) && p.playsDirectly(c, video, sound, picked, limit) {
 		// So Jellyfin's web app falls back to HLS where the version fails to play, as Jellyfin answers.
 		src.SupportsTranscoding = takesHLS
@@ -231,9 +231,6 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		}
 		return ""
 	}
-	if d.Video == nil {
-		return ""
-	}
 	address, err := a.transcodingURL(r, item, session, transcode{
 		Version: c.Version, Method: d.Method, Video: d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS, Renditions: p.renditions(),
@@ -244,7 +241,11 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 	}
 	src.SupportsTranscoding, src.TranscodingSubProtocol, src.TranscodingContainer = true, "hls", transcodingContainers[segments]
 	src.TranscodingURL = address
-	deliverSubtitles(a.mediaKey(r), src, item, c, p, d.Video.Encode, false)
+	var encode *domain.VideoEncode
+	if d.Video != nil {
+		encode = d.Video.Encode
+	}
+	deliverSubtitles(a.mediaKey(r), src, item, c, p, encode, false)
 	return ""
 }
 

@@ -84,6 +84,11 @@ A Jellyfin app can browse, search, play, download a title's file, mark titles wa
 favourite, and keep playlists. It shows chapters, scrubbing previews, intro and credits skipping,
 and theme music.
 
+A music library is a Jellyfin music library, so music apps such as Finamp and Feishin browse its
+artists and albums and play its tracks. A track plays as it is where the app plays its format, and
+is converted to AAC where it doesn't, or where it is over the app's streaming limit. An app's list
+of every song in a library is empty: browse by artist or album instead.
+
 Some parts of Jellyfin are left out on purpose:
 
 - **No profile is a Jellyfin admin**, not even an admin. Jellyfin's dashboard isn't there: you run

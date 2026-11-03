@@ -14,6 +14,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/playback"
 	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
@@ -121,7 +122,7 @@ func TestAnAppPlaysAThemeSong(t *testing.T) {
 	st, ada, show, _ := aShowWithATheme(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
 		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
-		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Themes: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Preferences: st, Themes: st, Playing: st, Sent: playback.NewSent(),
 	})
 	page, err := st.Title(t.Context(), ada.ID, show)
 	if err != nil || len(page.Themes) != 1 {
