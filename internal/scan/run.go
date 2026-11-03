@@ -3,6 +3,8 @@ package scan
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
+	"io/fs"
 	"path"
 	"strings"
 	"sync"
@@ -27,6 +29,9 @@ type run struct {
 	told   domain.ScanProgress
 	// folders and present are every folder read and every video and subtitle file in them.
 	folders, present []string
+	// unread is every folder, and every entry of one, that is there and could not be read: a
+	// mount's passing failure, which leaves what the library held under it as it was.
+	unread []string
 	// shows says of each folder of a mixed library known to the run whether it is a show's own.
 	shows map[string]bool
 }
@@ -115,4 +120,14 @@ func (r *run) done(folder string) {
 	r.told.Done++
 	r.told.Folder = strings.TrimPrefix(folder, ".")
 	r.progress(r.told)
+}
+
+// keep leaves what the library holds at rel as it was, when rel is there and could not be read.
+func (r *run) keep(rel string, err error) {
+	if errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	r.mu.Lock()
+	r.unread = append(r.unread, rel)
+	r.mu.Unlock()
 }

@@ -102,7 +102,7 @@ func TestForgettingALibrarysVersionsOnNoDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The file has gone, and the library keeps the version, marked missing.
-	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, nil); err != nil {
+	if _, err := s.FinishScan(ctx, lib.ID, []string{"."}, []string{"H"}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	versions, changed, err := s.ForgetMissingVersions(ctx, lib.ID)

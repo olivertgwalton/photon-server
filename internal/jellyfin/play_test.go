@@ -914,7 +914,7 @@ func TestAnAppIsOfferedOnlyVersionsOnDisk(t *testing.T) {
 	if _, err := st.SaveFolder(ctx, libs[0].ID, "Heat", []byte("w"), []store.Film{film}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.FinishScan(ctx, libs[0].ID, []string{"."}, []string{"Heat"}, []string{"Heat/Heat.mkv", "Heat/Heat.en.srt"}); err != nil {
+	if _, err := st.FinishScan(ctx, libs[0].ID, []string{"."}, []string{"Heat"}, []string{"Heat/Heat.mkv", "Heat/Heat.en.srt"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	versions, err := st.Versions(ctx, []uuid.UUID{heat})

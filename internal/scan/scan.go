@@ -147,7 +147,7 @@ func (s *Scanner) walk(ctx context.Context, lib domain.Library, asked []string, 
 	// A folder an empty .ignore hides was known and never read.
 	r.told.Phase, r.told.Known, r.told.Folder = domain.ScanRemoving, r.told.Done, ""
 	progress(r.told)
-	titles, err := s.store.FinishScan(ctx, lib.ID, scoped, r.folders, r.present)
+	titles, err := s.store.FinishScan(ctx, lib.ID, scoped, r.folders, r.present, r.unread)
 	if err == nil {
 		changed(titles)
 	}
@@ -160,6 +160,7 @@ var errNoOwner = errors.New("no single title it could belong to")
 func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err error) error {
 	defer r.done(folder.Path)
 	if err != nil {
+		r.keep(folder.Path, err)
 		s.log.WarnContext(ctx, "folder not read", slog.String("folder", folder.Path), slog.Any("err", err))
 		return nil
 	}
@@ -173,6 +174,7 @@ func (s *Scanner) folder(ctx context.Context, r *run, folder library.Folder, err
 	}
 	r.mu.Unlock()
 	for _, sk := range folder.Skipped {
+		r.keep(path.Join(folder.Path, sk.Name), sk.Err)
 		s.skip(ctx, r, path.Join(folder.Path, sk.Name), sk.Err)
 	}
 	series, err := r.seriesOf(folder)
