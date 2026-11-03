@@ -62,6 +62,9 @@ func planBooks(root string, f library.Folder) ([]bookPlan, map[string]error) {
 		if len(info.Authors) > 0 {
 			b.Author = info.Authors[0]
 		}
+		if info.ISBN != "" {
+			b.IDs = map[domain.Provider]string{domain.ProviderISBN: info.ISBN}
+		}
 		if info.Cover != "" {
 			b.Artwork = []domain.Artwork{{Kind: domain.ArtworkPoster, Path: rel}}
 		}

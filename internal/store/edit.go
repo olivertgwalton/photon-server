@@ -184,7 +184,7 @@ func describeAgain(ctx context.Context, tx db, items string, args pgx.NamedArgs)
 	return err
 }
 
-// RefreshLibrary queues a match of a library's films, shows, artists and albums, as Jellyfin's Refresh Metadata
+// RefreshLibrary queues a match of a library's films, shows, artists, albums, authors and books, as Jellyfin's Refresh Metadata
 // on a library does. RefreshMissing takes only those not yet described: never
 // matched, with no overview or poster, a season still titled by its file, or a match that failed
 // every attempt. RefreshAll takes every one, and every season and episode under it. Either is

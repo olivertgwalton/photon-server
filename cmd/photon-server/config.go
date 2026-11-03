@@ -24,6 +24,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/musicbrainz"
 	"github.com/olivertgwalton/photon-server/internal/omdb"
+	"github.com/olivertgwalton/photon-server/internal/openlibrary"
 	"github.com/olivertgwalton/photon-server/internal/opensubtitles"
 	"github.com/olivertgwalton/photon-server/internal/plugin"
 	"github.com/olivertgwalton/photon-server/internal/provider"
@@ -80,6 +81,7 @@ func metadataProviders(st *store.Store, plugins *plugin.Plugins, cache *kv.KV) *
 		mdblist.New(settingsOf(domain.SourceMDBList), cache),
 		omdb.New(settingsOf(domain.SourceOMDb), cache),
 		musicbrainz.New(version, cache),
+		openlibrary.New(version, cache),
 		fanart.New(settingsOf(domain.SourceFanart), cache),
 		opensubtitles.New(settingsOf(domain.SourceOpenSubtitles), cache),
 		riven.New(settingsOf(domain.SourceRiven)),

@@ -59,13 +59,14 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // describes no season and has a poster only for a film or a show, AniList knows no episode,
 // AniDB pictures no episode, and fanart.tv pictures films, shows, artists and albums alone.
 // MusicBrainz alone describes music, an artist and an album but no track, which its file's tags
-// describe, and pictures an album by its cover. A plugin may be ranked for anything.
+// describe, and pictures an album by its cover. Open Library alone describes and pictures books
+// and their authors. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
 	switch {
 	case kind.Music():
 		return musicFetchable(f, kind)
 	case kind.Books():
-		return nil
+		return []FieldSource{SourceOpenLibrary}
 	}
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
@@ -138,8 +139,9 @@ func (k KindSources) Of(f Fetcher) []RankedSource {
 }
 
 // DefaultSources trust an NFO beside the file over TMDB, as Jellyfin's default order does, and
-// take TMDB's pictures, for each kind a library holds; and for music, take whatever MusicBrainz
-// and fanart.tv may say, as Jellyfin's music providers are on by default.
+// take TMDB's pictures, for each kind a library holds; and for music and books, take whatever
+// MusicBrainz and fanart.tv, or Open Library, may say, as Jellyfin's providers of them are on by
+// default.
 func DefaultSources(lib LibraryKind) []KindSources {
 	var out []KindSources
 	for _, kind := range lib.ItemKinds() {
