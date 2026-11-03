@@ -20,22 +20,22 @@ let { class: className = "" }: { class?: string } = $props();
 .bars :global(path) {
 	transform-box: fill-box;
 	transform-origin: center;
-	animation: rise 0.9s ease-in-out infinite alternate;
+	animation: rise 0.7s ease-in-out infinite alternate;
 }
 .bars :global(path:nth-child(2)) {
-	animation-delay: -0.3s;
+	animation-delay: -0.23s;
 }
 .bars :global(path:nth-child(3)) {
-	animation-delay: -0.6s;
+	animation-delay: -0.47s;
 }
 .bars :global(path:nth-child(4)) {
-	animation-delay: -0.15s;
+	animation-delay: -0.12s;
 }
 .bars :global(path:nth-child(5)) {
-	animation-delay: -0.45s;
+	animation-delay: -0.35s;
 }
 .bars :global(path:nth-child(6)) {
-	animation-delay: -0.75s;
+	animation-delay: -0.58s;
 }
 .paused :global(path) {
 	animation-play-state: paused;

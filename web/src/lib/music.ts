@@ -20,10 +20,25 @@ export function discs(tracks: Card[]): { disc: number; tracks: Card[] }[] {
 	return out;
 }
 
+// Names joined as Apple Music joins a track's artists: "A & B", "A, B & C".
+export function artistLine(names: string[]): string {
+	const last = names.at(-1) ?? "";
+	return names.length > 1 ? `${names.slice(0, -1).join(", ")} & ${last}` : last;
+}
+
+// Who a track is by, wherever it is listed apart from its album.
+export function trackArtists(
+	track: Pick<Card, "artists" | "artist">,
+): string | undefined {
+	return track.artists?.length
+		? artistLine(track.artists)
+		: track.artist?.title;
+}
+
 // The artists a track names, where they are others than its album's.
 export function guests(track: Card, albumArtist?: string): string | undefined {
 	const names = track.artists ?? [];
 	if (!names.length || (names.length === 1 && names[0] === albumArtist))
 		return undefined;
-	return names.join(", ");
+	return artistLine(names);
 }

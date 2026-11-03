@@ -14,13 +14,13 @@ import MicVocalIcon from "@lucide/svelte/icons/mic-vocal";
 import Share2Icon from "@lucide/svelte/icons/share-2";
 import UserIcon from "@lucide/svelte/icons/user";
 import { toast } from "svelte-sonner";
-import { setMark } from "#lib/actions.ts";
 import { client } from "#lib/api/client.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import IconButton from "#lib/components/IconButton.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
 import { downloadFile } from "#lib/download.ts";
+import { isFavourite, setFavourite } from "#lib/favourites.svelte.ts";
 import { timecode } from "#lib/format.ts";
 import { listening } from "#lib/player/listening.svelte.ts";
 import { tracksOf } from "#lib/player/tracks.ts";
@@ -60,7 +60,9 @@ let details = $state<Details>();
 const known = $derived(
 	details && details.id === item?.id ? details : undefined,
 );
-const favourite = $derived(!!known?.page.state?.favourite_at);
+const favourite = $derived(
+	!!known && isFavourite(known.id, known.page.state?.favourite_at),
+);
 const lyrics = $derived(known?.lyrics?.lines ?? []);
 // The version playing, saved whole where it is one file: an audiobook in
 // several has no one file to give.
@@ -85,15 +87,20 @@ function opened(open: boolean) {
 	if (open && item && details?.id !== item.id) void load(item.id);
 }
 
-async function favour() {
-	if (!known) return;
+// The track's page is kept here, not the route's, so what was asked is kept in
+// it once saved.
+function favour() {
+	const was = known;
+	if (!was) return;
 	const on = !favourite;
-	if (!(await setMark(known.id, "favourite", on))) return;
-	const state = {
-		...known.page.state,
-		favourite_at: on ? new Date().toISOString() : null,
-	};
-	details = { ...known, page: { ...known.page, state } };
+	return setFavourite(was.id, on, () => {
+		const state = {
+			...was.page.state,
+			favourite_at: on ? new Date().toISOString() : null,
+		};
+		if (details?.id === was.id)
+			details = { ...details, page: { ...details.page, state } };
+	});
 }
 
 function download() {
@@ -157,7 +164,7 @@ async function copyLyrics() {
 						ready: downloadable,
 					},
 					{
-						label: favourite ? "Favourited" : "Favourite",
+						label: favourite ? "Unfavourite" : "Favourite",
 						icon: HeartIcon,
 						act: favour,
 						pressed: favourite,

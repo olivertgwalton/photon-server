@@ -5,6 +5,7 @@ import Volume2Icon from "@lucide/svelte/icons/volume-2";
 import VolumeXIcon from "@lucide/svelte/icons/volume-x";
 import XIcon from "@lucide/svelte/icons/x";
 import Artwork from "#lib/components/Artwork.svelte";
+import ExplicitMark from "#lib/components/ExplicitMark.svelte";
 import IconButton from "#lib/components/IconButton.svelte";
 import { Slider } from "#lib/components/ui/slider/index.ts";
 import { timecode } from "#lib/format.ts";
@@ -111,10 +112,16 @@ function onkeydown(e: KeyboardEvent) {
 				</span>
 			</button>
 			<div class="min-w-0">
-				<p class="text-ink truncate text-sm font-medium">
-					<a href="/titles/{item.from?.id ?? item.id}" class="hover:underline">
+				<p
+					class="text-ink flex min-w-0 items-center gap-1.5 text-sm font-medium"
+				>
+					<a
+						href="/titles/{item.from?.id ?? item.id}"
+						class="truncate hover:underline"
+					>
 						{item.title}
 					</a>
+					<ExplicitMark advisory={item.advisory} />
 				</p>
 				<p class="text-ink-3 truncate text-xs">
 					{chapter?.title ?? item.by ?? ""}
