@@ -60,7 +60,7 @@ type Provider interface {
 }
 
 // Hints are what a title is matched by: its name and year, the ids it already carries, and an
-// album's artist.
+// album's artist or a book's author.
 type Hints struct {
 	Title  string
 	Year   int

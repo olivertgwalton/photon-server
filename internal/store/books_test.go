@@ -72,3 +72,31 @@ func TestAReadersPlaceInABookIsKept(t *testing.T) {
 		t.Errorf("reading an author: %v, want ErrNotRead", err)
 	}
 }
+
+// A refresh of a books library asks its providers of its authors and books again.
+func TestABooksLibrarysRefreshAsksAgainOfItsAuthorsAndBooks(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Books", domain.LibraryBooks, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := "Earthsea/earthsea.epub"
+	if _, err := s.SaveBooksFolder(ctx, lib.ID, "Earthsea", []byte("seen"), []Book{{
+		Title: "A Wizard of Earthsea", Author: "Ursula K. Le Guin", Folder: "Earthsea",
+		Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "epub", Size: 1}}}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM jobs j JOIN items i ON i.id = j.subject
+		WHERE j.kind = 'identify' AND i.kind IN ('author', 'book')`).Scan(&n); err != nil || n != 2 {
+		t.Errorf("refresh asked of %d authors and books, %v; want 2", n, err)
+	}
+}

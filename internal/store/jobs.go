@@ -432,7 +432,7 @@ func (s *Store) Identified(ctx context.Context, id uuid.UUID) (Fulfilled, error)
 // titles and learns of the episode after.
 const airingRefreshDays = 7
 
-// RefreshStale queues a match of every film, show, artist and album its library refreshes and that was last
+// RefreshStale queues a match of every film, show, artist, album, author and book its library refreshes and that was last
 // matched longer ago than the library says, as Jellyfin's scheduled metadata refresh does, or than
 // airingRefreshDays for a show still airing. It answers how many.
 func (s *Store) RefreshStale(ctx context.Context) (int64, error) {

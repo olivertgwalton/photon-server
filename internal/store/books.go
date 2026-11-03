@@ -25,9 +25,11 @@ type Book struct {
 	Released         time.Time
 	Overview         string
 	Genres           []string
-	Folder           string
-	Artwork          []domain.Artwork
-	Versions         []Version
+	// IDs are those its files carry: an ebook's ISBN.
+	IDs      map[domain.Provider]string
+	Folder   string
+	Artwork  []domain.Artwork
+	Versions []Version
 }
 
 // Fill takes what o says of a book that b leaves unsaid, as another version of it says it.
@@ -39,6 +41,9 @@ func (b *Book) Fill(o Book) {
 	}
 	if len(b.Genres) == 0 {
 		b.Genres = o.Genres
+	}
+	if len(b.IDs) == 0 {
+		b.IDs = o.IDs
 	}
 	b.Artwork = append(b.Artwork, o.Artwork...)
 }
@@ -76,6 +81,7 @@ func saveBook(ctx context.Context, tx db, lib uuid.UUID, settings analysis, fold
 	book, err := ensureNamed(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemBook, ParentID: &author, Folder: b.Folder},
 		domain.Metadata{
 			Title: b.Title, SortTitle: b.SortTitle, Year: b.Year, ReleaseDate: b.Released, Overview: b.Overview, Genres: b.Genres,
+			IDs: b.IDs,
 		}, changed)
 	if err != nil {
 		return err

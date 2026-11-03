@@ -94,10 +94,14 @@ const (
 	ProviderAniList Provider = "anilist"
 	// ProviderMusicBrainz files an artist and an album, its release group, by MBID.
 	ProviderMusicBrainz Provider = "musicbrainz"
+	// ProviderOpenLibrary files an author and a book, its work, by OLID; ProviderISBN is a
+	// book's ISBN, which its ebook carries.
+	ProviderOpenLibrary Provider = "openlibrary"
+	ProviderISBN        Provider = "isbn"
 )
 
 func Providers() []Provider {
-	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB, ProviderAniDB, ProviderAniList, ProviderMusicBrainz}
+	return []Provider{ProviderTMDB, ProviderIMDb, ProviderTVDB, ProviderAniDB, ProviderAniList, ProviderMusicBrainz, ProviderOpenLibrary, ProviderISBN}
 }
 
 // KeptList is a list kept on a provider, which a collection could follow.

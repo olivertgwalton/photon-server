@@ -20,7 +20,7 @@ type Subject struct {
 	Title string
 	Year  int
 	IDs   map[domain.Provider]string
-	// Artist is an album's artist, which a music provider finds it by.
+	// Artist is an album's artist, or a book's author, which a provider finds it by.
 	Artist string
 	// Scope and Seasons are which of a show's seasons it is described with.
 	Scope   domain.SeasonScope
@@ -44,8 +44,8 @@ type Subject struct {
 }
 
 // matchedKinds are the kinds of title a provider is asked to match, whose match describes what is
-// under them: a film, a show, an artist and an album.
-const matchedKinds = `('movie', 'show', 'artist', 'album')`
+// under them: a film, a show, an artist, an album, an author and a book.
+const matchedKinds = `('movie', 'show', 'artist', 'album', 'author', 'book')`
 
 // IdentifySubject answers what is known of a title to match it by, or false for one that has gone.
 func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, bool, error) {
@@ -105,7 +105,7 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		if seasons == 0 {
 			sub.Scope = domain.SeasonsEvery
 		}
-	case item.Kind == domain.ItemAlbum:
+	case item.Kind == domain.ItemAlbum, item.Kind == domain.ItemBook:
 		err = s.pool.QueryRow(ctx, `SELECT title FROM items WHERE id = $1`, item.ParentID).Scan(&sub.Artist)
 		if err != nil {
 			return Subject{}, false, err

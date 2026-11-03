@@ -120,16 +120,18 @@ const (
 	// SourceMusicBrainz describes artists and albums, and pictures an album by the Cover Art
 	// Archive's cover.
 	SourceMusicBrainz FieldSource = "musicbrainz"
+	// SourceOpenLibrary describes authors and books, and pictures them by its covers.
+	SourceOpenLibrary FieldSource = "openlibrary"
 )
 
 func FieldSources() []FieldSource {
-	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceUpload, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr, SourceMusicBrainz}
+	return []FieldSource{SourceFile, SourceTMDB, SourceTVDB, SourceNFO, SourceUser, SourceUpload, SourceMDBList, SourceOMDb, SourceOpenSubtitles, SourceAniList, SourceAniDB, SourceFanart, SourceRiven, SourceRadarr, SourceSonarr, SourceMusicBrainz, SourceOpenLibrary}
 }
 
 // MetadataSources are the built-in sources a library may rank, in an order it chooses: what files
 // say always ranks lowest, and a reader's own edit highest. A registered plugin is one too.
 func MetadataSources() []FieldSource {
-	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart, SourceMusicBrainz}
+	return []FieldSource{SourceNFO, SourceTMDB, SourceTVDB, SourceMDBList, SourceOMDb, SourceAniList, SourceAniDB, SourceFanart, SourceMusicBrainz, SourceOpenLibrary}
 }
 
 // PluginPattern is a metadata plugin's source id: its slug after "plugin:", so none collides with
