@@ -754,6 +754,16 @@ func (l *livePlaybacks) ClaimPlayback(_ context.Context, p domain.Playback, _ ti
 	return true, nil
 }
 
+func (l *livePlaybacks) RenewPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, ok := l.m[p.ID]; !ok {
+		return false, nil
+	}
+	l.m[p.ID] = p
+	return true, nil
+}
+
 func (l *livePlaybacks) SavePlayback(_ context.Context, p domain.Playback, _ time.Duration) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
