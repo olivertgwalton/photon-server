@@ -91,7 +91,8 @@ func TestAnAlbumsPageListsItsTracksInOrder(t *testing.T) {
 }
 
 // A track's card names its album and artist, and an album's its artist, as an episode's names its
-// show, so a list of either says whose it is; a track wears its album's cover.
+// show, so a list of either says whose it is; a track wears its album's cover, and says, as its
+// page does, that it is explicit.
 func TestAMusicCardNamesWhoseItIs(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -99,10 +100,12 @@ func TestAMusicCardNamesWhoseItIs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	timeless := track("Timeless", 2, 2, "The Weeknd", "Playboi Carti")
+	timeless.Advisory = domain.AdvisoryExplicit
 	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
 		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
 		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Hurry Up Tomorrow/cover.jpg"}},
-		Tracks:  []Track{track("Timeless", 2, 2, "The Weeknd", "Playboi Carti")},
+		Tracks:  []Track{timeless},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +128,14 @@ func TestAMusicCardNamesWhoseItIs(t *testing.T) {
 	}
 	if album.Artist == nil || album.Artist.Title != "The Weeknd" || album.Album != nil {
 		t.Errorf("the album's card: artist %+v, album %+v; want The Weeknd and no album", album.Artist, album.Album)
+	}
+	page, err := s.Title(ctx, uuid.UUID{}, trackID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if track.Advisory != domain.AdvisoryExplicit || page.Advisory != domain.AdvisoryExplicit || album.Advisory != "" {
+		t.Errorf("Timeless's card says %q and its page %q, its album %q; want explicit, explicit and nothing",
+			track.Advisory, page.Advisory, album.Advisory)
 	}
 	if album.Poster == (uuid.UUID{}) || track.Poster != album.Poster {
 		t.Errorf("Timeless wears poster %v, its album has %v; want the album's cover", track.Poster, album.Poster)

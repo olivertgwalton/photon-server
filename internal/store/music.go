@@ -35,6 +35,7 @@ type Track struct {
 	Title, SortTitle string
 	Disc, Number     int
 	Artists          []string
+	Advisory         domain.Advisory
 	Year             int
 	Released         time.Time
 	Genres           []string
@@ -119,7 +120,7 @@ func ensureNamed(ctx context.Context, tx db, row model.Item, said domain.Metadat
 func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, album uuid.UUID, t Track, changed Changed) error {
 	row := model.Item{
 		LibraryID: &lib, Kind: domain.ItemTrack, ParentID: &album, DiscNumber: optional(t.Disc), TrackNumber: optional(t.Number),
-		Artists: t.Artists, ScanTitle: t.Title, Title: t.Title, SortTitle: sortTitle(t.Title), Folder: t.Folder,
+		Artists: t.Artists, Advisory: optional(t.Advisory), ScanTitle: t.Title, Title: t.Title, SortTitle: sortTitle(t.Title), Folder: t.Folder,
 	}
 	// A track is its file's, wherever its tags now place it, or the same bytes' moved from elsewhere.
 	err := tx.QueryRow(ctx, `
@@ -139,8 +140,9 @@ func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, alb
 		err = insertItem(ctx, tx, &row)
 	case err == nil:
 		_, err = tx.Exec(ctx, `
-			UPDATE items SET parent_id = $2, disc_number = $3, track_number = $4, artists = $5, scan_title = $6, folder = $7
-			WHERE id = $1`, row.ID, row.ParentID, row.DiscNumber, row.TrackNumber, row.Artists, row.ScanTitle, row.Folder)
+			UPDATE items SET parent_id = $2, disc_number = $3, track_number = $4, artists = $5, scan_title = $6, folder = $7,
+				advisory = $8
+			WHERE id = $1`, row.ID, row.ParentID, row.DiscNumber, row.TrackNumber, row.Artists, row.ScanTitle, row.Folder, row.Advisory)
 	}
 	if err != nil {
 		return err
@@ -157,11 +159,13 @@ func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, alb
 
 // MusicPage is what only an artist's, an album's or a track's page has: an album's or a track's
 // album artist, and a track's album, which lists Tracks as an artist lists Albums. DiscNumber and
-// TrackNumber place a track on its album, and Artists are the track's own.
+// TrackNumber place a track on its album, Artists are the track's own, and Advisory says whether it
+// is explicit or clean.
 type MusicPage struct {
 	Artist, Album           *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
+	Advisory                domain.Advisory
 	Albums                  []Card
 	Tracks                  []Card
 }

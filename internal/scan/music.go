@@ -173,7 +173,7 @@ func albumsOf(folder string, plans []trackPlan, read [][]store.Version) []store.
 		}
 		a.Tracks = append(a.Tracks, store.Track{
 			Title: t.title, SortTitle: t.tags.TitleSort, Disc: t.disc, Number: t.number, Artists: t.tags.Artists,
-			Year: t.tags.Year, Released: t.tags.Released, Genres: t.tags.Genres, Folder: folder, Version: read[i][0],
+			Advisory: t.tags.Advisory, Year: t.tags.Year, Released: t.tags.Released, Genres: t.tags.Genres, Folder: folder, Version: read[i][0],
 		})
 		a.Tracks[len(a.Tracks)-1].Version.Gain = t.tags.Gain
 		if t.tags.Pictured && !slices.ContainsFunc(a.Artwork, func(p domain.Artwork) bool { return p.Kind == domain.ArtworkPoster }) {

@@ -71,11 +71,12 @@ type cardJSON struct {
 	EpisodeEnd    *int          `json:"episode_end,omitzero"`
 	// An album's card names its artist, and a track's its album and artist, its place on the album
 	// and the artists it names, which may be others.
-	Artist      *titleRefJSON `json:"artist,omitzero"`
-	Album       *titleRefJSON `json:"album,omitzero"`
-	DiscNumber  *int          `json:"disc_number,omitzero"`
-	TrackNumber *int          `json:"track_number,omitzero"`
-	Artists     []string      `json:"artists,omitzero"`
+	Artist      *titleRefJSON   `json:"artist,omitzero"`
+	Album       *titleRefJSON   `json:"album,omitzero"`
+	DiscNumber  *int            `json:"disc_number,omitzero"`
+	TrackNumber *int            `json:"track_number,omitzero"`
+	Artists     []string        `json:"artists,omitzero"`
+	Advisory    domain.Advisory `json:"advisory,omitzero"`
 	// A book's card names its author, and the series it is in and its place there, which may be 1.5.
 	Author      *titleRefJSON `json:"author,omitzero"`
 	Series      string        `json:"series,omitzero"`
@@ -193,7 +194,7 @@ func cardOf(c store.Card) cardJSON {
 		Poster: c.Poster, Backdrop: c.Backdrop, State: titleStateJSON(c.State), DurationMS: c.DurationMS, VersionCount: c.VersionCount, Show: (*titleRefJSON)(c.Show), Season: (*titleRefJSON)(c.Season),
 		SeasonPoster: c.SeasonPoster, SeasonNumber: c.SeasonNumber, EpisodeNumber: c.EpisodeNumber, EpisodeEnd: c.EpisodeEnd, Thumb: c.Thumb,
 		Origin: c.Origin, Overview: c.Overview, Logo: c.Logo, Genres: c.Genres, Certificate: domain.Bare(c.Certificate),
-		Artist: (*titleRefJSON)(c.Artist), Album: (*titleRefJSON)(c.Album), DiscNumber: c.DiscNumber, TrackNumber: c.TrackNumber,
+		Artist: (*titleRefJSON)(c.Artist), Album: (*titleRefJSON)(c.Album), DiscNumber: c.DiscNumber, TrackNumber: c.TrackNumber, Advisory: c.Advisory,
 		Artists: c.Artists, Author: (*titleRefJSON)(c.Author), Series: c.Series, SeriesIndex: c.SeriesIndex, Blurhashes: c.Blurhashes,
 	}
 	for _, r := range c.Ratings {

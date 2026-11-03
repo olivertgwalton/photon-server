@@ -2,9 +2,11 @@ package media
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -57,38 +59,65 @@ func TestATracksArtistsAreTakenApartWhereTheTagsSplitThem(t *testing.T) {
 	}
 }
 
-// An artist credited as featured, in the title or in the artist's credit, is the track's artist
-// after its own, and leaves the title, as Apple Music credits them; a title that only reads like a
-// credit, and a name with "&" in it, are left as they are.
-func TestFeaturedArtistsAreTheTracksArtists(t *testing.T) {
+// A track marked explicit or clean says so, whether its tags carry iTunes's advisory as a comment
+// or frame or, as a file from the iTunes Store does, in its rtng atom; one marked neither says
+// nothing.
+func TestATracksAdvisoryIsWhatItsTagsMark(t *testing.T) {
+	dir := t.TempDir()
 	for _, tc := range []struct {
-		title, artist string
-		artists       []string
-		want          Tags
+		name string
+		tags map[string][]string
+		rtng byte
+		want domain.Advisory
 	}{
-		{"Wake Me Up (Feat. Justice)", "The Weeknd", nil, Tags{Title: "Wake Me Up", Artists: []string{"The Weeknd", "Justice"}}},
-		{"Song (ft. A, B & C) [Remix]", "Lead", nil, Tags{Title: "Song [Remix]", Artists: []string{"Lead", "A", "B", "C"}}},
-		{"Timeless", "The Weeknd featuring Playboi Carti", nil, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
-		{"Timeless [feat. Playboi Carti]", "", []string{"The Weeknd", "Playboi Carti"}, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
-		{"Ghost (feat. Florence and the Machine)", "Lead", nil, Tags{Title: "Ghost", Artists: []string{"Lead", "Florence and the Machine"}}},
-		{"Defeat the Feather", "Simon & Garfunkel", nil, Tags{Title: "Defeat the Feather", Artists: []string{"Simon & Garfunkel"}}},
+		{"explicit.flac", map[string][]string{"ITUNESADVISORY": {"1"}}, 0, domain.AdvisoryExplicit},
+		{"clean.mp3", map[string][]string{"ITUNESADVISORY": {"2"}}, 0, domain.AdvisoryClean},
+		{"store.m4a", map[string][]string{"TITLE": {"Timeless"}}, 1, domain.AdvisoryExplicit},
+		{"unmarked.flac", map[string][]string{"TITLE": {"Timeless"}}, 0, ""},
 	} {
-		path := filepath.Join(t.TempDir(), "track.flac")
-		tags := map[string][]string{"TITLE": {tc.title}}
-		if tc.artist != "" {
-			tags["ARTIST"] = []string{tc.artist}
+		path := filepath.Join(dir, tc.name)
+		testtool.Audio(t, path, tc.tags, nil)
+		if tc.rtng != 0 {
+			withRating(t, path, tc.rtng)
 		}
-		if tc.artists != nil {
-			tags["ARTISTS"] = tc.artists
-		}
-		testtool.Audio(t, path, tags, nil)
 		got, err := ReadTags(path)
-		if err != nil {
-			t.Fatal(err)
+		if err != nil || got.Advisory != tc.want {
+			t.Errorf("%s: %q, %v; want %q", tc.name, got.Advisory, err, tc.want)
 		}
-		if diff := cmp.Diff(tc.want, got); diff != "" {
-			t.Errorf("%q by %q (-want +got):\n%s", tc.title, tc.artist, diff)
+	}
+}
+
+// withRating adds an rtng atom of rating to the MP4 at path, as iTunes writes one, at the end of
+// its moov/udta/meta/ilst, growing each box that holds it.
+func withRating(t *testing.T, path string, rating byte) {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := []byte{0, 0, 0, 25, 'r', 't', 'n', 'g', 0, 0, 0, 17, 'd', 'a', 't', 'a', 0, 0, 0, 21, 0, 0, 0, 0, rating}
+	var holders []int
+	off, end := 0, len(b)
+	for _, typ := range []string{"moov", "udta", "meta", "ilst"} {
+		for off < end && string(b[off+4:off+8]) != typ {
+			off += int(binary.BigEndian.Uint32(b[off:]))
 		}
+		if off >= end {
+			t.Fatalf("%s holds no %s", path, typ)
+		}
+		holders = append(holders, off)
+		end = off + int(binary.BigEndian.Uint32(b[off:]))
+		off += 8
+		if typ == "meta" {
+			off += 4
+		}
+	}
+	for _, h := range holders {
+		binary.BigEndian.PutUint32(b[h:], binary.BigEndian.Uint32(b[h:])+uint32(len(item)))
+	}
+	b = append(b[:end], append(item, b[end:]...)...)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -149,5 +178,40 @@ func TestATrackWithoutReplayGainHasNone(t *testing.T) {
 	}
 	if got.Gain != (domain.ReplayGain{}) {
 		t.Errorf("gain = %+v, want none", got.Gain)
+	}
+}
+
+// An artist credited as featured, in the title or in the artist's credit, is the track's artist
+// after its own, and leaves the title, as Apple Music credits them; a title that only reads like a
+// credit, and a name with "&" in it, are left as they are.
+func TestFeaturedArtistsAreTheTracksArtists(t *testing.T) {
+	for _, tc := range []struct {
+		title, artist string
+		artists       []string
+		want          Tags
+	}{
+		{"Wake Me Up (Feat. Justice)", "The Weeknd", nil, Tags{Title: "Wake Me Up", Artists: []string{"The Weeknd", "Justice"}}},
+		{"Song (ft. A, B & C) [Remix]", "Lead", nil, Tags{Title: "Song [Remix]", Artists: []string{"Lead", "A", "B", "C"}}},
+		{"Timeless", "The Weeknd featuring Playboi Carti", nil, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
+		{"Timeless [feat. Playboi Carti]", "", []string{"The Weeknd", "Playboi Carti"}, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
+		{"Ghost (feat. Florence and the Machine)", "Lead", nil, Tags{Title: "Ghost", Artists: []string{"Lead", "Florence and the Machine"}}},
+		{"Defeat the Feather", "Simon & Garfunkel", nil, Tags{Title: "Defeat the Feather", Artists: []string{"Simon & Garfunkel"}}},
+	} {
+		path := filepath.Join(t.TempDir(), "track.flac")
+		tags := map[string][]string{"TITLE": {tc.title}}
+		if tc.artist != "" {
+			tags["ARTIST"] = []string{tc.artist}
+		}
+		if tc.artists != nil {
+			tags["ARTISTS"] = tc.artists
+		}
+		testtool.Audio(t, path, tags, nil)
+		got, err := ReadTags(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(tc.want, got); diff != "" {
+			t.Errorf("%q by %q (-want +got):\n%s", tc.title, tc.artist, diff)
+		}
 	}
 }

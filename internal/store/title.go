@@ -179,7 +179,8 @@ func (s *Store) Title(ctx context.Context, profile, id uuid.UUID) (TitlePage, er
 		AddedAt: item.AddedAt, SeasonNumber: item.SeasonNumber, EpisodeNumber: item.EpisodeNumber,
 		EpisodeEnd: item.EpisodeEnd, AirsBeforeSeason: item.AirsBeforeSeason, AirsBeforeEpisode: item.AirsBeforeEpisode,
 		AirsAfterSeason: item.AirsAfterSeason, DiscNumber: item.DiscNumber, TrackNumber: item.TrackNumber, Artists: item.Artists,
-		Series: deref(item.Series), SeriesIndex: item.SeriesIndex,
+		Advisory: deref(item.Advisory),
+		Series:   deref(item.Series), SeriesIndex: item.SeriesIndex,
 	}
 	var credits, showCredits []CreditRef
 	g, gctx = errgroup.WithContext(ctx)

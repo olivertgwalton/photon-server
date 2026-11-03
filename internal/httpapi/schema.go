@@ -38,6 +38,7 @@ var enums, enumReader = indexEnums(
 	enumOf(domain.Capabilities()),
 	enumOf(domain.LibraryMedias()),
 	enumOf(domain.PluginProtocols()),
+	enumOf(domain.Advisories()),
 	enumOf(domain.CollectionOrigins()),
 	enumOf(domain.CreditKinds()),
 	enumOf(domain.Discoveries()),

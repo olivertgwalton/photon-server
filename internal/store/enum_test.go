@@ -65,6 +65,7 @@ func TestEnumConstraintsMatchGo(t *testing.T) {
 		"secure_connections":       names(domain.SecureConnectionModes()),
 		"session_kind":             names(domain.SessionKinds()),
 		"extra_kind":               names(domain.ExtraKinds()),
+		"item_advisory":            names(domain.Advisories()),
 		"field":                    names(domain.Fields()),
 		"library_source_item_kind": names(slices.Concat(domain.LibraryMovies.ItemKinds(), domain.LibraryShows.ItemKinds(), domain.LibraryMusic.ItemKinds(), domain.LibraryBooks.ItemKinds())),
 		"library_source_fetcher":   names(domain.Fetchers()),
