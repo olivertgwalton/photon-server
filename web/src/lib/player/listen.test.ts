@@ -3,6 +3,7 @@ import {
 	type AudioCapabilities,
 	after,
 	audioProfile,
+	gainFactor,
 	keyAction,
 	movedTo,
 	nextAt,
@@ -169,4 +170,22 @@ test("the player's keys, and none with a modifier the browser keeps", () => {
 	expect(keyAction(key("l"))).toBe("forward");
 	expect(keyAction({ ...key("k"), metaKey: true })).toBeUndefined();
 	expect(keyAction(key("x"))).toBeUndefined();
+});
+
+test("a track is turned down by its own gain, or its album's", () => {
+	const gain = { track_gain_db: -6, album_gain_db: -9 };
+	expect(gainFactor(gain, "track")).toBeCloseTo(0.501, 3);
+	expect(gainFactor(gain, "album")).toBeCloseTo(0.355, 3);
+	expect(gainFactor(gain, "off")).toBe(1);
+	// An album's gain where the track has none of its own, and the other way.
+	expect(gainFactor({ album_gain_db: -6 }, "track")).toBeCloseTo(0.501, 3);
+	expect(gainFactor({ track_gain_db: -6 }, "album")).toBeCloseTo(0.501, 3);
+	expect(gainFactor(undefined, "track")).toBe(1);
+});
+
+test("a gain up goes no higher than full, nor past the loudest sample", () => {
+	expect(gainFactor({ track_gain_db: 4 }, "track")).toBe(1);
+	expect(
+		gainFactor({ track_gain_db: -1, track_peak: 1.2 }, "track"),
+	).toBeCloseTo(1 / 1.2, 3);
 });

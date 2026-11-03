@@ -256,3 +256,27 @@ export function keyAction(e: {
 			return undefined;
 	}
 }
+
+// Which of a track's ReplayGains it is played by, as Finamp's setting has
+// it: its own, so every track is as loud as the next, or its album's, so an
+// album keeps the quiet and loud of its tracks.
+export const gainModes = ["track", "album", "off"] as const;
+export type GainMode = (typeof gainModes)[number];
+
+// What the volume is turned by. A gain up is not turned up past full: an
+// audio element's volume goes no higher, and Safari plays HLS through the
+// Web Audio API as silence.
+export function gainFactor(
+	gain: Schemas["ReplayGain"] | null | undefined,
+	mode: GainMode,
+): number {
+	if (!gain || mode === "off") return 1;
+	const [db, peak] =
+		mode === "album" && gain.album_gain_db != null
+			? [gain.album_gain_db, gain.album_peak]
+			: [gain.track_gain_db ?? gain.album_gain_db, gain.track_peak];
+	if (db == null) return 1;
+	// Never so loud that the loudest sample clips.
+	const ceiling = peak ? 1 / peak : 1;
+	return Math.min(10 ** (db / 20), ceiling, 1);
+}
