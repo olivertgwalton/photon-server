@@ -235,7 +235,7 @@ func (a *API) decide(r *http.Request, src *mediaSource, item, session uuid.UUID,
 		return ""
 	}
 	address, err := a.transcodingURL(r, item, session, transcode{
-		Version: c.Version, Method: d.Method, Video: *d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
+		Version: c.Version, Method: d.Method, Video: d.Video, Audio: d.Audio, Subtitle: sub, Reasons: d.Reasons,
 		Segments: segments, StartMS: req.StartTimeTicks / ticksPerMS, Renditions: p.renditions(),
 	}, req.AllowVideoStreamCopy, req.AllowAudioStreamCopy)
 	if err != nil {

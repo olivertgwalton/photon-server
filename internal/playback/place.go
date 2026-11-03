@@ -95,7 +95,7 @@ func start(ctx context.Context, p placing, sessions starting, node domain.Node, 
 	o := s.Opening
 	o.Method = d.Method
 	if d.Method != domain.PlayDirect {
-		o.Video, o.Audio = *d.Video, d.Audio
+		o.Video, o.Audio = d.Video, d.Audio
 	}
 	if err := p.Open(ctx, node, s.ID, s.Version, o); err != nil {
 		// One not abandoned holds its id, so no other node is asked.

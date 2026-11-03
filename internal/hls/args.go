@@ -20,7 +20,7 @@ func quiet() []string {
 // drawn in where there is a layer of it. Each of the subtitle streams is written to its socket,
 // a cue at a time, on the file's clock: as SubRip, whose muxer ends a cue as it writes
 // it, where WebVTT's ends one only as it begins the next.
-func args(in media.Input, hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
+func args(in media.Input, hw Hardware, start time.Duration, video *domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
 	a := quiet()
 	if video.Encode != nil {
 		a = append(a, hw.inputArgs(*video.Encode)...)
@@ -137,7 +137,7 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 
 // streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw,
 // from start.
-func streamArgs(hw Hardware, start time.Duration, video domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
+func streamArgs(hw Hardware, start time.Duration, video *domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
 	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {

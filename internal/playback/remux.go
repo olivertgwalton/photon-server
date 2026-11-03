@@ -60,7 +60,7 @@ const (
 // Open starts a playback's HLS of a version at start, in segments of the format asked for, carrying
 // its video and audio as decided, and, unless a subtitle is drawn into the picture, its plain text
 // subtitles as WebVTT, as renditions says.
-func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
+func (r *Remuxes) Open(ctx context.Context, playback uuid.UUID, c store.PlayVersion, video *domain.VideoPlan, audio *domain.AudioPlan, segments domain.SegmentFormat, start time.Duration, renditions Renditions) error {
 	// The remux opens its files long after this request has been answered.
 	opening := context.WithoutCancel(ctx)
 	sources := make([]hls.Source, len(c.Parts))

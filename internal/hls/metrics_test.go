@@ -27,7 +27,7 @@ func TestEachSegmentServedIsTimed(t *testing.T) {
 	playback := uuid.NewV7()
 	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
 		Open: opening("testdata/fragments.mp4"), Part: Part{Duration: 30 * time.Second, Keyframes: keyframes},
-		Video: domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
+		Video: &domain.VideoPlan{Codec: "h264"}, Audio: &domain.AudioPlan{Stream: 1},
 	}}}); err != nil {
 		t.Fatal(err)
 	}

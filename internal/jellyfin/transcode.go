@@ -69,7 +69,7 @@ type planned struct {
 type transcode struct {
 	Version  uuid.UUID                `json:"version"`
 	Method   domain.PlayMethod        `json:"method"`
-	Video    domain.VideoPlan         `json:"video"`
+	Video    *domain.VideoPlan        `json:"video,omitzero"`
 	Audio    *domain.AudioPlan        `json:"audio,omitzero"`
 	Subtitle *int                     `json:"subtitle,omitzero"`
 	Segments domain.SegmentFormat     `json:"segments"`
@@ -214,12 +214,12 @@ func (a *API) open(w http.ResponseWriter, r *http.Request, item, session uuid.UU
 		a.internal(w, r, err)
 		return true
 	}
-	d := playback.Decision{Method: t.Method, Video: &t.Video, Audio: t.Audio, Reasons: t.Reasons}
+	d := playback.Decision{Method: t.Method, Video: t.Video, Audio: t.Audio, Reasons: t.Reasons}
 	// A version encoded is opened on the node with the most transcode slots free that can encode it,
 	// the next where it has none by then; one copied, on the node best placed to deliver it.
 	var candidates, deliverers []domain.Node
-	if t.Video.Encode != nil {
-		candidates, err = a.svc.Placer.Candidates(r.Context(), playback.NeedOf(t.Video))
+	if t.Video != nil && t.Video.Encode != nil {
+		candidates, err = a.svc.Placer.Candidates(r.Context(), playback.NeedOf(*t.Video))
 	} else {
 		deliverers, err = a.svc.Placer.Deliverers(r.Context(), a.svc.Reach.Network(r))
 	}

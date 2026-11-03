@@ -468,7 +468,7 @@ func (h Hardware) check(ctx context.Context, ffmpeg string, codec domain.VideoCo
 		a := quiet()
 		a = append(a, h.inputArgs(e)...)
 		a = append(a, "-f", "lavfi", "-i", source, "-t", "1")
-		a = append(a, streamArgs(h, 0, domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
+		a = append(a, streamArgs(h, 0, &domain.VideoPlan{Codec: "rawvideo", Encode: &e}, nil, nil)...)
 		a = append(a, "-f", "null", "-")
 		if err := encodeTest(ctx, ffmpeg, a); err != nil {
 			return fmt.Errorf("%w: %s %s (%s, tone mapping %q): %w", failed, h.Accel, codec, e.Range, e.ToneMap, err)

@@ -33,7 +33,7 @@ var audioCodecs = map[string]string{
 // variant describes a version's HLS variant as Jellyfin's master playlist does: its bandwidth, the
 // formats of the video and audio as they are sent, and the video's range, size and frame rate. Codecs are left out
 // where any one is not known, since a client takes a list as all there is.
-func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {
+func variant(streams []domain.Stream, video *domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {
 	v := hls.Variant{BandwidthKbps: kbps}
 	var picture domain.Stream
 	for _, s := range streams {
@@ -41,7 +41,7 @@ func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.Audi
 			picture = s
 		}
 	}
-	codecs := []string{videoCodec(picture, video)}
+	codecs := []string{videoCodec(picture, *video)}
 	if audio != nil {
 		codecs = append(codecs, audioCodec(streams, *audio))
 	}
@@ -52,7 +52,7 @@ func variant(streams []domain.Stream, video domain.VideoPlan, audio *domain.Audi
 			v.SupplementalCodecs = fmt.Sprintf("dav1.%02d.%02d", dv.Profile, dv.Level) + dav1Brands[dv.Compatibility]
 		}
 	}
-	v.Range, v.Width, v.Height, v.FrameRate = videoRange(picture, video), picture.Width, picture.Height, picture.FrameRate
+	v.Range, v.Width, v.Height, v.FrameRate = videoRange(picture, *video), picture.Width, picture.Height, picture.FrameRate
 	if e := video.Encode; e != nil {
 		v.Width, v.Height = e.Width, e.Height
 	}
