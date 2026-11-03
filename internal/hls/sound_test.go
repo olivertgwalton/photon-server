@@ -103,8 +103,58 @@ func TestSoundAloneIsCutIntoSegmentsOfItsLength(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// It ends with the fragment that reaches its end, at most a fragment past it.
 	start, end := (6*time.Second + clockOffset).Seconds(), (12*time.Second + clockOffset).Seconds()
-	if first < start-0.05 || first > start+0.05 || last < end-0.1 || last > end {
+	if first < start-0.05 || first > start+0.05 || last < end-0.1 || last > end+soundFragment.Seconds() {
 		t.Errorf("segment 1 is shown from %.3f s to %.3f s, want %.0f to %.0f", first, last, start, end)
+	}
+}
+
+// Copied sound is cut where its playlist says each segment starts, its short last segment
+// included, though a frame of FLAC at 44.1 kHz does not divide six seconds: cut a fragment to a
+// segment, the frames' overshoot added up, and the last segment was never made.
+func TestCopiedSoundIsCutWhereItsPlaylistSays(t *testing.T) {
+	ffmpeg := tool(t, "ffmpeg", "PHOTON_FFMPEG")
+	src := filepath.Join(t.TempDir(), "track.flac")
+	if out, err := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=31.6", src).CombinedOutput(); err != nil {
+		t.Fatalf("making the track: %v: %s", err, out)
+	}
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	length := 31600 * time.Millisecond
+	// From the start, and jumping to the fifth segment as a player seeking there would.
+	for _, from := range []int{0, 4} {
+		playback := uuid.NewV7()
+		if err := r.Open(t.Context(), playback, Version{
+			Variant: Variant{BandwidthKbps: 900, Codecs: []string{"fLaC"}},
+			Parts: []Source{{
+				Open: opening(src), Part: Part{Duration: length, Keyframes: Forced(length)},
+				Audio: &domain.AudioPlan{Stream: 0},
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for n := from; n < 6; n++ {
+			seg, err := r.Segment(t.Context(), playback, n)
+			if err != nil {
+				t.Fatalf("from %d, segment %d: %v", from, n, err)
+			}
+			init, err := r.Init(t.Context(), playback, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			shown := shownIn(t, init, seg)
+			if len(shown) == 0 {
+				t.Fatalf("from %d, segment %d holds nothing", from, n)
+			}
+			// Within a fragment of where it is said to start.
+			if off := shown[0] - time.Duration(6*n)*time.Second; off < -soundFragment || off > soundFragment {
+				t.Errorf("from %d, segment %d starts at %v, want %v", from, n, shown[0], time.Duration(6*n)*time.Second)
+			}
+		}
+		r.Close(playback)
 	}
 }
