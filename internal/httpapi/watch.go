@@ -22,34 +22,37 @@ type watching interface {
 	Unfavourite(ctx context.Context, profile, item uuid.UUID) error
 	Watchlist(ctx context.Context, profile, item uuid.UUID) error
 	Unwatchlist(ctx context.Context, profile, item uuid.UUID) error
-	SaveReading(ctx context.Context, profile, book uuid.UUID, locator jsontext.Value, progression float64) error
+	SaveReading(ctx context.Context, profile, book uuid.UUID, locator jsontext.Value, progression float64, at *time.Time) (domain.Reach, error)
 }
 
 // readingJSON is where a reader is in a book: Readium's Locator, as both photon apps' readers give
-// one and take it back, and how far through the book it is. The server keeps it as it is given.
+// one and take it back, and how far through the book it is; and, for a place read offline, when.
+// The server keeps the locator as it is given.
 type readingJSON struct {
 	Locator     jsontext.Value `json:"locator"`
 	Progression float64        `json:"progression"`
+	At          *time.Time     `json:"at,omitzero"`
 }
 
 // maxLocator bounds a locator kept: Readium's is an href, a type and a few positions.
 const maxLocator = 16 << 10
 
-// reading keeps where the profile is in a book.
-func (a *API) reading(r *http.Request, req readingJSON) (none, error) {
+// reading records where the profile is in a book, and answers how far that got.
+func (a *API) reading(r *http.Request, req readingJSON) (reachedJSON, error) {
 	var at struct {
 		Href string `json:"href"`
 	}
 	if req.Progression < 0 || req.Progression > 1 || len(req.Locator) > maxLocator || req.Locator.Kind() != '{' ||
-		json.Unmarshal(req.Locator, &at) != nil || at.Href == "" {
-		return none{}, refuse(codeInvalidBody, "locator is a locator of at most 16 KiB naming its href, and progression is from 0 to 1")
+		json.Unmarshal(req.Locator, &at) != nil || at.Href == "" || !atValid(req.At) {
+		return reachedJSON{}, refuse(codeInvalidBody, "locator is a locator of at most 16 KiB naming its href, progression is from 0 to 1, and "+atRule)
 	}
 	id := pathUUID(r, "id")
-	if err := a.svc.Watching.SaveReading(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.Locator, req.Progression); err != nil {
-		return none{}, err
+	reach, err := a.svc.Watching.SaveReading(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id, req.Locator, req.Progression, req.At)
+	if err != nil {
+		return reachedJSON{}, err
 	}
 	a.titleStateChanged(r, id)
-	return none{}, nil
+	return reachedJSON{Reach: reach}, nil
 }
 
 // clockSkew is how far ahead of the server's a client's clock may run; atRule says it.
@@ -151,8 +154,8 @@ func (a *API) watchRoutes() []route {
 		}, a.progress),
 		a.handles(route{
 			pattern: "PUT /api/v1/titles/{id}/reading", access: signedIn,
-			summary: "Keep where the profile is in a book, as its reader gives it, and how far through the book that is",
-			status:  http.StatusNoContent,
+			summary: "Record where the profile is in a book, as its reader gives it, how far through the book that is, and when: a place from before the title's state last changed is refused as a conflict",
+			status:  http.StatusOK,
 		}, a.reading),
 		a.handles(route{
 			pattern: "DELETE /api/v1/titles/{id}/progress", access: signedIn,

@@ -26,6 +26,22 @@ const (
 )
 
 // ReachOf is how far a play that stopped at position got through a title running duration.
+// readThrough is how far through a book a reader must be for it to be read: at its last page,
+// which a reader places a little short of the end.
+const readThrough = 0.99
+
+// ReadOf is how far a reader at progression through a book got: still at its start, somewhere to
+// resume from, or at its end, and the book read.
+func ReadOf(progression float64) Reach {
+	switch {
+	case progression <= 0:
+		return ReachStart
+	case progression >= readThrough:
+		return ReachEnd
+	}
+	return ReachResumable
+}
+
 func ReachOf(position, duration time.Duration) Reach {
 	switch {
 	case duration <= 0:
