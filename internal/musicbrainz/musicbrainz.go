@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -34,9 +33,7 @@ const confident = 90
 type Client struct {
 	api, covers provider.Client
 	header      http.Header
-	// mu holds each request back until every has passed since the last.
-	mu   sync.Mutex
-	last time.Time
+	pace        provider.Pace
 }
 
 // New is a client naming the server, at version, as MusicBrainz asks every client to name itself.
@@ -44,6 +41,7 @@ func New(version string, pauses provider.Pauses) *Client {
 	return &Client{
 		api:    provider.Client{Name: "musicbrainz", Base: baseURL, Pauses: pauses},
 		covers: provider.Client{Name: "coverartarchive", Base: coverArtURL},
+		pace:   provider.Pace{Every: every},
 		header: http.Header{
 			"User-Agent": {"photon-server/" + version + " ( https://github.com/olivertgwalton/photon-server )"},
 			"Accept":     {"application/json"},
@@ -180,25 +178,11 @@ func (c *Client) cover(ctx context.Context, id string) (string, error) {
 
 // get asks MusicBrainz for JSON, a second after it was last asked.
 func (c *Client) get(ctx context.Context, api *provider.Client, path string, q url.Values, into any) error {
-	if err := c.wait(ctx); err != nil {
+	if err := c.pace.Wait(ctx); err != nil {
 		return err
 	}
 	q.Set("fmt", "json")
 	return api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q, Header: c.header}, into)
-}
-
-func (c *Client) wait(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if d := time.Until(c.last.Add(every)); d > 0 {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(d):
-		}
-	}
-	c.last = time.Now()
-	return nil
 }
 
 // quoted is a name as a phrase of MusicBrainz's Lucene search, its quotes and backslashes escaped.
