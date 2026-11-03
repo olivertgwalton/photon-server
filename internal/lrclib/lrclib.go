@@ -22,22 +22,38 @@ const baseURL = "https://lrclib.net/api/"
 // as LRCLIB's own exact lookup allows.
 const near = 2
 
-// every is how often LRCLIB is asked: a library's tracks are fetched as a scan finds them, and
-// LRCLIB, run by one person on goodwill, answers a burst with 503s.
-const every = time.Second
+// gap is how long LRCLIB is let be between one answer and the next request. Its documentation asks a
+// client fetching a whole library's lyrics to send one request at a time, 200 to 500ms apart, and
+// a scan fetches every track's.
+const gap = 500 * time.Millisecond
+
+// appID is photon-server's application registered with LRCLIB, sent with every request for its
+// higher allowance. It is a client-side application's ID, which LRCLIB says is public and safe to
+// ship, so every server sends the same.
+const appID = "wxsfG0FcBhGKgjvVBfYCwbko8hZ3MKBHWX3qXF3D_HE"
+
+// longest is the longest duration LRCLIB takes, in seconds; it refuses a lookup by any longer.
+const longest = 3600
 
 type Client struct {
 	api    provider.Client
 	header http.Header
-	pace   provider.Pace
+	// turn is held for a request and the gap after it, so requests go one at a time.
+	turn chan struct{}
+	gap  time.Duration
 }
 
-// New is a client naming the server, at version, as LRCLIB asks of every client.
+// New is a client naming the server, at version, and where it is from, as LRCLIB asks of every
+// client: "LRCGET v0.2.0 (https://github.com/tranxuanthang/lrcget)".
 func New(version string, pauses provider.Pauses) *Client {
 	return &Client{
-		api:    provider.Client{Name: "lrclib", Base: baseURL, Pauses: pauses},
-		header: http.Header{"User-Agent": {"photon-server/" + version + " ( https://github.com/olivertgwalton/photon-server )"}},
-		pace:   provider.Pace{Every: every},
+		api: provider.Client{Name: "lrclib", Base: baseURL, Pauses: pauses},
+		header: http.Header{
+			"User-Agent":    {"photon-server " + version + " (https://github.com/olivertgwalton/photon-server)"},
+			"Lrclib-App-Id": {appID},
+		},
+		turn: make(chan struct{}, 1),
+		gap:  gap,
 	}
 }
 
@@ -76,8 +92,8 @@ func (c *Client) Lyrics(ctx context.Context, q domain.LyricsQuery) (string, erro
 	if q.Album != "" {
 		exact.Set("album_name", q.Album)
 	}
-	if seconds > 0 {
-		exact.Set("duration", strconv.Itoa(int(math.Round(seconds))))
+	if whole := int(math.Round(seconds)); whole >= 1 && whole <= longest {
+		exact.Set("duration", strconv.Itoa(whole))
 	}
 	var r record
 	found, err := c.get(ctx, "get", exact, &r)
@@ -97,9 +113,18 @@ func (c *Client) Lyrics(ctx context.Context, q domain.LyricsQuery) (string, erro
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, into any) (bool, error) {
-	if err := c.pace.Wait(ctx); err != nil {
-		return false, err
+	select {
+	case c.turn <- struct{}{}:
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
+	defer func() {
+		select {
+		case <-ctx.Done():
+		case <-time.After(c.gap):
+		}
+		<-c.turn
+	}()
 	err := c.api.Do(ctx, provider.Request{Method: http.MethodGet, Path: path, Query: q, Header: c.header}, into)
 	if errors.Is(err, provider.ErrNotFound) {
 		return false, nil

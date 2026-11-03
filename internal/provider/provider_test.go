@@ -163,3 +163,33 @@ func TestAShortPauseIsWaitedOut(t *testing.T) {
 		t.Errorf("asked after %v, want the pause waited out", waited)
 	}
 }
+
+// A provider answering 503 that says when to ask again, as an overloaded LRCLIB does, is asked again
+// then; one that says nothing of when is a failure, not asked in a loop.
+func TestAnOverloadedProviderIsAskedAgainWhenItSays(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked++
+		if r.URL.Path == "/silent" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if asked == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if _, err := w.Write([]byte(`{}`)); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer srv.Close()
+	c := Client{Name: "test", Base: srv.URL, Pauses: pauses{}}
+	if _, err := c.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/"}); err != nil || asked != 2 {
+		t.Errorf("a 503 saying when: %v after %d requests; want it answered on the second", err, asked)
+	}
+	asked = 0
+	if _, err := c.Bytes(t.Context(), Request{Method: http.MethodGet, Path: "/silent"}); err == nil || asked != 1 {
+		t.Errorf("a 503 saying nothing: %v after %d requests; want a failure on the first", err, asked)
+	}
+}
