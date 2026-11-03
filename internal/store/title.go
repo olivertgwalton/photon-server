@@ -290,7 +290,9 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 		p.Tracks, err = s.Tracks(ctx, profile, item.ID)
 	case domain.ItemAuthor:
 		p.Books, err = s.Books(ctx, profile, item.ID)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack, domain.ItemBook:
+	case domain.ItemTrack:
+		p.Versions, p.Lyrics, err = s.trackVersions(ctx, item)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemBook:
 		var versions map[uuid.UUID][]VersionPage
 		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
 		p.Versions = versions[item.ID]

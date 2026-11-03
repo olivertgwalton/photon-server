@@ -159,7 +159,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	n.providers = metadataProviders(n.st, n.plugins, n.cache)
 	offers := remote.New(n.providers, n.relay)
 	n.parts = library.Parts{Places: n.st, Streams: offers}
-	n.lyrics = lyrics.Finder{Parts: n.parts, Store: n.st, Providers: n.providers, Log: n.logger}
+	n.lyrics = lyrics.Finder{Parts: n.parts, Store: n.st, Providers: n.providers}
 	n.conversions, err = playback.NewConversions(n.st, n.parts, n.cache, n.remuxer, n.tools.FFmpeg.Path, filepath.Join(n.cacheRoot, "downloads"), n.id)
 	if err != nil {
 		return err
@@ -310,6 +310,7 @@ func (n *node) workers() []*jobs.Worker {
 		domain.JobIdentify: n.identify,
 		// Asking a plugin reads no media, so it is no reader's.
 		domain.JobSegments: analysis.Segments(st, n.providers),
+		domain.JobLyrics:   n.lyrics.Fetch,
 	}
 	// A node without yt-dlp leaves themes to one with it.
 	if n.tools.YTDLP.Path != "" {

@@ -49,9 +49,11 @@ type Card struct {
 	Artist, Album, Author   *TitleRef
 	DiscNumber, TrackNumber *int
 	Artists                 []string
-	Series                  string
-	SeriesIndex             *float64
-	Thumb                   uuid.UUID
+	// Lyrics is how a track's lyrics are timed, "" for none known.
+	Lyrics      domain.LyricsTiming
+	Series      string
+	SeriesIndex *float64
+	Thumb       uuid.UUID
 	// ShowThumb is an episode's show's thumb, the landscape picture lettered with its name, which a
 	// row of what is watched draws the episode by where the profile chose it. It is not answered
 	// beside the card's own.
@@ -383,6 +385,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		ratings  map[uuid.UUID][]domain.Rating
 		posters  []shownPoster
 		music    map[uuid.UUID]musicPlace
+		timings  map[uuid.UUID]domain.LyricsTiming
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
@@ -412,6 +415,10 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 		posters, err = s.collectionPosters(gctx, profile, rows)
 		return err
 	})
+	g.Go(func() (err error) {
+		timings, err = s.lyricsTimings(gctx, rows)
+		return err
+	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
@@ -429,7 +436,7 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 			Origin: sets[r.ID].Origin, Overview: deref(r.Overview), Logo: first(pictures[r.ID][domain.ArtworkLogo]),
 			Genres: r.Genres, Certificate: cmp.Or(deref(r.Certificate), shows[r.ID].certificate), Ratings: ratings[r.ID],
 			Artist: music[r.ID].artist, Album: music[r.ID].album, Author: music[r.ID].author, DiscNumber: r.DiscNumber, TrackNumber: r.TrackNumber,
-			Artists: r.Artists, Series: deref(r.Series), SeriesIndex: r.SeriesIndex,
+			Artists: r.Artists, Lyrics: timings[r.ID], Series: deref(r.Series), SeriesIndex: r.SeriesIndex,
 		}
 		c := &cards[n]
 		if set, ok := sets[r.ID]; ok {

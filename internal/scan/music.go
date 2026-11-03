@@ -35,6 +35,8 @@ type trackPlan struct {
 	number  int
 	title   string
 	version versionPlan
+	// lyrics is how the lyrics it carries are timed, as Parts.Lyrics would read them.
+	lyrics domain.LyricsTiming
 }
 
 // discFolder is a folder holding one disc of an album, "CD2" or "Disc 1".
@@ -62,10 +64,27 @@ func planTracks(root string, f library.Folder) ([]trackPlan, map[string]error) {
 		plans = append(plans, trackPlan{
 			file: file, tags: tags, disc: tags.Disc, number: tags.Track,
 			title: tags.Title, version: versionPlan{parts: []library.File{file}},
+			lyrics: ownLyrics(root, f, rel, tags),
 		})
 	}
 	numberTracks(path.Base(f.Path), plans)
 	return plans, unread
+}
+
+// ownLyrics is how the lyrics a track carries are timed: its LRC file's where it has one beside it,
+// else its tags'.
+func ownLyrics(root string, f library.Folder, rel string, tags media.Tags) domain.LyricsTiming {
+	beside := slices.ContainsFunc(f.Files, func(o library.File) bool {
+		return path.Join(f.Path, o.Name) == library.LyricsFile(rel)
+	})
+	if !beside {
+		return tags.Lyrics
+	}
+	text, err := library.ReadLyricsFile(root, rel)
+	if err != nil {
+		return tags.Lyrics
+	}
+	return media.TimingOf(text)
 }
 
 // numberTracks places the tracks a folder's tags leave unplaced: on the disc its folder names, by
@@ -176,6 +195,7 @@ func albumsOf(folder string, plans []trackPlan, read [][]store.Version) []store.
 			Year: t.tags.Year, Released: t.tags.Released, Genres: t.tags.Genres, Folder: folder, Version: read[i][0],
 		})
 		a.Tracks[len(a.Tracks)-1].Version.Gain = t.tags.Gain
+		a.Tracks[len(a.Tracks)-1].Version.Lyrics = t.lyrics
 		if t.tags.Pictured && !slices.ContainsFunc(a.Artwork, func(p domain.Artwork) bool { return p.Kind == domain.ArtworkPoster }) {
 			a.Artwork = append(a.Artwork, domain.Artwork{Kind: domain.ArtworkPoster, Path: path.Join(folder, t.file.Name)})
 		}

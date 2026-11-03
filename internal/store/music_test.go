@@ -3,6 +3,7 @@
 package store
 
 import (
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 func track(title string, disc, number int, artists ...string) Track {
@@ -221,7 +223,9 @@ func TestATrackKeepsItsReplayGain(t *testing.T) {
 }
 
 // A track's lyrics are asked by its artist, title, album and length, of the sources its library
-// ranks for them; what a source said is kept, and a none is believed for a while.
+// ranks for them, by a job queued as it is found; what a source said is kept, timed, and a none is
+// believed for a while. A full refresh asks again, the lyrics standing until it is answered, and a
+// track whose own file carries lyrics asks no source.
 func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -229,15 +233,42 @@ func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sung := track("Cry For Me", 1, 2, "The Weeknd")
+	sung.Version.Lyrics = domain.Untimed
 	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
 		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
-		Tracks: []Track{track("Timeless", 1, 1, "The Weeknd", "Playboi Carti")},
+		Tracks: []Track{track("Timeless", 1, 1, "The Weeknd", "Playboi Carti"), sung},
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	var id uuid.UUID
-	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track'`).Scan(&id); err != nil {
+	var id, own uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track' AND title = 'Timeless'`).Scan(&id); err != nil {
 		t.Fatal(err)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track' AND title = 'Cry For Me'`).Scan(&own); err != nil {
+		t.Fatal(err)
+	}
+	queued := func() []uuid.UUID {
+		t.Helper()
+		ids, err := queryColumn[uuid.UUID](ctx, s.pool, `SELECT subject FROM jobs WHERE kind = 'lyrics'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE kind = 'lyrics'`); err != nil {
+			t.Fatal(err)
+		}
+		return ids
+	}
+	timings := func() map[uuid.UUID]domain.LyricsTiming {
+		t.Helper()
+		m, err := s.lyricsTimings(ctx, []*model.Item{{ID: id, Kind: domain.ItemTrack}, {ID: own, Kind: domain.ItemTrack}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	if got := queued(); !slices.Equal(got, []uuid.UUID{id}) {
+		t.Errorf("lyrics asked for %v, want for Timeless alone, as Cry For Me carries its own", got)
 	}
 	ask, err := s.LyricsAsk(ctx, id)
 	if err != nil {
@@ -250,25 +281,48 @@ func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 	if diff := cmp.Diff(want, ask); diff != "" {
 		t.Errorf("asked by (-want +got):\n%s", diff)
 	}
-	if _, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || kept {
-		t.Errorf("before asking: kept %v, %v", kept, err)
+	if _, current, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || current {
+		t.Errorf("before asking: current %v, %v", current, err)
 	}
-	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, ""); err != nil {
+
+	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if text, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !kept || text != "" {
-		t.Errorf("a none: %q %v %v, want it kept", text, kept, err)
+	if text, current, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !current || text != "" {
+		t.Errorf("a none: %q %v %v, want it current", text, current, err)
+	}
+	if err := s.AskLyrics(ctx, id); err != nil || len(queued()) != 0 {
+		t.Errorf("a none just answered is asked again, or %v", err)
 	}
 	if _, err := s.pool.Exec(ctx, `UPDATE fetched_lyrics SET fetched_at = now() - interval '31 days'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || kept {
+	if _, current, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || current {
 		t.Errorf("a none a month old is still believed, or %v", err)
 	}
-	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, "[00:01.00]Timeless"); err != nil {
+	if err := s.AskLyrics(ctx, id); err != nil || len(queued()) != 1 {
+		t.Errorf("a none a month old is not asked again, or %v", err)
+	}
+
+	if err := s.KeepLyrics(ctx, id, domain.SourceLRCLIB, "[00:01.00]Timeless", domain.TimedByLine); err != nil {
 		t.Fatal(err)
 	}
-	if text, kept, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !kept || text != "[00:01.00]Timeless" {
-		t.Errorf("lyrics found: %q %v %v", text, kept, err)
+	if text, current, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB); err != nil || !current || text != "[00:01.00]Timeless" {
+		t.Errorf("lyrics found: %q %v %v", text, current, err)
+	}
+	wantTimings := map[uuid.UUID]domain.LyricsTiming{id: domain.TimedByLine, own: domain.Untimed}
+	if diff := cmp.Diff(wantTimings, timings()); diff != "" {
+		t.Errorf("timings (-want +got):\n%s", diff)
+	}
+
+	if err := s.RefreshLibrary(ctx, lib.ID, domain.RefreshAll); err != nil {
+		t.Fatal(err)
+	}
+	text, current, err := s.KeptLyrics(ctx, id, domain.SourceLRCLIB)
+	if err != nil || current || text != "[00:01.00]Timeless" || !slices.Equal(queued(), []uuid.UUID{id}) {
+		t.Errorf("after a full refresh: %q, current %v, %v; want them asked again, standing meanwhile", text, current, err)
+	}
+	if diff := cmp.Diff(wantTimings, timings()); diff != "" {
+		t.Errorf("timings while asked again (-want +got):\n%s", diff)
 	}
 }
