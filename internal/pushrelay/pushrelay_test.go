@@ -81,9 +81,12 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *relay) credential() string { return string(rune('0' + len(r.registered))) }
 
 // A server asks for a credential the first time it sends, keeps it, and asks again when the relay
-// no longer knows it; a device APNs has ended is ErrGone.
+// no longer knows it; a device APNs has ended, or the relay refuses, is ErrGone.
 func TestAServerIsKnownToTheRelayByTheCredentialItKeeps(t *testing.T) {
-	rx := &relay{status: map[string]int{"ended": http.StatusGone, "broken": http.StatusBadGateway}}
+	rx := &relay{status: map[string]int{
+		"ended": http.StatusGone, "refused": http.StatusBadRequest,
+		"broken": http.StatusBadGateway, "busy": http.StatusTooManyRequests,
+	}}
 	svc := httptest.NewServer(rx)
 	defer svc.Close()
 	server, k := uuid.NewV7(), &kept{}
@@ -107,8 +110,13 @@ func TestAServerIsKnownToTheRelayByTheCredentialItKeeps(t *testing.T) {
 	if err := r.Send(t.Context(), Message{Token: "ended"}); !errors.Is(err, ErrGone) {
 		t.Errorf("a device APNs ended: %v, want ErrGone", err)
 	}
-	if err := r.Send(t.Context(), Message{Token: "broken"}); err == nil || errors.Is(err, ErrGone) {
-		t.Errorf("a relay that failed: %v, want an error to try again on", err)
+	if err := r.Send(t.Context(), Message{Token: "refused"}); !errors.Is(err, ErrGone) {
+		t.Errorf("a device the relay refuses: %v, want ErrGone", err)
+	}
+	for _, token := range []string{"broken", "busy"} {
+		if err := r.Send(t.Context(), Message{Token: token}); err == nil || errors.Is(err, ErrGone) {
+			t.Errorf("a relay that failed for %s: %v, want an error to try again on", token, err)
+		}
 	}
 }
 
