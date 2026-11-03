@@ -35,6 +35,14 @@ var audioCodecs = map[string]string{
 // where any one is not known, since a client takes a list as all there is.
 func variant(streams []domain.Stream, video *domain.VideoPlan, audio *domain.AudioPlan, kbps int) hls.Variant {
 	v := hls.Variant{BandwidthKbps: kbps}
+	if video == nil {
+		if audio != nil {
+			if codec := audioCodec(streams, *audio); codec != "" {
+				v.Codecs = []string{codec}
+			}
+		}
+		return v
+	}
 	var picture domain.Stream
 	for _, s := range streams {
 		if s.Index == video.Stream && s.Kind == domain.StreamVideo {

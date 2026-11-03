@@ -255,8 +255,13 @@ func (r *Remuxer) cut(ctx context.Context, s *session, run *run, out io.Reader) 
 	if err != nil {
 		return err
 	}
-	// A frame sits a few milliseconds off the keyframe index: both are rounded.
-	const slack = 5 * time.Millisecond
+	// A frame sits a few milliseconds off the keyframe index: both are rounded. Sound alone, cut by
+	// time, starts a frame or so early, its encoder's priming before the point asked for: 1024
+	// samples of AAC, 46 ms at 22 kHz.
+	slack := 5 * time.Millisecond
+	if s.sources[run.part].Video == nil {
+		slack = 50 * time.Millisecond
+	}
 	first := run.at
 	n := first
 	// The segment being written, under a name no player asks for until it is whole.

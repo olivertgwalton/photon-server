@@ -22,9 +22,12 @@ func quiet() []string {
 // it, where WebVTT's ends one only as it begins the next.
 func args(in media.Input, hw Hardware, start time.Duration, video *domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer, f domain.SegmentFormat, subtitles []subtitleSocket) []string {
 	a := quiet()
-	if video.Encode != nil {
+	switch {
+	case video == nil:
+		// Sound alone is cut where it is asked, a frame of it being a few milliseconds long.
+	case video.Encode != nil:
 		a = append(a, hw.inputArgs(*video.Encode)...)
-	} else {
+	default:
 		// Copied video starts at the keyframe before start, and audio encoded beside it must too.
 		// Trimmed to start, it has nothing yet at the next keyframe, and the MP4 muxer, holding
 		// its first fragment until every track has a sample (delay_moov), puts that keyframe in
@@ -50,11 +53,15 @@ func args(in media.Input, hw Hardware, start time.Duration, video *domain.VideoP
 		a = append(a, "-f", "mpegts", "-mpegts_copyts", "1")
 	case domain.SegmentsFMP4:
 		// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
-		a = append(a,
-			"-strict", "experimental",
-			"-f", "mp4", "-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
-			"-use_editlist", "0",
-		)
+		// Every frame of sound is a keyframe, so sound alone is cut a segment to a fragment.
+		cut := []string{"-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer"}
+		if video == nil {
+			cut = []string{
+				"-movflags", "+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
+				"-frag_duration", strconv.FormatInt(SegmentLength.Microseconds(), 10),
+			}
+		}
+		a = append(append(append(a, "-strict", "experimental", "-f", "mp4"), cut...), "-use_editlist", "0")
 	}
 	a = append(a,
 		"-avoid_negative_ts", "disabled",
@@ -138,6 +145,9 @@ func burnArgs(hw Hardware, start time.Duration, in, filter string, e domain.Vide
 // streamArgs maps the input's video and audio, each copied or encoded as planned, video on hw,
 // from start.
 func streamArgs(hw Hardware, start time.Duration, video *domain.VideoPlan, audio *domain.AudioPlan, layer *styledLayer) []string {
+	if video == nil {
+		return audioArgs(audio)
+	}
 	var a []string
 	in := "0:" + strconv.Itoa(video.Stream)
 	switch e := video.Encode; {
@@ -175,16 +185,21 @@ func streamArgs(hw Hardware, start time.Duration, video *domain.VideoPlan, audio
 	if len(bsf) > 0 {
 		a = append(a, "-bsf:v", strings.Join(bsf, ","))
 	}
-	if audio != nil {
-		a = append(a, "-map", "0:"+strconv.Itoa(audio.Stream))
-		if e := audio.Encode; e != nil {
-			if e.Boost > 0 {
-				a = append(a, "-af", "volume="+strconv.FormatFloat(e.Boost, 'f', -1, 64))
-			}
-			a = append(a, "-c:a", e.Codec, "-ac", strconv.Itoa(e.Channels), "-b:a", strconv.Itoa(e.BitrateKbps)+"k")
-		} else {
-			a = append(a, "-c:a", "copy")
-		}
+	return append(a, audioArgs(audio)...)
+}
+
+// audioArgs maps the input's audio, copied or encoded as planned, if it has any.
+func audioArgs(audio *domain.AudioPlan) []string {
+	if audio == nil {
+		return nil
 	}
-	return a
+	a := []string{"-map", "0:" + strconv.Itoa(audio.Stream)}
+	e := audio.Encode
+	if e == nil {
+		return append(a, "-c:a", "copy")
+	}
+	if e.Boost > 0 {
+		a = append(a, "-af", "volume="+strconv.FormatFloat(e.Boost, 'f', -1, 64))
+	}
+	return append(a, "-c:a", e.Codec, "-ac", strconv.Itoa(e.Channels), "-b:a", strconv.Itoa(e.BitrateKbps)+"k")
 }
