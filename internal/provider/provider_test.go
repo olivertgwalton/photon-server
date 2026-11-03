@@ -119,6 +119,27 @@ func TestALongPauseHoldsEveryNodeBack(t *testing.T) {
 	}
 }
 
+// A provider answering 429 with no wait is still given a moment between requests, not asked in a
+// loop until it bans the server.
+func TestATooManyRequestsWithNoWaitIsNotAskedInALoop(t *testing.T) {
+	asked := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 2500*time.Millisecond)
+	defer cancel()
+	c := Client{Name: "test", Base: srv.URL, Pauses: pauses{}}
+	if _, err := c.Bytes(ctx, Request{Method: http.MethodGet, Path: "/"}); err == nil {
+		t.Error("a provider that only answered 429 was answered")
+	}
+	if asked > 3 {
+		t.Errorf("asked %d times in 2.5s, want a second between each", asked)
+	}
+}
+
 // A moment another node was asked to wait is waited out before asking, not spent on a 429.
 func TestAShortPauseIsWaitedOut(t *testing.T) {
 	asked := 0

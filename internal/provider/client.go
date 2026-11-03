@@ -230,14 +230,14 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// retryAfter reads a Retry-After header, seconds or a date; a provider that says nothing is given
-// a second.
+// retryAfter reads a Retry-After header, seconds or a date; a provider that says nothing, or to ask
+// again at once, is given a second, so one answering 429 with no wait is not asked in a loop.
 func retryAfter(v string) time.Duration {
 	if s, err := strconv.Atoi(v); err == nil && s >= 0 {
-		return time.Duration(s) * time.Second
+		return max(time.Duration(s)*time.Second, time.Second)
 	}
 	if t, err := http.ParseTime(v); err == nil {
-		return max(time.Until(t), 0)
+		return max(time.Until(t), time.Second)
 	}
 	return time.Second
 }
