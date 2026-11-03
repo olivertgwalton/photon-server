@@ -32,6 +32,8 @@ type catalogue interface {
 	Title(ctx context.Context, profile, id uuid.UUID) (store.TitlePage, error)
 	Seasons(ctx context.Context, profile, show uuid.UUID) ([]store.SeasonCard, error)
 	Episodes(ctx context.Context, profile, of uuid.UUID) ([]store.Card, error)
+	Albums(ctx context.Context, profile, artist uuid.UUID) ([]store.Card, error)
+	Tracks(ctx context.Context, profile, album uuid.UUID) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
@@ -371,7 +373,19 @@ func (a *API) titleChildren(w http.ResponseWriter, r *http.Request, profile, par
 		}
 		page, total := paged(members, cardID, l)
 		a.writeList(w, r, page, total, l.start, l)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemArtist, domain.ItemAlbum:
+		list := a.svc.Catalogue.Albums
+		if kind == domain.ItemAlbum {
+			list = a.svc.Catalogue.Tracks
+		}
+		cards, err := list(r.Context(), profile, parent)
+		if err != nil {
+			a.internal(w, r, err)
+			return
+		}
+		page, total := paged(cards, cardID, l)
+		a.writeList(w, r, page, total, l.start, l)
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
 		a.writeJSON(w, queryResult{StartIndex: l.start})
 	}
 }
@@ -534,4 +548,28 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 func (a *API) none(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	a.write(w, []byte(`[]`))
+}
+
+// artists answers Jellyfin's /Artists and /Artists/AlbumArtists: the artists of a music library an
+// app names, else of every one. photon's artists are its albums' artists, so both lists are those.
+func (a *API) artists(w http.ResponseWriter, r *http.Request) {
+	l := listedOf(w, r)
+	libs, seen, err := a.seenLibraries(r)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	parent, ok := optionalID(query(r, "parentId"))
+	if !ok {
+		a.refuse(w, http.StatusBadRequest)
+		return
+	}
+	if parent != (uuid.UUID{}) {
+		libs = nil
+		if lib, ok := seen[parent]; ok {
+			libs = []*store.SeenLibrary{lib}
+		}
+	}
+	libs = slices.DeleteFunc(slices.Clone(libs), func(l *store.SeenLibrary) bool { return l.Kind != domain.LibraryMusic })
+	a.wall(libs, w, r, []string{itemKinds[domain.ItemArtist]}, l)
 }

@@ -70,6 +70,13 @@ type item struct {
 	CollectionType          string              `json:"CollectionType,omitempty"`
 	SeriesPrimaryImageTag   string              `json:"SeriesPrimaryImageTag,omitempty"`
 	SeasonName              string              `json:"SeasonName,omitempty"`
+	Album                   string              `json:"Album,omitempty"`
+	AlbumID                 string              `json:"AlbumId,omitempty"`
+	AlbumPrimaryImageTag    string              `json:"AlbumPrimaryImageTag,omitempty"`
+	AlbumArtist             string              `json:"AlbumArtist,omitempty"`
+	AlbumArtists            []nameGUID          `json:"AlbumArtists,omitempty"`
+	Artists                 []string            `json:"Artists,omitempty"`
+	ArtistItems             []nameGUID          `json:"ArtistItems,omitempty"`
 	MediaStreams            []mediaStream       `json:"MediaStreams,omitempty"`
 	VideoType               string              `json:"VideoType,omitempty"`
 	ImageTags               map[string]string   `json:"ImageTags"`
@@ -84,6 +91,12 @@ type item struct {
 	Trickplay map[string]map[int]trickplayInfo `json:"Trickplay,omitempty"`
 
 	Chapters []chapterInfo `json:"Chapters,omitempty"`
+}
+
+// nameGUID is Jellyfin's NameGuidPair: an artist as an album or a track names it.
+type nameGUID struct {
+	Name string `json:"Name"`
+	ID   string `json:"Id"`
 }
 
 // blurhash is the BlurHashes of an item's pictures of one kind, by tag.
@@ -118,16 +131,20 @@ type person struct {
 var itemKinds = map[domain.ItemKind]string{
 	domain.ItemMovie: "Movie", domain.ItemShow: "Series", domain.ItemSeason: "Season",
 	domain.ItemEpisode: "Episode", domain.ItemCollection: "BoxSet", domain.ItemExtra: "Video",
+	domain.ItemArtist: "MusicArtist", domain.ItemAlbum: "MusicAlbum", domain.ItemTrack: "Audio",
 }
 
 // collectionTypes are Jellyfin's CollectionType for each kind of library. A mixed library has none,
 // as Jellyfin's has none, and its apps browse it as folders.
-var collectionTypes = map[domain.LibraryKind]string{domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows"}
+var collectionTypes = map[domain.LibraryKind]string{
+	domain.LibraryMovies: "movies", domain.LibraryShows: "tvshows", domain.LibraryMusic: "music",
+}
 
-// Shapes of the pictures Jellyfin's apps lay cards out by.
+// Shapes of the pictures Jellyfin's apps lay cards out by: an album's cover is square.
 const (
 	posterAspect = 2.0 / 3
 	stillAspect  = 16.0 / 9
+	coverAspect  = 1.0
 )
 
 func tag(id uuid.UUID) string {
@@ -222,12 +239,39 @@ func (a *API) fromCard(c store.Card) item {
 			it.ParentLogoItemID, it.ParentLogoImageTag = it.SeriesID, guid(c.Logo)
 		}
 		it.SeriesPrimaryImageTag = tag(c.Poster)
-	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+	case domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
+		it.music(c)
+	case domain.ItemMovie, domain.ItemShow, domain.ItemSeason, domain.ItemExtra, domain.ItemCollection:
 		it.pictures(c.Poster, c.Backdrop, c.Logo, c.Thumb, c.Blurhashes)
 		it.PrimaryImageAspectRatio = posterAspect
 	}
 	it.UserData = a.userData(c.ID, c.State, c.DurationMS, c.Kind)
 	return it
+}
+
+// music fills in an artist, album or track as Jellyfin's music apps read one: an album under its
+// album artist, and a track on its album, by its disc and number, naming its own artists. Of
+// those, only the album artist is an item of photon's, so only it has an id.
+func (it *item) music(c store.Card) {
+	it.pictures(c.Poster, c.Backdrop, c.Logo, c.Thumb, c.Blurhashes)
+	it.PrimaryImageAspectRatio = coverAspect
+	if c.Artist != nil {
+		it.AlbumArtist, it.AlbumArtists = c.Artist.Title, []nameGUID{{Name: c.Artist.Title, ID: guid(c.Artist.ID)}}
+		it.ParentID = guid(c.Artist.ID)
+	}
+	if c.Kind != domain.ItemTrack {
+		return
+	}
+	it.ParentIndexNumber, it.IndexNumber, it.Artists = c.DiscNumber, c.TrackNumber, c.Artists
+	for _, name := range c.Artists {
+		if c.Artist != nil && strings.EqualFold(name, c.Artist.Title) {
+			it.ArtistItems = append(it.ArtistItems, it.AlbumArtists[0])
+		}
+	}
+	if c.Album != nil {
+		it.Album, it.AlbumID, it.ParentID = c.Album.Title, guid(c.Album.ID), guid(c.Album.ID)
+		it.AlbumPrimaryImageTag = tag(c.Poster)
+	}
 }
 
 // fromSeason is a show's season.
@@ -250,6 +294,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		Poster: first(p.Artwork[domain.ArtworkPoster]), Backdrop: first(p.Artwork[domain.ArtworkBackdrop]),
 		Logo: first(p.Artwork[domain.ArtworkLogo]), Thumb: first(p.Artwork[domain.ArtworkThumb]), State: p.State,
 		Show: p.Show, Season: p.Season, SeasonNumber: p.SeasonNumber, EpisodeNumber: p.EpisodeNumber,
+		Artist: p.Artist, Album: p.Album, DiscNumber: p.DiscNumber, TrackNumber: p.TrackNumber, Artists: p.Artists,
 		EpisodeEnd: p.EpisodeEnd, Overview: p.Overview, Genres: p.Genres, Certificate: p.Certificate,
 		Ratings: p.Ratings, Blurhashes: p.Blurhashes,
 	})

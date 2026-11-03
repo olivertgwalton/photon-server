@@ -189,6 +189,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	// Someone is found by name and opened by id: /Persons/{name} is not answered, as two people
 	// here may share a name, and apps open a cast member by the id an item gives.
 	a.handle(a.persons, "GET /Persons")
+	a.handle(a.artists, "GET /Artists", "GET /Artists/AlbumArtists")
 	a.handle(a.genres, "GET /Genres")
 	a.handle(a.studios, "GET /Studios")
 	a.handle(a.filters, "GET /Items/Filters")
