@@ -1,24 +1,22 @@
 package domain
 
-// HomeRow is a row of a profile's home page.
+// HomeRow is a row of a profile's home page. Home is films and television: music and books are
+// reached by their own libraries and the profile's favourites.
 type HomeRow string
 
 const (
 	// RowContinueWatching is films and episodes stopped part way, the most recent first.
 	RowContinueWatching HomeRow = "continue_watching"
-	// RowContinueReading is books stopped part way through, the most recently read first.
-	RowContinueReading HomeRow = "continue_reading"
 	// RowNextUp is, for each show under way, the episode after the last one watched.
 	RowNextUp HomeRow = "next_up"
 	// RowWatchlist is what the profile put on its watchlist, the latest first.
-	RowWatchlist  HomeRow = "watchlist"
+	RowWatchlist HomeRow = "watchlist"
+	// RowFavourites is the films and shows the profile marked, the latest first: its music and
+	// books are on its favourites, not its home.
 	RowFavourites HomeRow = "favourites"
 	// RowRecentFilms and RowRecentShows are what was added last; a show by its newest episode.
 	RowRecentFilms HomeRow = "recently_added_films"
 	RowRecentShows HomeRow = "recently_added_shows"
-	// RowRecentAlbums and RowRecentBooks are the albums and books added last.
-	RowRecentAlbums HomeRow = "recently_added_albums"
-	RowRecentBooks  HomeRow = "recently_added_books"
 	// RowRecentlyReleased is films and shows newly out, a show by its newest episode's air date.
 	RowRecentlyReleased HomeRow = "recently_released"
 	// RowTopRatedUnwatched is the best rated films and shows the profile has not begun.
@@ -26,23 +24,19 @@ const (
 )
 
 func HomeRows() []HomeRow {
-	return []HomeRow{RowContinueWatching, RowContinueReading, RowNextUp, RowFavourites, RowWatchlist, RowRecentFilms, RowRecentShows, RowRecentAlbums, RowRecentBooks, RowRecentlyReleased, RowTopRatedUnwatched}
+	return []HomeRow{RowContinueWatching, RowNextUp, RowFavourites, RowWatchlist, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
 }
 
 // LibraryKinds are the kinds of library the row is made once for each of, as Plex's library hubs
 // are: none for a row of the profile's own. A title in two libraries is in each one's row.
 func (r HomeRow) LibraryKinds() []LibraryKind {
 	switch r {
-	case RowContinueWatching, RowContinueReading, RowNextUp, RowWatchlist, RowFavourites:
+	case RowContinueWatching, RowNextUp, RowWatchlist, RowFavourites:
 		return nil
 	case RowRecentFilms:
 		return []LibraryKind{LibraryMovies, LibraryMixed}
 	case RowRecentShows:
 		return []LibraryKind{LibraryShows, LibraryMixed}
-	case RowRecentAlbums:
-		return []LibraryKind{LibraryMusic}
-	case RowRecentBooks:
-		return []LibraryKind{LibraryBooks}
 	case RowRecentlyReleased, RowTopRatedUnwatched:
 		return []LibraryKind{LibraryMovies, LibraryShows, LibraryMixed}
 	}
@@ -55,7 +49,7 @@ func (r HomeRow) WearsCardArt() bool {
 	switch r {
 	case RowContinueWatching, RowNextUp:
 		return true
-	case RowContinueReading, RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentAlbums, RowRecentBooks, RowRecentlyReleased, RowTopRatedUnwatched:
+	case RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched:
 		return false
 	}
 	return false

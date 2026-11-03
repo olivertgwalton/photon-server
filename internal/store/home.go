@@ -23,12 +23,6 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE w.profile_id = @profile AND w.position_ms > 0 AND i.kind IN ('movie', 'episode')
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))
 		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
-	// A book read or listened to part way, and not finished.
-	domain.RowContinueReading: `
-		SELECT ` + itemColumnsOf("i") + ` FROM watch_state w JOIN items i ON i.id = w.item_id
-		WHERE w.profile_id = @profile AND i.kind = 'book' AND w.watched_at IS NULL AND (w.progression > 0 OR w.position_ms > 0)
-			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i))
-		ORDER BY w.last_played_at DESC, i.id DESC OFFSET @offset LIMIT @limit`,
 	// As Jellyfin's: the episode after the furthest one watched of each show, in the show's order
 	// and the specials placed in no season aside, unless it is under way already and so in Continue Watching; the shows
 	// in the order that episode was last played. The shows are put in that order before each one's
@@ -58,19 +52,11 @@ var rowQueries = map[domain.HomeRow]string{
 		WHERE coalesce(started.position_ms, 0) = 0
 			AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE NOT EXISTS (SELECT 1 FROM seen_before(v, last.show)))
 		ORDER BY last.last_played_at DESC, last.show_id DESC OFFSET @offset LIMIT @limit`,
-	domain.RowWatchlist:  listRow("watchlist"),
-	domain.RowFavourites: listRow("favourites"),
+	domain.RowWatchlist:  listRow("watchlist", ""),
+	domain.RowFavourites: listRow("favourites", screenKinds),
 	domain.RowRecentFilms: `
 		SELECT ` + itemColumns + ` FROM items
 		WHERE library_id = @lib AND kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
-		ORDER BY added_at DESC, id DESC LIMIT @limit`,
-	domain.RowRecentAlbums: `
-		SELECT ` + itemColumns + ` FROM items
-		WHERE library_id = @lib AND kind = 'album' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
-		ORDER BY added_at DESC, id DESC LIMIT @limit`,
-	domain.RowRecentBooks: `
-		SELECT ` + itemColumns + ` FROM items
-		WHERE library_id = @lib AND kind = 'book' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	// A show by its newest episode. The episodes are walked newest first, one step to the next
 	// show not yet found, so only the newest are read rather than every episode of every show.
@@ -144,10 +130,21 @@ func onList(table string) string {
 		WHERE l.profile_id = @profile AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, i) AND NOT EXISTS (SELECT 1 FROM seen_before(v, i)))`
 }
 
-// listRow is one of the profile's lists, the latest added first.
-func listRow(table string) string {
-	return `SELECT ` + itemColumnsOf("i") + onList(table) + ` ORDER BY l.added_at DESC, i.id DESC OFFSET @offset LIMIT @limit`
+// listRow is one of the profile's lists, the latest added first, of only the kinds of title named
+// where some are.
+func listRow(table, kinds string) string {
+	if kinds != "" {
+		kinds = ` AND i.kind IN (` + kinds + `)`
+	}
+	return `SELECT ` + itemColumnsOf("i") + onList(table) + kinds + ` ORDER BY l.added_at DESC, i.id DESC OFFSET @offset LIMIT @limit`
 }
+
+// screenKinds are the kinds of title a home row holds: films and television, as music and books are
+// kept to their own libraries and the profile's favourites.
+const screenKinds = `'movie', 'show', 'season', 'episode', 'collection'`
+
+// favouritesQuery is every title the profile marked, of every kind.
+var favouritesQuery = listRow("favourites", "")
 
 // librariesSeen are the libraries a profile sees, in the order it put them, those it has not placed
 // after, by name, as its library list is.
@@ -184,6 +181,17 @@ func (s *Store) RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeR
 	if !ok || row.LibraryKinds() != nil {
 		return nil, Extent{}, ErrNotFound
 	}
+	return s.listPage(ctx, profile, q, page)
+}
+
+// Favourites answers a page of every title the profile marked as a favourite, its music and books
+// among them, the latest first.
+func (s *Store) Favourites(ctx context.Context, profile uuid.UUID, page Page) ([]Card, Extent, error) {
+	return s.listPage(ctx, profile, favouritesQuery, page)
+}
+
+// listPage answers a page of q, a query of the profile's taking an offset and a limit.
+func (s *Store) listPage(ctx context.Context, profile uuid.UUID, q string, page Page) ([]Card, Extent, error) {
 	// LIMIT NULL is no limit.
 	all := pgx.NamedArgs{"profile": profile, "offset": 0, "limit": nil}
 	var items []*model.Item

@@ -68,7 +68,8 @@ type Mark string
 const (
 	MarkWatched   Mark = "watched"
 	MarkUnwatched Mark = "unwatched"
-	// MarkInProgress is a film part watched, or a show some of whose episodes are.
+	// MarkInProgress is a film part watched or a book part read, or a show some of whose episodes
+	// are.
 	MarkInProgress Mark = "in_progress"
 	MarkFavourite  Mark = "favourite"
 	MarkWatchlist  Mark = "watchlist"

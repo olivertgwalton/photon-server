@@ -35,13 +35,15 @@ to watchlist** in a card's menu. **Watchlist** in the sidebar shows them, newest
 
 Favourites are titles you like. They stay there after you watch them. Add one with the heart on its
 page, or **Add to favourites** in a card's menu. Anything can be a favourite, including a single
-episode or a collection.
+episode, a collection, a track or a book.
 
 **Favourites** in the sidebar groups them into **Films**, **Shows**, **Seasons**, **Episodes**,
-**Collections** and **Extras**, newest first.
+**Collections** and **Extras**, then **Artists**, **Albums**, **Tracks**, **Authors** and
+**Books**, newest first.
 
-Your watchlist and favourites also appear as rows on Home. See
-[Home rows](06-your-settings.md#home-rows).
+Your watchlist and favourites also appear as rows on Home. Home's Favourites row holds your
+favourite films and shows only: favourite music and books are here and in their own libraries.
+See [Home rows](06-your-settings.md#home-rows).
 
 ## History
 

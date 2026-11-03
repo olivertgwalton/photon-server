@@ -146,11 +146,12 @@ func markSQL(m domain.Mark) string {
 	case domain.MarkUnwatched:
 		return unwatched
 	case domain.MarkInProgress:
-		// A film or an episode is under way when its one watch state is played part way and not
-		// watched, which is a single lookup rather than one for each half.
+		// A film, an episode or a book is under way when its one watch state is played or read part
+		// way and not finished, which is a single lookup rather than one for each half.
 		return `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
-			ELSE items.kind IN ('movie', 'episode') AND EXISTS (SELECT 1 FROM watch_state w
-				WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NULL AND w.position_ms > 0) END`
+			ELSE items.kind IN ('movie', 'episode', 'book') AND EXISTS (SELECT 1 FROM watch_state w
+				WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NULL
+					AND (w.position_ms > 0 OR w.progression > 0)) END`
 	case domain.MarkFavourite:
 		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
 	case domain.MarkWatchlist:

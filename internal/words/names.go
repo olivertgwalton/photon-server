@@ -152,8 +152,6 @@ var rows = map[domain.HomeRow]string{
 	domain.RowContinueWatching: "Continue Watching", domain.RowNextUp: "Next Up",
 	domain.RowWatchlist: "Watchlist", domain.RowFavourites: "Favourites",
 	domain.RowRecentFilms: "Recently Added Films", domain.RowRecentShows: "Recently Added Shows",
-	domain.RowRecentAlbums: "Recently Added Albums", domain.RowRecentBooks: "Recently Added Books",
-	domain.RowContinueReading:  "Continue Reading",
 	domain.RowRecentlyReleased: "Recently Released", domain.RowTopRatedUnwatched: "Top Rated",
 }
 

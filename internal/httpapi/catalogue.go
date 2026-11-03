@@ -37,6 +37,7 @@ type catalogue interface {
 	Search(ctx context.Context, q store.SearchQuery) ([]store.Card, store.Extent, error)
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
+	Favourites(ctx context.Context, profile uuid.UUID, page store.Page) ([]store.Card, store.Extent, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	PlayOrder(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)

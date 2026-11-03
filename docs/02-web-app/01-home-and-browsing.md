@@ -18,7 +18,7 @@ scroll it a screen at a time. With the keyboard, Left and Right move from card t
 | Continue Watching | Films and episodes you stopped part way through, most recent first. |
 | Next Up | The next episode of each show you are watching. |
 | Watchlist | Titles you have saved to watch, newest first. |
-| Favourites | Titles you have marked as favourites, newest first. |
+| Favourites | Films and shows you have marked as favourites, newest first. |
 | Recently Added | One row for each film or show library, newest first. |
 | Recently Released | Films and shows out in the last year, in each library. |
 | Top Rated | Films and shows you have not started, best rated first, in each library. |
@@ -80,7 +80,7 @@ before A.
 
 | Filter | What it narrows to |
 | --- | --- |
-| Status | Watched, Unwatched, In progress, Favourites or Watchlist. |
+| Status | Watched, Unwatched, In progress, Favourites or Watchlist. In a books library, In progress is the books you are part way through. |
 | Genre | The library's genres. |
 | Year | Release years. |
 | Certificate | Age ratings. |

@@ -178,9 +178,17 @@ func (fakeCatalogue) RowPage(_ context.Context, _ uuid.UUID, row domain.HomeRow,
 		}, extentOf(2, 0, 2, page.Count), nil
 	case domain.RowFavourites:
 		return []store.Card{}, extentOf(0, 0, 0, page.Count), nil
-	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentAlbums, domain.RowRecentBooks, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched, domain.RowContinueReading:
+	case domain.RowRecentFilms, domain.RowRecentShows, domain.RowRecentlyReleased, domain.RowTopRatedUnwatched:
 	}
 	return nil, store.Extent{}, store.ErrNotFound
+}
+
+// Favourites are a film and an album, from offset 0.
+func (fakeCatalogue) Favourites(_ context.Context, _ uuid.UUID, page store.Page) ([]store.Card, store.Extent, error) {
+	if page.Offset > 0 {
+		return []store.Card{}, extentOf(2, page.Offset, 0, page.Count), nil
+	}
+	return []store.Card{{ID: films, Kind: domain.ItemMovie, Title: "Heat"}, {ID: films, Kind: domain.ItemAlbum, Title: "Kind of Blue"}}, extentOf(2, 0, 2, page.Count), nil
 }
 
 // LibraryRow answers, of a films library's row of films, a card titled after the row and how many
@@ -211,6 +219,10 @@ func TestProfileRow(t *testing.T) {
 		{"/api/v1/profile/rows/next_up?limit=3", http.StatusOK, `"offset":0,"more":false}`},
 		{"/api/v1/profile/rows/watchlist?total=all", http.StatusBadRequest, ""},
 		{"/api/v1/profile/rows/recently_added_films", http.StatusNotFound, ""},
+		// A row the server no longer has, as an older client may still ask for.
+		{"/api/v1/profile/rows/continue_reading", http.StatusNotFound, ""},
+		{"/api/v1/profile/favourites?total=exact", http.StatusOK, `"title":"Kind of Blue"`},
+		{"/api/v1/profile/favourites?offset=2&total=exact", http.StatusOK, `{"items":[],"offset":2,"more":false,"total":2}`},
 		{"/api/v1/profile/rows/watchlist?limit=0", http.StatusBadRequest, ""},
 		// An offset past where any list reaches is refused, not added to its page's length.
 		{"/api/v1/profile/rows/watchlist?offset=2147483647", http.StatusOK, `{"items":[],"offset":2147483647,"more":false}`},

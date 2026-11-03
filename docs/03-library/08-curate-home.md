@@ -19,7 +19,7 @@ they suit, and named after it, such as "Recently Added in Films".
 | Continue Watching | Films and episodes you stopped part way through, the most recent first |
 | Next Up | For each show you are watching, the next episode, with the shows you played most recently first |
 | Watchlist | What you added to your watchlist, newest first |
-| Favourites | What you marked as a favourite, newest first |
+| Favourites | The films and shows you marked as a favourite, newest first |
 | Recently Added Films | One for each library of films: the newest films |
 | Recently Added Shows | One for each library of shows: shows with newly added episodes |
 | Recently Released | One for each library: films released, and shows with an episode aired, in the past year |
@@ -68,6 +68,9 @@ it:
 ## Good to know
 
 - A title in two libraries shows once in your own rows, and once in each library's rows.
+- Home is films and shows. Music and books have no rows on it: open them from their libraries in
+  the sidebar, and find your favourite ones under **Favourites**. A book you are part way through
+  is under **In progress** in its library's **Filter**.
 - If a later version of photon-server adds a new kind of row, it appears at the bottom of your
   Home, so nothing new is hidden by accident.
 - Collections and playlists are not Home rows. Find collections under **Collections** in the

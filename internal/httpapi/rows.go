@@ -32,6 +32,20 @@ func (a *API) profileRow(r *http.Request, _ none) (pageJSON[cardJSON], error) {
 	return pageAt(cardsJSON(cards), page.Offset, extent), nil
 }
 
+// favourites answers a page of every title the profile marked, of every kind: its home's row is
+// its films and shows alone.
+func (a *API) favourites(r *http.Request, _ none) (pageJSON[cardJSON], error) {
+	page, err := paging(r, defaultWallLimit)
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
+	}
+	cards, extent, err := a.svc.Catalogue.Favourites(r.Context(), auth.SessionOf(r.Context()).Profile.ID, page)
+	if err != nil {
+		return pageJSON[cardJSON]{}, err
+	}
+	return pageAt(cardsJSON(cards), page.Offset, extent), nil
+}
+
 // libraryRow answers the first of one of a library's rows, as the home page has it: the newest or
 // the best, a count and no more, as Plex's and Jellyfin's are.
 func (a *API) libraryRow(r *http.Request, _ none) (listJSON[cardJSON], error) {
@@ -94,10 +108,15 @@ func (a *API) rowsRoutes() []route {
 	return []route{
 		a.handles(route{
 			pattern: "GET /api/v1/profile/rows/{row}", access: signedIn,
-			summary: "Page one of the profile's own rows: continue watching, next up, its watchlist or its favourites",
+			summary: "Page one of the profile's own rows: continue watching, next up, its watchlist or its favourite films and shows",
 			path:    []param{{"row", domain.HomeRow(""), "The row; a library's is asked of the library."}},
 			query:   pageParams, status: http.StatusOK,
 		}, a.profileRow),
+		a.handles(route{
+			pattern: "GET /api/v1/profile/favourites", access: signedIn,
+			summary: "Page every title the profile marked as a favourite, its music and books among them",
+			query:   pageParams, status: http.StatusOK,
+		}, a.favourites),
 		a.handles(route{
 			pattern: "GET /api/v1/libraries/{id}/rows/{row}", access: signedIn,
 			summary: "The first of one of a library's rows: recently added, recently released or top rated",
