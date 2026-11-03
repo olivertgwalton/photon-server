@@ -57,6 +57,41 @@ func TestATracksArtistsAreTakenApartWhereTheTagsSplitThem(t *testing.T) {
 	}
 }
 
+// An artist credited as featured, in the title or in the artist's credit, is the track's artist
+// after its own, and leaves the title, as Apple Music credits them; a title that only reads like a
+// credit, and a name with "&" in it, are left as they are.
+func TestFeaturedArtistsAreTheTracksArtists(t *testing.T) {
+	for _, tc := range []struct {
+		title, artist string
+		artists       []string
+		want          Tags
+	}{
+		{"Wake Me Up (Feat. Justice)", "The Weeknd", nil, Tags{Title: "Wake Me Up", Artists: []string{"The Weeknd", "Justice"}}},
+		{"Song (ft. A, B & C) [Remix]", "Lead", nil, Tags{Title: "Song [Remix]", Artists: []string{"Lead", "A", "B", "C"}}},
+		{"Timeless", "The Weeknd featuring Playboi Carti", nil, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
+		{"Timeless [feat. Playboi Carti]", "", []string{"The Weeknd", "Playboi Carti"}, Tags{Title: "Timeless", Artists: []string{"The Weeknd", "Playboi Carti"}}},
+		{"Ghost (feat. Florence and the Machine)", "Lead", nil, Tags{Title: "Ghost", Artists: []string{"Lead", "Florence and the Machine"}}},
+		{"Defeat the Feather", "Simon & Garfunkel", nil, Tags{Title: "Defeat the Feather", Artists: []string{"Simon & Garfunkel"}}},
+	} {
+		path := filepath.Join(t.TempDir(), "track.flac")
+		tags := map[string][]string{"TITLE": {tc.title}}
+		if tc.artist != "" {
+			tags["ARTIST"] = []string{tc.artist}
+		}
+		if tc.artists != nil {
+			tags["ARTISTS"] = tc.artists
+		}
+		testtool.Audio(t, path, tags, nil)
+		got, err := ReadTags(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(tc.want, got); diff != "" {
+			t.Errorf("%q by %q (-want +got):\n%s", tc.title, tc.artist, diff)
+		}
+	}
+}
+
 func TestATracksCoverIsTheOneItHolds(t *testing.T) {
 	dir := t.TempDir()
 	var cover bytes.Buffer
