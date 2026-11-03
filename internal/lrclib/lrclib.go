@@ -27,6 +27,11 @@ const near = 2
 // a scan fetches every track's.
 const gap = 500 * time.Millisecond
 
+// appID is photon-server's application registered with LRCLIB, sent with every request for its
+// higher allowance. It is a client-side application's ID, which LRCLIB says is public and safe to
+// ship, so every server sends the same.
+const appID = "wxsfG0FcBhGKgjvVBfYCwbko8hZ3MKBHWX3qXF3D_HE"
+
 // longest is the longest duration LRCLIB takes, in seconds; it refuses a lookup by any longer.
 const longest = 3600
 
@@ -42,10 +47,13 @@ type Client struct {
 // client: "LRCGET v0.2.0 (https://github.com/tranxuanthang/lrcget)".
 func New(version string, pauses provider.Pauses) *Client {
 	return &Client{
-		api:    provider.Client{Name: "lrclib", Base: baseURL, Pauses: pauses},
-		header: http.Header{"User-Agent": {"photon-server " + version + " (https://github.com/olivertgwalton/photon-server)"}},
-		turn:   make(chan struct{}, 1),
-		gap:    gap,
+		api: provider.Client{Name: "lrclib", Base: baseURL, Pauses: pauses},
+		header: http.Header{
+			"User-Agent":    {"photon-server " + version + " (https://github.com/olivertgwalton/photon-server)"},
+			"Lrclib-App-Id": {appID},
+		},
+		turn: make(chan struct{}, 1),
+		gap:  gap,
 	}
 }
 

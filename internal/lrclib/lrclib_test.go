@@ -26,7 +26,7 @@ var answers = map[string]string{
 func client(t *testing.T) *Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.Header.Get("User-Agent"), "photon-server 1.0 (https://") {
+		if !strings.HasPrefix(r.Header.Get("User-Agent"), "photon-server 1.0 (https://") || r.Header.Get("Lrclib-App-Id") != appID {
 			http.Error(w, "say who you are", http.StatusForbidden)
 			return
 		}
