@@ -32,6 +32,13 @@ var answers = map[string]string{
 		"hdmovielogo":[{"id":"6","url":"https://assets.fanart.tv/fanart/movies/578/hdmovielogo/jaws-hd.png","lang":"en","likes":"7"}],
 		"moviethumb":[{"id":"7","url":"https://assets.fanart.tv/fanart/movies/578/moviethumb/jaws.jpg","lang":"en","likes":"2","width":"1000","height":"562"}],
 		"hdmovieclearart":[{"id":"8","url":"https://assets.fanart.tv/fanart/movies/578/hdmovieclearart/jaws.png","lang":"en","likes":"5"}]}`,
+	"/music/c8b03190-306c-4120-bb0b-6f2ebfc06ea9": `{"name":"The Weeknd","mbid_id":"c8b03190-306c-4120-bb0b-6f2ebfc06ea9",
+		"artistthumb":[{"id":"11","url":"https://assets.fanart.tv/fanart/music/c8b/artistthumb/weeknd.jpg","likes":"6"}],
+		"artistbackground":[{"id":"12","url":"https://assets.fanart.tv/fanart/music/c8b/artistbackground/weeknd.jpg","likes":"3"}],
+		"hdmusiclogo":[{"id":"13","url":"https://assets.fanart.tv/fanart/music/c8b/hdmusiclogo/weeknd.png","likes":"2"}],
+		"albums":[{"release_group_id":"14f83b04-2b9e-4974-9169-476f26475be3","albumcover":[]}]}`,
+	"/music/albums/14f83b04-2b9e-4974-9169-476f26475be3": `{"name":"The Weeknd","albums":[
+		{"release_group_id":"14f83b04-2b9e-4974-9169-476f26475be3","albumcover":[{"id":"14","url":"https://assets.fanart.tv/fanart/music/c8b/albumcover/hurry.jpg","likes":"4"}]}]}`,
 	"/tv/81189": `{"name":"Breaking Bad","thetvdb_id":"81189",
 		"tvthumb":[{"id":"9","url":"https://assets.fanart.tv/fanart/tv/81189/tvthumb/bb.jpg","lang":"en","likes":"4"}],
 		"seasonposter":[{"id":"10","url":"https://assets.fanart.tv/fanart/tv/81189/seasonposter/bb-s1.jpg","lang":"en","likes":"4","season":"1"}]}`,
@@ -123,6 +130,37 @@ func TestAShowIsPicturedByItsTheTVDBID(t *testing.T) {
 	}
 	if id, err := c.Match(t.Context(), domain.Locale{}, domain.ItemShow, provider.Hints{IDs: map[domain.Provider]string{domain.ProviderTMDB: "1396"}}); err != nil || id != "" {
 		t.Errorf("a show with no TheTVDB id matched as %q, %v", id, err)
+	}
+}
+
+// An artist is pictured by its photograph, backdrop and lettering, and an album by its cover, each
+// found by its MusicBrainz id; one with none is not matched.
+func TestMusicIsPicturedByItsMusicBrainzID(t *testing.T) {
+	c, _ := client(t, "", false)
+	art := "https://assets.fanart.tv/fanart/music/c8b/"
+	for _, tc := range []struct {
+		kind domain.ItemKind
+		mbid string
+		want []domain.Artwork
+	}{
+		{domain.ItemArtist, "c8b03190-306c-4120-bb0b-6f2ebfc06ea9", []domain.Artwork{
+			{Kind: domain.ArtworkPoster, URL: art + "artistthumb/weeknd.jpg"},
+			{Kind: domain.ArtworkBackdrop, URL: art + "artistbackground/weeknd.jpg"},
+			{Kind: domain.ArtworkLogo, URL: art + "hdmusiclogo/weeknd.png"},
+		}},
+		{domain.ItemAlbum, "14f83b04-2b9e-4974-9169-476f26475be3", []domain.Artwork{{Kind: domain.ArtworkPoster, URL: art + "albumcover/hurry.jpg"}}},
+	} {
+		id, err := c.Match(t.Context(), domain.Locale{}, tc.kind, provider.Hints{IDs: map[domain.Provider]string{domain.ProviderMusicBrainz: tc.mbid}})
+		if err != nil || id != tc.mbid {
+			t.Fatalf("%s: match = %q, %v", tc.kind, id, err)
+		}
+		m, _, err := c.Describe(t.Context(), domain.Locale{Artwork: domain.ArtworkAny}, tc.kind, id, domain.SeasonRequest{})
+		if diff := cmp.Diff(tc.want, m.Artwork); err != nil || diff != "" {
+			t.Errorf("%s artwork, %v (-want +got):\n%s", tc.kind, err, diff)
+		}
+		if id, err := c.Match(t.Context(), domain.Locale{}, tc.kind, provider.Hints{Title: "The Weeknd"}); err != nil || id != "" {
+			t.Errorf("%s with no MusicBrainz id matched as %q, %v", tc.kind, id, err)
+		}
 	}
 }
 
