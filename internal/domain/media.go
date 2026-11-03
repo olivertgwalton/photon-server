@@ -169,6 +169,18 @@ type Chapter struct {
 
 // LyricsQuery is a track as a lyrics source finds it: by its artist, its title, its album and how
 // long it is, as LRCLIB matches a recording.
+// LyricsTiming is how far a track's lyrics say where they are sung: line by line, or not at all.
+type LyricsTiming string
+
+const (
+	TimedByLine LyricsTiming = "line"
+	Untimed     LyricsTiming = "untimed"
+)
+
+func LyricsTimings() []LyricsTiming {
+	return []LyricsTiming{TimedByLine, Untimed}
+}
+
 type LyricsQuery struct {
 	Artist, Title, Album string
 	Duration             time.Duration

@@ -6,6 +6,7 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/media"
 )
@@ -39,10 +40,10 @@ func (a *API) lyrics(r *http.Request, _ none) (lyricsJSON, error) {
 	return lyricsJSON{Lines: each(l.Lines, func(line media.LyricLine) lyricLineJSON {
 		out := lyricLineJSON{Text: line.Text}
 		switch l.Timing {
-		case media.TimedByLine:
+		case domain.TimedByLine:
 			ms := line.Start.Milliseconds()
 			out.StartMS = &ms
-		case media.Untimed:
+		case domain.Untimed:
 		}
 		return out
 	})}, nil

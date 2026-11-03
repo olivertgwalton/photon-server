@@ -6,8 +6,8 @@ import (
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
-	"github.com/olivertgwalton/photon-server/internal/media"
 )
 
 // lyricDto is Jellyfin's lyrics of a track: Start, in ticks, on each line of timed lyrics alone.
@@ -45,14 +45,14 @@ func (a *API) lyrics(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 		return
 	}
 	var out lyricDto
-	out.Metadata.IsSynced = l.Timing == media.TimedByLine
+	out.Metadata.IsSynced = l.Timing == domain.TimedByLine
 	for _, line := range l.Lines {
 		row := lyricLine{Text: line.Text}
 		switch l.Timing {
-		case media.TimedByLine:
+		case domain.TimedByLine:
 			ticks := line.Start.Milliseconds() * ticksPerMS
 			row.Start = &ticks
-		case media.Untimed:
+		case domain.Untimed:
 		}
 		out.Lyrics = append(out.Lyrics, row)
 	}
