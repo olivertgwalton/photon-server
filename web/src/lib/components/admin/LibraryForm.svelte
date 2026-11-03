@@ -75,14 +75,8 @@ const able = (
 // a provider files under ids of its own, which a title found is kept by.
 const listers = $derived([{ value: "", label: "No list" }, ...able("list")]);
 const streamers = $derived(able("stream"));
-const searchers = $derived([
-	{ value: "", label: "Nothing" },
-	...able("search").filter(
-		(p) => p.value.startsWith("plugin:") || ["tmdb", "tvdb"].includes(p.value),
-	),
-]);
-// A library of files' requests go to a provider that fetches every kind of
-// title it holds, or to an admin, by hand.
+// What a library holds, which a provider it finds titles with or sends
+// requests to must know: no film provider knows an artist.
 const holds = $derived(
 	(
 		{
@@ -94,9 +88,22 @@ const holds = $derived(
 		} as const
 	)[kind],
 );
+const knows = (p: Schemas["MetadataProvider"]) =>
+	holds.every((k) => p.kinds.includes(k));
+const searchers = $derived([
+	{ value: "", label: "Nothing" },
+	...able(
+		"search",
+		(p) =>
+			knows(p) &&
+			(p.id.startsWith("plugin:") || ["tmdb", "tvdb"].includes(p.id)),
+	),
+]);
+// A library of files' requests go to a provider that fetches every kind of
+// title it holds, or to an admin, by hand.
 const requesters = $derived([
 	{ value: "", label: "Nobody: you add them yourself" },
-	...able("request", (p) => holds.every((k) => p.kinds.includes(k))),
+	...able("request", knows),
 ]);
 let listSource = $state("");
 const nameOf = (id?: Schemas["FieldSource"]) =>
@@ -297,35 +304,40 @@ const refreshOptions = $derived(
 				class="font-mono"
 			/>
 		</Field.Field>
-		<Field.Field>
-			<Field.Label for="{id}-library-discover"
-				>People can ask for titles from</Field.Label
-			>
-			<Choice
-				id="{id}-library-discover"
-				name="discover"
-				value={library.discover ?? ""}
-				options={searchers}
-			/>
-			<Field.Description>
-				A search of the server shows what this finds that no library holds, for
-				people to ask for. Nothing turns asking off.
-			</Field.Description>
-		</Field.Field>
-		<Field.Field>
-			<Field.Label for="{id}-library-requests">Requests go to</Field.Label>
-			<Choice
-				id="{id}-library-requests"
-				name="requests"
-				value={library.requests ?? ""}
-				options={requesters}
-			/>
-			<Field.Description>
-				Once you, or the manager who keeps the profile that asked, approve a
-				request, it is sent here to fetch. Whoever asked is told once a scan
-				adds the title.
-			</Field.Description>
-		</Field.Field>
+		<!-- Nothing finds or fetches music or books yet: neither is asked. -->
+		{#if searchers.length > 1}
+			<Field.Field>
+				<Field.Label for="{id}-library-discover"
+					>People can ask for titles from</Field.Label
+				>
+				<Choice
+					id="{id}-library-discover"
+					name="discover"
+					value={library.discover ?? ""}
+					options={searchers}
+				/>
+				<Field.Description>
+					A search of the server shows what this finds that no library holds,
+					for people to ask for. Nothing turns asking off.
+				</Field.Description>
+			</Field.Field>
+		{/if}
+		{#if requesters.length > 1}
+			<Field.Field>
+				<Field.Label for="{id}-library-requests">Requests go to</Field.Label>
+				<Choice
+					id="{id}-library-requests"
+					name="requests"
+					value={library.requests ?? ""}
+					options={requesters}
+				/>
+				<Field.Description>
+					Once you, or the manager who keeps the profile that asked, approve a
+					request, it is sent here to fetch. Whoever asked is told once a scan
+					adds the title.
+				</Field.Description>
+			</Field.Field>
+		{/if}
 	{/if}
 
 	<!-- A new library needs only its folder; the rest has defaults that suit most,
