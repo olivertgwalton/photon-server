@@ -23,12 +23,17 @@ async function load(id: string): Promise<Lyrics | null> {
 }
 
 const lyrics = $derived(load(id));
+
+// Lyrics are timed where their lines say where they are sung.
+function timed(l: Lyrics): boolean {
+	return l.lines.some((line) => line.start_ms != null);
+}
 let at = $state(-1);
 
 // Follows the track as it plays, and scrolls only when the line changes.
 function follow(l: Lyrics): Attachment<HTMLOListElement> {
 	return (list) => {
-		if (!l.synced) return;
+		if (!timed(l)) return;
 		const next = lineAt(l.lines, listening.position * 1000);
 		if (next === untrack(() => at)) return;
 		at = next;
@@ -50,7 +55,7 @@ function follow(l: Lyrics): Attachment<HTMLOListElement> {
 		>
 			{#each l.lines as line, i (i)}
 				<li>
-					{#if l.synced && line.start_ms != null}
+					{#if line.start_ms != null}
 						{@const start = line.start_ms}
 						<button
 							type="button"
