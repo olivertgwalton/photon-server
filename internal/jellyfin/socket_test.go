@@ -267,3 +267,25 @@ func TestAnAppIsToldWhatChangesOfWhatItsProfileSees(t *testing.T) {
 		t.Errorf("an admin stopped its playback: %v", m)
 	}
 }
+
+// An app signed out is told nothing more: its socket closes, as Jellyfin's does as its session
+// ends.
+func TestAnAppsSocketClosesWhenItSignsOut(t *testing.T) {
+	events := make(chan domain.Event, 16)
+	api := New(slog.New(slog.DiscardHandler), serverID.String(), func() string { return "Den" }, Services{
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{},
+		Auth:      fakeAuth{signedOut: &[]uuid.UUID{}},
+		Raise:     func(_ context.Context, e domain.Event) { events <- e },
+		Subscribe: func() (<-chan domain.Event, func()) { return events, func() {} },
+	})
+	srv := httptest.NewServer(api)
+	defer srv.Close()
+	c := openSocket(t, srv.URL+"/socket?ApiKey=pst_device", nil)
+	heard(t, c)
+	if w := serve(api, http.MethodPost, "/Sessions/Logout", `MediaBrowser Token="pst_device"`, ""); w.Code != http.StatusNoContent {
+		t.Fatalf("signing out: %d", w.Code)
+	}
+	if head, _, err := c.Next(); err != nil || head != websockettest.Fin|websockettest.OpClose {
+		t.Errorf("once signed out: %#x %v, want the socket closed", head, err)
+	}
+}

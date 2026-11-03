@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"encoding/json/v2"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -72,7 +73,8 @@ type stoppingKey struct{}
 
 // socket keeps a WebSocket open to the signed-in app, which keeps it alive, and tells it what
 // changes of what the profile sees, on every node. What the app sends that is not a KeepAlive,
-// such as SessionsStart, is let pass: none of it is served.
+// such as SessionsStart, is let pass: none of it is served. It closes once the session is signed
+// out or moved to another profile, as Jellyfin closes a session's sockets as it ends.
 func (a *API) socket(w http.ResponseWriter, r *http.Request) {
 	ctx, session := r.Context(), auth.SessionOf(r.Context())
 	stopping, _ := ctx.Value(stoppingKey{}).(<-chan struct{})
@@ -105,6 +107,12 @@ func (a *API) socket(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
+			if e.Kind == domain.EventSessionsChanged {
+				if e.Profile == session.Profile.ID && !a.stillSignedIn(ctx, session) {
+					return
+				}
+				continue
+			}
 			m, told, err := a.told(ctx, session, e)
 			if err != nil {
 				// The app opens it again, and reads again what it shows.
@@ -116,6 +124,18 @@ func (a *API) socket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// stillSignedIn answers whether a session is signed in still, to the same profile.
+func (a *API) stillSignedIn(ctx context.Context, session domain.Session) bool {
+	now, err := a.svc.Auth.Session(ctx, session.ID)
+	if err != nil {
+		if !errors.Is(err, auth.ErrUnauthenticated) {
+			a.logger.WarnContext(ctx, "jellyfin socket ended", slog.Any("err", err))
+		}
+		return false
+	}
+	return now.Profile.ID == session.Profile.ID
 }
 
 // listen tells heard what kind of message the app sends, until it goes, breaks the protocol or

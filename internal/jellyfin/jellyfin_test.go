@@ -111,6 +111,9 @@ func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func (f fakeAuth) Session(ctx context.Context, id uuid.UUID) (domain.Session, error) {
+	if f.signedOut != nil && slices.Contains(*f.signedOut, id) {
+		return domain.Session{}, auth.ErrUnauthenticated
+	}
 	for _, token := range []string{"pst_device", "pst_key"} {
 		if s, err := f.Authenticate(ctx, token); err == nil && s.ID == id {
 			return s, nil
