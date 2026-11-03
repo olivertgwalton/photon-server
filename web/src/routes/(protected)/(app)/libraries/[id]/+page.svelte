@@ -6,6 +6,7 @@ import { act } from "#lib/act.ts";
 import { withQuery } from "#lib/address.ts";
 import { client, refusal } from "#lib/api/client.ts";
 import type { components } from "#lib/api/schema.d.ts";
+import { aspect } from "#lib/artwork.ts";
 import { cardMin } from "#lib/cardsize.svelte.ts";
 import LetterBar from "#lib/components/LetterBar.svelte";
 import SmartSaveDialog from "#lib/components/SmartSaveDialog.svelte";
@@ -78,6 +79,9 @@ const kinds = $derived(
 		>
 	)[data.library.kind],
 );
+// Music is drawn on squares, as its covers are.
+const cover = $derived(data.library.kind === "music" ? "square" : "poster");
+const shape = $derived(view === "still" ? "still" : cover);
 const narrowed = $derived(filterCount(data.query) > 0);
 const worth = $derived(narrowed || Boolean(data.query.sort));
 // What an admin may keep of this wall as a smart collection.
@@ -307,6 +311,7 @@ function jump(letters: Letter[], letter: string) {
 					pageSize={wallPageSize}
 					{fetchPage}
 					{view}
+					{cover}
 					label={data.library.name}
 				/>
 			</div>
@@ -331,7 +336,7 @@ function jump(letters: Letter[], letter: string) {
 			class={view === "list" ? "grid gap-y-4.5" : "grid gap-x-3 gap-y-4.5"}
 			style={view === "list"
 				? ""
-				: `grid-template-columns: ${gridColumns(cardMin(view === "still" ? "still" : "poster"))}`}
+				: `grid-template-columns: ${gridColumns(cardMin(shape))}`}
 			aria-hidden="true"
 		>
 			{#each blanks as card (card)}
@@ -339,11 +344,7 @@ function jump(letters: Letter[], letter: string) {
 					<div
 						class={[
 							"bg-raise rounded-xl",
-							view === "list"
-								? "h-18 w-full"
-								: view === "still"
-									? "aspect-video"
-									: "aspect-2/3",
+							view === "list" ? "h-18 w-full" : aspect[shape].class,
 						]}
 					></div>
 				</li>

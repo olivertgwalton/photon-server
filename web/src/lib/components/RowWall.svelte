@@ -36,6 +36,7 @@ async function fetchPage(offset: number) {
 			pageSize={wallPageSize}
 			{fetchPage}
 			view="poster"
+			cover={row.shape === "square" ? "square" : "poster"}
 			label={title}
 		/>
 	{:else}

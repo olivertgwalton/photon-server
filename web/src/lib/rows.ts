@@ -28,7 +28,7 @@ export const homeRows: Record<
 	favourites: { shape: "poster" },
 	recently_added_films: { shape: "poster" },
 	recently_added_shows: { shape: "poster" },
-	recently_added_albums: { shape: "poster" },
+	recently_added_albums: { shape: "square" },
 	recently_added_books: { shape: "poster" },
 	recently_released: { shape: "poster" },
 	top_rated_unwatched: { shape: "poster" },
