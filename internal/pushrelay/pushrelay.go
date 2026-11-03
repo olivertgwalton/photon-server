@@ -25,10 +25,13 @@ const URL = "https://push.photon.oliverwalton.uk"
 const sendTimeout = 15 * time.Second
 
 var (
-	// ErrGone is a device APNs or FCM says no longer takes notifications: it is to be forgotten.
+	// ErrGone is a device APNs or FCM says no longer takes notifications, or one the relay refuses
+	// to wake for good: it is to be forgotten.
 	ErrGone = errors.New("the device no longer takes notifications")
 	// errRefused is a credential the relay does not know, as after its key is changed.
 	errRefused = errors.New("the relay refused the server's credential")
+	// errRejected is a request the relay refuses, and would refuse again.
+	errRejected = errors.New("the push relay refused the request")
 )
 
 // Message wakes one device for one notification. Collapse stands for what it is of: APNs and FCM
@@ -61,7 +64,8 @@ func New(url string, server uuid.UUID, kept credentials) *Relay {
 	return &Relay{url: url, server: server, kept: kept, client: &http.Client{Timeout: sendTimeout}}
 }
 
-// Send wakes a device. ErrGone for one APNs or FCM no longer delivers to.
+// Send wakes a device. ErrGone for one APNs or FCM no longer delivers to, or the relay will not
+// wake.
 func (r *Relay) Send(ctx context.Context, m Message) error {
 	credential, err := r.kept.PushRelayCredential(ctx)
 	if err != nil {
@@ -98,7 +102,11 @@ func (r *Relay) register(ctx context.Context) (string, error) {
 }
 
 func (r *Relay) send(ctx context.Context, credential string, m Message) error {
-	return r.post(ctx, "/v1/send", credential, m, nil)
+	err := r.post(ctx, "/v1/send", credential, m, nil)
+	if errors.Is(err, errRejected) {
+		return fmt.Errorf("%w: %w", ErrGone, err)
+	}
+	return err
 }
 
 func (r *Relay) post(ctx context.Context, path, credential string, body, answer any) error {
@@ -125,6 +133,8 @@ func (r *Relay) post(ctx context.Context, path, credential string, body, answer 
 		return ErrGone
 	case res.StatusCode == http.StatusUnauthorized:
 		return errRefused
+	case res.StatusCode/100 == 4 && res.StatusCode != http.StatusRequestTimeout && res.StatusCode != http.StatusTooManyRequests:
+		return fmt.Errorf("%w: %s", errRejected, res.Status)
 	case res.StatusCode/100 != 2:
 		return fmt.Errorf("the push relay answered %s", res.Status)
 	case answer != nil:

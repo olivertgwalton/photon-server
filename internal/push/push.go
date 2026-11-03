@@ -60,8 +60,9 @@ const requestsPage = "/settings/requests"
 
 // Job is the job that pushes a profile's notifications not yet pushed to each device subscribed for
 // it: a browser in its language, an Apple or Android device by the notification's id, which it asks
-// the server to word. A device that ended its subscription is forgotten; one that fails has every device sent
-// again later, where each replaces what it shows of the same title or request.
+// the server to word. A device that ended its subscription, or that its push service refuses, is
+// forgotten; one that fails has every device sent again later, where each replaces what it shows of
+// the same title or request.
 func Job(st *store.Store, browsers web, devices relay) jobs.Handler {
 	return func(ctx context.Context, profile uuid.UUID) error {
 		pushes, err := st.Pushes(ctx, profile)

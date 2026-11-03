@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -148,8 +149,37 @@ func TestAnEndpointIsAnHTTPSAddressOnTheInternet(t *testing.T) {
 	defer svc.Close()
 	sub := subscriber(t)
 	sub.Endpoint = svc.URL + "/push"
-	if err := s.Send(context.Background(), sub, Message{Payload: []byte("{}")}); !errors.Is(err, ErrNotPublic) {
-		t.Errorf("an endpoint on loopback: %v, want ErrNotPublic", err)
+	if err := s.Send(context.Background(), sub, Message{Payload: []byte("{}")}); !errors.Is(err, ErrNotPublic) || !errors.Is(err, ErrGone) {
+		t.Errorf("an endpoint on loopback: %v, want ErrNotPublic and ErrGone", err)
+	}
+}
+
+// A subscription its push service refuses is ErrGone, so it is forgotten rather than sent the
+// same again; one it is only too busy or failing for is tried again.
+func TestASubscriptionRefusedForGoodIsGone(t *testing.T) {
+	key, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(must(strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/"))))
+	}))
+	defer svc.Close()
+	s.client = svc.Client()
+	sub := subscriber(t)
+	for status, gone := range map[int]bool{
+		http.StatusBadRequest: true, http.StatusForbidden: true, http.StatusNotFound: true, http.StatusGone: true,
+		http.StatusRequestEntityTooLarge: true, http.StatusRequestTimeout: false, http.StatusTooManyRequests: false,
+		http.StatusInternalServerError: false, http.StatusServiceUnavailable: false,
+	} {
+		sub.Endpoint = svc.URL + "/" + strconv.Itoa(status)
+		if err := s.Send(t.Context(), sub, Message{Payload: []byte("{}")}); err == nil || errors.Is(err, ErrGone) != gone {
+			t.Errorf("a push service answering %d: %v, want gone %t", status, err, gone)
+		}
 	}
 }
 
