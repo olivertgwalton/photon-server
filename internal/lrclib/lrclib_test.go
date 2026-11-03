@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -17,12 +20,13 @@ var answers = map[string]string{
 	"/search artist_name=The+Weeknd&track_name=Cry+For+Me":                                        `[{"duration":180,"plainLyrics":"Another","syncedLyrics":""},{"duration":224.5,"plainLyrics":"Cry for me","syncedLyrics":""}]`,
 	"/get album_name=Hurry+Up+Tomorrow&artist_name=The+Weeknd&duration=60&track_name=Interlude":   `{"duration":60,"instrumental":true,"plainLyrics":"","syncedLyrics":""}`,
 	"/search artist_name=The+Weeknd&track_name=Untold":                                            `[]`,
+	"/get album_name=Mixes&artist_name=The+Weeknd&track_name=Two+Hours":                           `{"duration":7200,"plainLyrics":"Long","syncedLyrics":""}`,
 }
 
 func client(t *testing.T) *Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.Header.Get("User-Agent"), "photon-server/") {
+		if !strings.HasPrefix(r.Header.Get("User-Agent"), "photon-server 1.0 (https://") {
 			http.Error(w, "say who you are", http.StatusForbidden)
 			return
 		}
@@ -37,7 +41,7 @@ func client(t *testing.T) *Client {
 	}))
 	t.Cleanup(srv.Close)
 	c := New("1.0", nil)
-	c.api.Base, c.api.HTTP, c.pace.Every = srv.URL+"/", srv.Client(), 0
+	c.api.Base, c.api.HTTP, c.gap = srv.URL+"/", srv.Client(), 0
 	return c
 }
 
@@ -60,3 +64,57 @@ func TestATracksLyricsAreFoundOnLRCLIB(t *testing.T) {
 		}
 	}
 }
+
+// A track longer than LRCLIB takes, an hour, is looked up by its name alone, as LRCLIB refuses a
+// lookup by a longer duration.
+func TestATrackLongerThanAnHourIsLookedUpWithoutItsLength(t *testing.T) {
+	c := client(t)
+	got, err := c.Lyrics(t.Context(), domain.LyricsQuery{Artist: "The Weeknd", Title: "Two Hours", Album: "Mixes", Duration: 2 * time.Hour})
+	if err != nil || got != "Long" {
+		t.Errorf("%q, %v; want its lyrics", got, err)
+	}
+}
+
+// Lookups asked at once go to LRCLIB one at a time, each half a second after the last was
+// answered, as it asks of a client fetching a library's.
+func TestLyricsAreAskedOneAtATime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var at, most atomic.Int32
+		var sent []time.Time
+		var mu sync.Mutex
+		c := New("1.0", nil)
+		c.api.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+			n := at.Add(1)
+			defer at.Add(-1)
+			if n > most.Load() {
+				most.Store(n)
+			}
+			mu.Lock()
+			sent = append(sent, time.Now())
+			mu.Unlock()
+			<-time.After(100 * time.Millisecond)
+			return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("{}")), Request: r}, nil
+		})}
+		var wg sync.WaitGroup
+		for range 3 {
+			wg.Go(func() {
+				if _, err := c.Lyrics(t.Context(), domain.LyricsQuery{Artist: "A", Title: "B", Duration: time.Minute}); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+		wg.Wait()
+		if most.Load() != 1 {
+			t.Errorf("%d requests at once, want one at a time", most.Load())
+		}
+		for i := 1; i < len(sent); i++ {
+			if d := sent[i].Sub(sent[i-1]); d < 100*time.Millisecond+gap {
+				t.Errorf("request %d sent %v after the one before, want its answer and %v between", i, d, gap)
+			}
+		}
+	})
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
