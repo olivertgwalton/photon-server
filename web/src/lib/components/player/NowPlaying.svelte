@@ -29,8 +29,9 @@ let {
 const item = $derived(listening.current);
 const chapter = $derived(chapterAt(listening.position, item?.chapters));
 const tint = $derived(tintColour(item?.blurhash) ?? "transparent");
-// A track's lyrics in its cover's place; an audiobook has chapters instead.
-const sung = $derived(item?.kind === "track");
+// A track's lyrics in its cover's place, where it has any; an audiobook has
+// chapters instead.
+const sung = $derived(item?.kind === "track" && !!item.lyrics);
 // The cover sinks back as the lyrics rise over it, as Apple Music's do, both
 // in the one square so nothing below them moves.
 const swap = $derived({
@@ -61,7 +62,7 @@ const swap = $derived({
 				>
 					{#if sung && lyrics}
 						<div class="size-full" transition:fly={{ ...swap, y: 24 }}>
-							<Lyrics id={item.id} />
+							<Lyrics id={item.id} version={item.version} />
 						</div>
 					{:else}
 						<div
