@@ -53,12 +53,15 @@ func args(in media.Input, hw Hardware, start time.Duration, video *domain.VideoP
 		a = append(a, "-f", "mpegts", "-mpegts_copyts", "1")
 	case domain.SegmentsFMP4:
 		// Dolby Vision's configuration, TrueHD and DTS are experimental in FFmpeg's MP4 muxer.
-		// Every frame of sound is a keyframe, so sound alone is cut a segment to a fragment.
+		// Every frame of sound is a keyframe, so sound alone is written in short fragments, which
+		// cut gathers into segments where the playlist says each starts. A segment to a fragment
+		// would end on the frame after each six seconds, and a frame of FLAC at 44.1 kHz, 4096
+		// samples, overshoots by up to 93 ms a time, until the segments drift past the plan's.
 		cut := []string{"-movflags", "+frag_keyframe+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer"}
 		if video == nil {
 			cut = []string{
 				"-movflags", "+empty_moov+default_base_moof+delay_moov+frag_discont+skip_trailer",
-				"-frag_duration", strconv.FormatInt(SegmentLength.Microseconds(), 10),
+				"-frag_duration", strconv.FormatInt(soundFragment.Microseconds(), 10),
 			}
 		}
 		a = append(append(append(a, "-strict", "experimental", "-f", "mp4"), cut...), "-use_editlist", "0")
@@ -73,6 +76,9 @@ func args(in media.Input, hw Hardware, start time.Duration, video *domain.VideoP
 	}
 	return a
 }
+
+// soundFragment is how long ffmpeg makes a fragment of sound alone, at least: a frame or two.
+const soundFragment = 100 * time.Millisecond
 
 // vaapiDrawnHeight is the most a subtitle overlay_vaapi lays over is drawn high.
 const vaapiDrawnHeight = 1080
