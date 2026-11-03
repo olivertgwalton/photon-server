@@ -100,3 +100,55 @@ func TestABooksLibrarysRefreshAsksAgainOfItsAuthorsAndBooks(t *testing.T) {
 		t.Errorf("refresh asked of %d authors and books, %v; want 2", n, err)
 	}
 }
+
+// A search finds music and books as it finds films: an album before the track named as it, which
+// it holds, and a book by a word of its title; and a search for books alone finds no album.
+func TestASearchFindsMusicAndBooks(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	music, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	books, err := s.AddLibrary(ctx, "Books", domain.LibraryBooks, t.TempDir()+"/books", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveMusicFolder(ctx, music.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
+		Tracks: []Track{track("Hurry Up Tomorrow", 2, 11)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	rel := "Earthsea/earthsea.epub"
+	if _, err := s.SaveBooksFolder(ctx, books.ID, "Earthsea", []byte("seen"), []Book{{
+		Title: "A Wizard of Earthsea", Author: "Ursula K. Le Guin", Folder: "Earthsea",
+		Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "epub", Size: 1}}}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	found := func(text string, kinds ...domain.ItemKind) []string {
+		t.Helper()
+		cards, _, err := s.Search(ctx, SearchQuery{Text: text, Kinds: kinds, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cards {
+			out = append(out, string(c.Kind)+" "+c.Title)
+		}
+		return out
+	}
+	if got, want := found("hurry up"), []string{"album Hurry Up Tomorrow", "track Hurry Up Tomorrow"}; !cmp.Equal(got, want) {
+		t.Errorf("hurry up: %v, want %v", got, want)
+	}
+	if got, want := found("earthsea"), []string{"book A Wizard of Earthsea"}; !cmp.Equal(got, want) {
+		t.Errorf("earthsea: %v, want %v", got, want)
+	}
+	if got, want := found("weeknd"), []string{"artist The Weeknd"}; !cmp.Equal(got, want) {
+		t.Errorf("weeknd: %v, want %v", got, want)
+	}
+	if got := found("hurry", domain.ItemBook); len(got) != 0 {
+		t.Errorf("hurry among books: %v, want none", got)
+	}
+}
