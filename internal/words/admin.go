@@ -129,6 +129,8 @@ func (w Words) Event(e domain.Event, names Names) string {
 		return profile + "'s " + w.Tracker(d.Tracker) + " account changed"
 	case domain.EventNotificationsChanged:
 		return profile + "'s notifications changed"
+	case domain.EventSessionsChanged:
+		return profile + "'s devices changed"
 	}
 	return string(e.Kind)
 }

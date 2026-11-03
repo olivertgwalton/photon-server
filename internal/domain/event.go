@@ -74,6 +74,10 @@ const (
 	// EventNotificationsChanged is a profile's inbox changed: notified of new titles, or read on
 	// another device, told to the profile so each of its pages shows it.
 	EventNotificationsChanged EventKind = "notifications.changed"
+	// EventSessionsChanged is a profile's devices signed out, one of them moved to another profile,
+	// or the profile changed or removed: a socket open in one of its sessions asks again whether it
+	// may stay open, as Jellyfin closes a session's sockets as it ends. No client is told it.
+	EventSessionsChanged EventKind = "sessions.changed"
 )
 
 func EventKinds() []EventKind {
@@ -84,7 +88,7 @@ func EventKinds() []EventKind {
 		EventUserDataChanged, EventTitlesAdded, EventScanProgress, EventTaskStarted, EventTaskFinished, EventTaskFailed, EventBackupMade,
 		EventJobStarted, EventJobFinished, EventJobFailed, EventJobDead, EventJobsProgress, EventWebhookTest,
 		EventMaintenanceChanged, EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged,
-		EventRestoreStarted, EventTrackerChanged, EventNotificationsChanged,
+		EventRestoreStarted, EventTrackerChanged, EventNotificationsChanged, EventSessionsChanged,
 	}
 }
 
@@ -100,7 +104,7 @@ func (k EventKind) Logged() bool {
 		EventUserDataChanged, EventScanProgress, EventTaskStarted, EventTaskFinished, EventJobStarted,
 		EventJobFinished, EventJobFailed, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged,
 		EventNetworkChanged, EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted,
-		EventTrackerChanged, EventNotificationsChanged:
+		EventTrackerChanged, EventNotificationsChanged, EventSessionsChanged:
 		return false
 	}
 	return false
@@ -120,7 +124,7 @@ func (k EventKind) Hookable() bool {
 		EventTaskStarted, EventTaskFinished, EventJobStarted, EventJobFinished, EventJobFailed,
 		EventJobDead, EventJobsProgress, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
 		EventStorageChanged, EventNodesChanged, EventServerChanged, EventRestoreStarted, EventTrackerChanged,
-		EventNotificationsChanged:
+		EventNotificationsChanged, EventSessionsChanged:
 		return false
 	}
 	return false
@@ -206,7 +210,7 @@ func DetailsOf(k EventKind, raw []byte) (EventDetails, error) {
 	case EventNotificationsChanged:
 		return detailsOf[NotificationsDetails](raw)
 	case EventTitleUpdated, EventWebhookTest, EventMaintenanceChanged, EventNetworkChanged,
-		EventStorageChanged, EventNodesChanged, EventServerChanged:
+		EventStorageChanged, EventNodesChanged, EventServerChanged, EventSessionsChanged:
 	}
 	return nil, nil
 }
