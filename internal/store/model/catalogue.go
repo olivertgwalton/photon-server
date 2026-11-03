@@ -29,6 +29,8 @@ type Item struct {
 	DiscNumber  *int
 	TrackNumber *int
 	Artists     []string
+	// Advisory is whether a track is explicit or clean, nil where its tags say neither.
+	Advisory *domain.Advisory
 	// Series is the series a book is in, and SeriesIndex its place there, which may be 1.5.
 	Series      *string
 	SeriesIndex *float64

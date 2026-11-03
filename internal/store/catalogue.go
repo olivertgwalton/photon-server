@@ -154,11 +154,11 @@ func insertItem(ctx context.Context, tx db, row *model.Item) error {
 	row.ID = uuid.NewV7()
 	_, err := tx.Exec(ctx, `
 		INSERT INTO items (id, library_id, kind, parent_id, season_number, episode_number, episode_end, air_date,
-			extra_kind, scan_title, title, sort_title, folder, disc_number, track_number, artists, series, series_index)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+			extra_kind, scan_title, title, sort_title, folder, disc_number, track_number, artists, advisory, series, series_index)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
 		row.ID, row.LibraryID, row.Kind, row.ParentID, row.SeasonNumber, row.EpisodeNumber, row.EpisodeEnd, row.AirDate,
 		row.ExtraKind, row.ScanTitle, row.Title, row.SortTitle, row.Folder, row.DiscNumber, row.TrackNumber, row.Artists,
-		row.Series, row.SeriesIndex)
+		row.Advisory, row.Series, row.SeriesIndex)
 	return err
 }
 
