@@ -217,7 +217,7 @@ func (a *API) addLibrary(r *http.Request, req addLibraryJSON) (adminLibraryJSON,
 			return adminLibraryJSON{}, refuse(codeInvalidBody, "root is not a folder the server can read")
 		}
 		if req.Discover != "" {
-			if why := a.discoverRefused(r.Context(), req.Discover); why != "" {
+			if why := a.discoverRefused(r.Context(), req.Discover, req.Kind); why != "" {
 				return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 			}
 		}
@@ -252,7 +252,7 @@ func (a *API) remoteRefused(ctx context.Context, req addLibraryJSON) string {
 		}
 	}
 	if req.Discover != "" {
-		if why := a.discoverRefused(ctx, req.Discover); why != "" {
+		if why := a.discoverRefused(ctx, req.Discover, req.Kind); why != "" {
 			return why
 		}
 	}
@@ -263,14 +263,21 @@ func (a *API) remoteRefused(ctx context.Context, req addLibraryJSON) string {
 }
 
 // discoverRefused is why a provider cannot find a library titles, or "" where it can: it searches,
-// and files titles under ids of its own, which a title found is kept by.
-func (a *API) discoverRefused(ctx context.Context, source domain.FieldSource) string {
+// files titles under ids of its own, which a title found is kept by, and knows every kind of
+// title the library holds, as no film provider knows an artist.
+func (a *API) discoverRefused(ctx context.Context, source domain.FieldSource, kind domain.LibraryKind) string {
 	_, plugin := source.Plugin()
 	if !plugin && !slices.Contains(domain.Providers(), domain.Provider(source)) {
 		return string(source) + " files no titles under ids of its own"
 	}
-	if p, ok, err := a.svc.Providers.Get(ctx, source); err != nil || !ok || !answers[provider.Searcher](p, domain.CapabilitySearch) {
+	p, ok, err := a.svc.Providers.Get(ctx, source)
+	if err != nil || !ok || !answers[provider.Searcher](p, domain.CapabilitySearch) {
 		return string(source) + " searches nothing"
+	}
+	for _, k := range kind.Titles() {
+		if !slices.Contains(p.Info().Kinds, k) {
+			return string(source) + " finds no " + string(k) + "s"
+		}
 	}
 	return ""
 }
@@ -393,7 +400,7 @@ func (a *API) setLibrary(r *http.Request, req libraryChangeJSON) (adminLibraryJS
 	change.MetadataLanguage, change.CertificationCountry = (*string)(req.MetadataLanguage), (*string)(req.CertificationCountry)
 	change.ArtworkLanguage, change.TitleLanguage = req.ArtworkLanguage, req.TitleLanguage
 	if d := req.Discover; d != nil && *d != "" {
-		if why := a.discoverRefused(r.Context(), *d); why != "" {
+		if why := a.discoverRefused(r.Context(), *d, lib.Kind); why != "" {
 			return adminLibraryJSON{}, refuse(codeInvalidBody, why)
 		}
 	}

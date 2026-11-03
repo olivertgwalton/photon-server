@@ -141,7 +141,7 @@ func (f *fakeLibraries) RefreshLibrary(_ context.Context, lib uuid.UUID, _ domai
 type addon struct{}
 
 func (addon) Info() provider.Info {
-	return provider.Info{ID: domain.PluginSource("aio"), Name: "AIOStreams"}
+	return provider.Info{ID: domain.PluginSource("aio"), Name: "AIOStreams", Kinds: []domain.ItemKind{domain.ItemMovie, domain.ItemShow}}
 }
 
 func (addon) List(context.Context, string) ([]domain.Listed, error) { return nil, nil }
@@ -185,6 +185,8 @@ func TestAnAdminAddsARemoteLibrary(t *testing.T) {
 		`{"name": "F", "kind": "movies", "media": "cloud"}`,
 		`{"name": "G", "kind": "movies", "media": "remote", "discover": "omdb", "streams": "plugin:aio"}`,
 		`{"name": "H", "kind": "movies", "media": "remote", "discover": "tmdb", "streams": "plugin:aio"}`,
+		// A provider that finds films finds no artists for a music library to be asked for.
+		`{"name": "I", "kind": "music", "media": "remote", "discover": "plugin:aio", "streams": "plugin:aio"}`,
 	} {
 		if rec := do(http.MethodPost, "/api/v1/admin/libraries", body); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400: %s", body, rec.Code, rec.Body)
