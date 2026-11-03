@@ -32,6 +32,9 @@ type Tags struct {
 	Compilation bool
 	// Pictured is a file holding a picture, which Picture reads.
 	Pictured bool
+	// AlbumArtistMBID and ReleaseGroupMBID are the MusicBrainz ids of its album's artist and of the
+	// album, as Picard tags them.
+	AlbumArtistMBID, ReleaseGroupMBID string
 }
 
 // ErrNotTagged is a file TagLib reads as no sound file it knows.
@@ -58,7 +61,8 @@ func ReadTags(path string) (Tags, error) {
 		AlbumArtists: names(raw[taglib.AlbumArtist]), AlbumArtistSort: first(taglib.AlbumArtistSort),
 		Artists: names(raw[taglib.Artists]), Genres: names(raw[taglib.Genre]),
 		Disc: ordinal(first(taglib.DiscNumber)), Track: ordinal(first(taglib.TrackNumber)),
-		Compilation: first(taglib.Compilation) == "1",
+		Compilation:     first(taglib.Compilation) == "1",
+		AlbumArtistMBID: first(taglib.MusicBrainzAlbumArtistID), ReleaseGroupMBID: first(taglib.MusicBrainzReleaseGroupID),
 	}
 	// Picard writes each artist apart in ARTISTS, and their credit as printed in ARTIST.
 	if len(t.Artists) == 0 {

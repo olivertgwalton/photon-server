@@ -124,3 +124,21 @@ func TestAnEmptiedAlbumAndArtistGo(t *testing.T) {
 		t.Errorf("%d items left of an emptied library, want none", n)
 	}
 }
+
+// The MusicBrainz ids Picard tags an album and its artist with are theirs, and a new artist and
+// album are asked of their providers.
+func TestAnAlbumKeepsTheMusicBrainzIdsItsTagsCarry(t *testing.T) {
+	f := newFixture(t, domain.LibraryMusic)
+	f.track("Hurry Up Tomorrow/01.flac", "TITLE=Wake Me Up", "ALBUMARTIST=The Weeknd", "ALBUM=Hurry Up Tomorrow",
+		"MUSICBRAINZ_RELEASEGROUPID=e35b2a1c-4d0a-4b56-9e7d-5f5d0a6e5a11", "MUSICBRAINZ_ALBUMARTISTID=c8b03190-306c-4120-bb0b-6f2ebfc06ea9")
+	f.scan()
+	for kind, mbid := range map[string]string{"album": "e35b2a1c-4d0a-4b56-9e7d-5f5d0a6e5a11", "artist": "c8b03190-306c-4120-bb0b-6f2ebfc06ea9"} {
+		if n := f.count(`SELECT count(*) FROM external_ids x JOIN items i ON i.id = x.item_id
+			WHERE i.kind = '` + kind + `' AND x.provider = 'musicbrainz' AND x.source = 'tags' AND x.value = '` + mbid + `'`); n != 1 {
+			t.Errorf("the %s does not keep its MusicBrainz id from its tags", kind)
+		}
+	}
+	if n := f.count(`SELECT count(*) FROM jobs j JOIN items i ON i.id = j.subject WHERE j.kind = 'identify' AND i.kind IN ('artist', 'album')`); n != 2 {
+		t.Errorf("%d identify jobs for the artist and album, want 2", n)
+	}
+}

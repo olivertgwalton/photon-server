@@ -20,6 +20,8 @@ type Subject struct {
 	Title string
 	Year  int
 	IDs   map[domain.Provider]string
+	// Artist is an album's artist, which a music provider finds it by.
+	Artist string
 	// Scope and Seasons are which of a show's seasons it is described with.
 	Scope   domain.SeasonScope
 	Seasons []int
@@ -98,6 +100,11 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 		}
 		if seasons == 0 {
 			sub.Scope = domain.SeasonsEvery
+		}
+	case item.Kind == domain.ItemAlbum:
+		err = s.pool.QueryRow(ctx, `SELECT title FROM items WHERE id = $1`, item.ParentID).Scan(&sub.Artist)
+		if err != nil {
+			return Subject{}, false, err
 		}
 	case item.Kind == domain.ItemShow:
 		// Only a season holding an episode still titled by its file name or asked about again, as

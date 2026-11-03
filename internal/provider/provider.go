@@ -59,11 +59,13 @@ type Provider interface {
 	Info() Info
 }
 
-// Hints are what a title is matched by: its name and year, and the ids it already carries.
+// Hints are what a title is matched by: its name and year, the ids it already carries, and an
+// album's artist.
 type Hints struct {
-	Title string
-	Year  int
-	IDs   map[domain.Provider]string
+	Title  string
+	Year   int
+	IDs    map[domain.Provider]string
+	Artist string
 }
 
 // Describer matches a title on its provider and says what the provider knows of it and, for a

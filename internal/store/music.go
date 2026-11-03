@@ -19,9 +19,11 @@ import (
 type Album struct {
 	Title, SortTitle   string
 	Artist, ArtistSort string
-	Year               int
-	Released           time.Time
-	Genres             []string
+	// IDs and ArtistIDs are the album's and its artist's ids, as its tracks' tags carry them.
+	IDs, ArtistIDs map[domain.Provider]string
+	Year           int
+	Released       time.Time
+	Genres         []string
 	// Folder is the album's own folder, which a folder of one of its discs is under.
 	Folder  string
 	Artwork []domain.Artwork
@@ -67,12 +69,12 @@ func saveAlbum(ctx context.Context, tx db, lib uuid.UUID, settings analysis, fol
 		artistFolder = path.Dir(a.Folder)
 	}
 	artist, err := ensureMusic(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemArtist, Folder: artistFolder},
-		domain.Metadata{Title: a.Artist, SortTitle: a.ArtistSort}, changed)
+		domain.Metadata{Title: a.Artist, SortTitle: a.ArtistSort, IDs: a.ArtistIDs}, changed)
 	if err != nil {
 		return err
 	}
 	album, err := ensureMusic(ctx, tx, model.Item{LibraryID: &lib, Kind: domain.ItemAlbum, ParentID: &artist, Folder: a.Folder},
-		domain.Metadata{Title: a.Title, SortTitle: a.SortTitle, Year: a.Year, ReleaseDate: a.Released, Genres: a.Genres}, changed)
+		domain.Metadata{Title: a.Title, SortTitle: a.SortTitle, Year: a.Year, ReleaseDate: a.Released, Genres: a.Genres, IDs: a.IDs}, changed)
 	if err != nil {
 		return err
 	}
@@ -88,7 +90,8 @@ func saveAlbum(ctx context.Context, tx db, lib uuid.UUID, settings analysis, fol
 }
 
 // ensureMusic is the artist or album of a title under row's parent, by its name in any case,
-// added where there is none; what the files say of it is written either way.
+// added where there is none, and asked of its providers once it is; what the files say of it,
+// and the ids their tags carry, are written either way.
 func ensureMusic(ctx context.Context, tx db, row model.Item, said domain.Metadata, changed Changed) (uuid.UUID, error) {
 	row.ScanTitle, row.Title, row.SortTitle = said.Title, said.Title, sortTitle(said.Title)
 	err := tx.QueryRow(ctx, `
@@ -99,13 +102,18 @@ func ensureMusic(ctx context.Context, tx db, row model.Item, said domain.Metadat
 	case err == nil:
 	case errors.Is(err, pgx.ErrNoRows):
 		change = domain.TitleAdded
-		err = insertItem(ctx, tx, &row)
+		if err = insertItem(ctx, tx, &row); err == nil {
+			err = enqueue(ctx, tx, domain.JobIdentify, row.ID)
+		}
 	}
 	if err != nil {
 		return uuid.UUID{}, err
 	}
 	changed.add(change, row.ID)
-	return row.ID, applyMetadata(ctx, tx, row.ID, domain.SourceFile, said)
+	if err := applyMetadata(ctx, tx, row.ID, domain.SourceFile, said); err != nil {
+		return uuid.UUID{}, err
+	}
+	return row.ID, saveIDs(ctx, tx, row.ID, domain.IDFromTags, said.IDs)
 }
 
 func saveTrack(ctx context.Context, tx db, lib uuid.UUID, settings analysis, album uuid.UUID, t Track, changed Changed) error {
