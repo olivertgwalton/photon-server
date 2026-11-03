@@ -26,6 +26,7 @@ import { blurStyle, tintColour } from "#lib/blurhash.ts";
 import AlbumPage from "#lib/components/AlbumPage.svelte";
 import ArtistPage from "#lib/components/ArtistPage.svelte";
 import Artwork from "#lib/components/Artwork.svelte";
+import BookPage from "#lib/components/BookPage.svelte";
 import CardGrid from "#lib/components/CardGrid.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import DownloadDialog from "#lib/components/DownloadDialog.svelte";
@@ -279,11 +280,13 @@ async function ask() {
 	<title>{titleWithShow(t)} · Photon</title>
 </svelte:head>
 
-<!-- Music has pages of its own, drawn from the same title. -->
+<!-- Music and books have pages of their own, drawn from the same title. -->
 {#if t.kind === "album"}
 	<AlbumPage title={t} />
 {:else if t.kind === "artist"}
 	<ArtistPage title={t} />
+{:else if t.kind === "book"}
+	<BookPage title={t} />
 {:else}
 	<article class="grid gap-10">
 		<header class="relative -mx-3 -mt-6 sm:-mx-6" style:--accent={accent}>
