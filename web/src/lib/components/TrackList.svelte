@@ -3,6 +3,7 @@ import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { components } from "#lib/api/schema.d.ts";
 import ExplicitMark from "#lib/components/ExplicitMark.svelte";
+import FavouriteMenuItem from "#lib/components/FavouriteMenuItem.svelte";
 import PlayingBars from "#lib/components/player/PlayingBars.svelte";
 import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
@@ -108,6 +109,11 @@ const split = $derived(discs(tracks));
 									ids={[track.id]}
 									name={track.title}
 									tracks={async () => [trackListen(track)]}
+								/>
+								<DropdownMenu.Separator />
+								<FavouriteMenuItem
+									id={track.id}
+									at={track.state?.favourite_at}
 								/>
 							</DropdownMenu.Content>
 						</DropdownMenu.Root>

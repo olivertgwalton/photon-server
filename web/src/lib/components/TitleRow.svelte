@@ -5,6 +5,7 @@ import type { components } from "#lib/api/schema.d.ts";
 import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import { runtime, showLine } from "#lib/format.ts";
+import { trackArtists } from "#lib/music.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
 type Card = components["schemas"]["Card"];
@@ -20,7 +21,9 @@ const line = $derived(
 		[
 			card.kind === "episode" || card.kind === "season"
 				? showLine(card)
-				: card.year,
+				: card.kind === "track"
+					? trackArtists(card)
+					: card.year,
 			card.duration_ms && runtime(card.duration_ms),
 		]
 			.filter(Boolean)

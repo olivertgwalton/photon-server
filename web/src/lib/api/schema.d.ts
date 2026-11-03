@@ -10037,7 +10037,7 @@ export interface components {
             titles: components["schemas"]["CardPage"];
         };
         /** @enum {string} */
-        SearchKind: "movie" | "show" | "collection" | "episode" | "person";
+        SearchKind: "movie" | "show" | "collection" | "episode" | "artist" | "album" | "track" | "author" | "book" | "person";
         SeasonCard: {
             blurhashes?: {
                 [key: string]: string;

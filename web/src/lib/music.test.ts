@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { components } from "./api/schema.d.ts";
-import { discs, guests } from "./music.ts";
+import { artistLine, discs, guests } from "./music.ts";
 
 type Card = components["schemas"]["Card"];
 
@@ -38,5 +38,11 @@ test("a track names its artists only where they are not the album's", () => {
 	expect(guests(t, "The Weeknd")).toBeUndefined();
 	expect(
 		guests({ ...t, artists: ["The Weeknd", "Justice"] }, "The Weeknd"),
-	).toBe("The Weeknd, Justice");
+	).toBe("The Weeknd & Justice");
+});
+
+test("a track's artists are joined as Apple Music joins them", () => {
+	expect(artistLine(["A"])).toBe("A");
+	expect(artistLine(["A", "B"])).toBe("A & B");
+	expect(artistLine(["A", "B", "C"])).toBe("A, B & C");
 });

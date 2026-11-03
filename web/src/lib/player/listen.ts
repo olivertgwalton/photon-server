@@ -1,4 +1,5 @@
 import type { components } from "#lib/api/schema.d.ts";
+import { trackArtists } from "#lib/music.ts";
 import { shuffled } from "#lib/shuffle.ts";
 
 type Schemas = components["schemas"];
@@ -109,7 +110,7 @@ export function trackListen(card: Schemas["Card"]): Listen {
 		id: card.id,
 		kind: "track",
 		title: card.title,
-		by: card.artists?.join(", ") || card.artist?.title,
+		by: trackArtists(card),
 		creator: card.artist ?? undefined,
 		from: card.album ?? undefined,
 		artwork: card.poster,
