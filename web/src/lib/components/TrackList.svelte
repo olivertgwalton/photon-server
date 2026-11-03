@@ -1,8 +1,8 @@
 <script lang="ts">
-import AudioLinesIcon from "@lucide/svelte/icons/audio-lines";
 import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
 import PlayIcon from "@lucide/svelte/icons/play";
 import type { components } from "#lib/api/schema.d.ts";
+import PlayingBars from "#lib/components/player/PlayingBars.svelte";
 import QueueMenuItems from "#lib/components/player/QueueMenuItems.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
 import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
@@ -59,10 +59,7 @@ const split = $derived(discs(tracks));
 				<Table.Row class="group border-line/50 relative">
 					<Table.Cell class="text-ink-3 w-12 text-right font-mono tabular-nums">
 						{#if playing}
-							<AudioLinesIcon
-								class="text-signal ml-auto size-4"
-								aria-label="Playing"
-							/>
+							<PlayingBars class="text-signal ml-auto size-4" />
 						{:else}
 							<span class="group-hover:hidden">{track.track_number ?? ""}</span>
 							<PlayIcon
