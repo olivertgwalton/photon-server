@@ -80,3 +80,29 @@ func TestASampleOfAStrmIsHeldToItsLimit(t *testing.T) {
 		t.Errorf("a sample of 16 bytes sent %d bytes with Content-Length %q, want the first 16 and no length", len(got), w.Header().Get("Content-Length"))
 	}
 }
+
+// An EPUB is sent as a download of its own type, never as a page a browser would run its script
+// in, and in the ranges a reader asks for.
+func TestAnEbookIsServedAsADownload(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"Earthsea.epub": "PK<html><script>alert(1)</script></html>"})
+	in, err := OpenMedia(dir, "Earthsea.epub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "bytes=0-1")
+	w := httptest.NewRecorder()
+	if err := Serve(w, r, in, math.MaxInt64); err != nil {
+		t.Fatal(err)
+	}
+	h := w.Header()
+	if w.Code != http.StatusPartialContent || w.Body.String() != "PK" {
+		t.Errorf("%d %q, want its first two bytes", w.Code, w.Body)
+	}
+	if h.Get("Content-Type") != "application/epub+zip" || h.Get("Content-Disposition") != `attachment; filename=Earthsea.epub` ||
+		h.Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(h.Get("Content-Security-Policy"), "sandbox") {
+		t.Errorf("headers %v, want a sandboxed download of an EPUB", h)
+	}
+}

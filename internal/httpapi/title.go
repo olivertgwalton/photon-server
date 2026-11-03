@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json/jsontext"
 	"time"
 	"uuid"
 
@@ -304,13 +305,17 @@ type creditRefJSON struct {
 }
 
 type titleStateJSON struct {
-	PositionMS    int64      `json:"position_ms,omitzero"`
-	Plays         int        `json:"plays,omitzero"`
-	WatchedAt     *time.Time `json:"watched_at,omitzero"`
-	LastPlayedAt  *time.Time `json:"last_played_at,omitzero"`
-	FavouriteAt   *time.Time `json:"favourite_at,omitzero"`
-	WatchlistedAt *time.Time `json:"watchlisted_at,omitzero"`
-	Unwatched     int        `json:"unwatched,omitzero"`
+	PositionMS int64 `json:"position_ms,omitzero"`
+	// Locator is where the profile is in a book, as its reader gave it, and Progression how far
+	// through the book that is, from 0 to 1.
+	Locator       jsontext.Value `json:"locator,omitzero"`
+	Progression   *float64       `json:"progression,omitzero"`
+	Plays         int            `json:"plays,omitzero"`
+	WatchedAt     *time.Time     `json:"watched_at,omitzero"`
+	LastPlayedAt  *time.Time     `json:"last_played_at,omitzero"`
+	FavouriteAt   *time.Time     `json:"favourite_at,omitzero"`
+	WatchlistedAt *time.Time     `json:"watchlisted_at,omitzero"`
+	Unwatched     int            `json:"unwatched,omitzero"`
 }
 
 func titlePageOf(p store.TitlePage, w words.Words) titlePageJSON {

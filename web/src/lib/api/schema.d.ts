@@ -7708,6 +7708,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/titles/{id}/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Keep where the profile is in a book, as its reader gives it, and how far through the book that is */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Reading"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/titles/{id}/similar": {
         parameters: {
             query?: never;
@@ -9793,6 +9834,12 @@ export interface components {
         Reached: {
             reach: components["schemas"]["Reach"];
         };
+        Reading: {
+            locator: {
+                [key: string]: unknown;
+            };
+            progression: number;
+        };
         /** @enum {string} */
         Recheck: "hourly" | "at_sign_in";
         Redemption: {
@@ -10235,9 +10282,11 @@ export interface components {
             artwork?: {
                 [key: string]: string[];
             };
+            author?: components["schemas"]["TitleRef"] | null;
             blurhashes?: {
                 [key: string]: string;
             };
+            books?: components["schemas"]["Card"][];
             box_set?: components["schemas"]["CollectionBoxSet"];
             certificate?: string;
             certification_country?: string;
@@ -10277,6 +10326,8 @@ export interface components {
             season?: components["schemas"]["TitleRef"] | null;
             season_number?: number | null;
             seasons?: components["schemas"]["SeasonCard"][];
+            series?: string;
+            series_index?: number | null;
             show?: components["schemas"]["TitleRef"] | null;
             state?: components["schemas"]["TitleState"];
             studios?: string[];
@@ -10300,9 +10351,13 @@ export interface components {
             favourite_at?: string | null;
             /** Format: date-time */
             last_played_at?: string | null;
+            locator?: {
+                [key: string]: unknown;
+            };
             plays?: number;
             /** Format: int64 */
             position_ms?: number;
+            progression?: number | null;
             unwatched?: number;
             /** Format: date-time */
             watched_at?: string | null;

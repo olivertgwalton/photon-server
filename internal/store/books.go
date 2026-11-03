@@ -3,6 +3,8 @@ package store
 import (
 	"cmp"
 	"context"
+	"encoding/json/jsontext"
+	"errors"
 	"fmt"
 	"path"
 	"time"
@@ -116,4 +118,25 @@ func (s *Store) Books(ctx context.Context, profile, author uuid.UUID) ([]Card, e
 		return nil, err
 	}
 	return s.cards(ctx, profile, rows)
+}
+
+// ErrNotRead is a title that is no book, which no reader reads.
+var ErrNotRead = errors.New("only a book is read")
+
+// SaveReading keeps where the profile is in a book, as its reader says it, and how far through the
+// book that is. ErrNotRead for any other title, ErrNotFound for none.
+func (s *Store) SaveReading(ctx context.Context, profile, book uuid.UUID, locator jsontext.Value, progression float64) error {
+	var kind domain.ItemKind
+	if err := s.pool.QueryRow(ctx, `SELECT kind FROM items WHERE id = $1`, book).Scan(&kind); err != nil {
+		return found(err)
+	}
+	if kind != domain.ItemBook {
+		return ErrNotRead
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO watch_state (profile_id, item_id, locator, progression, last_played_at, changed_at)
+		VALUES ($1, $2, $3, $4, now(), now())
+		ON CONFLICT (profile_id, item_id) DO UPDATE SET locator = excluded.locator, progression = excluded.progression,
+			last_played_at = now(), changed_at = now()`, profile, book, locator, progression)
+	return err
 }

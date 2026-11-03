@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"net/url"
 	"path"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/media"
+	"github.com/olivertgwalton/photon-server/internal/naming"
 )
 
 // fileTypes are the types of the files a library holds, which Go's own table lacks.
@@ -36,6 +38,16 @@ func Serve(w http.ResponseWriter, r *http.Request, in media.Input, limit int64) 
 	}
 	if t, ok := fileTypes[strings.ToLower(path.Ext(in.Name))]; ok {
 		w.Header().Set("Content-Type", t)
+	}
+	// An ebook is a reader's to open, never a page of the server's: an EPUB is HTML that may carry
+	// script, as Audiobookshelf's and File Browser's readers ran it, and a PDF may too. It goes as a
+	// download its type alone names, sandboxed were a browser to show it.
+	if t, ok := naming.BookType(in.Name); ok {
+		h := w.Header()
+		h.Set("Content-Type", t)
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": in.Name}))
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	}
 	if limit >= info.Size() {
 		// The bare file keeps the copy in the kernel: sendfile takes only an *os.File.

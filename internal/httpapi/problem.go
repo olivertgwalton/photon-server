@@ -136,6 +136,7 @@ var problems = []struct {
 	{err: store.ErrBeyondManager, code: codeForbidden, ownWords: true},
 	{err: store.ErrSuperseded, code: codeConflict, ownWords: true},
 	{err: store.ErrNotListable, code: codeConflict, ownWords: true},
+	{err: store.ErrNotRead, code: codeConflict, ownWords: true},
 	{err: store.ErrNothingOnDisk, code: codeConflict, ownWords: true},
 	{err: store.ErrOneVersion, code: codeConflict, ownWords: true},
 	{err: store.ErrNotMergeable, code: codeInvalidBody, ownWords: true},
