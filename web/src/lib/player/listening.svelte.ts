@@ -14,6 +14,7 @@ import {
 	type GainMode,
 	gainFactor,
 	gainModes,
+	keptOf,
 	type Listen,
 	movedTo,
 	nextAt,
@@ -27,6 +28,7 @@ import {
 	qualityKbps,
 	queued,
 	type Repeat,
+	readKept,
 	reshuffled,
 	without,
 } from "./listen.ts";
@@ -57,6 +59,9 @@ type Deck = {
 const readyAhead = 20;
 const qualityKey = "photon:audio-quality";
 const gainKey = "photon:audio-gain";
+const keptKey = "photon:audio-queue";
+// A playing queue is written again each this many seconds, not at every tick.
+const keepEvery = 5;
 
 // The audio player: one queue for the tab, played for as long as the shell's
 // bar is drawn, so it goes on from page to page. Seconds throughout, on the
@@ -98,11 +103,19 @@ class Listening {
 
 	// Drawn once the bar is: the player stops once it is gone, as a page
 	// without the shell has a player of its own.
+	// What was queued is back as it was left, paused, as Finamp and Plexamp
+	// keep a queue on each device; gone, the queue is still kept.
 	start = () => {
 		this.#started = true;
-		const off = on(window, "pagehide", () => void this.#reporter?.stop(true));
+		this.#restore();
+		const off = on(window, "pagehide", () => {
+			this.#keep();
+			void this.#reporter?.stop(true);
+		});
 		return () => {
-			this.close();
+			this.#keep();
+			this.#halt();
+			this.#reset();
 			off();
 			this.#started = false;
 		};
@@ -124,6 +137,7 @@ class Listening {
 				? [first, ...shuffled(all.filter((i) => i !== first))]
 				: all;
 		this.at = this.queue.findIndex((i) => i.key === first.key);
+		this.#keep();
 		void this.#open(startOf(first));
 	};
 
@@ -145,6 +159,7 @@ class Listening {
 		const added = queued(items);
 		this.#original = [...this.#original, ...added];
 		this.queue = [...this.queue, ...added];
+		this.#keep();
 	};
 
 	move = (from: number, to: number) => this.#set(movedTo(this.#q, from, to));
@@ -175,6 +190,7 @@ class Listening {
 			>
 		)[this.repeat];
 		this.#settleReady();
+		this.#keep();
 	};
 
 	setQuality = (quality: Quality) => {
@@ -208,6 +224,7 @@ class Listening {
 		const item = this.queue[index];
 		if (!item) return;
 		this.at = index;
+		this.#keep();
 		void this.#open(startOf(item));
 	};
 
@@ -278,7 +295,14 @@ class Listening {
 		if (this.#deck) this.#deck.audio.muted = this.muted;
 	};
 
+	// The queue goes, here and from this browser's keeping.
 	close = () => {
+		this.#halt();
+		this.#reset();
+		forget(keptKey);
+	};
+
+	#halt() {
 		void this.#reporter?.stop();
 		this.#reporter = undefined;
 		this.#opening++;
@@ -286,13 +310,43 @@ class Listening {
 		this.#deck = undefined;
 		this.#discardReady();
 		this.setSleep({ kind: "off" });
+	}
+
+	#reset() {
 		this.queue = [];
 		this.#original = [];
 		this.at = 0;
 		this.playing = false;
 		this.position = 0;
 		this.duration = 0;
-	};
+	}
+
+	#keep() {
+		if (!this.queue.length) return forget(keptKey);
+		const position = Math.floor(this.position);
+		const kept = keptOf(
+			this.queue,
+			this.at,
+			position,
+			this.order,
+			this.repeat,
+			this.#original,
+		);
+		keep(keptKey, JSON.stringify(kept));
+	}
+
+	#restore() {
+		const kept = readKept(storedText(keptKey));
+		if (!kept) return;
+		const items = queued(kept.items);
+		this.queue = items;
+		this.at = kept.at;
+		this.order = kept.order;
+		this.repeat = kept.repeat;
+		this.#original = kept.original.map((i) => items[i]);
+		this.position = kept.position;
+		this.duration = (items[kept.at].duration_ms ?? 0) / 1000;
+	}
 
 	get #q(): Queue {
 		return { items: this.queue, at: this.at };
@@ -302,6 +356,7 @@ class Listening {
 		this.queue = q.items;
 		this.at = q.at;
 		this.#settleReady();
+		this.#keep();
 	}
 
 	#fallAsleep() {
@@ -334,6 +389,7 @@ class Listening {
 				this.playing = false;
 				// The pause an ended file makes is not the listener's.
 				if (!audio.ended) this.#reporter?.paused();
+				this.#keep();
 			}),
 			on(audio, "ended", () => mine() && this.#ended(deck)),
 		];
@@ -345,7 +401,9 @@ class Listening {
 	#timeupdate(deck: Deck) {
 		if (this.#seekTo !== undefined) return;
 		const offset = deck.playback.parts?.[deck.part]?.offset_ms ?? 0;
+		const before = Math.floor(this.position / keepEvery);
 		this.position = offset / 1000 + deck.audio.currentTime;
+		if (Math.floor(this.position / keepEvery) !== before) this.#keep();
 		if (this.sleep.kind === "end" && this.position >= this.sleep.at - 0.25) {
 			this.#fallAsleep();
 			return;
@@ -376,6 +434,7 @@ class Listening {
 			const ready = this.#ready;
 			if (ready && ready.key === this.queue[to]?.key) {
 				this.at = to;
+				this.#keep();
 				this.#takeReady(ready);
 			} else {
 				this.jump(to);
@@ -579,11 +638,25 @@ function stored<T extends string>(
 	options: readonly T[],
 	otherwise: T,
 ): T {
+	const kept = storedText(key);
+	return options.find((o) => o === kept) ?? otherwise;
+}
+
+// What this browser keeps under key, nothing where it keeps nothing or
+// refuses storage.
+function storedText(key: string): string | null {
 	try {
-		const kept = localStorage.getItem(key);
-		return options.find((o) => o === kept) ?? otherwise;
+		return localStorage.getItem(key);
 	} catch {
-		return otherwise;
+		return null;
+	}
+}
+
+function forget(key: string) {
+	try {
+		localStorage.removeItem(key);
+	} catch {
+		// Nothing was kept where storage is refused.
 	}
 }
 

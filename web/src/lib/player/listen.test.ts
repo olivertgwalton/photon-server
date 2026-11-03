@@ -4,6 +4,7 @@ import {
 	after,
 	audioProfile,
 	gainFactor,
+	keptOf,
 	keyAction,
 	lineAt,
 	movedTo,
@@ -12,6 +13,7 @@ import {
 	previousAt,
 	type Queue,
 	qualityKbps,
+	readKept,
 	reshuffled,
 	without,
 } from "./listen.ts";
@@ -196,4 +198,35 @@ test("the line sung is the last to have started", () => {
 	expect(lineAt(lines, 500)).toBe(-1);
 	expect(lineAt(lines, 4000)).toBe(1);
 	expect(lineAt(lines, 60_000)).toBe(2);
+});
+
+test("a kept queue comes back as it was left", () => {
+	const items = q("a", "b", "c");
+	const kept = keptOf(items, 1, 42, "shuffled", "all", [
+		items[2],
+		items[0],
+		items[1],
+	]);
+	const back = readKept(JSON.stringify(kept));
+	expect(back).toEqual({
+		items: items.map(({ key: _, ...i }) => i),
+		at: 1,
+		position: 42,
+		order: "shuffled",
+		repeat: "all",
+		original: [2, 0, 1],
+	});
+});
+
+test("what is not a queue kept by this page is none", () => {
+	const good = keptOf(q("a"), 0, 0, "in_order", "off", []);
+	expect(readKept(null)).toBeUndefined();
+	expect(readKept("{")).toBeUndefined();
+	expect(readKept(JSON.stringify({ ...good, at: 3 }))).toBeUndefined();
+	expect(
+		readKept(JSON.stringify({ ...good, items: [{ id: 1 }] })),
+	).toBeUndefined();
+	expect(
+		readKept(JSON.stringify({ ...good, repeat: "sometimes" })),
+	).toBeUndefined();
 });
