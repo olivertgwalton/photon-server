@@ -14,6 +14,7 @@ import { blurStyle } from "#lib/blurhash.ts";
 import Artwork from "#lib/components/Artwork.svelte";
 import { Progress } from "#lib/components/ui/progress/index.ts";
 import { showLine } from "#lib/format.ts";
+import { trackArtists } from "#lib/music.ts";
 import { hidesSpoiler } from "#lib/spoilers.ts";
 import TitleMenuButton from "./TitleMenuButton.svelte";
 
@@ -56,6 +57,7 @@ const picture = $derived(
 const caption = $derived.by(() => {
 	if (given !== undefined) return given;
 	if (card.kind === "season" || card.kind === "episode") return showLine(card);
+	if (card.kind === "track") return trackArtists(card) ?? "";
 	return card.year ? String(card.year) : "";
 });
 
