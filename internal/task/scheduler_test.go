@@ -227,6 +227,30 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 	})
 }
 
+// A task that panics is a failed run, and the scheduler, and the node, go on.
+func TestATaskThatPanicsFails(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
+		task := Task{
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: time.Hour},
+			Run:     func(context.Context, Start) error { panic("nil map") },
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			NewScheduler(st, discard(), uuid.NewV7(), ignore, task).Run(ctx)
+			close(done)
+		}()
+		synctest.Sleep(90 * time.Minute)
+		cancel()
+		<-done
+		if got := st.results(); len(got) != 2 || got[0] != domain.TaskFailed || got[1] != domain.TaskFailed {
+			t.Errorf("outcomes = %v, want two failed runs", got)
+		}
+	})
+}
+
 func TestATaskAskedForRunsBeforeItIsDue(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
