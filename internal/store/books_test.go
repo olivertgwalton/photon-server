@@ -38,8 +38,8 @@ func TestAReadersPlaceInABookIsKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	locator := jsontext.Value(`{"href":"/OEBPS/text/c3.xhtml","type":"application/xhtml+xml","locations":{"progression":0.5,"totalProgression":0.42}}`)
-	if err := s.SaveReading(ctx, ada.ID, book, locator, 0.42); err != nil {
-		t.Fatal(err)
+	if reach, err := s.SaveReading(ctx, ada.ID, book, locator, 0.42, nil); err != nil || reach != domain.ReachResumable {
+		t.Fatalf("reading: %s, %v; want somewhere to resume from", reach, err)
 	}
 	p, err := s.Title(ctx, ada.ID, book)
 	if err != nil {
@@ -62,13 +62,21 @@ func TestAReadersPlaceInABookIsKept(t *testing.T) {
 	if err != nil || len(reading) != 1 || reading[0].ID != book || reading[0].Author == nil {
 		t.Fatalf("continue reading: %+v, %v; want the book and its author", reading, err)
 	}
-	if err := s.MarkWatched(ctx, ada.ID, book, nil); err != nil {
-		t.Fatal(err)
+	// A place read offline before the book's state last changed is too old to keep.
+	yesterday := time.Now().Add(-24 * time.Hour)
+	if _, err := s.SaveReading(ctx, ada.ID, book, locator, 0.1, &yesterday); !errors.Is(err, ErrSuperseded) {
+		t.Errorf("reading from yesterday: %v, want ErrSuperseded", err)
+	}
+	if reach, err := s.SaveReading(ctx, ada.ID, book, locator, 1, nil); err != nil || reach != domain.ReachEnd {
+		t.Fatalf("reading to the end: %s, %v; want the book read", reach, err)
+	}
+	if p, err := s.Title(ctx, ada.ID, book); err != nil || p.State.WatchedAt == nil || p.State.Plays != 1 {
+		t.Errorf("once read to the end: %+v, %v; want read once", p.State, err)
 	}
 	if reading, _, err := s.RowPage(ctx, ada.ID, domain.RowContinueReading, Page{Limit: 10}); err != nil || len(reading) != 0 {
 		t.Errorf("continue reading once finished: %+v, %v; want none", reading, err)
 	}
-	if err := s.SaveReading(ctx, ada.ID, author, locator, 0.1); !errors.Is(err, ErrNotRead) {
+	if _, err := s.SaveReading(ctx, ada.ID, author, locator, 0.1, nil); !errors.Is(err, ErrNotRead) {
 		t.Errorf("reading an author: %v, want ErrNotRead", err)
 	}
 }
