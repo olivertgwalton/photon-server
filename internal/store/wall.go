@@ -384,10 +384,10 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() (err error) {
-		if shows, err = s.showsOf(gctx, rows); err != nil {
+		if shows, music, err = s.placesOf(gctx, rows); err != nil {
 			return err
 		}
-		pictures, hashes, err = s.picturesWorn(gctx, rows, shows)
+		pictures, hashes, err = s.picturesWorn(gctx, rows, shows, music)
 		return err
 	})
 	g.Go(func() (err error) {
@@ -408,10 +408,6 @@ func (s *Store) cards(ctx context.Context, profile uuid.UUID, rows []*model.Item
 	})
 	g.Go(func() (err error) {
 		posters, err = s.collectionPosters(gctx, profile, rows)
-		return err
-	})
-	g.Go(func() (err error) {
-		music, err = s.musicOf(gctx, rows)
 		return err
 	})
 	if err := g.Wait(); err != nil {
@@ -451,9 +447,10 @@ type seasonShow struct {
 
 // picturesWorn answers titles' pictures as bestPictures does, an episode wearing its show's of
 // each kind it has none of (a poster, a backdrop, the lettering), as Plex answers an episode with its
-// show's art: its own still stays its thumb. The shows, and the seasons an episode's card carries
-// the poster of, are read in the same lookup.
-func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
+// show's art: its own still stays its thumb. A track wears its album's cover, as Plex's do. The
+// shows, the seasons an episode's card carries the poster of, and the albums, are read in the same
+// lookup.
+func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[uuid.UUID]episodeShow, music map[uuid.UUID]musicPlace) (map[uuid.UUID]map[domain.ArtworkKind][]uuid.UUID, map[uuid.UUID]string, error) {
 	// A show is ranked as a show of its episode's library; nothing more of it is read.
 	all := slices.Clone(rows)
 	seen := map[uuid.UUID]bool{}
@@ -466,12 +463,19 @@ func (s *Store) picturesWorn(ctx context.Context, rows []*model.Item, shows map[
 			seen[season.ID] = true
 			all = append(all, &model.Item{ID: season.ID, LibraryID: r.LibraryID, Kind: domain.ItemSeason})
 		}
+		if album := music[r.ID].album; album != nil && !seen[album.ID] {
+			seen[album.ID] = true
+			all = append(all, &model.Item{ID: album.ID, LibraryID: r.LibraryID, Kind: domain.ItemAlbum})
+		}
 	}
 	pictures, hashes, err := s.bestPictures(ctx, all)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, r := range rows {
+		if album := music[r.ID].album; album != nil && len(pictures[r.ID][domain.ArtworkPoster]) == 0 && len(pictures[album.ID][domain.ArtworkPoster]) > 0 {
+			pictures[r.ID] = map[domain.ArtworkKind][]uuid.UUID{domain.ArtworkPoster: pictures[album.ID][domain.ArtworkPoster]}
+		}
 		show := shows[r.ID].ref
 		if r.Kind != domain.ItemEpisode || show == nil {
 			continue

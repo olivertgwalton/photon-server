@@ -304,11 +304,11 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 
 // dress fills in the pictures item wears, as profile is shown them, and their blurhashes.
 func (s *Store) dress(ctx context.Context, profile uuid.UUID, item *model.Item, p *TitlePage) error {
-	shows, err := s.showsOf(ctx, []*model.Item{item})
+	shows, music, err := s.placesOf(ctx, []*model.Item{item})
 	if err != nil {
 		return err
 	}
-	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows)
+	pictures, hashes, err := s.picturesWorn(ctx, []*model.Item{item}, shows, music)
 	if err != nil {
 		return err
 	}
