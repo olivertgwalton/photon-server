@@ -62,3 +62,21 @@ test("a chosen row that is empty or gone leaves the showcase curated", async () 
 		expect(pool.turn).toBe("rests");
 	}
 });
+
+test("the showcase is about films and shows: music and books are passed over", async () => {
+	const kinds = ["track", "album", "book", "movie"] as const;
+	const pool = await showcasePool(
+		[
+			{
+				key: "favourites/l",
+				kind: "favourites" as const,
+				library,
+				cards: Promise.resolve({
+					items: kinds.map((kind) => ({ ...card(kind), kind }) as Card),
+				}),
+			},
+		],
+		undefined,
+	);
+	expect(pool.cards.map((c) => c.id)).toEqual(["movie"]);
+});

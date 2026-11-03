@@ -29,6 +29,19 @@ export function keepShowcase(s: Showcase) {
 	localStorage.setItem(key, JSON.stringify(s));
 }
 
+// What the showcase can be about: a film or a show, wide over its backdrop.
+// Music and books are drawn square or tall and have no backdrop; resting on
+// one leaves the showcase where it was.
+export function shows(card: Pick<Card, "kind">): boolean {
+	return (
+		card.kind === "movie" ||
+		card.kind === "show" ||
+		card.kind === "season" ||
+		card.kind === "episode" ||
+		card.kind === "collection"
+	);
+}
+
 // The titles the showcase is about: the row the reader chose, which slides
 // through itself; or else the first library row that has any. Never a row
 // about the reader on its own account: the showcase is a suggestion, and what
@@ -52,7 +65,7 @@ export async function showcasePool(
 
 async function items(r: Source): Promise<Card[]> {
 	return r.cards.then(
-		(p) => p.items,
+		(p) => p.items.filter(shows),
 		() => [],
 	);
 }
