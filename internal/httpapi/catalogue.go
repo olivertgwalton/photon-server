@@ -244,7 +244,8 @@ func (a *API) search(r *http.Request, _ none) (searchJSON, error) {
 		switch k {
 		case domain.SearchPerson:
 			findPeople = true
-		case domain.SearchMovie, domain.SearchShow, domain.SearchCollection, domain.SearchEpisode:
+		case domain.SearchMovie, domain.SearchShow, domain.SearchCollection, domain.SearchEpisode,
+			domain.SearchArtist, domain.SearchAlbum, domain.SearchTrack, domain.SearchAuthor, domain.SearchBook:
 			query.Kinds = append(query.Kinds, domain.ItemKind(k))
 		}
 	}
