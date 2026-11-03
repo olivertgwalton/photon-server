@@ -43,6 +43,9 @@ type countsJSON struct {
 	Shows    int `json:"shows"`
 	Seasons  int `json:"seasons"`
 	Episodes int `json:"episodes"`
+	Artists  int `json:"artists"`
+	Albums   int `json:"albums"`
+	Tracks   int `json:"tracks"`
 	// Collections are how many its collections listing holds, so a client knows whether to offer
 	// one without asking it.
 	Collections int `json:"collections"`

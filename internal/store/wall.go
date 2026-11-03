@@ -511,7 +511,7 @@ func (s *Store) showsOf(ctx context.Context, rows []*model.Item) (map[uuid.UUID]
 			return r.ParentID
 		case domain.ItemSeason:
 			return &r.ID
-		case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra:
+		case domain.ItemMovie, domain.ItemShow, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		}
 		return nil
 	}

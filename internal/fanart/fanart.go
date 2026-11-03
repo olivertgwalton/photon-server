@@ -120,7 +120,7 @@ func (c *Client) Describe(ctx context.Context, loc domain.Locale, kind domain.It
 			{domain.ArtworkThumb, s.Thumbs},
 			{domain.ArtworkBanner, s.Banners},
 		}
-	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra:
+	case domain.ItemSeason, domain.ItemEpisode, domain.ItemCollection, domain.ItemExtra, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		return domain.Metadata{}, nil, nil
 	}
 	var m domain.Metadata

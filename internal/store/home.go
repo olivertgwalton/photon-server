@@ -58,6 +58,10 @@ var rowQueries = map[domain.HomeRow]string{
 		SELECT ` + itemColumns + ` FROM items
 		WHERE library_id = @lib AND kind = 'movie' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
 		ORDER BY added_at DESC, id DESC LIMIT @limit`,
+	domain.RowRecentAlbums: `
+		SELECT ` + itemColumns + ` FROM items
+		WHERE library_id = @lib AND kind = 'album' AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE sees(v, items))
+		ORDER BY added_at DESC, id DESC LIMIT @limit`,
 	// A show by its newest episode. The episodes are walked newest first, one step to the next
 	// show not yet found, so only the newest are read rather than every episode of every show.
 	// Whether a show is seen is asked of that one show once it is found: asked in the walk's

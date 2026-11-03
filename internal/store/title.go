@@ -281,7 +281,8 @@ func (s *Store) ofKind(ctx context.Context, profile uuid.UUID, item *model.Item,
 		p.State = states[item.ID]
 	case domain.ItemSeason:
 		p.Episodes, err = s.episodes(ctx, profile, item.ID)
-	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra:
+	case domain.ItemArtist, domain.ItemAlbum:
+	case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemTrack:
 		var versions map[uuid.UUID][]VersionPage
 		versions, err = s.Versions(ctx, []uuid.UUID{item.ID})
 		p.Versions = versions[item.ID]
@@ -453,7 +454,7 @@ func (s *Store) parents(ctx context.Context, item *model.Item, p *TitlePage) err
 			p.Season = ref
 		case domain.ItemShow:
 			p.Show = ref
-		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection:
+		case domain.ItemMovie, domain.ItemEpisode, domain.ItemExtra, domain.ItemCollection, domain.ItemArtist, domain.ItemAlbum, domain.ItemTrack:
 		}
 		parent = row.ParentID
 	}

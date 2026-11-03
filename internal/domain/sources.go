@@ -27,13 +27,16 @@ func (k LibraryKind) ItemKinds() []ItemKind {
 		return []ItemKind{ItemShow, ItemSeason, ItemEpisode}
 	case LibraryMixed:
 		return []ItemKind{ItemMovie, ItemShow, ItemSeason, ItemEpisode}
+	case LibraryMusic:
+		return []ItemKind{ItemArtist, ItemAlbum, ItemTrack}
 	}
 	return nil
 }
 
-// Titles are the kinds of title a library holds, which its wall lists.
+// Titles are the kinds of title a library holds, which its wall lists: a music library's artists,
+// as Plex's lists them.
 func (k LibraryKind) Titles() []ItemKind {
-	return slices.DeleteFunc(k.ItemKinds(), func(i ItemKind) bool { return i != ItemMovie && i != ItemShow })
+	return slices.DeleteFunc(k.ItemKinds(), func(i ItemKind) bool { return i != ItemMovie && i != ItemShow && i != ItemArtist })
 }
 
 // RankedAs is the kind whose sources an item takes: its own, or for a collection or an extra, its
@@ -50,9 +53,12 @@ func (k LibraryKind) RankedAs(item ItemKind) ItemKind {
 // Jellyfin lists only the providers that support a type: an NFO describes whatever it sits beside
 // but holds no pictures, TheTVDB knows only shows, MDBList rates films and shows alone, and OMDb
 // describes no season and has a poster only for a film or a show, AniList knows no episode,
-// AniDB pictures no episode, and fanart.tv pictures films and shows alone. A plugin may be ranked
-// for anything.
+// AniDB pictures no episode, and fanart.tv pictures films and shows alone. None of them knows
+// music, which its files' tags describe. A plugin may be ranked for anything.
 func Fetchable(f Fetcher, kind ItemKind) []FieldSource {
+	if kind.Music() {
+		return nil
+	}
 	title := kind == ItemMovie || kind == ItemShow
 	var out []FieldSource
 	switch f {
@@ -112,15 +118,16 @@ func (k KindSources) Of(f Fetcher) []RankedSource {
 }
 
 // DefaultSources trust an NFO beside the file over TMDB, as Jellyfin's default order does, and
-// take TMDB's pictures, for each kind a library holds.
+// take TMDB's pictures, for each kind a library holds that they know.
 func DefaultSources(lib LibraryKind) []KindSources {
 	var out []KindSources
 	for _, kind := range lib.ItemKinds() {
-		out = append(out, KindSources{
-			Kind:     kind,
-			Metadata: []RankedSource{{SourceNFO, true}, {SourceTMDB, true}},
-			Images:   []RankedSource{{SourceTMDB, true}},
-		})
+		sources := KindSources{Kind: kind}
+		if !kind.Music() {
+			sources.Metadata = []RankedSource{{SourceNFO, true}, {SourceTMDB, true}}
+			sources.Images = []RankedSource{{SourceTMDB, true}}
+		}
+		out = append(out, sources)
 	}
 	return out
 }

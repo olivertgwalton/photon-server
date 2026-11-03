@@ -14,6 +14,8 @@ const (
 	// RowRecentFilms and RowRecentShows are what was added last; a show by its newest episode.
 	RowRecentFilms HomeRow = "recently_added_films"
 	RowRecentShows HomeRow = "recently_added_shows"
+	// RowRecentAlbums is the albums added last.
+	RowRecentAlbums HomeRow = "recently_added_albums"
 	// RowRecentlyReleased is films and shows newly out, a show by its newest episode's air date.
 	RowRecentlyReleased HomeRow = "recently_released"
 	// RowTopRatedUnwatched is the best rated films and shows the profile has not begun.
@@ -21,7 +23,7 @@ const (
 )
 
 func HomeRows() []HomeRow {
-	return []HomeRow{RowContinueWatching, RowNextUp, RowFavourites, RowWatchlist, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched}
+	return []HomeRow{RowContinueWatching, RowNextUp, RowFavourites, RowWatchlist, RowRecentFilms, RowRecentShows, RowRecentAlbums, RowRecentlyReleased, RowTopRatedUnwatched}
 }
 
 // LibraryKinds are the kinds of library the row is made once for each of, as Plex's library hubs
@@ -34,8 +36,10 @@ func (r HomeRow) LibraryKinds() []LibraryKind {
 		return []LibraryKind{LibraryMovies, LibraryMixed}
 	case RowRecentShows:
 		return []LibraryKind{LibraryShows, LibraryMixed}
+	case RowRecentAlbums:
+		return []LibraryKind{LibraryMusic}
 	case RowRecentlyReleased, RowTopRatedUnwatched:
-		return LibraryKinds()
+		return []LibraryKind{LibraryMovies, LibraryShows, LibraryMixed}
 	}
 	return nil
 }
@@ -46,7 +50,7 @@ func (r HomeRow) WearsCardArt() bool {
 	switch r {
 	case RowContinueWatching, RowNextUp:
 		return true
-	case RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentlyReleased, RowTopRatedUnwatched:
+	case RowWatchlist, RowFavourites, RowRecentFilms, RowRecentShows, RowRecentAlbums, RowRecentlyReleased, RowTopRatedUnwatched:
 		return false
 	}
 	return false

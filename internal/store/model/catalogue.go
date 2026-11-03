@@ -24,6 +24,11 @@ type Item struct {
 	EpisodeEnd    *int
 	AirDate       *time.Time
 	ExtraKind     *domain.ExtraKind
+	// DiscNumber and TrackNumber are where a track is on its album, and Artists the artists it
+	// names, which its album's may not be.
+	DiscNumber  *int
+	TrackNumber *int
+	Artists     []string
 
 	ScanTitle     string
 	OriginalTitle *string

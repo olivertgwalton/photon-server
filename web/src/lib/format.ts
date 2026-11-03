@@ -16,8 +16,8 @@ export function count(n: number, thing: string): string {
 	return `${n.toLocaleString()} ${thing}${n === 1 ? "" : "s"}`;
 }
 
-// "1,204 films", "12 shows · 40 seasons · 512 episodes": what a library holds,
-// as its kind counts it.
+// "1,204 films", "12 shows · 40 seasons · 512 episodes", "3 artists · 5 albums ·
+// 61 tracks": what a library holds, as its kind counts it.
 export function holding(
 	kind: Schemas["LibraryKind"],
 	c: Schemas["Counts"],
@@ -35,6 +35,12 @@ export function holding(
 			return shows.join(" · ");
 		case "mixed":
 			return [films, ...shows].join(" · ");
+		case "music":
+			return [
+				count(c.artists, "artist"),
+				count(c.albums, "album"),
+				count(c.tracks, "track"),
+			].join(" · ");
 	}
 }
 
