@@ -48,8 +48,9 @@ const (
 )
 
 var (
-	// ErrGone is a subscription its browser has ended: it is to be forgotten.
-	ErrGone = errors.New("the subscription has ended")
+	// ErrGone is a subscription no message will reach: its browser ended it, its push service
+	// refuses it, or it is not on the internet. It is to be forgotten.
+	ErrGone = errors.New("the subscription takes no messages")
 	// ErrNotPublic is an endpoint that is not on the internet at large.
 	ErrNotPublic = errors.New("a push endpoint is an https address on the internet")
 	// ErrTooLarge is a message more than MaxPayload.
@@ -117,13 +118,14 @@ func Check(endpoint string) error {
 }
 
 // Send seals a message for a subscription and hands it to its push service. ErrGone for a
-// subscription the browser has ended.
+// subscription that sending again would not reach: one the browser has ended, one its push service
+// refuses for good, and one off the internet.
 func (s *Sender) Send(ctx context.Context, sub Subscription, m Message) error {
 	if len(m.Payload) > MaxPayload {
 		return ErrTooLarge
 	}
 	if err := Check(sub.Endpoint); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrGone, err)
 	}
 	ephemeral, err := ecdh.P256().GenerateKey(rand.Reader)
 	if err != nil {
@@ -158,16 +160,19 @@ func (s *Sender) Send(ctx context.Context, sub Subscription, m Message) error {
 		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
 		}
+		if errors.Is(err, ErrNotPublic) {
+			return fmt.Errorf("%w: %s: %w", ErrGone, req.URL.Host, err)
+		}
 		return fmt.Errorf("%s: %w", req.URL.Host, err)
 	}
 	res.Body.Close()
 	switch {
-	case res.StatusCode == http.StatusNotFound || res.StatusCode == http.StatusGone:
-		return ErrGone
-	case res.StatusCode/100 != 2:
+	case res.StatusCode/100 == 2:
+		return nil
+	case res.StatusCode/100 != 4 || res.StatusCode == http.StatusRequestTimeout || res.StatusCode == http.StatusTooManyRequests:
 		return fmt.Errorf("%s answered %s", req.URL.Host, res.Status)
 	}
-	return nil
+	return fmt.Errorf("%w: %s answered %s", ErrGone, req.URL.Host, res.Status)
 }
 
 // seal encrypts a payload for a browser in one aes128gcm record, as RFC 8291 sets out: a key agreed
