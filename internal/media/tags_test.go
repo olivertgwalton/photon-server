@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -213,5 +214,35 @@ func TestFeaturedArtistsAreTheTracksArtists(t *testing.T) {
 		if diff := cmp.Diff(tc.want, got); diff != "" {
 			t.Errorf("%q by %q (-want +got):\n%s", tc.title, tc.artist, diff)
 		}
+	}
+}
+
+// What a track at an address is tagged, as ffprobe reports it: an Ogg file's comments on its
+// stream, the container's tags over them, FFmpeg's names for ID3 frames read as TagLib's, artists
+// split where FFmpeg joined them and a title left whole.
+func TestTagsReadThroughFfprobe(t *testing.T) {
+	out := []byte(`{
+		"format": {"format_name": "ogg", "probe_score": 100, "tags": {
+			"title": "Part One; Part Two", "album_artist": "Radiohead", "track": "3/12"
+		}},
+		"streams": [
+			{"index": 0, "codec_type": "video", "tags": {"title": "Cover"}},
+			{"index": 1, "codec_type": "audio", "tags": {
+				"TITLE": "Stream Title", "ALBUM": "OK Computer", "ARTIST": "Thom Yorke; Jonny Greenwood", "DISC": "2"
+			}}
+		]
+	}`)
+	tags, err := probedTags(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tags.Title != "Part One; Part Two" || tags.Album != "OK Computer" {
+		t.Errorf("title %q, album %q: want the container's title whole and the stream's album", tags.Title, tags.Album)
+	}
+	if !slices.Equal(tags.AlbumArtists, []string{"Radiohead"}) || tags.Track != 3 || tags.Disc != 2 {
+		t.Errorf("album artists %q, track %d, disc %d: want FFmpeg's names read", tags.AlbumArtists, tags.Track, tags.Disc)
+	}
+	if !slices.Equal(tags.Artists, []string{"Thom Yorke", "Jonny Greenwood"}) {
+		t.Errorf("artists %q, want the joined pair apart", tags.Artists)
 	}
 }

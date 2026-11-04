@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/library"
 	"github.com/olivertgwalton/photon-server/internal/naming"
 )
@@ -23,6 +24,9 @@ type versionPlan struct {
 	edition   string
 	label     string
 	subtitles []subtitlePlan
+	// probed is a .strm track's media, described when its tags were read, so its address is not
+	// fetched again.
+	probed *domain.Facts
 }
 
 type subtitlePlan struct {

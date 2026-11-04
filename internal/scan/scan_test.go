@@ -44,6 +44,11 @@ func (l lists) List(context.Context, domain.FieldSource, string) ([]domain.Liste
 // sound file as sound alone, anything else as a film.
 type fakeProber struct{}
 
+// ProbeTrack is asked only of what a .strm names, which a test reads through a prober of its own.
+func (fakeProber) ProbeTrack(_ context.Context, in media.Input) (domain.Facts, media.Tags, error) {
+	return domain.Facts{}, media.Tags{}, fmt.Errorf("no track at %v", in.URL)
+}
+
 func (fakeProber) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
 	var size int64
 	if in.File != nil {
@@ -1232,6 +1237,7 @@ func TestAddingAnEpisodeReadsThatFileAlone(t *testing.T) {
 // gatheringProber answers a probe only once readsAtOnce probes are under way, and fails one left
 // waiting alone.
 type gatheringProber struct {
+	fakeProber
 	mu      sync.Mutex
 	waiting int
 	all     chan struct{}

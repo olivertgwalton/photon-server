@@ -2,9 +2,11 @@ package media
 
 import (
 	"cmp"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -63,6 +65,71 @@ func ReadTags(path string) (Tags, error) {
 	if err != nil {
 		return Tags{}, err
 	}
+	t := tagsOf(raw)
+	if t.Advisory == "" && isMP4(path) {
+		t.Advisory = mp4Advisory(path)
+	}
+	props, err := taglib.ReadProperties(path)
+	t.Pictured = len(props.Images) > 0
+	return t, err
+}
+
+// probedTags are a track's tags as ffprobe reads them: its container's, and under those its first
+// audio stream's, where FFmpeg keeps an Ogg file's Vorbis comments.
+func probedTags(out []byte) (Tags, error) {
+	var p probeOutput
+	if err := json.Unmarshal(out, &p, probed); err != nil {
+		return Tags{}, fmt.Errorf("ffprobe output: %w", err)
+	}
+	var stream map[string]string
+	if i := slices.IndexFunc(p.Streams, func(s probeStream) bool { return s.CodecType == "audio" }); i >= 0 {
+		stream = p.Streams[i].Tags
+	}
+	return tagsOf(ffmpegTags(stream, p.Format.Tags)), nil
+}
+
+// ffmpegTagNames are FFmpeg's names for tags TagLib names otherwise, from ID3 frames and MP4
+// atoms; a Vorbis comment keeps its own name in both.
+var ffmpegTagNames = map[string]string{
+	"ALBUM_ARTIST":                 taglib.AlbumArtist,
+	"TRACK":                        taglib.TrackNumber,
+	"DISC":                         taglib.DiscNumber,
+	"MUSICBRAINZ ALBUM ARTIST ID":  taglib.MusicBrainzAlbumArtistID,
+	"MUSICBRAINZ RELEASE GROUP ID": taglib.MusicBrainzReleaseGroupID,
+}
+
+// listTags are the tags that may hold several values, which FFmpeg joins with "; " where a Vorbis
+// comment gives one twice. It keeps only the first value of an ID3v2.4 frame, so a tagged MP3 at
+// an address keeps one artist.
+var listTags = map[string]bool{
+	taglib.Artist: true, taglib.Artists: true, taglib.AlbumArtist: true, taglib.Genre: true,
+}
+
+// ffmpegTags are FFmpeg's tags as TagLib names and splits them. A later layer's value of a tag
+// replaces an earlier's; within one, tags FFmpeg names two ways are taken in name order, so a file
+// tagged both ways reads the same at every scan.
+func ffmpegTags(layers ...map[string]string) map[string][]string {
+	raw := map[string][]string{}
+	for _, layer := range layers {
+		own := map[string][]string{}
+		for _, key := range slices.Sorted(maps.Keys(layer)) {
+			name := strings.ToUpper(key)
+			if renamed, ok := ffmpegTagNames[name]; ok {
+				name = renamed
+			}
+			values := []string{layer[key]}
+			if listTags[name] {
+				values = strings.Split(layer[key], "; ")
+			}
+			own[name] = append(own[name], values...)
+		}
+		maps.Copy(raw, own)
+	}
+	return raw
+}
+
+// tagsOf is what tags say, named and split as TagLib reads them.
+func tagsOf(raw map[string][]string) Tags {
 	first := func(key string) string {
 		if v := raw[key]; len(v) > 0 {
 			return strings.TrimSpace(v[0])
@@ -91,13 +158,8 @@ func ReadTags(path string) (Tags, error) {
 	t.Released, t.Year = dated(first(taglib.Date))
 	t.Gain = replayGain(first)
 	t.Advisory = advisory(first(itunesAdvisory))
-	if t.Advisory == "" && isMP4(path) {
-		t.Advisory = mp4Advisory(path)
-	}
 	t.Lyrics = TimingOf(strings.Join(raw[taglib.Lyrics], "\n"))
-	props, err := taglib.ReadProperties(path)
-	t.Pictured = len(props.Images) > 0
-	return t, err
+	return t
 }
 
 // Picture is the picture an audio file at path holds: the one its tags mark as the front cover,
