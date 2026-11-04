@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Photon",
     platforms: [.macOS(.v13)],
-    dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")],
+    dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1")],
     targets: [
         .executableTarget(
             name: "Photon",
