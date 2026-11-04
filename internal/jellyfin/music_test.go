@@ -179,7 +179,7 @@ func aTrack(t *testing.T) (*store.Store, domain.Profile, uuid.UUID) {
 	return st, ada, tracks[0].ID
 }
 
-// Finamp plays a track at /Audio/{id}/universal, naming what it plays: the FLAC as it is where it
+// A Jellyfin app plays a track at /Audio/{id}/universal, naming what it plays: the FLAC as it is where it
 // plays FLAC, and, under a limit the FLAC is over, the HLS of AAC photon makes of it, which it is
 // sent to.
 func TestAMusicAppPlaysATrackAtItsUniversalAddress(t *testing.T) {
@@ -206,5 +206,23 @@ func TestAMusicAppPlaysATrackAtItsUniversalAddress(t *testing.T) {
 	if planned.Video != nil || planned.Audio == nil || planned.Audio.Encode == nil || planned.Audio.Encode.Codec != "aac" ||
 		planned.Audio.Encode.BitrateKbps > 320 || planned.Segments != domain.SegmentsFMP4 {
 		t.Errorf("the HLS planned: video %+v, audio %+v, in %s; want AAC alone within 320 kbps in fragmented MP4", planned.Video, planned.Audio, planned.Segments)
+	}
+}
+
+// Finamp plays a track it does not transcode at /Items/{id}/File, its token in the query, as its
+// player sends no headers.
+func TestAMusicAppPlaysATrackAtItsFileAddress(t *testing.T) {
+	st, ada, track := aTrack(t)
+	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Sent: playback.NewSent(), Network: st,
+		Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st, Parts: library.Parts{Places: st}, Watching: st, Preferences: st,
+		Owners: noOwners{}, Themes: st,
+	})
+	w := serve(api, http.MethodGet, "/Items/"+guid(track)+"/File?ApiKey=pst_ada", "", "")
+	if w.Code != http.StatusOK || w.Body.String() != "fLaC and its frames" {
+		t.Fatalf("the track's file: %d %q, want the file as it is", w.Code, w.Body)
+	}
+	if w := serve(api, http.MethodGet, "/Items/"+guid(track)+"/File", "", ""); w.Code != http.StatusUnauthorized {
+		t.Errorf("without a token: %d, want 401", w.Code)
 	}
 }

@@ -224,6 +224,8 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handleMedia(a.sending(playback.DeliveryFile, a.stream), "GET /Videos/{itemId}/stream")
 	a.handleMedia(a.video, "GET /Videos/{itemId}/{file}")
 	a.handle(a.sending(playback.DeliveryFile, a.download), "GET /Items/{itemId}/Download")
+	// Finamp plays a track it does not transcode at File, its token in the query.
+	a.handleMedia(a.sending(playback.DeliveryFile, a.stream), "GET /Items/{itemId}/File")
 	a.handle(a.endEncoding, "DELETE /Videos/ActiveEncodings")
 	a.handleMedia(a.subtitle,
 		"GET /Videos/{itemId}/{sourceId}/Subtitles/{index}/{file}",
