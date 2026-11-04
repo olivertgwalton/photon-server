@@ -43,6 +43,7 @@ type catalogue interface {
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error)
 	LibraryRow(ctx context.Context, profile uuid.UUID, row domain.HomeRow, library *store.SeenLibrary, limit int) ([]store.Card, error)
 	Versions(ctx context.Context, items []uuid.UUID) (map[uuid.UUID][]store.VersionPage, error)
+	LyricsTiming(ctx context.Context, id uuid.UUID) (domain.LyricsTiming, error)
 	Streamed(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]bool, error)
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)

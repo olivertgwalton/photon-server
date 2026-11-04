@@ -353,6 +353,9 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	it.CanDownload = downloadable(versions)
 	if len(versions) > 0 {
 		it.sources(versions, w)
+		for n := range it.MediaSources {
+			it.MediaSources[n].lyrics(p.Lyrics)
+		}
 		it.MediaStreams = it.MediaSources[0].MediaStreams
 		it.trickplay(versions)
 		it.chapters(versions)

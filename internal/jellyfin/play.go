@@ -115,6 +115,10 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = a.chooseTracks(r.Context(), profile, id, versions)
 	}
+	var lyrics domain.LyricsTiming
+	if err == nil {
+		lyrics, err = a.svc.Catalogue.LyricsTiming(r.Context(), id)
+	}
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -128,6 +132,7 @@ func (a *API) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	said := words.Negotiate(w, r)
 	for _, v := range versions {
 		src := sourceOf(v, said)
+		src.lyrics(lyrics)
 		// An app that names a version is answered it alone, as Jellyfin answers it.
 		if v.ID == c.Version {
 			out.MediaSources = slices.Insert(out.MediaSources, 0, src)
