@@ -171,6 +171,13 @@ type Facets struct {
 	RatingSites  []domain.RatingSite
 }
 
+// Genres answers every genre of the titles of libs the profile sees, each once: what an app's genre
+// id, made from a name, is looked up among.
+func (s *Store) Genres(ctx context.Context, libs []uuid.UUID, profile uuid.UUID) ([]string, error) {
+	return queryColumn[string](ctx, s.pool, `SELECT DISTINCT g FROM items, viewer($2) v, jsonb_array_elements_text(items.genres) g
+		WHERE items.library_id = ANY($1) AND sees(v, items)`, libs, profile)
+}
+
 // Facets answers the values the films and shows of libraries, or their episodes, a profile may see
 // have; ErrNotFound for no such library.
 func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (Facets, error) {

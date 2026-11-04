@@ -101,15 +101,41 @@ func (a *API) named(w http.ResponseWriter, r *http.Request, kind string, of func
 	page := names[min(l.start, len(names)):min(l.start+l.limit, len(names))]
 	out := queryResult{Items: make([]item, len(page)), TotalRecordCount: len(names), StartIndex: l.start}
 	for n, name := range page {
-		it := item{
-			Name: name, SortName: name, ServerID: a.id, ID: guid(nameID(kind, name)), Type: kind, IsFolder: true,
-			LocationType: "FileSystem", MediaType: "Unknown",
-		}
-		it.pictures(uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, nil)
-		it.Etag = etag(it)
-		out.Items[n] = it
+		out.Items[n] = a.nameItem(kind, name)
 	}
 	a.writeJSON(w, out)
+}
+
+// nameItem is a genre or studio as Jellyfin's Genre or Studio item.
+func (a *API) nameItem(kind, name string) item {
+	it := item{
+		Name: name, SortName: name, ServerID: a.id, ID: guid(nameID(kind, name)), Type: kind, IsFolder: true,
+		LocationType: "FileSystem", MediaType: "Unknown",
+	}
+	it.pictures(uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, uuid.UUID{}, nil)
+	it.Etag = etag(it)
+	return it
+}
+
+// genre answers the genre an app names by its id, as Finamp opens a title's genre: the one of the
+// libraries' genres whose name makes it. Anything else is not found.
+func (a *API) genre(w http.ResponseWriter, r *http.Request, libs []*store.SeenLibrary, id uuid.UUID) {
+	ids := make([]uuid.UUID, len(libs))
+	for n, l := range libs {
+		ids[n] = l.ID
+	}
+	genres, err := a.svc.Catalogue.Genres(r.Context(), ids, auth.SessionOf(r.Context()).Profile.ID)
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	for _, name := range genres {
+		if nameID("Genre", name) == id {
+			a.writeJSON(w, a.nameItem("Genre", name))
+			return
+		}
+	}
+	a.refuse(w, http.StatusNotFound)
 }
 
 // filters answers Jellyfin's QueryFiltersLegacy: what the libraries asked for can be narrowed to.

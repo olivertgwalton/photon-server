@@ -128,6 +128,16 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 		t.Errorf("filters2: %+v, want the genres by the ids /Genres gave", filters)
 	}
 
+	// Finamp opens a title's genre by asking for it by its id.
+	var genre named
+	get("/Items/"+items[3].ID, &genre)
+	if genre != (named{ID: items[3].ID, Name: "Science Fiction", Type: "Genre"}) {
+		t.Errorf("the genre by its id: %+v, want Science Fiction", genre)
+	}
+	if w := serve(api, http.MethodGet, "/Items/"+guid(nameID("Genre", "Western")), `MediaBrowser Client="Jellyfin Web", Token="pst_ada"`, ""); w.Code != http.StatusNotFound {
+		t.Errorf("a genre no title has: %d, want 404", w.Code)
+	}
+
 	walled := func(narrowed string) []string {
 		t.Helper()
 		names, _ := list("/Items?" + lib + "&recursive=true&includeItemTypes=Movie&sortBy=SortName&" + narrowed)
