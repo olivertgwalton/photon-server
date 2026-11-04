@@ -310,6 +310,15 @@ func TestAnAppSignsIn(t *testing.T) {
 		t.Errorf("signed in as %v", result)
 	}
 	checkUser(t, u)
+	// Discrete refuses a sign-in that answers no SessionInfo, as Jellyfin always does.
+	session, _ := result["SessionInfo"].(map[string]any)
+	requireKeys(t, "SessionInfoDto", session, "PlayState", "AdditionalUsers", "Capabilities", "PlayableMediaTypes", "Id",
+		"UserId", "UserName", "Client", "LastActivityDate", "LastPlaybackCheckIn", "DeviceName", "DeviceId",
+		"ApplicationVersion", "IsActive", "SupportsMediaControl", "SupportsRemoteControl", "NowPlayingQueue",
+		"NowPlayingQueueFullItems", "HasCustomDeviceName", "ServerId", "SupportedCommands")
+	if session["Id"] != "0000000000000000000000000000000d" || session["UserId"] != u["Id"] || session["ServerId"] != public["Id"] {
+		t.Errorf("the session signed in: %v, want this session of Ada's on this server", session)
+	}
 	limits.spent = true
 	if w := signIn(kotlin, `{"Username":"Ada","Pw":"correct horse"}`); w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "3" {
 		t.Errorf("past the limit: %d, Retry-After %q", w.Code, w.Header().Get("Retry-After"))
