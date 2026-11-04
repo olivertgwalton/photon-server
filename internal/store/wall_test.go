@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
@@ -86,6 +87,10 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 			if err != nil || total != 7 || len(full) != 7 {
 				t.Fatalf("%s %s in one page: %d titles of %d, err %v; want the 7 films", sort, order, len(full), total, err)
 			}
+			// A random wall is shuffled anew for each page, so its pages are of no one order.
+			if sort == domain.SortRandom {
+				continue
+			}
 			var paged []Card
 			for offset := 0; offset < int(total); offset += 3 {
 				page, n, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: sort, Order: order, Offset: offset, Limit: 3})
@@ -134,6 +139,44 @@ func TestWallPagesEveryTitleOnce(t *testing.T) {
 	}
 	if _, _, err := s.wallCards(ctx, []uuid.UUID{uuid.NewV7()}, WallPage{Sort: domain.SortTitle, Limit: 3}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("an unknown library: err = %v, want ErrNotFound", err)
+	}
+}
+
+// A random wall holds every title, in a new order each time it is asked for, as Jellyfin's apps
+// shuffle a library by asking for it at random.
+func TestARandomWallShufflesItsTitles(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []uuid.UUID
+	for _, title := range []string{"Alien", "Brazil", "Chinatown", "Dune", "Heat", "Memento", "Ran", "Se7en", "Vertigo", "Zodiac"} {
+		want = append(want, addItem(t, s, model.Item{
+			LibraryID: &lib.ID, Kind: domain.ItemMovie, Title: title, ScanTitle: title, SortTitle: sortTitle(title), Folder: title,
+		}))
+	}
+	slices.SortFunc(want, func(a, b uuid.UUID) int { return cmp.Compare(a.String(), b.String()) })
+	orders := map[string]bool{}
+	for range 5 {
+		ids, _, err := s.Wall(ctx, []uuid.UUID{lib.ID}, WallPage{Sort: domain.SortRandom, Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var order strings.Builder
+		for _, id := range ids {
+			order.WriteString(id.String())
+		}
+		orders[order.String()] = true
+		slices.SortFunc(ids, func(a, b uuid.UUID) int { return cmp.Compare(a.String(), b.String()) })
+		if !slices.Equal(ids, want) {
+			t.Fatalf("a random wall: %v, want every film once", ids)
+		}
+	}
+	// Five shuffles of ten titles alike would be one chance in about 10^26.
+	if len(orders) < 2 {
+		t.Errorf("five random walls were all in one order")
 	}
 }
 
@@ -315,6 +358,13 @@ func TestAWallPagesEpisodesAcrossShows(t *testing.T) {
 	for _, sort := range domain.WallSorts() {
 		for _, order := range domain.Orders() {
 			full := episodes(WallPage{Sort: sort, Order: order})
+			// A random wall is shuffled anew for each page, so its pages are of no one order.
+			if sort == domain.SortRandom {
+				if len(full) != 5 {
+					t.Errorf("random: %q, want the 5 episodes", full)
+				}
+				continue
+			}
 			var paged []string
 			for offset := 0; offset < len(full); offset += 2 {
 				page, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{Profile: oliver.ID, Kind: domain.WallEpisodes, Sort: sort, Order: order, Offset: offset, Limit: 2})
@@ -486,6 +536,13 @@ func TestAWallCollapsesABoxSet(t *testing.T) {
 	for _, sort := range domain.WallSorts() {
 		for _, order := range []domain.Order{domain.Ascending, domain.Descending} {
 			full := wall(WallPage{Sort: sort, Order: order})
+			// A random wall is shuffled anew for each page, so its pages are of no one order.
+			if sort == domain.SortRandom {
+				if len(full) != 3 || !slices.Contains(full, "Harry Potter Collection") {
+					t.Errorf("random: %q, want the box set and both films", full)
+				}
+				continue
+			}
 			var paged []string
 			for offset := range len(full) {
 				paged = append(paged, wall(WallPage{Sort: sort, Order: order, Offset: offset, Limit: 1})...)
