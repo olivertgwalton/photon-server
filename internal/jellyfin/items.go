@@ -40,6 +40,7 @@ type item struct {
 	Overview                string            `json:"Overview,omitempty"`
 	Taglines                []string          `json:"Taglines,omitempty"`
 	Genres                  []string          `json:"Genres,omitempty"`
+	GenreItems              []nameGUID        `json:"GenreItems,omitempty"`
 	CommunityRating         *float64          `json:"CommunityRating,omitzero"`
 	RunTimeTicks            int64             `json:"RunTimeTicks,omitzero"`
 	ProductionYear          int               `json:"ProductionYear,omitzero"`
@@ -224,6 +225,10 @@ func (a *API) fromCard(c store.Card) item {
 	it := a.newItem(c.ID, c.Kind, c.Title)
 	it.DateCreated, it.PremiereDate = optionalTime(c.AddedAt), optionalTime(c.ReleaseDate)
 	it.ProductionYear, it.Overview, it.Genres, it.OfficialRating = c.Year, c.Overview, c.Genres, domain.Bare(c.Certificate)
+	// Finamp shows and opens a title's genres by GenreItems alone, each by the id /Genres lists.
+	for _, g := range c.Genres {
+		it.GenreItems = append(it.GenreItems, nameGUID{Name: g, ID: guid(nameID("Genre", g))})
+	}
 	it.RunTimeTicks = c.DurationMS * ticksPerMS
 	it.ratings(c.Ratings)
 	it.SeriesID, it.SeriesName = ref(c.Show)

@@ -146,4 +146,27 @@ func TestAnAppNarrowsALibraryByWhatItsTitlesHave(t *testing.T) {
 			t.Errorf("%s: %v, want %v", narrowed, got, want)
 		}
 	}
+
+	// Finamp shows and opens a title's genres by GenreItems alone.
+	var page struct {
+		Items []struct {
+			Name       string  `json:"Name"`
+			GenreItems []named `json:"GenreItems"`
+		} `json:"Items"`
+	}
+	get("/Items?"+lib+"&recursive=true&includeItemTypes=Movie&sortBy=SortName", &page)
+	ids := map[string]string{}
+	for _, g := range items {
+		ids[g.Name] = g.ID
+	}
+	for _, it := range page.Items {
+		if len(it.GenreItems) == 0 {
+			t.Errorf("%s names no GenreItems", it.Name)
+		}
+		for _, g := range it.GenreItems {
+			if g.ID != ids[g.Name] {
+				t.Errorf("%s's genre %q is %q, want the id /Genres gave, %q", it.Name, g.Name, g.ID, ids[g.Name])
+			}
+		}
+	}
 }
