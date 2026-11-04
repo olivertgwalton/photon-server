@@ -167,6 +167,25 @@ func sourceOf(v store.VersionPage, w words.Words) mediaSource {
 	return s
 }
 
+// lyrics lists a track's lyrics among its streams, as Jellyfin lists a lyrics file beside it:
+// Finamp shows a track's lyrics only where its source has a Lyric stream.
+func (s *mediaSource) lyrics(t domain.LyricsTiming) {
+	codec := ""
+	switch t {
+	case domain.TimedByLine:
+		codec = "lrc"
+	case domain.Untimed:
+		codec = "txt"
+	default:
+		return
+	}
+	index := 0
+	for _, m := range s.MediaStreams {
+		index = max(index, m.Index+1)
+	}
+	s.MediaStreams = append(s.MediaStreams, mediaStream{Codec: codec, Type: "Lyric", Index: index, IsExternal: true})
+}
+
 // mediaName is a file's name as an app should take it: a .strm's as the media it points to, by the
 // container it is in. Infuse reads a file named .strm whole as a shortcut, and refuses one over 4 GiB.
 func mediaName(name, container string) string {

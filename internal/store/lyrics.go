@@ -112,6 +112,17 @@ func askLyricsAgain(ctx context.Context, tx db, items string, args pgx.NamedArgs
 	return askLyrics(ctx, tx, items, args)
 }
 
+// LyricsTiming answers how a track's lyrics are timed, as its card says: "" where it has none, or
+// is no track.
+func (s *Store) LyricsTiming(ctx context.Context, id uuid.UUID) (domain.LyricsTiming, error) {
+	rows, err := queryRows[model.Item](ctx, s.pool, `SELECT `+itemColumns+` FROM items WHERE id = $1`, id)
+	if err != nil {
+		return "", err
+	}
+	timings, err := s.lyricsTimings(ctx, rows)
+	return timings[id], err
+}
+
 // lyricsTimings answers how the lyrics of each track among rows that has any are timed: its own
 // file's, else those of the first of its library's sources for them that found any.
 func (s *Store) lyricsTimings(ctx context.Context, rows []*model.Item) (map[uuid.UUID]domain.LyricsTiming, error) {

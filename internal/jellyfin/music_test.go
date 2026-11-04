@@ -226,3 +226,74 @@ func TestAMusicAppPlaysATrackAtItsFileAddress(t *testing.T) {
 		t.Errorf("without a token: %d, want 401", w.Code)
 	}
 }
+
+// Finamp shows a track's lyrics only where its PlaybackInfo lists a Lyric stream, as Jellyfin lists
+// a lyrics file beside a track: one for a track with lyrics, none for one without.
+func TestAMusicAppIsToldWhichTracksHaveLyrics(t *testing.T) {
+	ctx := t.Context()
+	db := storetest.FreshDatabase(t)
+	log := slog.New(slog.DiscardHandler)
+	if err := store.Migrate(ctx, db, log); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, db, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.Close)
+	music, err := st.AddLibrary(ctx, "Music", domain.LibraryMusic, "/srv/music", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.AddProfile(ctx, "Ada", domain.RoleAdmin, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	track := func(title string, number int, lyrics domain.LyricsTiming) store.Track {
+		rel := "Hurry Up Tomorrow/" + title + ".flac"
+		return store.Track{Title: title, Disc: 1, Number: number, Folder: "Hurry Up Tomorrow", Version: store.Version{
+			ContentKey: []byte(rel), Lyrics: lyrics, Parts: []store.Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{
+				Duration: 4 * time.Minute, Container: "flac", Streams: []domain.Stream{{Kind: domain.StreamAudio, Codec: "flac", Channels: 2}},
+			}}},
+		}}
+	}
+	if _, err := st.SaveMusicFolder(ctx, music.ID, "Hurry Up Tomorrow", []byte("v"), []store.Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
+		Tracks: []store.Track{track("Wake Me Up", 1, domain.TimedByLine), track("Timeless", 2, "")},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	api := New(log, uuid.NewV7().String(), func() string { return "Den" }, Services{
+		RemoteVersions: noRemoteVersions{}, Discover: noDiscoveries{}, Auth: profiles{"pst_ada": ada}, Catalogue: st, Playing: st,
+		Network: st, Preferences: st, Playlists: st, Owners: noOwners{},
+	})
+	const finamp = `MediaBrowser Client="Finamp", Token="pst_ada"`
+	var album struct{ Items []musicItem }
+	if err := json.Unmarshal(serve(api, http.MethodGet, "/Items?IncludeItemTypes=MusicAlbum&Recursive=true", finamp, "").Body.Bytes(), &album); err != nil || len(album.Items) != 1 {
+		t.Fatal(album, err)
+	}
+	var tracks struct{ Items []musicItem }
+	if err := json.Unmarshal(serve(api, http.MethodGet, "/Items?ParentId="+album.Items[0].ID, finamp, "").Body.Bytes(), &tracks); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, tr := range tracks.Items {
+		w := serve(api, http.MethodGet, "/Items/"+tr.ID+"/PlaybackInfo", finamp, "")
+		var info struct {
+			MediaSources []struct {
+				MediaStreams []struct{ Type, Codec string }
+			}
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || len(info.MediaSources) != 1 {
+			t.Fatalf("%s's playback info: %d %s", tr.Name, w.Code, w.Body)
+		}
+		for _, m := range info.MediaSources[0].MediaStreams {
+			if m.Type == "Lyric" {
+				got[tr.Name]++
+			}
+		}
+	}
+	if diff := cmp.Diff(map[string]int{"Wake Me Up": 1}, got); diff != "" {
+		t.Errorf("Lyric streams by track (-want +got):\n%s", diff)
+	}
+}
