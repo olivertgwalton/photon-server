@@ -46,17 +46,23 @@ var discFolder = regexp.MustCompile(`(?i)^(?:cd|dis[ck])[ ._-]*(\d{1,2})$`)
 // and its track's, "203-take_me_back_to_la", as releases of several discs number them.
 var leadingNumber = regexp.MustCompile(`^(\d{1,3})(?:[ ._-]+|$)`)
 
-// planTracks reads the tags of a folder's sound files, answering each, and why each it could not
+// isTrack is a music library's file that may be a track: a sound file, or a .strm, which says
+// what it names only once that is probed and is refused then if it holds no sound.
+func isTrack(name string) bool {
+	return naming.IsAudio(name) || naming.IsShortcut(name)
+}
+
+// planTracks reads the tags of a folder's tracks, answering each, and why each it could not
 // read was not, by its path.
-func planTracks(root string, f library.Folder) ([]trackPlan, map[string]error) {
+func (s *Scanner) planTracks(ctx context.Context, root string, f library.Folder) ([]trackPlan, map[string]error) {
 	var plans []trackPlan
 	unread := map[string]error{}
 	for _, file := range f.Files {
-		if !naming.IsAudio(file.Name) {
+		if !isTrack(file.Name) {
 			continue
 		}
 		rel := path.Join(f.Path, file.Name)
-		tags, err := media.ReadTags(filepath.Join(root, filepath.FromSlash(rel)))
+		tags, err := s.readTags(ctx, root, rel)
 		if err != nil {
 			unread[rel] = err
 			continue
@@ -69,6 +75,20 @@ func planTracks(root string, f library.Folder) ([]trackPlan, map[string]error) {
 	}
 	numberTracks(path.Base(f.Path), plans)
 	return plans, unread
+}
+
+// readTags reads a track's tags: TagLib's of a sound file, ffprobe's of what a .strm names, which
+// TagLib cannot reach.
+func (s *Scanner) readTags(ctx context.Context, root, rel string) (media.Tags, error) {
+	if !naming.IsShortcut(rel) {
+		return media.ReadTags(filepath.Join(root, filepath.FromSlash(rel)))
+	}
+	in, err := library.OpenMedia(root, rel)
+	if err != nil {
+		return media.Tags{}, err
+	}
+	defer in.Close()
+	return s.prober.ProbeTags(ctx, in)
 }
 
 // ownLyrics is how the lyrics a track carries are timed: its LRC file's where it has one beside it,
@@ -236,11 +256,12 @@ func sharedArtist(tracks []store.Track) string {
 // The folder's own pictures are its album's where it holds one, before any cover its tracks hold.
 func (s *Scanner) saveAlbums(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
 	lib := r.run.lib
-	plans, unread := planTracks(lib.Root, folder)
+	plans, unread := s.planTracks(ctx, lib.Root, folder)
 	for rel, err := range unread {
-		// A file TagLib takes for no sound file is passed over, as one ffprobe reads no media in;
-		// any other failure is the file's passing trouble, read again at the next scan.
-		if errors.Is(err, media.ErrNotTagged) {
+		// A file TagLib takes for no sound file is passed over, as one ffprobe reads no media in
+		// and a .strm naming no address; any other failure is the file's passing trouble, read
+		// again at the next scan.
+		if errors.Is(err, media.ErrNotTagged) || errors.Is(err, media.ErrNotMedia) {
 			s.skip(ctx, r.run, rel, err)
 		} else {
 			s.unreadable(ctx, r, rel, err)

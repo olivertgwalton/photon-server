@@ -2,6 +2,8 @@ package media
 
 import (
 	"cmp"
+	"context"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +65,64 @@ func ReadTags(path string) (Tags, error) {
 	if err != nil {
 		return Tags{}, err
 	}
+	t := tagsOf(raw)
+	if t.Advisory == "" && isMP4(path) {
+		t.Advisory = mp4Advisory(path)
+	}
+	props, err := taglib.ReadProperties(path)
+	t.Pictured = len(props.Images) > 0
+	return t, err
+}
+
+// ProbeTags reads the tags of the audio in reads through ffprobe, for audio at an address, which
+// TagLib reads only from a path. FFmpeg's joins of a Vorbis comment given twice are split again;
+// it keeps only the first value of an ID3v2.4 frame, so a tagged MP3 there keeps one artist.
+func (t Tools) ProbeTags(ctx context.Context, in Input) (Tags, error) {
+	out, err := output(ctx, Background, PartRun, t.FFprobe.Path, append([]string{
+		"-hide_banner", "-v", "error", "-print_format", "json", "-show_entries", "format_tags",
+	}, in.Args()...)...)
+	if err != nil {
+		if strings.Contains(err.Error(), "Invalid data found when processing input") {
+			return Tags{}, fmt.Errorf("ffprobe: %w: %w", ErrNotTagged, err)
+		}
+		return Tags{}, fmt.Errorf("ffprobe: %w", err)
+	}
+	var p struct {
+		Format struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"format"`
+	}
+	if err := json.Unmarshal(out, &p, probed); err != nil {
+		return Tags{}, fmt.Errorf("ffprobe output: %w", err)
+	}
+	return tagsOf(ffmpegTags(p.Format.Tags)), nil
+}
+
+// ffmpegTagNames are FFmpeg's names for tags TagLib names otherwise, from ID3 frames and MP4
+// atoms; a Vorbis comment keeps its own name in both.
+var ffmpegTagNames = map[string]string{
+	"ALBUM_ARTIST":                 taglib.AlbumArtist,
+	"TRACK":                        taglib.TrackNumber,
+	"DISC":                         taglib.DiscNumber,
+	"MUSICBRAINZ ALBUM ARTIST ID":  taglib.MusicBrainzAlbumArtistID,
+	"MUSICBRAINZ RELEASE GROUP ID": taglib.MusicBrainzReleaseGroupID,
+}
+
+// ffmpegTags are FFmpeg's tags as TagLib names and splits them.
+func ffmpegTags(tags map[string]string) map[string][]string {
+	raw := map[string][]string{}
+	for key, value := range tags {
+		key = strings.ToUpper(key)
+		if name, ok := ffmpegTagNames[key]; ok {
+			key = name
+		}
+		raw[key] = append(raw[key], strings.Split(value, "; ")...)
+	}
+	return raw
+}
+
+// tagsOf is what tags say, named and split as TagLib reads them.
+func tagsOf(raw map[string][]string) Tags {
 	first := func(key string) string {
 		if v := raw[key]; len(v) > 0 {
 			return strings.TrimSpace(v[0])
@@ -91,13 +151,8 @@ func ReadTags(path string) (Tags, error) {
 	t.Released, t.Year = dated(first(taglib.Date))
 	t.Gain = replayGain(first)
 	t.Advisory = advisory(first(itunesAdvisory))
-	if t.Advisory == "" && isMP4(path) {
-		t.Advisory = mp4Advisory(path)
-	}
 	t.Lyrics = TimingOf(strings.Join(raw[taglib.Lyrics], "\n"))
-	props, err := taglib.ReadProperties(path)
-	t.Pictured = len(props.Images) > 0
-	return t, err
+	return t
 }
 
 // Picture is the picture an audio file at path holds: the one its tags mark as the front cover,

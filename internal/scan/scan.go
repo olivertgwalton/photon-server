@@ -23,6 +23,8 @@ import (
 
 type prober interface {
 	Probe(ctx context.Context, in media.Input) (domain.Facts, error)
+	// ProbeTags reads the tags of audio at an address, which TagLib cannot.
+	ProbeTags(ctx context.Context, in media.Input) (media.Tags, error)
 }
 
 // lister reads the list a remote library holds the titles of.
@@ -239,7 +241,7 @@ func (s *Scanner) unreadable(ctx context.Context, r reading, rel string, err err
 }
 
 // mediaIn is the paths of a folder's files that are a library's media: its videos, a music
-// library's sound files, or a books library's ebooks and sound files.
+// library's sound files and .strm files, or a books library's ebooks and sound files.
 func mediaIn(kind domain.LibraryKind, f library.Folder) []string {
 	var paths []string
 	for _, file := range f.Files {
@@ -253,7 +255,7 @@ func mediaIn(kind domain.LibraryKind, f library.Folder) []string {
 func isMedia(kind domain.LibraryKind, name string) bool {
 	switch kind {
 	case domain.LibraryMusic:
-		return naming.IsAudio(name)
+		return isTrack(name)
 	case domain.LibraryBooks:
 		return naming.IsAudio(name) || naming.IsBook(name)
 	case domain.LibraryMovies, domain.LibraryShows, domain.LibraryMixed:

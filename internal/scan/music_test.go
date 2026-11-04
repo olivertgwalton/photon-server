@@ -3,12 +3,16 @@
 package scan
 
 import (
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/media"
 	"github.com/olivertgwalton/photon-server/internal/testtool"
 )
 
@@ -171,5 +175,52 @@ func TestATrackCarriesItsOwnLyricsOrAsksForThem(t *testing.T) {
 	}
 	if want := "Bare none 1\nTagged untimed 0\nTimed line 0"; strings.Join(got, "\n") != want {
 		t.Errorf("tracks' own lyrics and fetches:\n%s\nwant:\n%s", strings.Join(got, "\n"), want)
+	}
+}
+
+// taggedAddresses is sound at the addresses .strm files name, tagged as ffprobe reads them there.
+type taggedAddresses struct {
+	tags map[string]media.Tags
+}
+
+func (p taggedAddresses) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
+	if in.URL == nil {
+		return domain.Facts{}, media.ErrNotMedia
+	}
+	return domain.Facts{
+		Container: "flac", Duration: 3 * time.Minute,
+		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamAudio, Codec: "flac", Channels: 2}},
+	}, nil
+}
+
+func (p taggedAddresses) ProbeTags(_ context.Context, in media.Input) (media.Tags, error) {
+	return p.tags[in.URL.String()], nil
+}
+
+// A music library riven writes is .strm files naming its tracks, which TagLib cannot read: they
+// are tracks all the same, tagged as what they name is.
+func TestStrmFilesAreTracksTaggedAsWhatTheyName(t *testing.T) {
+	f := newFixture(t, domain.LibraryMusic)
+	tagged := func(title string, track int) media.Tags {
+		return media.Tags{
+			Title: title, Album: "OK Computer", AlbumArtists: []string{"Radiohead"},
+			Artists: []string{"Radiohead"}, Disc: 1, Track: track,
+		}
+	}
+	f.scanner = New(f.st, taggedAddresses{tags: map[string]media.Tags{
+		"http://127.0.0.1:8081/media/1": tagged("Airbag", 1),
+		"http://127.0.0.1:8081/media/2": tagged("Paranoid Android", 2),
+	}}, lists(nil), slog.New(slog.DiscardHandler))
+	album := "Radiohead/OK Computer (1997) [music_best]/"
+	if err := os.MkdirAll(filepath.Join(f.root, album), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.write(album+"01 - Airbag.strm", "http://127.0.0.1:8081/media/1\n")
+	f.write(album+"02 - Paranoid Android.strm", "http://127.0.0.1:8081/media/2\n")
+	f.scan()
+	want := `Radiohead / OK Computer / 1.1 Airbag
+Radiohead / OK Computer / 1.2 Paranoid Android`
+	if got := f.music(); got != want {
+		t.Errorf("tracks:\n%s\nwant:\n%s", got, want)
 	}
 }
