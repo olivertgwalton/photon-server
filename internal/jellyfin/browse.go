@@ -151,6 +151,7 @@ var sorts = map[string]domain.WallSort{
 	"sortname": domain.SortTitle, "name": domain.SortTitle, "seriessortname": domain.SortTitle, "datecreated": domain.SortAdded,
 	"premieredate": domain.SortReleased, "productionyear": domain.SortReleased, "communityrating": domain.SortRating,
 	"criticrating": domain.SortRating, "runtime": domain.SortRuntime, "dateplayed": domain.SortPlayed,
+	"random": domain.SortRandom,
 }
 
 // marks are photon's marks for Jellyfin's ItemFilter.
