@@ -366,6 +366,46 @@ func TestAPlaybackEndedWhileItReportsStaysEnded(t *testing.T) {
 	}
 }
 
+// superseded holds a newer place than any report: each is refused, as one from before the title's
+// state last changed is.
+type superseded struct{ positions }
+
+func (superseded) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.Duration, time.Duration, domain.Reach, *time.Time) (domain.Reach, error) {
+	return "", store.ErrSuperseded
+}
+
+// A report whose place is older than what is kept, as one racing another is, keeps no place but
+// goes on all the same: the playback moves on, and its stop ends it and keeps the play, rather
+// than failing and keeping it live to be swept, and refused, again.
+func TestAPlaybackGoesOnPastASupersededPlace(t *testing.T) {
+	live, saved := memory{}, superseded{positions{}}
+	var stopped int
+	s := NewSessions(live, saved, served{}, func(_ context.Context, e domain.Event) {
+		if e.Kind == domain.EventPlaybackStopped {
+			stopped++
+		}
+	}, thisNode)
+	ctx := t.Context()
+	oliver := uuid.NewV7()
+	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), 0, thisNode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
+		t.Errorf("a superseded report: %v, want it taken", err)
+	}
+	if got := live[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused {
+		t.Errorf("after a superseded report: %+v, want the playback at 20 minutes, paused", got)
+	}
+	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
+		t.Errorf("a superseded stop: %v, want it stopped", err)
+	}
+	if _, ok := live[p.ID]; ok || saved.positions[p.ID] != 25*time.Minute || stopped != 1 {
+		t.Errorf("after a superseded stop: still live %v, play kept at %v, %d stops told; want it gone, its play at 25 minutes, one stop",
+			ok, saved.positions[p.ID], stopped)
+	}
+}
+
 // ends answers the end for every report, and keeps how far each report said the viewing had got.
 type ends struct{ before []domain.Reach }
 
