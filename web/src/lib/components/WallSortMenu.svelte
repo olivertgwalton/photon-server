@@ -69,21 +69,25 @@ function sortBy(value: string) {
 				{/each}
 			</DropdownMenu.RadioGroup>
 		</DropdownMenu.Group>
-		<DropdownMenu.Separator />
-		<DropdownMenu.Group>
-			<DropdownMenu.GroupHeading>Order</DropdownMenu.GroupHeading>
-			<DropdownMenu.RadioGroup
-				value={order}
-				onValueChange={(value) => onchange({ ...query, order: value as Order })}
-			>
-				<DropdownMenu.RadioItem value="asc">
-					{words.sorts[sort].ascending}
-				</DropdownMenu.RadioItem>
-				<DropdownMenu.RadioItem value="desc">
-					{words.sorts[sort].descending}
-				</DropdownMenu.RadioItem>
-			</DropdownMenu.RadioGroup>
-		</DropdownMenu.Group>
+		<!-- A random wall runs no way, so it has no order to choose. -->
+		{#if sort !== "random"}
+			<DropdownMenu.Separator />
+			<DropdownMenu.Group>
+				<DropdownMenu.GroupHeading>Order</DropdownMenu.GroupHeading>
+				<DropdownMenu.RadioGroup
+					value={order}
+					onValueChange={(value) =>
+						onchange({ ...query, order: value as Order })}
+				>
+					<DropdownMenu.RadioItem value="asc">
+						{words.sorts[sort].ascending}
+					</DropdownMenu.RadioItem>
+					<DropdownMenu.RadioItem value="desc">
+						{words.sorts[sort].descending}
+					</DropdownMenu.RadioItem>
+				</DropdownMenu.RadioGroup>
+			</DropdownMenu.Group>
+		{/if}
 		{#if sort === "rating" && sites.length > 1}
 			<DropdownMenu.Separator />
 			<DropdownMenu.Group>
