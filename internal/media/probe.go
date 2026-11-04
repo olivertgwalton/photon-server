@@ -97,8 +97,9 @@ type probeSideData struct {
 // duration, and the version that would make plays as nothing.
 const guessedFormat = 25
 
-// probed reads ffprobe's JSON, which passes a file's tags through byte for byte, UTF-8 or not.
-var probed = jsontext.AllowInvalidUTF8(true)
+// probed reads ffprobe's JSON, which passes a file's tags through byte for byte, UTF-8 or not,
+// and names each element of an array in HDR10+ metadata as a member of its own: three "maxscl".
+var probed = json.JoinOptions(jsontext.AllowInvalidUTF8(true), jsontext.AllowDuplicateNames(true))
 
 func parseProbe(out []byte) (domain.Facts, error) {
 	var p probeOutput
