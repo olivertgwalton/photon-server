@@ -26,6 +26,7 @@ type catalogue interface {
 	HasCollections(ctx context.Context, profile uuid.UUID) (bool, error)
 	Members(ctx context.Context, profile, collection uuid.UUID) ([]store.Card, error)
 	Named(ctx context.Context, profile, id uuid.UUID) (store.Named, error)
+	Genres(ctx context.Context, libs []uuid.UUID, profile uuid.UUID) ([]string, error)
 	SearchPeople(ctx context.Context, text string, page store.Page) ([]store.PersonRef, store.Extent, error)
 	Person(ctx context.Context, id uuid.UUID) (store.PersonPage, error)
 	Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID, wall domain.WallKind) (store.Facets, error)
@@ -415,7 +416,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	_, seen, err := a.seenLibraries(r)
+	libs, seen, err := a.seenLibraries(r)
 	if err != nil {
 		a.internal(w, r, err)
 		return
@@ -437,7 +438,7 @@ func (a *API) item(w http.ResponseWriter, r *http.Request) {
 	a.ensureVersions(r.Context(), id)
 	named, err := a.svc.Catalogue.Named(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if errors.Is(err, store.ErrNotFound) {
-		a.refuse(w, http.StatusNotFound)
+		a.genre(w, r, libs, id)
 		return
 	}
 	if err != nil {
