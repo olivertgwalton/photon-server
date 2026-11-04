@@ -191,6 +191,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.nextUp, "GET /Shows/NextUp")
 	a.handle(a.upcoming, "GET /Shows/Upcoming")
 	a.handle(a.latest, "GET /Items/Latest", "GET /Users/{userId}/Items/Latest")
+	a.handle(a.suggestions, "GET /Items/Suggestions", "GET /Users/{userId}/Suggestions")
 	// Someone is found by name and opened by id: /Persons/{name} is not answered, as two people
 	// here may share a name, and apps open a cast member by the id an item gives.
 	a.handle(a.persons, "GET /Persons")
