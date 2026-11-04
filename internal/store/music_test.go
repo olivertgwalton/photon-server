@@ -144,6 +144,36 @@ func TestAMusicCardNamesWhoseItIs(t *testing.T) {
 	}
 }
 
+// A track's best picture is the cover it wears, its album's, as an app asking for the track's
+// picture by the track alone is answered, as Finamp's player asks.
+func TestATracksBestPictureIsItsAlbumsCover(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow",
+		Artwork: []domain.Artwork{{Kind: domain.ArtworkPoster, Path: "Hurry Up Tomorrow/cover.jpg"}},
+		Tracks:  []Track{track("Sao Paulo", 1, 4, "The Weeknd", "Anitta")},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	var trackID uuid.UUID
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE kind = 'track'`).Scan(&trackID); err != nil {
+		t.Fatal(err)
+	}
+	cards, err := s.Cards(ctx, uuid.UUID{}, []uuid.UUID{trackID})
+	if err != nil || len(cards) != 1 {
+		t.Fatal(cards, err)
+	}
+	best, err := s.BestPicture(ctx, trackID, []domain.ArtworkKind{domain.ArtworkPoster, domain.ArtworkThumb})
+	if err != nil || cards[0].Poster == (uuid.UUID{}) || best != cards[0].Poster {
+		t.Errorf("the track's best picture: %v, %v; want the cover its card wears, %v", best, err, cards[0].Poster)
+	}
+}
+
 // A refresh of a music library asks its providers of its artists and albums again, and not of its
 // tracks, which their tags alone describe.
 func TestAMusicLibrarysRefreshAsksAgainOfItsArtistsAndAlbums(t *testing.T) {
