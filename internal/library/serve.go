@@ -39,6 +39,11 @@ func Serve(w http.ResponseWriter, r *http.Request, in media.Input, limit int64) 
 	if t, ok := fileTypes[strings.ToLower(path.Ext(in.Name))]; ok {
 		w.Header().Set("Content-Type", t)
 	}
+	// A player that fetches a track by an address with no extension, as AVPlayer does Finamp's,
+	// knows it by its type alone, and refuses audio/x-flac, which a system's own table may name.
+	if t, ok := naming.AudioType(in.Name); ok {
+		w.Header().Set("Content-Type", t)
+	}
 	// An ebook is a reader's to open, never a page of the server's: an EPUB is HTML that may carry
 	// script, as Audiobookshelf's and File Browser's readers ran it, and a PDF may too. It goes as a
 	// download its type alone names, sandboxed were a browser to show it.

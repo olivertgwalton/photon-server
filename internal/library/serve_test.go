@@ -106,3 +106,22 @@ func TestAnEbookIsServedAsADownload(t *testing.T) {
 		t.Errorf("headers %v, want a sandboxed download of an EPUB", h)
 	}
 }
+
+func TestATrackIsServedAsTheSoundItIs(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{"Wake Me Up.flac": "fLaC and its frames", "Earthsea.m4b": "\x00\x00\x00\x18ftypM4B \x00\x00\x02\x00"})
+	for name, want := range map[string]string{"Wake Me Up.flac": "audio/flac", "Earthsea.m4b": "audio/mp4"} {
+		in, err := OpenMedia(dir, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := httptest.NewRecorder()
+		if err := Serve(w, httptest.NewRequest(http.MethodGet, "/", nil), in, math.MaxInt64); err != nil {
+			t.Fatal(err)
+		}
+		in.Close()
+		if got := w.Header().Get("Content-Type"); got != want {
+			t.Errorf("%s served as %q, want %q", name, got, want)
+		}
+	}
+}
