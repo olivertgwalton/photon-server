@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 	"uuid"
@@ -210,6 +211,19 @@ func TestAnAppBrowsesTheLibraries(t *testing.T) {
 	all, _ := list("pst_ada", "/Items?recursive=true&includeItemTypes=Movie,Series&sortBy=SortName")
 	if got := names(all); len(got) != 3 || got[0] != "Alien" || got[2] != "The Wire" {
 		t.Errorf("every library at once: %v", got)
+	}
+	// Jellyfin's apps shuffle a library by asking for it at random.
+	shuffles := map[string]bool{}
+	for range 20 {
+		got, _ := list("pst_ada", "/Items?recursive=true&includeItemTypes=Movie,Series&sortBy=Random")
+		if len(got) != 3 {
+			t.Fatalf("at random: %v, want the 3 titles", names(got))
+		}
+		shuffles[strings.Join(names(got), ",")] = true
+	}
+	// Twenty shuffles of three titles alike would be one chance in about 10^15.
+	if len(shuffles) < 2 {
+		t.Errorf("sortBy=Random gave one order twenty times: %v", shuffles)
 	}
 	// Findroid and Jellyfin's web app fetch the items they hold by id: those alone, in their order,
 	// as Jellyfin writes an id or with dashes.

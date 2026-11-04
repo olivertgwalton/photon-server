@@ -54,7 +54,8 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 		}
 	}
 	for _, s := range domain.WallSorts() {
-		if d := w.Sort(s); d.Name == "" || d.Ascending == "" || d.Descending == "" {
+		// A random sort runs no way, so it has no directions to name.
+		if d := w.Sort(s); d.Name == "" || s != domain.SortRandom && (d.Ascending == "" || d.Descending == "") {
 			t.Errorf("sort %s is named %+v", s, d)
 		}
 	}

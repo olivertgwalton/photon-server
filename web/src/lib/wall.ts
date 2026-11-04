@@ -16,6 +16,7 @@ export const sorts: Schemas["WallSort"][] = [
 	"rating",
 	"runtime",
 	"played",
+	"random",
 ];
 const sites: Schemas["RatingSite"][] = [
 	"imdb",

@@ -194,6 +194,8 @@ func (p WallPage) sortKey(args pgx.NamedArgs) (join, key, nulls string) {
 		}
 	case domain.SortTitle:
 		key = "items.sort_title"
+	case domain.SortRandom:
+		key = "random()"
 	}
 	return join, key, nulls
 }

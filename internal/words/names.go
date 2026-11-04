@@ -253,4 +253,5 @@ var sorts = map[domain.WallSort]Sorted{
 	domain.SortRating:   {"Rating", "Lowest first", "Highest first"},
 	domain.SortRuntime:  {"Runtime", "Shortest first", "Longest first"},
 	domain.SortPlayed:   {"Last played", "Longest ago", "Most recent"},
+	domain.SortRandom:   {Name: "Random"},
 }

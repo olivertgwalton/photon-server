@@ -16,10 +16,13 @@ const (
 	SortRuntime WallSort = "runtime"
 	// SortPlayed is by when the profile last played it; a title never played comes last.
 	SortPlayed WallSort = "played"
+	// SortRandom is shuffled anew whenever a page is asked for, as Jellyfin's Random is: its order
+	// runs no way, and its pages are not of one order.
+	SortRandom WallSort = "random"
 )
 
 func WallSorts() []WallSort {
-	return []WallSort{SortTitle, SortAdded, SortReleased, SortRating, SortRuntime, SortPlayed}
+	return []WallSort{SortTitle, SortAdded, SortReleased, SortRating, SortRuntime, SortPlayed, SortRandom}
 }
 
 // WallKind is what a wall pages: a library's titles, its films or its shows alone, as Jellyfin's

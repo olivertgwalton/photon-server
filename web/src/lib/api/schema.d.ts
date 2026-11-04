@@ -10688,7 +10688,7 @@ export interface components {
         /** @enum {string} */
         WallKind: "titles" | "films" | "shows" | "episodes" | "albums" | "books";
         /** @enum {string} */
-        WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played";
+        WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played" | "random";
         Watched: {
             /** Format: date-time */
             at?: string | null;
