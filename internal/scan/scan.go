@@ -23,8 +23,8 @@ import (
 
 type prober interface {
 	Probe(ctx context.Context, in media.Input) (domain.Facts, error)
-	// ProbeTags reads the tags of audio at an address, which TagLib cannot.
-	ProbeTags(ctx context.Context, in media.Input) (media.Tags, error)
+	// ProbeTrack describes a track at an address and reads its tags, which TagLib cannot, at once.
+	ProbeTrack(ctx context.Context, in media.Input) (domain.Facts, media.Tags, error)
 }
 
 // lister reads the list a remote library holds the titles of.

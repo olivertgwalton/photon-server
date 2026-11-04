@@ -2,11 +2,11 @@ package media
 
 import (
 	"cmp"
-	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -74,28 +74,18 @@ func ReadTags(path string) (Tags, error) {
 	return t, err
 }
 
-// ProbeTags reads the tags of the audio in reads through ffprobe, for audio at an address, which
-// TagLib reads only from a path. FFmpeg's joins of a Vorbis comment given twice are split again;
-// it keeps only the first value of an ID3v2.4 frame, so a tagged MP3 there keeps one artist.
-func (t Tools) ProbeTags(ctx context.Context, in Input) (Tags, error) {
-	out, err := output(ctx, Background, PartRun, t.FFprobe.Path, append([]string{
-		"-hide_banner", "-v", "error", "-print_format", "json", "-show_entries", "format_tags",
-	}, in.Args()...)...)
-	if err != nil {
-		if strings.Contains(err.Error(), "Invalid data found when processing input") {
-			return Tags{}, fmt.Errorf("ffprobe: %w: %w", ErrNotTagged, err)
-		}
-		return Tags{}, fmt.Errorf("ffprobe: %w", err)
-	}
-	var p struct {
-		Format struct {
-			Tags map[string]string `json:"tags"`
-		} `json:"format"`
-	}
+// probedTags are a track's tags as ffprobe reads them: its container's, and under those its first
+// audio stream's, where FFmpeg keeps an Ogg file's Vorbis comments.
+func probedTags(out []byte) (Tags, error) {
+	var p probeOutput
 	if err := json.Unmarshal(out, &p, probed); err != nil {
 		return Tags{}, fmt.Errorf("ffprobe output: %w", err)
 	}
-	return tagsOf(ffmpegTags(p.Format.Tags)), nil
+	var stream map[string]string
+	if i := slices.IndexFunc(p.Streams, func(s probeStream) bool { return s.CodecType == "audio" }); i >= 0 {
+		stream = p.Streams[i].Tags
+	}
+	return tagsOf(ffmpegTags(stream, p.Format.Tags)), nil
 }
 
 // ffmpegTagNames are FFmpeg's names for tags TagLib names otherwise, from ID3 frames and MP4
@@ -108,15 +98,32 @@ var ffmpegTagNames = map[string]string{
 	"MUSICBRAINZ RELEASE GROUP ID": taglib.MusicBrainzReleaseGroupID,
 }
 
-// ffmpegTags are FFmpeg's tags as TagLib names and splits them.
-func ffmpegTags(tags map[string]string) map[string][]string {
+// listTags are the tags that may hold several values, which FFmpeg joins with "; " where a Vorbis
+// comment gives one twice. It keeps only the first value of an ID3v2.4 frame, so a tagged MP3 at
+// an address keeps one artist.
+var listTags = map[string]bool{
+	taglib.Artist: true, taglib.Artists: true, taglib.AlbumArtist: true, taglib.Genre: true,
+}
+
+// ffmpegTags are FFmpeg's tags as TagLib names and splits them. A later layer's value of a tag
+// replaces an earlier's; within one, tags FFmpeg names two ways are taken in name order, so a file
+// tagged both ways reads the same at every scan.
+func ffmpegTags(layers ...map[string]string) map[string][]string {
 	raw := map[string][]string{}
-	for key, value := range tags {
-		key = strings.ToUpper(key)
-		if name, ok := ffmpegTagNames[key]; ok {
-			key = name
+	for _, layer := range layers {
+		own := map[string][]string{}
+		for _, key := range slices.Sorted(maps.Keys(layer)) {
+			name := strings.ToUpper(key)
+			if renamed, ok := ffmpegTagNames[name]; ok {
+				name = renamed
+			}
+			values := []string{layer[key]}
+			if listTags[name] {
+				values = strings.Split(layer[key], "; ")
+			}
+			own[name] = append(own[name], values...)
 		}
-		raw[key] = append(raw[key], strings.Split(value, "; ")...)
+		maps.Copy(raw, own)
 	}
 	return raw
 }

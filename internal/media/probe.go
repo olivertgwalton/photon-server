@@ -23,6 +23,29 @@ import (
 // the first frame of each stream: FFmpeg 9 leaves a stream's colour unknown until a frame is
 // decoded, and HDR10+ metadata is only ever on frames.
 func (t Tools) Probe(ctx context.Context, in Input) (domain.Facts, error) {
+	out, err := t.probe(ctx, in)
+	if err != nil {
+		return domain.Facts{}, err
+	}
+	return parseProbe(out)
+}
+
+// ProbeTrack describes a track at an address and reads its tags in the one run, since TagLib reads
+// tags only from a path and fetching the address again for them could fail where this did not.
+func (t Tools) ProbeTrack(ctx context.Context, in Input) (domain.Facts, Tags, error) {
+	out, err := t.probe(ctx, in)
+	if err != nil {
+		return domain.Facts{}, Tags{}, err
+	}
+	facts, err := parseProbe(out)
+	if err != nil {
+		return domain.Facts{}, Tags{}, err
+	}
+	tags, err := probedTags(out)
+	return facts, tags, err
+}
+
+func (t Tools) probe(ctx context.Context, in Input) ([]byte, error) {
 	out, err := output(ctx, Background, PartRun, t.FFprobe.Path, append([]string{
 		"-hide_banner", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters",
 		"-show_frames", "-read_intervals", "%+#1",
@@ -31,22 +54,23 @@ func (t Tools) Probe(ctx context.Context, in Input) (domain.Facts, error) {
 		// A file ffprobe reads to the end of its header and finds no media in is the same file
 		// next time; one it could not read, or ran out of time on, may not be.
 		if strings.Contains(err.Error(), "Invalid data found when processing input") {
-			return domain.Facts{}, fmt.Errorf("ffprobe: %w: %w", ErrNotMedia, err)
+			return nil, fmt.Errorf("ffprobe: %w: %w", ErrNotMedia, err)
 		}
-		return domain.Facts{}, fmt.Errorf("ffprobe: %w", err)
+		return nil, fmt.Errorf("ffprobe: %w", err)
 	}
-	return parseProbe(out)
+	return out, nil
 }
 
 var ErrNotMedia = errors.New("not media ffprobe can read")
 
 type probeOutput struct {
 	Format struct {
-		FormatName string `json:"format_name"`
-		Score      int    `json:"probe_score"`
-		Duration   string `json:"duration"`
-		Size       string `json:"size"`
-		BitRate    string `json:"bit_rate"`
+		FormatName string            `json:"format_name"`
+		Score      int               `json:"probe_score"`
+		Duration   string            `json:"duration"`
+		Size       string            `json:"size"`
+		BitRate    string            `json:"bit_rate"`
+		Tags       map[string]string `json:"tags"`
 	} `json:"format"`
 	Streams  []probeStream `json:"streams"`
 	Chapters []struct {

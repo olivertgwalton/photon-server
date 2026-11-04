@@ -4,6 +4,7 @@ package scan
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -178,27 +179,33 @@ func TestATrackCarriesItsOwnLyricsOrAsksForThem(t *testing.T) {
 	}
 }
 
-// taggedAddresses is sound at the addresses .strm files name, tagged as ffprobe reads them there.
-type taggedAddresses struct {
+// addresses is media at the addresses .strm files name: a track, tagged as ffprobe reads it there,
+// or a film where it has no tags. Each address is read once, with its tags.
+type addresses struct {
 	tags map[string]media.Tags
 }
 
-func (p taggedAddresses) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
-	if in.URL == nil {
-		return domain.Facts{}, media.ErrNotMedia
+func (p addresses) Probe(_ context.Context, in media.Input) (domain.Facts, error) {
+	return domain.Facts{}, fmt.Errorf("%v read again after its tags", in.URL)
+}
+
+func (p addresses) ProbeTrack(_ context.Context, in media.Input) (domain.Facts, media.Tags, error) {
+	tags, ok := p.tags[in.URL.String()]
+	if !ok {
+		return domain.Facts{
+			Container: "matroska,webm", Duration: 2 * time.Hour,
+			Streams: []domain.Stream{{Index: 0, Kind: domain.StreamVideo, Codec: "hevc"}},
+		}, media.Tags{}, nil
 	}
 	return domain.Facts{
 		Container: "flac", Duration: 3 * time.Minute,
 		Streams: []domain.Stream{{Index: 0, Kind: domain.StreamAudio, Codec: "flac", Channels: 2}},
-	}, nil
-}
-
-func (p taggedAddresses) ProbeTags(_ context.Context, in media.Input) (media.Tags, error) {
-	return p.tags[in.URL.String()], nil
+	}, tags, nil
 }
 
 // A music library riven writes is .strm files naming its tracks, which TagLib cannot read: they
-// are tracks all the same, tagged as what they name is.
+// are tracks all the same, placed and named by the tags of what they name, not by their own
+// names, and a .strm naming a film is left out.
 func TestStrmFilesAreTracksTaggedAsWhatTheyName(t *testing.T) {
 	f := newFixture(t, domain.LibraryMusic)
 	tagged := func(title string, track int) media.Tags {
@@ -207,7 +214,7 @@ func TestStrmFilesAreTracksTaggedAsWhatTheyName(t *testing.T) {
 			Artists: []string{"Radiohead"}, Disc: 1, Track: track,
 		}
 	}
-	f.scanner = New(f.st, taggedAddresses{tags: map[string]media.Tags{
+	f.scanner = New(f.st, addresses{tags: map[string]media.Tags{
 		"http://127.0.0.1:8081/media/1": tagged("Airbag", 1),
 		"http://127.0.0.1:8081/media/2": tagged("Paranoid Android", 2),
 	}}, lists(nil), slog.New(slog.DiscardHandler))
@@ -215,9 +222,12 @@ func TestStrmFilesAreTracksTaggedAsWhatTheyName(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(f.root, album), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	f.write(album+"01 - Airbag.strm", "http://127.0.0.1:8081/media/1\n")
-	f.write(album+"02 - Paranoid Android.strm", "http://127.0.0.1:8081/media/2\n")
-	f.scan()
+	f.write(album+"07 - First.strm", "http://127.0.0.1:8081/media/1\n")
+	f.write(album+"08 - Second.strm", "http://127.0.0.1:8081/media/2\n")
+	f.write(album+"09 - A Film.strm", "http://127.0.0.1:8081/media/3\n")
+	if r := f.scan(); r.Probed != 3 || r.Skipped != 1 {
+		t.Errorf("scanned %+v, want each address probed once and the film left out", r)
+	}
 	want := `Radiohead / OK Computer / 1.1 Airbag
 Radiohead / OK Computer / 1.2 Paranoid Android`
 	if got := f.music(); got != want {

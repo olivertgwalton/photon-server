@@ -54,7 +54,8 @@ func isTrack(name string) bool {
 
 // planTracks reads the tags of a folder's tracks, answering each, and why each it could not
 // read was not, by its path.
-func (s *Scanner) planTracks(ctx context.Context, root string, f library.Folder) ([]trackPlan, map[string]error) {
+func (s *Scanner) planTracks(ctx context.Context, r reading, f library.Folder) ([]trackPlan, map[string]error) {
+	root := r.run.lib.Root
 	var plans []trackPlan
 	unread := map[string]error{}
 	for _, file := range f.Files {
@@ -62,14 +63,14 @@ func (s *Scanner) planTracks(ctx context.Context, root string, f library.Folder)
 			continue
 		}
 		rel := path.Join(f.Path, file.Name)
-		tags, err := s.readTags(ctx, root, rel)
+		tags, probed, err := s.readTags(ctx, r, rel)
 		if err != nil {
 			unread[rel] = err
 			continue
 		}
 		plans = append(plans, trackPlan{
 			file: file, tags: tags, disc: tags.Disc, number: tags.Track,
-			title: tags.Title, version: versionPlan{parts: []library.File{file}},
+			title: tags.Title, version: versionPlan{parts: []library.File{file}, probed: probed},
 			lyrics: ownLyrics(root, f, rel, tags),
 		})
 	}
@@ -78,17 +79,24 @@ func (s *Scanner) planTracks(ctx context.Context, root string, f library.Folder)
 }
 
 // readTags reads a track's tags: TagLib's of a sound file, ffprobe's of what a .strm names, which
-// TagLib cannot reach.
-func (s *Scanner) readTags(ctx context.Context, root, rel string) (media.Tags, error) {
+// TagLib cannot reach, with the media it describes there.
+func (s *Scanner) readTags(ctx context.Context, r reading, rel string) (media.Tags, *domain.Facts, error) {
+	root := r.run.lib.Root
 	if !naming.IsShortcut(rel) {
-		return media.ReadTags(filepath.Join(root, filepath.FromSlash(rel)))
+		tags, err := media.ReadTags(filepath.Join(root, filepath.FromSlash(rel)))
+		return tags, nil, err
 	}
 	in, err := library.OpenMedia(root, rel)
 	if err != nil {
-		return media.Tags{}, err
+		return media.Tags{}, nil, err
 	}
 	defer in.Close()
-	return s.prober.ProbeTags(ctx, in)
+	facts, tags, err := s.prober.ProbeTrack(ctx, in)
+	r.run.count(func(rep *Report) { rep.Probed++ })
+	if err != nil {
+		return media.Tags{}, nil, err
+	}
+	return tags, &facts, nil
 }
 
 // ownLyrics is how the lyrics a track carries are timed: its LRC file's where it has one beside it,
@@ -256,7 +264,7 @@ func sharedArtist(tracks []store.Track) string {
 // The folder's own pictures are its album's where it holds one, before any cover its tracks hold.
 func (s *Scanner) saveAlbums(ctx context.Context, r reading, folder library.Folder) (store.Saved, error) {
 	lib := r.run.lib
-	plans, unread := s.planTracks(ctx, lib.Root, folder)
+	plans, unread := s.planTracks(ctx, r, folder)
 	for rel, err := range unread {
 		// A file TagLib takes for no sound file is passed over, as one ffprobe reads no media in
 		// and a .strm naming no address; any other failure is the file's passing trouble, read

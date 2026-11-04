@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path"
 	"slices"
 	"strings"
@@ -95,26 +96,8 @@ func (s *Scanner) readVersion(ctx context.Context, r reading, c *store.Version) 
 			c.Parts[i].Facts = &domain.Facts{Container: format, Size: p.Size}
 			continue
 		}
-		var in media.Input
-		if i == 0 {
-			in, err = library.Media(p.RelPath, first)
-		} else {
-			in, err = library.OpenMedia(root, p.RelPath)
-		}
-		var facts domain.Facts
-		if err == nil {
-			facts, err = s.prober.Probe(ctx, in)
-			if i > 0 {
-				in.Close()
-			}
-			r.run.count(func(rep *Report) { rep.Probed++ })
-		}
-		switch {
-		case errors.Is(err, media.ErrNotMedia):
-			s.skip(ctx, r.run, p.RelPath, err)
-			return false, nil
-		case err != nil:
-			s.unreadable(ctx, r, p.RelPath, err)
+		facts, ok := s.partFacts(ctx, r, first, i, p)
+		if !ok {
 			return false, nil
 		}
 		if want, refused := heldBy(r.run.lib.Kind); !slices.ContainsFunc(facts.Streams, func(st domain.Stream) bool { return st.Kind == want }) {
@@ -145,6 +128,39 @@ func heldBy(kind domain.LibraryKind) (domain.StreamKind, error) {
 	return domain.StreamVideo, errNoPicture
 }
 
+// partFacts describes a version's part i, the first through first, the file its key was read from:
+// what its tags were read with where it was described then, else what ffprobe reads of it. It
+// reports whether the part could be described, having logged why where it could not.
+func (s *Scanner) partFacts(ctx context.Context, r reading, first *os.File, i int, p store.Part) (domain.Facts, bool) {
+	if p.Facts != nil {
+		return *p.Facts, true
+	}
+	var in media.Input
+	var err error
+	if i == 0 {
+		in, err = library.Media(p.RelPath, first)
+	} else {
+		in, err = library.OpenMedia(r.run.lib.Root, p.RelPath)
+	}
+	var facts domain.Facts
+	if err == nil {
+		facts, err = s.prober.Probe(ctx, in)
+		if i > 0 {
+			in.Close()
+		}
+		r.run.count(func(rep *Report) { rep.Probed++ })
+	}
+	switch {
+	case errors.Is(err, media.ErrNotMedia):
+		s.skip(ctx, r.run, p.RelPath, err)
+		return domain.Facts{}, false
+	case err != nil:
+		s.unreadable(ctx, r, p.RelPath, err)
+		return domain.Facts{}, false
+	}
+	return facts, true
+}
+
 // ebookFormat is an ebook's format by its name, its extension's, for a file that is one.
 func ebookFormat(name string) (string, bool) {
 	if !naming.IsBook(name) {
@@ -165,6 +181,9 @@ func describe(dir string, v versionPlan) store.Version {
 	}
 	for _, p := range v.parts {
 		c.Parts = append(c.Parts, store.Part{RelPath: path.Join(dir, p.Name), Size: p.Size, ModTime: p.ModTime})
+	}
+	if v.probed != nil {
+		c.Parts[0].Facts = v.probed
 	}
 	return c
 }
