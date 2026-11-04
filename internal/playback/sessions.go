@@ -133,6 +133,11 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 		p.Tracks = tracks
 	}
 	reach, err := s.saved.SaveProgress(ctx, profile, p.Item, position, p.Length, p.Reached, nil)
+	if errors.Is(err, store.ErrSuperseded) {
+		// A newer place is kept, as one report racing another leaves it: this one keeps none, and
+		// the playback goes on.
+		reach, err = p.Last, nil
+	}
 	if err != nil {
 		return "", err
 	}
@@ -212,10 +217,14 @@ func (s *Sessions) stop(ctx context.Context, p domain.Playback, position time.Du
 	s.Close(p.ID)
 	p.Position = position
 	reach, err := s.saved.SaveProgress(ctx, p.Profile, p.Item, position, p.Length, p.Reached, nil)
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		// A title removed while it played leaves no place to keep, and its playback ends all the
 		// same, rather than kept to be swept again for ever.
 		reach, err = domain.ReachStart, nil
+	case errors.Is(err, store.ErrSuperseded):
+		// So does a place older than the one kept, which it would be refused again and again.
+		reach, err = p.Last, nil
 	}
 	if err == nil {
 		err = s.saved.RecordPlay(ctx, p, time.Now(), position)
