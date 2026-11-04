@@ -900,6 +900,7 @@ const vocabulary: Schemas["Vocabulary"] = {
 			ascending: "Longest ago",
 			descending: "Most recent",
 		},
+		random: { name: "Random", ascending: "", descending: "" },
 		rating: {
 			name: "Rating",
 			ascending: "Lowest first",
