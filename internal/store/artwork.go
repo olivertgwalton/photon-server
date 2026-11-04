@@ -134,8 +134,11 @@ func (s *Store) bestPictures(ctx context.Context, items []*model.Item) (map[uuid
 // of them.
 func (s *Store) BestPicture(ctx context.Context, item uuid.UUID, kinds []domain.ArtworkKind) (uuid.UUID, error) {
 	var id uuid.UUID
-	err := s.pool.QueryRow(ctx, `SELECT artwork_id FROM best_artwork WHERE item_id = $1 AND kind = ANY($2)
-		ORDER BY array_position($2, kind) LIMIT 1`, item, kinds).Scan(&id)
+	// A track with no cover of its own wears its album's, as its card does (picturesWorn).
+	err := s.pool.QueryRow(ctx, `SELECT b.artwork_id FROM items i
+		JOIN best_artwork b ON b.item_id = i.id OR i.kind = 'track' AND b.item_id = i.parent_id AND b.kind = 'poster'
+		WHERE i.id = $1 AND b.kind = ANY($2)
+		ORDER BY array_position($2, b.kind), b.item_id = i.id DESC LIMIT 1`, item, kinds).Scan(&id)
 	return id, found(err)
 }
 
