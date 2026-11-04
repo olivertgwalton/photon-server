@@ -75,11 +75,69 @@ func (a *API) userOf(ctx context.Context, p domain.Profile) (user, error) {
 	}, err
 }
 
-// authenticationResult is Jellyfin's, but its SessionInfo, which no app reads.
+// authenticationResult is Jellyfin's AuthenticationResult.
 type authenticationResult struct {
-	User        user   `json:"User"`
-	AccessToken string `json:"AccessToken"`
-	ServerID    string `json:"ServerId"`
+	User        user        `json:"User"`
+	SessionInfo sessionInfo `json:"SessionInfo"`
+	AccessToken string      `json:"AccessToken"`
+	ServerID    string      `json:"ServerId"`
+}
+
+// sessionInfo is Jellyfin's SessionInfoDto of a session just signed in, with every field Jellyfin
+// fills: Discrete refuses a sign-in whose answer has none.
+type sessionInfo struct {
+	PlayState struct {
+		CanSeek       bool   `json:"CanSeek"`
+		IsPaused      bool   `json:"IsPaused"`
+		IsMuted       bool   `json:"IsMuted"`
+		RepeatMode    string `json:"RepeatMode"`
+		PlaybackOrder string `json:"PlaybackOrder"`
+	} `json:"PlayState"`
+	AdditionalUsers []struct{} `json:"AdditionalUsers"`
+	Capabilities    struct {
+		PlayableMediaTypes           []string `json:"PlayableMediaTypes"`
+		SupportedCommands            []string `json:"SupportedCommands"`
+		SupportsMediaControl         bool     `json:"SupportsMediaControl"`
+		SupportsPersistentIdentifier bool     `json:"SupportsPersistentIdentifier"`
+	} `json:"Capabilities"`
+	RemoteEndPoint           string     `json:"RemoteEndPoint"`
+	PlayableMediaTypes       []string   `json:"PlayableMediaTypes"`
+	ID                       string     `json:"Id"`
+	UserID                   string     `json:"UserId"`
+	UserName                 string     `json:"UserName"`
+	Client                   string     `json:"Client"`
+	LastActivityDate         time.Time  `json:"LastActivityDate"`
+	LastPlaybackCheckIn      time.Time  `json:"LastPlaybackCheckIn"`
+	DeviceName               string     `json:"DeviceName"`
+	DeviceID                 string     `json:"DeviceId"`
+	ApplicationVersion       string     `json:"ApplicationVersion"`
+	IsActive                 bool       `json:"IsActive"`
+	SupportsMediaControl     bool       `json:"SupportsMediaControl"`
+	SupportsRemoteControl    bool       `json:"SupportsRemoteControl"`
+	NowPlayingQueue          []struct{} `json:"NowPlayingQueue"`
+	NowPlayingQueueFullItems []struct{} `json:"NowPlayingQueueFullItems"`
+	HasCustomDeviceName      bool       `json:"HasCustomDeviceName"`
+	ServerID                 string     `json:"ServerId"`
+	SupportedCommands        []string   `json:"SupportedCommands"`
+}
+
+// sessionOf is the session token signs an app in to, as the app says of itself.
+func (a *API) sessionOf(r *http.Request, p domain.Profile, token string) (sessionInfo, error) {
+	s, err := a.svc.Auth.Authenticate(r.Context(), token)
+	if err != nil {
+		return sessionInfo{}, err
+	}
+	app := appOf(r)
+	out := sessionInfo{
+		AdditionalUsers: []struct{}{}, PlayableMediaTypes: []string{}, ID: guid(s.ID), UserID: guid(p.ID), UserName: p.Name,
+		Client: app.Client, LastActivityDate: time.Now().UTC(), DeviceName: app.Device, DeviceID: app.DeviceID,
+		ApplicationVersion: app.Version, IsActive: true, NowPlayingQueue: []struct{}{}, NowPlayingQueueFullItems: []struct{}{},
+		ServerID: a.id, SupportedCommands: []string{}, RemoteEndPoint: a.svc.Reach.Client(r).String(),
+	}
+	out.PlayState.RepeatMode, out.PlayState.PlaybackOrder = "RepeatNone", "Default"
+	out.Capabilities.PlayableMediaTypes, out.Capabilities.SupportedCommands = []string{}, []string{}
+	out.Capabilities.SupportsPersistentIdentifier = true
+	return out, nil
 }
 
 // authenticateByName signs a device in by a profile's name and password, as photon's own sign-in
@@ -138,11 +196,15 @@ func (a *API) allowed(w http.ResponseWriter, r *http.Request, limit kv.Limit, ke
 // writeUser answers a profile as Jellyfin's user, and as signed in by token where there is one.
 func (a *API) writeUser(w http.ResponseWriter, r *http.Request, p domain.Profile, token string) {
 	u, err := a.userOf(r.Context(), p)
+	var session sessionInfo
+	if err == nil && token != "" {
+		session, err = a.sessionOf(r, p, token)
+	}
 	switch {
 	case err != nil:
 		a.internal(w, r, err)
 	case token != "":
-		a.writeJSON(w, authenticationResult{User: u, AccessToken: token, ServerID: a.id})
+		a.writeJSON(w, authenticationResult{User: u, SessionInfo: session, AccessToken: token, ServerID: a.id})
 	default:
 		a.writeJSON(w, u)
 	}
