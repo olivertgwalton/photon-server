@@ -421,7 +421,7 @@ func (a *API) facets(r *http.Request, _ none) (facetsJSON, error) {
 		f.Genres, f.Years,
 		each(f.Certificates, func(c string) certificateFacetJSON { return certificateFacetJSON{domain.Bare(c), c} }),
 		f.Studios, f.Resolutions,
-		f.Ranges, f.RatingSites, domain.Marks(),
+		f.Ranges, f.RatingSites, f.Marks,
 	}, nil
 }
 

@@ -367,3 +367,23 @@ func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 		t.Errorf("timings while asked again (-want +got):\n%s", diff)
 	}
 }
+
+// An album is favourited but not watched nor put on a watchlist, so its wall is offered that alone.
+func TestAnAlbumWallIsOfferedFavouritesAlone(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveMusicFolder(ctx, lib.ID, "Hurry Up Tomorrow", []byte("seen"), []Album{{
+		Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Year: 2025, Folder: "Hurry Up Tomorrow",
+		Tracks: []Track{track("Wake Me Up", 1, 1, "The Weeknd")},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, uuid.UUID{}, domain.WallAlbums)
+	if err != nil || !slices.Equal(facets.Marks, []domain.Mark{domain.MarkFavourite}) {
+		t.Errorf("an album wall's marks = %v, %v; want favourites alone", facets.Marks, err)
+	}
+}

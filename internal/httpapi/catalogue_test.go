@@ -103,7 +103,7 @@ func (fakeCatalogue) Facets(_ context.Context, libs []uuid.UUID, _ uuid.UUID, _ 
 	if !slices.Equal(libs, []uuid.UUID{films}) {
 		return store.Facets{}, store.ErrNotFound
 	}
-	return store.Facets{Genres: []string{"Crime"}}, nil
+	return store.Facets{Genres: []string{"Crime"}, Marks: domain.Marks()}, nil
 }
 
 func (fakeCatalogue) Similar(_ context.Context, _, id uuid.UUID) ([]store.Card, error) {

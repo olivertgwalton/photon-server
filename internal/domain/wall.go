@@ -81,6 +81,17 @@ func Marks() []Mark {
 	return []Mark{MarkWatched, MarkUnwatched, MarkInProgress, MarkFavourite, MarkWatchlist}
 }
 
+// Marks are what a profile can make of a title of the kind: an album or a book is favourited, but
+// is not watched nor put on a watchlist.
+func (k ItemKind) Marks() []Mark {
+	switch k {
+	case ItemMovie, ItemShow, ItemSeason, ItemEpisode:
+		return Marks()
+	case ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack, ItemAuthor, ItemBook:
+	}
+	return []Mark{MarkFavourite}
+}
+
 // Resolution is a picture's size class, by its width: a scope master is no less 4K for being
 // short.
 type Resolution string

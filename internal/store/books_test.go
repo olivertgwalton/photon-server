@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -158,5 +159,26 @@ func TestASearchFindsMusicAndBooks(t *testing.T) {
 	}
 	if got := found("hurry", domain.ItemBook); len(got) != 0 {
 		t.Errorf("hurry among books: %v, want none", got)
+	}
+}
+
+// A book is favourited but not watched nor put on a watchlist, so its wall is offered that alone.
+func TestABookWallIsOfferedFavouritesAlone(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Books", domain.LibraryBooks, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := "Earthsea/earthsea.epub"
+	if _, err := s.SaveBooksFolder(ctx, lib.ID, "Earthsea", []byte("seen"), []Book{{
+		Title: "A Wizard of Earthsea", Author: "Ursula K. Le Guin", Folder: "Earthsea",
+		Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "epub", Size: 1}}}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, uuid.UUID{}, domain.WallBooks)
+	if err != nil || !slices.Equal(facets.Marks, []domain.Mark{domain.MarkFavourite}) {
+		t.Errorf("a book wall's marks = %v, %v; want favourites alone", facets.Marks, err)
 	}
 }

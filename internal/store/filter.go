@@ -169,6 +169,7 @@ type Facets struct {
 	Resolutions  []domain.Resolution
 	Ranges       []domain.Range
 	RatingSites  []domain.RatingSite
+	Marks        []domain.Mark
 }
 
 // Genres answers every genre of the titles of libs the profile sees, each once: what an app's genre
@@ -245,6 +246,12 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	}
 	f.Ranges = order(f.Ranges, domain.Ranges())
 	f.RatingSites = order(f.RatingSites, domain.RatingSites())
+	for _, k := range kinds {
+		if kind, ok := k.(domain.ItemKind); ok {
+			f.Marks = append(f.Marks, kind.Marks()...)
+		}
+	}
+	f.Marks = order(f.Marks, domain.Marks())
 	return f, nil
 }
 

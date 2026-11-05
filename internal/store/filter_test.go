@@ -168,6 +168,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		Certificates: []string{"15", "18", "PG"}, Studios: []string{"Studio Alien", "Studio Brazil", "Studio Émile"},
 		Resolutions: []domain.Resolution{domain.ResolutionSD, domain.ResolutionFHD, domain.ResolutionUHD},
 		Ranges:      []domain.Range{domain.RangeSDR, domain.RangeHDR10}, RatingSites: []domain.RatingSite{domain.SiteIMDb},
+		Marks: domain.Marks(),
 	}
 	if diff := cmp.Diff(want, facets); diff != "" {
 		t.Errorf("facets (-want +got):\n%s", diff)
@@ -189,6 +190,7 @@ func TestAWallIsNarrowedAndSortedAsAskedFor(t *testing.T) {
 		Certificates: []string{"15", "PG"}, Studios: []string{"Studio Brazil", "Studio Émile"},
 		Resolutions: []domain.Resolution{domain.ResolutionSD, domain.ResolutionFHD},
 		Ranges:      []domain.Range{domain.RangeSDR}, RatingSites: []domain.RatingSite{domain.SiteIMDb},
+		Marks: domain.Marks(),
 	}
 	if diff := cmp.Diff(want, facets); diff != "" {
 		t.Errorf("facets of a profile kept to 15 (-want +got):\n%s", diff)
