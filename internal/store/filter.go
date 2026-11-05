@@ -130,32 +130,40 @@ func (f WallFilter) where(args pgx.NamedArgs, row string) string {
 	return w.String()
 }
 
-// markSQL is the condition a mark sets on a title, for the profile given as @profile. A
-// show is watched when every episode is, as Jellyfin and Plex count it.
+// markSQL is the condition a mark sets on a title, for the profile given as @profile: a title of a
+// kind that cannot have the mark has not got it. A show is watched when every episode is, as
+// Jellyfin and Plex count it, and a book when it is read to its end.
 func markSQL(m domain.Mark) string {
+	var kinds []string
+	for _, k := range domain.ItemKinds() {
+		if slices.Contains(k.Marks(), m) {
+			kinds = append(kinds, "'"+string(k)+"'")
+		}
+	}
 	// A show's episodes are counted from what is kept of them, not looked up one by one.
 	unwatched := `CASE WHEN items.kind = 'show' THEN EXISTS (SELECT 1 FROM episode_counts c
 			LEFT JOIN watched_counts w ON w.group_id = c.group_id AND w.profile_id = @profile
 			WHERE c.group_id = items.id AND c.episodes > coalesce(w.watched, 0))
-		ELSE items.kind IN ('movie', 'episode') AND NOT EXISTS (SELECT 1 FROM watch_state w
+		ELSE NOT EXISTS (SELECT 1 FROM watch_state w
 			WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NOT NULL) END`
+	var has string
 	switch m {
 	case domain.MarkWatched:
-		return "NOT " + unwatched
+		has = "NOT " + unwatched
 	case domain.MarkUnwatched:
-		return unwatched
+		has = unwatched
 	case domain.MarkInProgress:
-		// A film or an episode is under way when its one watch state is played part way and not
-		// watched, which is a single lookup rather than one for each half.
-		return `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
-			ELSE items.kind IN ('movie', 'episode') AND EXISTS (SELECT 1 FROM watch_state w
-				WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NULL AND w.position_ms > 0) END`
+		// A film, an episode or a book is under way when its one watch state is played or read part
+		// way and not to its end, which is a single lookup rather than one for each half.
+		has = `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
+			ELSE EXISTS (SELECT 1 FROM watch_state w WHERE w.item_id = items.id AND w.profile_id = @profile
+				AND w.watched_at IS NULL AND (w.position_ms > 0 OR w.progression > 0)) END`
 	case domain.MarkFavourite:
-		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
+		has = "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
 	case domain.MarkWatchlist:
-		return "EXISTS (SELECT 1 FROM watchlist l WHERE l.item_id = items.id AND l.profile_id = @profile)"
+		has = "EXISTS (SELECT 1 FROM watchlist l WHERE l.item_id = items.id AND l.profile_id = @profile)"
 	}
-	return "true"
+	return "items.kind IN (" + strings.Join(kinds, ", ") + ") AND " + has
 }
 
 // Facets are the values a library's titles have, which its wall can be narrowed to: what Jellyfin's

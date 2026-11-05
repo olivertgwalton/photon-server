@@ -81,13 +81,15 @@ func Marks() []Mark {
 	return []Mark{MarkWatched, MarkUnwatched, MarkInProgress, MarkFavourite, MarkWatchlist}
 }
 
-// Marks are what a profile can make of a title of the kind: an album or a book is favourited, but
-// is not watched nor put on a watchlist.
+// Marks are what a profile can make of a title of the kind. A book is read as a film is watched,
+// but only a film or show goes on a watchlist: an episode or season there is its show.
 func (k ItemKind) Marks() []Mark {
 	switch k {
-	case ItemMovie, ItemShow, ItemSeason, ItemEpisode:
+	case ItemMovie, ItemShow:
 		return Marks()
-	case ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack, ItemAuthor, ItemBook:
+	case ItemEpisode, ItemBook:
+		return []Mark{MarkWatched, MarkUnwatched, MarkInProgress, MarkFavourite}
+	case ItemSeason, ItemExtra, ItemCollection, ItemArtist, ItemAlbum, ItemTrack, ItemAuthor:
 	}
 	return []Mark{MarkFavourite}
 }

@@ -368,7 +368,8 @@ func TestATracksLyricsAreAskedAndKept(t *testing.T) {
 	}
 }
 
-// An album is favourited but not watched nor put on a watchlist, so its wall is offered that alone.
+// An album is favourited but neither watched nor put on a watchlist: its wall is offered favourites
+// alone, and asked for the watched finds none.
 func TestAnAlbumWallIsOfferedFavouritesAlone(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -385,5 +386,12 @@ func TestAnAlbumWallIsOfferedFavouritesAlone(t *testing.T) {
 	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, uuid.UUID{}, domain.WallAlbums)
 	if err != nil || !slices.Equal(facets.Marks, []domain.Mark{domain.MarkFavourite}) {
 		t.Errorf("an album wall's marks = %v, %v; want favourites alone", facets.Marks, err)
+	}
+	cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{
+		Kind: domain.WallAlbums, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10,
+		Filter: WallFilter{Marks: []domain.Mark{domain.MarkWatched}},
+	})
+	if err != nil || len(cards) != 0 {
+		t.Errorf("watched albums: %d, %v; want none", len(cards), err)
 	}
 }
