@@ -72,8 +72,8 @@ func watchRestore(ctx context.Context, cache *kv.KV, server, node uuid.UUID, dir
 	}
 }
 
-// endStreams stops the node taking work and ends its streams: a restore leaves no playback to
-// go on with.
+// endStreams stops the node taking work and ends its streams: a restore or a restart leaves no
+// playback to go on with.
 func endStreams(self interface{ Stop() }, streams interface {
 	Playbacks() []uuid.UUID
 	Close(playback uuid.UUID)

@@ -157,11 +157,25 @@ test("an admin sees what each node does and how busy it is, and sets what one do
 	await expect(page.getByText("gpu-1 takes new streams again.")).toBeVisible();
 	await expect(gpu).not.toContainText("Draining");
 
+	// Restarted when a job will not let go: its streams end, and it starts again.
+	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
+	await page.getByRole("menuitem", { name: "Restart…" }).click();
+	const restart = page.getByRole("alertdialog", { name: "Restart gpu-1?" });
+	await expect(restart).toContainText("Its 2 streams end");
+	const restarted = page.waitForRequest(
+		(r) =>
+			r.method() === "POST" && r.url().endsWith("/admin/nodes/n-2/restart"),
+	);
+	await restart.getByRole("button", { name: "Restart gpu-1" }).click();
+	await restarted;
+	await expect(page.getByText("gpu-1 is restarting.")).toBeVisible();
+
 	// Taken away for good, it is forgotten; one running is not offered to be.
 	await gpu.getByRole("button", { name: "Actions for gpu-1" }).click();
 	await expect(page.getByRole("menuitem", { name: "Forget…" })).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await old.getByRole("button", { name: "Actions for old-mini" }).click();
+	await expect(page.getByRole("menuitem", { name: "Restart…" })).toHaveCount(0);
 	await page.getByRole("menuitem", { name: "Forget…" }).click();
 	const forget = page.getByRole("alertdialog", { name: "Forget old-mini?" });
 	await expect(forget).toContainText("It was last seen");

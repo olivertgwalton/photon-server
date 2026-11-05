@@ -341,6 +341,54 @@ func (a *API) forgetNode(r *http.Request, _ none) (none, error) {
 	return none{}, nil
 }
 
+// restartPath is where a node is asked by another to restart.
+const restartPath = "/api/v1/internal/restart"
+
+// restartNode stops a node that is up, ending its streams, for its restart policy to start it
+// again; another node is asked to, as only it can stop itself.
+func (a *API) restartNode(r *http.Request, _ none) (none, error) {
+	ctx := r.Context()
+	id := pathUUID(r, "id")
+	if _, err := a.svc.Nodes.Node(ctx, id); err != nil {
+		return none{}, err
+	}
+	online, err := a.online(ctx)
+	if err != nil {
+		return none{}, err
+	}
+	n, up := online[id]
+	switch {
+	case !up:
+		return none{}, refuse(codeConflict, "the node is not up: start it where it runs")
+	case id == a.svc.Placer.Self().ID:
+		a.svc.Restart()
+		return none{}, nil
+	case n.Address == "":
+		return none{}, refuse(codeConflict, "the node has no address the others reach it at: restart it where it runs")
+	}
+	ctx, cancel := context.WithTimeout(ctx, gatherWithin)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.Address+restartPath, nil)
+	if err != nil {
+		return none{}, err
+	}
+	resp, err := a.svc.NodeKey.Do(req, nil)
+	if err != nil {
+		return none{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		return none{}, fmt.Errorf("%s answered %s", n.Name, resp.Status)
+	}
+	return none{}, nil
+}
+
+// nodeRestart is this node asked by another to restart.
+func (a *API) nodeRestart(w http.ResponseWriter, _ *http.Request) {
+	a.svc.Restart()
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (a *API) nodesRoutes() []route {
 	return []route{
 		a.handles(route{
@@ -358,5 +406,10 @@ func (a *API) nodesRoutes() []route {
 			summary: "Forget a node that is not up, as one taken away is; one up is refused",
 			status:  http.StatusNoContent,
 		}, a.forgetNode),
+		a.handles(route{
+			pattern: "POST /api/v1/admin/nodes/{id}/restart", access: admin,
+			summary: "Restart a node that is up: its streams end, and its restart policy starts it again",
+			status:  http.StatusAccepted,
+		}, a.restartNode),
 	}
 }

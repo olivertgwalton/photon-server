@@ -559,6 +559,11 @@ export async function admin(
 		return done();
 	}
 	const node = url.pathname.match(/^\/api\/v1\/admin\/nodes\/([^/]+)$/)?.[1];
+	if (
+		request.method === "POST" &&
+		/^\/api\/v1\/admin\/nodes\/[^/]+\/restart$/.test(url.pathname)
+	)
+		return done(202);
 	if (request.method === "DELETE" && node) {
 		nodes = nodes.filter((n) => n.id !== node);
 		return new Response(null, { status: 204 });

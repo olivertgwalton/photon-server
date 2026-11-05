@@ -15,8 +15,8 @@ import { cn } from "#lib/utils.ts";
 
 type Node = components["schemas"]["KnownNode"];
 
-// What an admin may do of a node: set what it does, drain it before stopping it, resume it, and
-// forget it once taken away.
+// What an admin may do of a node: set what it does, drain it before stopping it, resume it,
+// restart it while it is up, and forget it once taken away.
 let { node, nodes }: { node: Node; nodes: Node[] } = $props();
 const shell = getShell();
 
@@ -49,6 +49,25 @@ function forget() {
 					params: { path: { id: node.id } },
 				}),
 				`${node.name} is forgotten.`,
+			),
+	);
+}
+
+function restart() {
+	const playing = node.online?.streams ?? 0;
+	const ending = playing
+		? `${playing === 1 ? "Its 1 stream ends" : `Its ${playing} streams end`}, and it stops`
+		: "It stops";
+	shell.confirmFirst(
+		`Restart ${node.name}?`,
+		`${ending} and starts again within a minute or so. One run by hand, not by the app, a service or a container, stays stopped.`,
+		`Restart ${node.name}`,
+		() =>
+			act(
+				client().POST("/api/v1/admin/nodes/{id}/restart", {
+					params: { path: { id: node.id } },
+				}),
+				`${node.name} is restarting.`,
 			),
 	);
 }
@@ -90,7 +109,9 @@ function set(body: components["schemas"]["NodeChange"], said: string) {
 				Resume
 			</DropdownMenu.Item>
 		{/if}
-		{#if !node.online}
+		{#if node.online}
+			<DropdownMenu.Item onSelect={restart}>Restart…</DropdownMenu.Item>
+		{:else}
 			<DropdownMenu.Item onSelect={forget}>Forget…</DropdownMenu.Item>
 		{/if}
 	</DropdownMenu.Content>
