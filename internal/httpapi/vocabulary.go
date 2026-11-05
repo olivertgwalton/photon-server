@@ -35,10 +35,12 @@ type vocabularyJSON struct {
 	Ranges         map[domain.Range]string         `json:"ranges"`
 	Resolutions    map[domain.Resolution]string    `json:"resolutions"`
 	// Kinds are the kinds of item, as a list of mixed titles heads each kind's: "Films".
-	Kinds           map[domain.ItemKind]string       `json:"kinds"`
-	LibraryKinds    map[domain.LibraryKind]string    `json:"library_kinds"`
-	StreamKinds     map[domain.StreamKind]string     `json:"stream_kinds"`
-	Marks           map[domain.Mark]string           `json:"marks"`
+	Kinds        map[domain.ItemKind]string    `json:"kinds"`
+	LibraryKinds map[domain.LibraryKind]string `json:"library_kinds"`
+	StreamKinds  map[domain.StreamKind]string  `json:"stream_kinds"`
+	Marks        map[domain.Mark]string        `json:"marks"`
+	// ReadMarks are the marks a book can have, as a reader says them: "Read" for "Watched".
+	ReadMarks       map[domain.Mark]string           `json:"read_marks"`
 	Milestones      map[domain.Milestone]string      `json:"milestones"`
 	CalendarFilters map[domain.CalendarFilter]string `json:"calendar_filters"`
 	Sorts           map[domain.WallSort]sortJSON     `json:"sorts"`
@@ -87,6 +89,7 @@ func (a *API) vocabulary(w http.ResponseWriter, r *http.Request) {
 		LibraryKinds:    wordsFor(domain.LibraryKinds(), said.LibraryKind),
 		StreamKinds:     wordsFor(domain.StreamKinds(), said.StreamKind),
 		Marks:           wordsFor(domain.Marks(), said.Mark),
+		ReadMarks:       wordsFor(domain.ItemBook.Marks(), said.ReadMark),
 		Milestones:      wordsFor(domain.Milestones(), said.Milestone),
 		CalendarFilters: wordsFor(domain.CalendarFilters(), said.CalendarFilter),
 		Sorts:           wordsFor(domain.WallSorts(), func(s domain.WallSort) sortJSON { return sortJSON(said.Sort(s)) }),

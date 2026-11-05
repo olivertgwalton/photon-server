@@ -19,6 +19,7 @@ func (w Words) Resolution(v domain.Resolution) string         { return label(res
 func (w Words) ItemKind(v domain.ItemKind) string             { return label(itemKinds, v) }
 func (w Words) LibraryKind(v domain.LibraryKind) string       { return label(libraryKinds, v) }
 func (w Words) Mark(v domain.Mark) string                     { return label(marks, v) }
+func (w Words) ReadMark(v domain.Mark) string                 { return label(readMarks, v) }
 func (w Words) Milestone(v domain.Milestone) string           { return label(milestones, v) }
 func (w Words) CalendarFilter(v domain.CalendarFilter) string { return label(calendarFilters, v) }
 func (w Words) DownloadState(v domain.DownloadState) string   { return label(downloadStates, v) }
@@ -110,6 +111,12 @@ var marks = map[domain.Mark]string{
 	domain.MarkWatched: "Watched", domain.MarkUnwatched: "Unwatched",
 	domain.MarkInProgress: "In progress", domain.MarkFavourite: "Favourites",
 	domain.MarkWatchlist: "Watchlist",
+}
+
+// readMarks are the marks a book can have, said as a reader says them.
+var readMarks = map[domain.Mark]string{
+	domain.MarkWatched: "Read", domain.MarkUnwatched: "Unread",
+	domain.MarkInProgress: "Reading", domain.MarkFavourite: "Favourites",
 }
 
 var milestones = map[domain.Milestone]string{
