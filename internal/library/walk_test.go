@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -407,4 +408,50 @@ func TestAWalkEndsAtTheFirstErrorItIsGiven(t *testing.T) {
 	if !errors.Is(err, stop) {
 		t.Errorf("walk answered %v, want the error it was given", err)
 	}
+}
+
+// A walk answers as its context ends, though a folder's read never returns, as one on a mount that
+// has stopped answering does not: a scan so held kept the server from stopping for an hour. The
+// folder, read at last, is handed to no one.
+func TestAWalkEndsWithItsContextThoughAReadIsStuck(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, dir, map[string]string{"Heat (1995)/Heat.mkv": "v"})
+		reading, release := make(chan struct{}), make(chan struct{})
+		readDir = func(name string) ([]fs.DirEntry, error) {
+			if filepath.Base(name) == "Heat (1995)" {
+				close(reading)
+				<-release
+			}
+			return os.ReadDir(name)
+		}
+		t.Cleanup(func() { readDir = os.ReadDir })
+		ctx, cancel := context.WithCancel(t.Context())
+		var mu sync.Mutex
+		var handed []string
+		walked := make(chan error, 1)
+		go func() {
+			walked <- Walk(ctx, dir, []string{"."}, 2, func(_ context.Context, f Folder, err error) error {
+				mu.Lock()
+				defer mu.Unlock()
+				handed = append(handed, f.Path)
+				return err
+			})
+		}()
+		<-reading
+		cancel()
+		select {
+		case err := <-walked:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("walk answered %v, want its context's end", err)
+			}
+		case <-time.After(time.Minute):
+			t.Error("the walk waited on a read that never returns")
+		}
+		close(release)
+		synctest.Wait()
+		if !slices.Equal(handed, []string{"."}) {
+			t.Errorf("handed %q, want the root alone", handed)
+		}
+	})
 }

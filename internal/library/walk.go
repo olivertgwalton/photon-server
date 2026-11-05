@@ -64,11 +64,14 @@ var (
 // Links are followed wherever they lead, to files and folders, as Jellyfin and Plex follow them:
 // a library of links into a remote mount is a library like any other. A root that cannot be read
 // is passed to each as "." with its error.
+// Walk answers as ctx ends, though a folder is still being read: a mount that has stopped answering
+// holds its reader in the kernel, past any context, and held a scan, and with it the server's
+// shutdown, for an hour. Such a reader is left to it, and hands each nothing once it returns.
 func Walk(ctx context.Context, root string, dirs []string, atOnce int, each func(context.Context, Folder, error) error) error {
-	g, ctx := errgroup.WithContext(ctx)
+	g, gctx := errgroup.WithContext(ctx)
 	w := &walker{root: root, each: each}
 	w.more = sync.NewCond(&w.mu)
-	stop := context.AfterFunc(ctx, func() {
+	stop := context.AfterFunc(gctx, func() {
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		w.more.Broadcast()
@@ -78,9 +81,20 @@ func Walk(ctx context.Context, root string, dirs []string, atOnce int, each func
 		w.queue = append(w.queue, visit{dir: dir, start: true})
 	}
 	for range atOnce {
-		g.Go(func() error { return w.work(ctx) })
+		g.Go(func() error { return w.work(gctx) })
 	}
-	return g.Wait()
+	walked := make(chan error, 1)
+	go func() { walked <- g.Wait() }()
+	select {
+	case err := <-walked:
+		return err
+	case <-ctx.Done():
+	}
+	// Each folder being handed to each is waited for: it is told ctx has ended.
+	w.calls.Lock()
+	w.left = true
+	w.calls.Unlock()
+	return ctx.Err()
 }
 
 // visit is a folder to read, and what is known of it from the folders above it: the full path of
@@ -96,8 +110,12 @@ type visit struct {
 type walker struct {
 	root string
 	each func(context.Context, Folder, error) error
-	mu   sync.Mutex
-	more *sync.Cond
+	// calls is held to hand each a folder, and left is whether Walk has answered without the
+	// readers still in the kernel.
+	calls sync.RWMutex
+	left  bool
+	mu    sync.Mutex
+	more  *sync.Cond
 	// queue is taken from its end, so a walk goes deep before wide and keeps few folders waiting.
 	queue []visit
 	busy  int
@@ -141,7 +159,7 @@ func (w *walker) visit(ctx context.Context, v visit) ([]visit, error) {
 			return nil, err
 		}
 		if err != nil {
-			return nil, w.each(ctx, Folder{Path: v.dir}, err)
+			return nil, w.call(ctx, Folder{Path: v.dir}, err)
 		}
 	}
 	folder, v, ok, err := list(v)
@@ -149,9 +167,9 @@ func (w *walker) visit(ctx context.Context, v visit) ([]visit, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, w.each(ctx, folder, err)
+		return nil, w.call(ctx, folder, err)
 	}
-	if err := w.each(ctx, folder, nil); err != nil {
+	if err := w.call(ctx, folder, nil); err != nil {
 		return nil, err
 	}
 	full := v.above[len(v.above)-1]
@@ -163,6 +181,19 @@ func (w *walker) visit(ctx context.Context, v visit) ([]visit, error) {
 	}
 	return below, nil
 }
+
+// call hands each a folder, unless Walk has answered.
+func (w *walker) call(ctx context.Context, folder Folder, err error) error {
+	w.calls.RLock()
+	defer w.calls.RUnlock()
+	if w.left {
+		return ctx.Err()
+	}
+	return w.each(ctx, folder, err)
+}
+
+// readDir reads a folder's entries: a test stands in a mount that has stopped answering.
+var readDir = os.ReadDir
 
 // Read reads one folder of the library at root as Walk would, and none under it. One a .ignore
 // hides holds nothing.
@@ -182,7 +213,7 @@ func Read(root, dir string) (Folder, error) {
 // for one an empty .ignore hides.
 func list(v visit) (Folder, visit, bool, error) {
 	full := v.above[len(v.above)-1]
-	entries, err := os.ReadDir(full)
+	entries, err := readDir(full)
 	if err != nil {
 		return Folder{Path: v.dir}, v, true, err
 	}
