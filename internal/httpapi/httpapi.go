@@ -169,6 +169,8 @@ type Services struct {
 	Jobs         jobQueue
 	// Backups restores one of this node's dumps, every node stopping for it.
 	Backups backupRestores
+	// Restart stops this node, ending its streams, for its restart policy to start it again.
+	Restart func()
 	// Maintenance is when work that reads media, and that no one waits on, is done.
 	Maintenance maintenanceSettings
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.
@@ -308,11 +310,12 @@ func New(logger *slog.Logger, info domain.Info, svc Services) *API {
 		}
 		a.mux.Handle(r.pattern, h)
 	}
-	// Another node asking this one to open a remux, for its metrics, or whether it can read a
-	// library's root, is no client's to call, and so in no description.
+	// Another node asking this one to open a remux, for its metrics, whether it can read a
+	// library's root, or to restart, is no client's to call, and so in no description.
 	a.mux.Handle("POST "+playback.RemotePattern, a.svc.NodeKey.Verify(http.HandlerFunc(a.openRemote)))
 	a.mux.Handle("GET "+metricsPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeMetrics)))
 	a.mux.Handle("GET "+libraryCheckPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeCheckLibrary)))
+	a.mux.Handle("POST "+restartPath, a.svc.NodeKey.Verify(http.HandlerFunc(a.nodeRestart)))
 	// A sign-in provider sends a browser back here with a query of its own, which a client never
 	// calls.
 	a.mux.HandleFunc("GET "+sso.CallbackPattern, a.signInCallback)

@@ -70,6 +70,8 @@ type node struct {
 	cacheRoot string
 	// stops are requests to stop after the first, which ended ctx: one stops a drain at once.
 	stops <-chan os.Signal
+	// restart stops the node, ending its streams, for its restart policy to start it again.
+	restart func()
 
 	id             uuid.UUID
 	info           domain.Info
@@ -289,7 +291,7 @@ func (n *node) httpServer(p playing) (*http.Server, error) {
 	return &http.Server{
 		Addr: n.listen, TLSConfig: n.secured.TLSConfig(),
 		Handler: httpapi.New(n.logger, n.info, httpapi.Services{
-			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Requests: st, RequestablePages: requests.NewPages(st, n.providers, n.identity.Locale, n.logger), Notifications: st, Push: st, PushKey: n.pusher, People: st, PersonDescriber: n.providers, Editing: st, History: st, Statistics: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Lyrics: n.lyrics, RemoteVersions: n.remoteVersions, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Releases: n.releases, Postgres: st, Valkey: cache, Web: web,
+			Ready: ready(st, cache, n.self), Auth: n.auth, Profiles: st, Catalogue: st, Libraries: st, Tasks: n.scheduler, Jobs: st, Backups: n.restores, Maintenance: st, NowPlaying: cache, ProfileAdmin: st, Avatars: st, Providers: n.providers, ProviderSettings: st, Plugins: p.plugins, Collections: st, Preferences: st, Playlists: st, Requests: st, RequestablePages: requests.NewPages(st, n.providers, n.identity.Locale, n.logger), Notifications: st, Push: st, PushKey: n.pusher, People: st, PersonDescriber: n.providers, Editing: st, History: st, Statistics: st, Pictures: st, Themes: st, Watching: st, Playing: p.files, Parts: n.parts, Lyrics: n.lyrics, RemoteVersions: n.remoteVersions, Discover: n.discover, Subtitles: p.fetcher, Playbacks: n.sessions, Owners: p.owners, Placer: p.placer, NodeKey: p.nodeKey, HLS: n.remuxer, Signer: p.signer, Artwork: n.pictures, Previews: st, PreviewFiles: n.previews, Downloads: st, Conversions: n.conversions, Limits: cache, Activity: st, Events: n.hub, Audience: st, Webhooks: st, Importer: n.imports, HistoryImports: st, Trackers: n.trackers, TrackerClients: st, SignIns: n.signIns, Reach: n.reach, Network: st, Storage: st, Stores: n.stores, Nodes: st, Secure: n.secured, Jellyfin: n.jellyfin, Setup: setup, Identity: n.identity, ServerSettings: st, Releases: n.releases, Postgres: st, Valkey: cache, Web: web, Restart: n.restart,
 			Metrics: metrics(version, n.self, n.remuxer, n.sessions, p.placer, n.sent, n.finished, cluster{lead: n.scheduler, st: st, nodes: cache, self: p.placer}),
 			Sent:    n.sent,
 		}),
@@ -394,16 +396,22 @@ func (n *node) serve(ctx context.Context) error {
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
 		defer stopEvents()
-		if errors.As(context.Cause(ctx), new(*stoppedForRestore)) {
+		if cause := context.Cause(ctx); errors.As(cause, new(*stoppedForRestore)) || errors.Is(cause, errRestart) {
 			endStreams(n.self, n.sessions)
 			return
 		}
 		drain(context.WithoutCancel(ctx), n.self, n.sessions, n.stops, drainFor, logger)
 	})
-	if stopped, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok && err == nil {
+	if err != nil {
+		return err
+	}
+	if stopped, ok := errors.AsType[*stoppedForRestore](context.Cause(ctx)); ok {
 		return stopped
 	}
-	return err
+	if errors.Is(context.Cause(ctx), errRestart) {
+		return errRestart
+	}
+	return nil
 }
 
 // said is the server as this node says of itself now, named as an admin last named it.

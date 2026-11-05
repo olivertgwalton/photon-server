@@ -60,12 +60,13 @@ const (
 	mediaSlots = 1
 )
 
-// exitRestart is the exit code of a node stopped for a restore, which its restart policy starts
-// again: EX_TEMPFAIL, a failure, so a policy that restarts on failure alone does too.
+// exitRestart is the exit code of a node stopped for a restore or an admin's restart, which its
+// restart policy starts again: EX_TEMPFAIL, a failure, so a policy that restarts on failure alone
+// does too.
 const exitRestart = 75
 
-// errRestart is a node stopped for a restore, to be started again.
-var errRestart = errors.New("stopped for a restore; to be started again")
+// errRestart is a node stopped to be started again.
+var errRestart = errors.New("stopped to be started again")
 
 func main() {
 	if ok, code := asService(os.Args[1:]); ok {
@@ -81,7 +82,7 @@ func main() {
 func exitCode(logger *slog.Logger, err error) int {
 	switch {
 	case errors.Is(err, errRestart):
-		logger.Info("photon-server stopped for a restore; its restart policy starts it again", slog.Int("exit", exitRestart))
+		logger.Info("photon-server stopped to start again; its restart policy starts it", slog.Int("exit", exitRestart))
 		return exitRestart
 	case err != nil:
 		logger.Error("photon-server stopped", slog.Any("err", err))
@@ -220,10 +221,12 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 	if err := n.join(ctx, databaseURL, valkeyURL); err != nil {
 		return err
 	}
-	// A restore under way stops the node as a signal does, but for its streams, which it ends;
-	// the watch outlives what it stops, to keep the restore while this node goes on to restore it.
+	// A restore under way, or an admin's restart, stops the node as a signal does, but for its
+	// streams, which it ends; the watch outlives what it stops, to keep the restore while this node
+	// goes on to restore it.
 	ctx, stopFor := context.WithCancelCause(ctx)
 	defer stopFor(nil)
+	n.restart = func() { stopFor(errRestart) }
 	watched := make(chan struct{})
 	defer close(watched)
 	go watchRestore(context.WithoutCancel(ctx), cache, id, n.id, n.dumper.Dir, stopFor, watched, logger)

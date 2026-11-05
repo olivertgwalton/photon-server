@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 	"uuid"
@@ -197,5 +198,51 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 	}
 	if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+uuid.NewV7().String(), `{"role":"serve"}`); rec.Code != http.StatusNotFound {
 		t.Errorf("a node there has never been: %d, want 404", rec.Code)
+	}
+}
+
+// An admin restarts any node that is up, from whichever node they reach: this one stops itself,
+// another is asked to, and only by a node of the cluster. One stopped is not up to restart.
+func TestAnAdminRestartsANode(t *testing.T) {
+	self, other, gone := uuid.NewV7(), uuid.NewV7(), uuid.NewV7()
+	key, err := nodecall.NewKey([]byte("cluster signing key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var otherRestarted, selfRestarted int
+	elsewhere := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		NodeKey: key, Restart: func() { otherRestarted++ },
+	}))
+	defer elsewhere.Close()
+	nodes := fakeNodes{
+		self:  {ID: self, Name: "mini"},
+		other: {ID: other, Name: "gpu-1"},
+		gone:  {ID: gone, Name: "old"},
+	}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Nodes: nodes, NodeKey: key, Restart: func() { selfRestarted++ },
+		Valkey: fakeBackend{version: "9.0.0", nodes: []domain.Node{{ID: other, Name: "gpu-1", Address: elsewhere.URL}}},
+		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: self, Name: "mini"} }, nil, nil, key),
+	})
+
+	if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+self.String()+"/restart", ""); rec.Code != http.StatusAccepted || selfRestarted != 1 {
+		t.Errorf("restarting this node: %d %s, restarted %d times; want 202, once", rec.Code, rec.Body, selfRestarted)
+	}
+	if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+other.String()+"/restart", ""); rec.Code != http.StatusAccepted || otherRestarted != 1 || selfRestarted != 1 {
+		t.Errorf("restarting gpu-1: %d %s, it restarted %d times, this node %d; want 202, gpu-1 once", rec.Code, rec.Body, otherRestarted, selfRestarted)
+	}
+	if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+gone.String()+"/restart", ""); rec.Code != http.StatusConflict {
+		t.Errorf("restarting a node stopped: %d, want 409", rec.Code)
+	}
+	if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+uuid.NewV7().String()+"/restart", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("restarting a node there has never been: %d, want 404", rec.Code)
+	}
+	resp, err := http.Post(elsewhere.URL+restartPath, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized || otherRestarted != 1 {
+		t.Errorf("an unsigned restart: %d, restarted %d times; want 401, not restarted", resp.StatusCode, otherRestarted)
 	}
 }
