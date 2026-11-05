@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"uuid"
 
@@ -187,19 +186,19 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	if err != nil {
 		return f, err
 	}
-	// The facets are of the kinds of title each library's wall lists.
-	ids, kinds := []any{}, []any{}
-	for n := 0; at["lib"+strconv.Itoa(n)] != nil; n++ {
-		ids, kinds = append(ids, at["lib"+strconv.Itoa(n)]), append(kinds, at["kind"+strconv.Itoa(n)])
+	// The facets are of the kinds of title each library's wall lists, and so are the marks offered.
+	kinds, _ := at["wall_kinds"].([]domain.ItemKind)
+	for _, k := range kinds {
+		f.Marks = append(f.Marks, k.Marks()...)
 	}
-	at["ids"], at["kinds"] = ids, kinds
+	f.Marks = order(f.Marks, domain.Marks())
 	// The titles are read once for all four of their facets. The kinds of version and the rating
 	// sites are those of the titles read, as the wall's filters find them, each read in one pass
 	// over the titles' versions and ratings: asked of each kind and site in turn, the titles were
 	// joined again for each, half an episode wall's facets. A title's versions are its own, its
 	// extras' and its episodes'.
 	titles := `SELECT items.id, items.year, items.genres, items.studios, items.certificate FROM items
-		JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
+		JOIN unnest(CAST(@wall_libs AS uuid[]), CAST(@wall_kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
 		viewer(@profile) v
 		WHERE sees(v, items)`
 	versions := `versions c JOIN items e ON e.id = c.item_id LEFT JOIN items p ON p.id = e.parent_id
@@ -214,7 +213,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 		titles = `SELECT items.id, items.year, show.id AS show FROM items show
 			JOIN items season ON season.parent_id = show.id JOIN items ON items.parent_id = season.id AND items.kind = 'episode',
 			viewer(@profile) v
-			WHERE show.library_id = ANY(CAST(@ids AS uuid[])) AND show.kind = 'show' AND sees(v, items, season, show)`
+			WHERE show.library_id = ANY(CAST(@wall_libs AS uuid[])) AND show.kind = 'show' AND sees(v, items, season, show)`
 		versions = `versions c JOIN titles t ON t.id = c.item_id`
 		shows = `shows AS MATERIALIZED (SELECT genres, studios, certificate FROM items WHERE id IN (SELECT show FROM titles)),`
 		about = "shows"
@@ -246,12 +245,6 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	}
 	f.Ranges = order(f.Ranges, domain.Ranges())
 	f.RatingSites = order(f.RatingSites, domain.RatingSites())
-	for _, k := range kinds {
-		if kind, ok := k.(domain.ItemKind); ok {
-			f.Marks = append(f.Marks, kind.Marks()...)
-		}
-	}
-	f.Marks = order(f.Marks, domain.Marks())
 	return f, nil
 }
 
