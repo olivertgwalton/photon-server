@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"uuid"
 
@@ -131,32 +130,40 @@ func (f WallFilter) where(args pgx.NamedArgs, row string) string {
 	return w.String()
 }
 
-// markSQL is the condition a mark sets on a title, for the profile given as @profile. A
-// show is watched when every episode is, as Jellyfin and Plex count it.
+// markSQL is the condition a mark sets on a title, for the profile given as @profile: a title of a
+// kind that cannot have the mark has not got it. A show is watched when every episode is, as
+// Jellyfin and Plex count it, and a book when it is read to its end.
 func markSQL(m domain.Mark) string {
+	var kinds []string
+	for _, k := range domain.ItemKinds() {
+		if slices.Contains(k.Marks(), m) {
+			kinds = append(kinds, "'"+string(k)+"'")
+		}
+	}
 	// A show's episodes are counted from what is kept of them, not looked up one by one.
 	unwatched := `CASE WHEN items.kind = 'show' THEN EXISTS (SELECT 1 FROM episode_counts c
 			LEFT JOIN watched_counts w ON w.group_id = c.group_id AND w.profile_id = @profile
 			WHERE c.group_id = items.id AND c.episodes > coalesce(w.watched, 0))
-		ELSE items.kind IN ('movie', 'episode') AND NOT EXISTS (SELECT 1 FROM watch_state w
+		ELSE NOT EXISTS (SELECT 1 FROM watch_state w
 			WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NOT NULL) END`
+	var has string
 	switch m {
 	case domain.MarkWatched:
-		return "NOT " + unwatched
+		has = "NOT " + unwatched
 	case domain.MarkUnwatched:
-		return unwatched
+		has = unwatched
 	case domain.MarkInProgress:
-		// A film or an episode is under way when its one watch state is played part way and not
-		// watched, which is a single lookup rather than one for each half.
-		return `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
-			ELSE items.kind IN ('movie', 'episode') AND EXISTS (SELECT 1 FROM watch_state w
-				WHERE w.item_id = items.id AND w.profile_id = @profile AND w.watched_at IS NULL AND w.position_ms > 0) END`
+		// A film, an episode or a book is under way when its one watch state is played or read part
+		// way and not to its end, which is a single lookup rather than one for each half.
+		has = `CASE WHEN items.kind = 'show' THEN ` + unwatched + ` AND ` + begun + `
+			ELSE EXISTS (SELECT 1 FROM watch_state w WHERE w.item_id = items.id AND w.profile_id = @profile
+				AND w.watched_at IS NULL AND (w.position_ms > 0 OR w.progression > 0)) END`
 	case domain.MarkFavourite:
-		return "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
+		has = "EXISTS (SELECT 1 FROM favourites f WHERE f.item_id = items.id AND f.profile_id = @profile)"
 	case domain.MarkWatchlist:
-		return "EXISTS (SELECT 1 FROM watchlist l WHERE l.item_id = items.id AND l.profile_id = @profile)"
+		has = "EXISTS (SELECT 1 FROM watchlist l WHERE l.item_id = items.id AND l.profile_id = @profile)"
 	}
-	return "true"
+	return "items.kind IN (" + strings.Join(kinds, ", ") + ") AND " + has
 }
 
 // Facets are the values a library's titles have, which its wall can be narrowed to: what Jellyfin's
@@ -169,6 +176,7 @@ type Facets struct {
 	Resolutions  []domain.Resolution
 	Ranges       []domain.Range
 	RatingSites  []domain.RatingSite
+	Marks        []domain.Mark
 }
 
 // Genres answers every genre of the titles of libs the profile sees, each once: what an app's genre
@@ -186,19 +194,19 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 	if err != nil {
 		return f, err
 	}
-	// The facets are of the kinds of title each library's wall lists.
-	ids, kinds := []any{}, []any{}
-	for n := 0; at["lib"+strconv.Itoa(n)] != nil; n++ {
-		ids, kinds = append(ids, at["lib"+strconv.Itoa(n)]), append(kinds, at["kind"+strconv.Itoa(n)])
+	// The facets are of the kinds of title each library's wall lists, and so are the marks offered.
+	kinds, _ := at["wall_kinds"].([]domain.ItemKind)
+	for _, k := range kinds {
+		f.Marks = append(f.Marks, k.Marks()...)
 	}
-	at["ids"], at["kinds"] = ids, kinds
+	f.Marks = order(f.Marks, domain.Marks())
 	// The titles are read once for all four of their facets. The kinds of version and the rating
 	// sites are those of the titles read, as the wall's filters find them, each read in one pass
 	// over the titles' versions and ratings: asked of each kind and site in turn, the titles were
 	// joined again for each, half an episode wall's facets. A title's versions are its own, its
 	// extras' and its episodes'.
 	titles := `SELECT items.id, items.year, items.genres, items.studios, items.certificate FROM items
-		JOIN unnest(CAST(@ids AS uuid[]), CAST(@kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
+		JOIN unnest(CAST(@wall_libs AS uuid[]), CAST(@wall_kinds AS text[])) l (lib, kind) ON items.library_id = l.lib AND items.kind = l.kind,
 		viewer(@profile) v
 		WHERE sees(v, items)`
 	versions := `versions c JOIN items e ON e.id = c.item_id LEFT JOIN items p ON p.id = e.parent_id
@@ -213,7 +221,7 @@ func (s *Store) Facets(ctx context.Context, libs []uuid.UUID, profile uuid.UUID,
 		titles = `SELECT items.id, items.year, show.id AS show FROM items show
 			JOIN items season ON season.parent_id = show.id JOIN items ON items.parent_id = season.id AND items.kind = 'episode',
 			viewer(@profile) v
-			WHERE show.library_id = ANY(CAST(@ids AS uuid[])) AND show.kind = 'show' AND sees(v, items, season, show)`
+			WHERE show.library_id = ANY(CAST(@wall_libs AS uuid[])) AND show.kind = 'show' AND sees(v, items, season, show)`
 		versions = `versions c JOIN titles t ON t.id = c.item_id`
 		shows = `shows AS MATERIALIZED (SELECT genres, studios, certificate FROM items WHERE id IN (SELECT show FROM titles)),`
 		about = "shows"

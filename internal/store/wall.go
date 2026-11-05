@@ -234,9 +234,10 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	wall = cmp.Or(wall, domain.WallTitles)
 	_, row, seen := wallRows(wall)
 	filter := f.where(args, row)
-	// Each library's titles are what its kind makes them.
+	// Each library's titles are what its kind makes them: @wall_libs and @wall_kinds pair each
+	// library with each kind it lists.
 	var arms []string
-	boxedLibs, boxedKinds := []uuid.UUID{}, []domain.ItemKind{}
+	wallLibs, wallKinds := []uuid.UUID{}, []domain.ItemKind{}
 	// The libraries whose own mode shows box sets, by the mode.
 	shownLibs := map[domain.BoxSetMode][]uuid.UUID{domain.BoxSetsCollapsed: {}, domain.BoxSetsBeside: {}}
 	var id uuid.UUID
@@ -252,7 +253,7 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 			n := strconv.Itoa(len(arms))
 			args["lib"+n], args["kind"+n] = id, item
 			arms = append(arms, `(items.library_id = @lib`+n+` AND items.kind = @kind`+n+`)`)
-			boxedLibs, boxedKinds = append(boxedLibs, id), append(boxedKinds, item)
+			wallLibs, wallKinds = append(wallLibs, id), append(wallKinds, item)
 		}
 		return nil
 	})
@@ -262,13 +263,13 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 	if int(found.RowsAffected()) != len(libs) {
 		return "", "", "", nil, ErrNotFound
 	}
+	args["wall_libs"], args["wall_kinds"] = wallLibs, wallKinds
 	where = `WHERE items.library_id = ANY(@libs)
 		AND EXISTS (SELECT 1 FROM viewer(@profile) v WHERE ` + seen + ` AND (` + cmp.Or(strings.Join(arms, " OR "), "false") + `))` + filter
 	// A filtered wall answers titles alone, as Jellyfin's does: a box set has no genre or year.
 	if boxes == domain.BoxSetsExpanded || filter != "" || wall == domain.WallEpisodes || !showing && boxes == "" {
 		return "", where, "", args, nil
 	}
-	args["boxed_libs"], args["boxed_kinds"] = boxedLibs, boxedKinds
 	args["collapsed_libs"], args["beside_libs"] = shownLibs[domain.BoxSetsCollapsed], shownLibs[domain.BoxSetsBeside]
 	args["boxes"] = (*domain.BoxSetMode)(nil)
 	if boxes != "" {
@@ -285,7 +286,7 @@ func (s *Store) wallWhere(ctx context.Context, libs []uuid.UUID, profile uuid.UU
 		`WHERE items.kind = 'collection' AND items.id IN (` + boxedSets + `)`, args, nil
 }
 
-// boxedTitles are the titles of @boxed_libs and @boxed_kinds the profile may see in the
+// boxedTitles are the titles of @wall_libs and @wall_kinds the profile may see in the
 // collections the wall shows, by collection, each with the mode it is shown in there: collapsed,
 // in place of its titles, or beside them. The viewer is made once: joined, it was made again for
 // every title, ten times the time.
@@ -293,7 +294,7 @@ const boxedTitles = `WITH seer AS MATERIALIZED (SELECT v FROM viewer(@profile) v
 	SELECT * FROM (SELECT m.collection_id, m.item_id, coalesce(CAST(@boxes AS text), nullif(c.box_set, 'library'),
 			CASE WHEN t.library_id = ANY(@collapsed_libs) THEN 'collapsed' WHEN t.library_id = ANY(@beside_libs) THEN 'beside' END) AS mode
 		FROM collection_members m JOIN collections c ON c.item_id = m.collection_id JOIN items t ON t.id = m.item_id, seer
-		WHERE (t.library_id, t.kind) IN (SELECT * FROM unnest(CAST(@boxed_libs AS uuid[]), CAST(@boxed_kinds AS text[])))
+		WHERE (t.library_id, t.kind) IN (SELECT * FROM unnest(CAST(@wall_libs AS uuid[]), CAST(@wall_kinds AS text[])))
 			AND sees(seer.v, t)) shown
 	WHERE mode IN ('collapsed', 'beside')`
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 	"uuid"
@@ -158,5 +159,66 @@ func TestASearchFindsMusicAndBooks(t *testing.T) {
 	}
 	if got := found("hurry", domain.ItemBook); len(got) != 0 {
 		t.Errorf("hurry among books: %v, want none", got)
+	}
+}
+
+// A books library's wall is narrowed to what a reader has read, is reading and has not begun, as
+// a film's is by what is watched; a book goes on no watchlist, so the wall is not offered one.
+func TestABookWallIsNarrowedByWhatIsRead(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Books", domain.LibraryBooks, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var books []Book
+	for _, title := range []string{"A Wizard of Earthsea", "The Tombs of Atuan", "The Farthest Shore"} {
+		rel := "Earthsea/" + title + ".epub"
+		books = append(books, Book{
+			Title: title, Author: "Ursula K. Le Guin", Folder: "Earthsea",
+			Versions: []Version{{ContentKey: []byte(rel), Parts: []Part{{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Container: "epub", Size: 1}}}}},
+		})
+	}
+	if _, err := s.SaveBooksFolder(ctx, lib.ID, "Earthsea", []byte("seen"), books); err != nil {
+		t.Fatal(err)
+	}
+	ada := addProfile(t, s, "Ada", domain.RoleAdmin, nil)
+	id := func(title string) uuid.UUID {
+		t.Helper()
+		var id uuid.UUID
+		if err := s.pool.QueryRow(ctx, `SELECT id FROM items WHERE title = $1`, title).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	locator := jsontext.Value(`{"href":"/c1.xhtml","type":"application/xhtml+xml"}`)
+	if _, err := s.SaveReading(ctx, ada.ID, id("A Wizard of Earthsea"), locator, 1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveReading(ctx, ada.ID, id("The Tombs of Atuan"), locator, 0.4, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	facets, err := s.Facets(ctx, []uuid.UUID{lib.ID}, ada.ID, domain.WallBooks)
+	want := []domain.Mark{domain.MarkWatched, domain.MarkUnwatched, domain.MarkInProgress, domain.MarkFavourite}
+	if err != nil || !slices.Equal(facets.Marks, want) {
+		t.Errorf("a book wall's marks = %v, %v; want %v", facets.Marks, err, want)
+	}
+	for mark, want := range map[domain.Mark][]string{
+		domain.MarkWatched:    {"A Wizard of Earthsea"},
+		domain.MarkUnwatched:  {"The Farthest Shore", "The Tombs of Atuan"},
+		domain.MarkInProgress: {"The Tombs of Atuan"},
+	} {
+		cards, _, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{
+			Profile: ada.ID, Kind: domain.WallBooks, Sort: domain.SortTitle, Order: domain.Ascending, Limit: 10,
+			Filter: WallFilter{Marks: []domain.Mark{mark}},
+		})
+		var got []string
+		for _, c := range cards {
+			got = append(got, c.Title)
+		}
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("%s books: %q, %v; want %q", mark, got, err, want)
+		}
 	}
 }

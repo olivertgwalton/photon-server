@@ -25,6 +25,7 @@ func TestEveryValueAClientShowsHasAName(t *testing.T) {
 	hasNames(t, libraryKinds, domain.LibraryKinds())
 	hasNames(t, streamKinds, domain.StreamKinds())
 	hasNames(t, marks, domain.Marks())
+	hasNames(t, readMarks, domain.ItemBook.Marks())
 	hasNames(t, milestones, domain.Milestones())
 	hasNames(t, calendarFilters, domain.CalendarFilters())
 	hasNames(t, jobStates, domain.JobStates())
