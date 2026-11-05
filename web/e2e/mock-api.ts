@@ -878,6 +878,12 @@ const vocabulary: Schemas["Vocabulary"] = {
 		watched: "Watched",
 		watchlist: "Watchlist",
 	},
+	read_marks: {
+		favourite: "Favourites",
+		in_progress: "Reading",
+		unwatched: "Unread",
+		watched: "Read",
+	},
 	milestones: {
 		season_finale: "Finale",
 		season_premiere: "Season premiere",

@@ -257,7 +257,12 @@ function jump(letters: Letter[], letter: string) {
 			save={keepPlaylist}
 		/>
 	{/if}
-	<WallFilterMenu query={data.query} {facets} onchange={show} />
+	<WallFilterMenu
+		library={data.library.kind}
+		query={data.query}
+		{facets}
+		onchange={show}
+	/>
 	<WallSortMenu
 		query={data.query}
 		sites={facets.rating_sites}

@@ -10633,6 +10633,9 @@ export interface components {
             rating_sites: {
                 [key: string]: string;
             };
+            read_marks: {
+                [key: string]: string;
+            };
             reasons: {
                 [key: string]: components["schemas"]["Described"];
             };

@@ -14,17 +14,22 @@ import {
 
 type Facets = components["schemas"]["Facets"];
 type Site = components["schemas"]["RatingSite"];
+type LibraryKind = components["schemas"]["LibraryKind"];
 
 let {
+	library,
 	query,
 	facets,
 	onchange,
 }: {
+	library: LibraryKind;
 	query: WallQuery;
 	facets: Facets;
 	onchange: (query: WallQuery) => void;
 } = $props();
 const words = vocabulary();
+// A book is read, where a film is watched.
+const marks = $derived(library === "books" ? words.read_marks : words.marks);
 
 // A certificate is filtered by with its country (GB:PG) and shown as a viewer reads it.
 const certificates = $derived(
@@ -35,7 +40,7 @@ const certificates = $derived(
 const groups = $derived(
 	(
 		[
-			["Status", "mark", facets.marks, (v) => words.marks[v]],
+			["Status", "mark", facets.marks, (v) => marks[v]],
 			["Genre", "genre", facets.genres],
 			["Year", "year", facets.years],
 			[
