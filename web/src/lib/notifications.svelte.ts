@@ -10,6 +10,9 @@ type InboxChange = components["schemas"]["InboxChange"];
 // The profile's inbox, as the bell draws it: loaded once as the shell opens,
 // then changed by what the server tells of it, from this device or another.
 class Inbox {
+	// Requests being decided, so a second click decides nothing twice.
+	#deciding = new Set<string>();
+
 	notifications = $state<Notification[]>([]);
 	unread = $state(0);
 
@@ -53,15 +56,16 @@ class Inbox {
 	// taken back, is gone already, which is no refusal.
 	async decide(n: Notification, verdict: "approve" | "decline", reason = "") {
 		const r = n.request;
-		if (!r) return;
+		if (!r || this.#deciding.has(r.id)) return;
+		this.#deciding.add(r.id);
 		const path = { params: { path: { id: r.id } } };
-		const { error, response } =
-			verdict === "approve"
-				? await client().POST("/api/v1/admin/requests/{id}/approve", path)
-				: await client().POST("/api/v1/admin/requests/{id}/decline", {
-						...path,
-						body: { reason },
-					});
+		const { error, response } = await (verdict === "approve"
+			? client().POST("/api/v1/admin/requests/{id}/approve", path)
+			: client().POST("/api/v1/admin/requests/{id}/decline", {
+					...path,
+					body: { reason },
+				})
+		).finally(() => this.#deciding.delete(r.id));
 		const gone = response.status === 404 || response.status === 409;
 		if (error && !gone) {
 			toast.error(problemMessage(error));

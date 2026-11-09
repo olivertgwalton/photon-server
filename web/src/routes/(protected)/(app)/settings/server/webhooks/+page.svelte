@@ -31,7 +31,12 @@ const formats = Object.entries(words.webhook_formats).map(([value, label]) => ({
 	label,
 }));
 
+let making = $state(false);
+
 async function add(event: SubmitEvent) {
+	// A second webhook would take the place of the first's secret, shown only once.
+	if (making) return;
+	making = true;
 	const form = fields(event);
 	const hook = await act(
 		api.POST("/api/v1/admin/webhooks", {
@@ -43,7 +48,9 @@ async function add(event: SubmitEvent) {
 					.map(String) as components["schemas"]["EventKind"][],
 			},
 		}),
-	);
+	).finally(() => {
+		making = false;
+	});
 	if (!hook) return;
 	adding = false;
 	if (hook.data.format === "photon") added = hook.data;
@@ -110,7 +117,7 @@ async function add(event: SubmitEvent) {
 						</Field.Set>
 					</Field.Group>
 					<Dialog.Footer>
-						<Button type="submit">Add webhook</Button>
+						<Button type="submit" disabled={making}>Add webhook</Button>
 					</Dialog.Footer>
 				</form>
 			</Dialog.Content>

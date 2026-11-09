@@ -23,10 +23,15 @@ let hidden = $state(false);
 let listing = $state.raw<components["schemas"]["FolderList"]>();
 let refusal = $state("");
 
+// The last folder asked for, so an older answer arriving late is dropped.
+let asked = 0;
+
 async function browse(path?: string) {
+	const mine = ++asked;
 	const { data, error } = await api.GET("/api/v1/admin/folders", {
 		params: { query: { path, hidden: hidden ? "show" : undefined } },
 	});
+	if (mine !== asked) return;
 	refusal = error ? problemMessage(error) : "";
 	if (data) listing = data;
 }
