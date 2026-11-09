@@ -358,8 +358,11 @@ func (n *node) serve(ctx context.Context) error {
 	// What keeps streams playing (serving, telling the others where this node is, ending what has
 	// stopped) outlives the signal, as the node drains; what begins new work stops at it.
 	background, stopBackground := context.WithCancel(context.WithoutCancel(ctx))
+	// ctx ends only with a signal, so a node that could not listen would wait on this for ever.
+	work, stopWork := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	defer func() {
+		stopWork()
 		stopBackground()
 		wg.Wait()
 	}()
@@ -367,10 +370,10 @@ func (n *node) serve(ctx context.Context) error {
 	// client reconnecting while streams play to their end is told events, not ended at once.
 	events, stopEvents := context.WithCancel(background)
 	wg.Go(func() { n.hub.Run(events) })
-	wg.Go(func() { n.scheduler.Run(ctx) })
+	wg.Go(func() { n.scheduler.Run(work) })
 	wg.Go(func() { n.gate.Run(background) })
 	for _, w := range n.workers() {
-		wg.Go(func() { w.Run(ctx) })
+		wg.Go(func() { w.Run(work) })
 	}
 	wg.Go(func() { sweepPlaybacks(background, n.sessions, n.remuxer, logger) })
 	wg.Go(func() { pruneConversions(background, n.conversions, logger) })
@@ -378,7 +381,7 @@ func (n *node) serve(ctx context.Context) error {
 	wg.Go(func() { n.sent.Measure(background) })
 	wg.Go(func() { advertise(background, n.cache, n.self.Node, n.remuxer.Changes(), n.self.Changes(), logger) })
 	wg.Go(func() {
-		if err := watch.New(n.st, logger).Run(ctx); err != nil {
+		if err := watch.New(n.st, logger).Run(work); err != nil {
 			logger.WarnContext(ctx, "libraries are scanned on schedule only", slog.Any("err", err))
 		}
 	})
@@ -391,8 +394,8 @@ func (n *node) serve(ctx context.Context) error {
 		n.stores.Run(background, storage.Cluster{Node: n.id, Subscribe: n.hub.Subscribe, Raise: n.hub.Raise, Nodes: nodeIDs(n.cache)})
 	})
 	wg.Go(func() { n.jellyfin.Run(background) })
-	wg.Go(func() { n.trackers.Run(ctx) })
-	wg.Go(func() { n.signIns.Run(ctx) })
+	wg.Go(func() { n.trackers.Run(work) })
+	wg.Go(func() { n.signIns.Run(work) })
 	logger.InfoContext(ctx, "serving", slog.String("addr", n.srv.Addr), slog.String("version", n.info.Version))
 	err := listenUntilDone(ctx, n.srv, n.secured.Listen, func() {
 		defer stopEvents()
