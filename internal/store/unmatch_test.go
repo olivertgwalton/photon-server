@@ -69,3 +69,28 @@ func TestAnUnmatchedFilmKeepsOnlyItsOwnWordsUntilItIsFixed(t *testing.T) {
 		t.Errorf("after its match is fixed: %+v, %v, %v; want it asked of TMDB by its id", sub, ok, err)
 	}
 }
+
+// A job running as the title was unmatched read it before it was held, and finishes after.
+func TestAnIdentifyRunningAsAFilmIsUnmatchedSavesNothing(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveFolder(ctx, lib.ID, "jaws 1975", []byte("v1"), []Film{{Title: "jaws 1975", Folder: "jaws 1975"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	id := oneItem(t, s, "true").ID
+	if err := s.Unmatch(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveIdentity(ctx, id, domain.SourceTMDB, domain.Metadata{
+		Title: "Jaws", IDs: map[domain.Provider]string{domain.ProviderTMDB: "578"},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, s, `SELECT count(*) FROM external_ids WHERE source = $1`, domain.IDFromMatch); n != 0 {
+		t.Errorf("%d ids matched onto a film held unmatched, want none", n)
+	}
+}
