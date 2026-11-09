@@ -24,6 +24,7 @@ import type { components } from "#lib/api/schema.d.ts";
 import { artworkURL } from "#lib/artwork.ts";
 import { Button } from "#lib/components/ui/button/index.ts";
 import { fullTitle, timecode } from "#lib/format.ts";
+import { adminStops } from "#lib/live.svelte.ts";
 import { cueStyle, keptAppearance } from "#lib/player/appearance.ts";
 import { castContext, castRequest } from "#lib/player/cast.ts";
 import { Casting } from "#lib/player/casting.svelte.ts";
@@ -250,6 +251,21 @@ function tracks(): Pick<
 	};
 }
 
+// Every playback this player has opened: an admin's stop may be heard only once
+// the broken stream has been reopened under a new one.
+const opened = new Set<string>();
+
+$effect(() =>
+	adminStops((id) => {
+		if (!opened.has(id)) return;
+		opening++;
+		void reporter?.stop();
+		reporter = undefined;
+		detach();
+		refusal = { message: "An admin stopped this playback.", reasons: [] };
+	}),
+);
+
 // Opens a playback at a moment, stopping the one before it first so the
 // server is never transcoding twice for one reader.
 async function open(at: number) {
@@ -300,6 +316,7 @@ async function open(at: number) {
 		return;
 	}
 	playback = data;
+	opened.add(data.playback_id);
 	reporter = new ProgressReporter(
 		() => position * 1000,
 		send(data.playback_id),

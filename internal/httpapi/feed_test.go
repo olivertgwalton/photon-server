@@ -185,7 +185,7 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	stopped := uuid.NewV7()
 	hub.Raise(ctx, domain.Event{
 		Kind: domain.EventPlaybackStopped, Profile: sam.ID, Item: title["Paddington"],
-		Details: domain.PlaybackDetails{Playback: domain.NowPlaying{ID: stopped}},
+		Details: domain.PlaybackDetails{StoppedBy: domain.StoppedByAdmin, Playback: domain.NowPlaying{ID: stopped}},
 	})
 	hub.Raise(ctx, domain.Event{Kind: domain.EventTrackerChanged, Profile: sam.ID, Details: domain.TrackerDetails{Tracker: domain.TrackerTrakt}})
 
@@ -244,8 +244,8 @@ func TestAProfileIsToldWhatChangesOfWhatItSees(t *testing.T) {
 	if same, _ := progress[0].Details["title_ids"].([]any); len(same) != 1 || same[0] != title["Paddington"].String() {
 		t.Errorf("Sam was told the progress is of %v, want Films' Paddington alone: Other's is the same but unseen", progress[0].Details)
 	}
-	if len(stops) != 1 || len(stops[0].Details) != 1 || stops[0].Details["playback_id"] != stopped.String() {
-		t.Errorf("Sam was told of stops %+v, want the one playback's id alone, for its player to close", stops)
+	if len(stops) != 1 || len(stops[0].Details) != 2 || stops[0].Details["playback_id"] != stopped.String() || stops[0].Details["stopped_by"] != string(domain.StoppedByAdmin) {
+		t.Errorf("Sam was told of stops %+v, want the one playback's id and who stopped it alone, for its player to close", stops)
 	}
 	if len(trackers) != 1 || trackers[0].Details["tracker"] != string(domain.TrackerTrakt) {
 		t.Errorf("Sam was told of trackers %+v, want Trakt's link", trackers)

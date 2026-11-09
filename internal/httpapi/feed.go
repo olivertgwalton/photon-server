@@ -302,7 +302,7 @@ func (a *API) toldTo(ctx context.Context, profile uuid.UUID, said words.Words, e
 			return eventJSON{}, false, nil
 		}
 		shown, _ := e.Details.(domain.PlaybackDetails)
-		e.Details = domain.PlaybackClosedDetails{PlaybackID: shown.Playback.ID}
+		e.Details = domain.PlaybackClosedDetails{PlaybackID: shown.Playback.ID, StoppedBy: shown.StoppedBy}
 		return eventOf(e), true, nil
 	case domain.EventPlaybackStarted, domain.EventPlaybackPaused, domain.EventPlaybackResumed,
 		domain.EventSignedIn, domain.EventSignInRefused,

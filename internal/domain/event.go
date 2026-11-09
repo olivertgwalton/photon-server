@@ -235,6 +235,8 @@ type PlaybackDetails struct {
 // PlaybackClosedDetails is what a profile's own player is told of its playback stopped.
 type PlaybackClosedDetails struct {
 	PlaybackID uuid.UUID `json:"playback_id"`
+	// StoppedBy is what ended it: a player closes for an admin, and reopens what merely broke.
+	StoppedBy StoppedBy `json:"stopped_by,omitzero"`
 }
 
 // SignInDetails is who tried to sign in, from where and on what; never the password.
