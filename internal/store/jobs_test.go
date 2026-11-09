@@ -260,6 +260,23 @@ func TestARunThatLostItsJobHasNoSayInIt(t *testing.T) {
 	}
 }
 
+func TestAJobThatEndsItsNodeEveryTimeGoesDead(t *testing.T) {
+	s := migrated(t)
+	enqueueN(t, s, 1)
+	if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET attempts = $1`, maxAttempts-1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ClaimJobs(t.Context(), []domain.JobKind{domain.JobKeyframes}, nil, uuid.NewV7(), -time.Second, 1); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.SweepJobs(t.Context()); err != nil || n != 1 {
+		t.Fatalf("swept %d, %v; want the job", n, err)
+	}
+	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE state = $1 AND last_error <> $2`, domain.JobDead, ""); n != 1 {
+		t.Errorf("%d jobs dead with a reason, want the one", n)
+	}
+}
+
 func TestALateCompletionDoesNotReviveADeadJob(t *testing.T) {
 	s := migrated(t)
 	enqueueN(t, s, 1)
