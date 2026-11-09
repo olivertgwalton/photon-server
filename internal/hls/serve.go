@@ -112,6 +112,10 @@ func (r *Remuxer) cuesThrough(ctx context.Context, s *session, p piece) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-wait:
+	case <-run.done:
+		if !closed(wait) {
+			return r.moved(s)
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -145,14 +149,33 @@ func (r *Remuxer) Init(ctx context.Context, playback uuid.UUID, part int) (*os.F
 	if !closed(wait) && (s.run == nil || s.run.part != part) {
 		r.start(ctx, s, n)
 	}
+	var stopped <-chan struct{}
+	if s.run != nil {
+		stopped = s.run.done
+	}
 	s.mu.Unlock()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-wait:
+	case <-stopped:
+		if !closed(wait) {
+			return nil, r.moved(s)
+		}
 	}
 	// A run that failed before writing it leaves none, and the next one asked for starts again.
 	return s.root.Open(initName(part))
+}
+
+// moved answers a request waiting on a run that stopped short of what it waited for: ended with
+// its session, or replaced by a seek.
+func (r *Remuxer) moved(s *session) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ended {
+		return ErrNoRemux
+	}
+	return ErrSuperseded
 }
 
 // MasterName is the playlist a player is given.
