@@ -84,7 +84,10 @@ func (s *Stores) move(ctx context.Context, c Cluster, st domain.Storage, m domai
 			s.log.WarnContext(copying, "artwork and previews not moved", slog.Any("err", err))
 		}
 		s.mu.Lock()
-		s.copying = nil
+		// One stopped has had its place cleared, and another may be copying in it by now.
+		if copying.Err() == nil {
+			s.copying = nil
+		}
 		s.mu.Unlock()
 	})
 	return nil
