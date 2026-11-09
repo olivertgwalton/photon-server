@@ -111,7 +111,7 @@ func TestAWebhookIsToldWhatItAskedFor(t *testing.T) {
 	if failed == nil || strings.Contains(failed.Error(), "theirs") {
 		t.Fatalf("a receiver answering 503: %v; want a failure that does not repeat its address's token", failed)
 	}
-	if dead, err := st.FailJob(ctx, jobs[0], failed); err != nil || dead {
+	if dead, err := st.FailJob(ctx, jobs[0], node, failed); err != nil || dead {
 		t.Fatalf("failing it: dead %v, %v; want it queued again", dead, err)
 	}
 	// Tried again once its backoff has passed, as the worker would.

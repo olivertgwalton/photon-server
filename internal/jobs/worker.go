@@ -35,10 +35,10 @@ type Handler func(ctx context.Context, subject uuid.UUID) error
 
 type queue interface {
 	ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, node uuid.UUID, lease time.Duration, limit int) ([]domain.Job, error)
-	CompleteJob(ctx context.Context, id int64) error
-	FailJob(ctx context.Context, job domain.Job, err error) (bool, error)
-	ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error
-	PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error
+	CompleteJob(ctx context.Context, job domain.Job, node uuid.UUID) error
+	FailJob(ctx context.Context, job domain.Job, node uuid.UUID, err error) (bool, error)
+	ExtendLease(ctx context.Context, job domain.Job, node uuid.UUID, lease time.Duration) error
+	PostponeJob(ctx context.Context, job domain.Job, node uuid.UUID, delay time.Duration) error
 }
 
 // teller is told as each job starts and ends.
@@ -122,7 +122,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 		jobCtx = held
 	}
 	done := make(chan struct{})
-	go w.renew(ctx, log, job.ID, lose, done)
+	go w.renew(ctx, log, job, lose, done)
 	w.tell.Raise(ctx, event(domain.EventJobStarted, job, nil))
 	runErr := handle(jobCtx, log, w.handlers[job.Kind], job.Subject)
 	close(done)
@@ -140,12 +140,12 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 	switch {
 	case runErr != nil && ctx.Err() != nil:
 		// Cut short by shutdown, which is no fault of its subject's: any node takes it now.
-		err = w.queue.PostponeJob(record, job, 0)
+		err = w.queue.PostponeJob(record, job, w.node, 0)
 	case errors.Is(runErr, ErrNotNow), errors.Is(context.Cause(jobCtx), ErrNotNow):
-		err = w.queue.PostponeJob(record, job, notNow)
+		err = w.queue.PostponeJob(record, job, w.node, notNow)
 	case runErr != nil:
 		log.WarnContext(ctx, "job failed", slog.Int("attempt", job.Attempts), slog.Any("err", runErr))
-		ended, err = w.queue.FailJob(record, job, runErr)
+		ended, err = w.queue.FailJob(record, job, w.node, runErr)
 		out = outcomeFailed
 		kind := domain.EventJobFailed
 		if ended {
@@ -153,7 +153,7 @@ func (w *Worker) run(ctx context.Context, job domain.Job) {
 		}
 		w.tell.Raise(ctx, event(kind, job, runErr))
 	default:
-		err = w.queue.CompleteJob(record, job.ID)
+		err = w.queue.CompleteJob(record, job, w.node)
 		ended, out = true, outcomeDone
 		w.tell.Raise(ctx, event(domain.EventJobFinished, job, nil))
 	}
@@ -200,14 +200,14 @@ func (w *Worker) open(kinds []domain.JobKind) (open, nowOnly []domain.JobKind) {
 func (w *Worker) postpone(ctx context.Context, log *slog.Logger, job domain.Job) {
 	record, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
 	defer cancel()
-	if err := w.queue.PostponeJob(record, job, notNow); err != nil {
+	if err := w.queue.PostponeJob(record, job, w.node, notNow); err != nil {
 		log.WarnContext(ctx, "job outcome not recorded", slog.Any("err", err))
 	}
 }
 
 // renew keeps a job's lease until done is closed, and stops the job through lose if the lease was
 // lost all the same, as when the database was out of reach for longer than a lease.
-func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose context.CancelCauseFunc, done <-chan struct{}) {
+func (w *Worker) renew(ctx context.Context, log *slog.Logger, job domain.Job, lose context.CancelCauseFunc, done <-chan struct{}) {
 	t := time.NewTicker(lease / 3)
 	defer t.Stop()
 	for {
@@ -217,7 +217,7 @@ func (w *Worker) renew(ctx context.Context, log *slog.Logger, id int64, lose con
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			err := w.queue.ExtendLease(ctx, id, w.node, lease)
+			err := w.queue.ExtendLease(ctx, job, w.node, lease)
 			switch {
 			case errors.Is(err, domain.ErrLeaseLost):
 				lose(err)

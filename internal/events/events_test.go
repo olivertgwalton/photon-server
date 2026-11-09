@@ -136,12 +136,13 @@ func TestABacklogCountsDownAndStartsAgainOnceDrained(t *testing.T) {
 		}
 	}
 	finish := func(n int) {
-		jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobKeyframes}, nil, uuid.NewV7(), time.Minute, n)
+		node := uuid.NewV7()
+		jobs, err := st.ClaimJobs(ctx, []domain.JobKind{domain.JobKeyframes}, nil, node, time.Minute, n)
 		if err != nil || len(jobs) != n {
 			t.Fatalf("claimed %d, %v; want %d", len(jobs), err, n)
 		}
 		for _, j := range jobs {
-			if err := st.CompleteJob(ctx, j.ID); err != nil {
+			if err := st.CompleteJob(ctx, j, node); err != nil {
 				t.Fatal(err)
 			}
 			hub.JobEnded(ctx, j.Kind)

@@ -45,28 +45,28 @@ func (q *memoryQueue) ClaimJobs(_ context.Context, kinds, nowOnly []domain.JobKi
 	return out, nil
 }
 
-func (q *memoryQueue) CompleteJob(_ context.Context, id int64) error {
+func (q *memoryQueue) CompleteJob(_ context.Context, job domain.Job, _ uuid.UUID) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.completed = append(q.completed, id)
+	q.completed = append(q.completed, job.ID)
 	return nil
 }
 
-func (q *memoryQueue) FailJob(_ context.Context, job domain.Job, _ error) (bool, error) {
+func (q *memoryQueue) FailJob(_ context.Context, job domain.Job, _ uuid.UUID, _ error) (bool, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.failed = append(q.failed, job.ID)
 	return false, nil
 }
 
-func (q *memoryQueue) PostponeJob(_ context.Context, job domain.Job, _ time.Duration) error {
+func (q *memoryQueue) PostponeJob(_ context.Context, job domain.Job, _ uuid.UUID, _ time.Duration) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.postponed = append(q.postponed, job.ID)
 	return nil
 }
 
-func (q *memoryQueue) ExtendLease(_ context.Context, _ int64, _ uuid.UUID, lease time.Duration) error {
+func (q *memoryQueue) ExtendLease(_ context.Context, _ domain.Job, _ uuid.UUID, lease time.Duration) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.taken {

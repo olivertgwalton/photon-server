@@ -6,6 +6,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
@@ -167,44 +168,66 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, 
 		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
 }
 
+// heldBy picks a job by the run that claimed it, its node and its attempt: a run whose lease ran
+// out has no say in what became of the job, even where its own node has claimed it again.
+const heldBy = `id = @id AND node_id = @node AND attempts = @attempts`
+
+func heldArgs(job domain.Job, node uuid.UUID) pgx.NamedArgs {
+	return pgx.NamedArgs{"id": job.ID, "node": node, "attempts": job.Attempts}
+}
+
 // CompleteJob removes a finished job, as what it produced is the record that it ran, or queues
-// it again if its subject changed while it ran.
-func (s *Store) CompleteJob(ctx context.Context, id int64) error {
-	done, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1 AND state = 'running'`, id)
+// it again if its subject changed while it ran. ErrLeaseLost for a run that no longer holds it.
+func (s *Store) CompleteJob(ctx context.Context, job domain.Job, node uuid.UUID) error {
+	held := heldArgs(job, node)
+	done, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE `+heldBy+` AND state = 'running'`, held)
 	if err != nil || done.RowsAffected() > 0 {
 		return err
 	}
-	_, err = s.pool.Exec(ctx, `
-		UPDATE jobs SET state = 'queued', attempts = 0, lease_until = NULL, node_id = NULL WHERE id = $1`, id)
-	return err
+	again, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', attempts = 0, lease_until = NULL, node_id = NULL
+		WHERE `+heldBy+` AND state = 'rerun'`, held)
+	return stillHeld(again, err)
 }
 
 // FailJob queues a job again after a backoff that doubles with each attempt, up to an hour, or
 // marks it dead once it has had maxAttempts and its subject has not changed since it was claimed,
-// answering whether it did.
-func (s *Store) FailJob(ctx context.Context, job domain.Job, runErr error) (bool, error) {
+// answering whether it did. ErrLeaseLost for a run that no longer holds it.
+func (s *Store) FailJob(ctx context.Context, job domain.Job, node uuid.UUID, runErr error) (bool, error) {
+	held := heldArgs(job, node)
+	held["error"] = runErr.Error()
 	if job.Attempts >= maxAttempts {
 		dead, err := s.pool.Exec(ctx, `
-			UPDATE jobs SET state = 'dead', lease_until = NULL, last_error = $2 WHERE id = $1 AND state = 'running'`,
-			job.ID, runErr.Error())
+			UPDATE jobs SET state = 'dead', lease_until = NULL, last_error = @error
+			WHERE `+heldBy+` AND state = 'running'`, held)
 		if err != nil || dead.RowsAffected() > 0 {
 			return err == nil, err
 		}
 	}
-	backoff := min(time.Minute<<job.Attempts, time.Hour)
-	_, err := s.pool.Exec(ctx, `
-		UPDATE jobs SET state = 'queued', lease_until = NULL, node_id = NULL, run_after = now() + $2, last_error = $3
-		WHERE id = $1`, job.ID, backoff, runErr.Error())
-	return false, err
+	held["backoff"] = min(time.Minute<<job.Attempts, time.Hour)
+	again, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET state = 'queued', lease_until = NULL, node_id = NULL, run_after = now() + @backoff, last_error = @error
+		WHERE `+heldBy+` AND state IN ('running', 'rerun')`, held)
+	return false, stillHeld(again, err)
 }
 
 // PostponeJob queues a job again once a delay has passed, giving back its attempt: it could not
-// start for want of room on its node, which is no fault of its subject's.
-func (s *Store) PostponeJob(ctx context.Context, job domain.Job, delay time.Duration) error {
-	_, err := s.pool.Exec(ctx, `
+// start for want of room on its node, which is no fault of its subject's. ErrLeaseLost for a run
+// that no longer holds it.
+func (s *Store) PostponeJob(ctx context.Context, job domain.Job, node uuid.UUID, delay time.Duration) error {
+	held := heldArgs(job, node)
+	held["delay"] = delay
+	again, err := s.pool.Exec(ctx, `
 		UPDATE jobs SET state = 'queued', attempts = attempts - 1, lease_until = NULL, node_id = NULL,
-			run_after = now() + $2
-		WHERE id = $1`, job.ID, delay)
+			run_after = now() + @delay
+		WHERE `+heldBy+` AND state IN ('running', 'rerun')`, held)
+	return stillHeld(again, err)
+}
+
+func stillHeld(tag pgconn.CommandTag, err error) error {
+	if err == nil && tag.RowsAffected() == 0 {
+		return domain.ErrLeaseLost
+	}
 	return err
 }
 
@@ -238,15 +261,13 @@ func (s *Store) StopJobs(ctx context.Context, kinds []domain.JobKind) error {
 	return err
 }
 
-// ExtendLease keeps a running job's lease while node is at it.
-func (s *Store) ExtendLease(ctx context.Context, id int64, node uuid.UUID, lease time.Duration) error {
+// ExtendLease keeps a running job's lease while the run that claimed it is at it.
+func (s *Store) ExtendLease(ctx context.Context, job domain.Job, node uuid.UUID, lease time.Duration) error {
+	held := heldArgs(job, node)
+	held["lease"] = lease
 	info, err := s.pool.Exec(ctx, `
-		UPDATE jobs SET lease_until = now() + $3 WHERE id = $1 AND state IN ('running', 'rerun') AND node_id = $2`,
-		id, node, lease)
-	if err == nil && info.RowsAffected() == 0 {
-		return domain.ErrLeaseLost
-	}
-	return err
+		UPDATE jobs SET lease_until = now() + @lease WHERE `+heldBy+` AND state IN ('running', 'rerun')`, held)
+	return stillHeld(info, err)
 }
 
 // SweepJobs queues again every job whose worker's lease ran out: the worker died or lost touch.
