@@ -751,6 +751,49 @@ func TestAnInitIsAnsweredBeforeAnySegmentIsMade(t *testing.T) {
 	}
 }
 
+// One waiting on an initialisation its run will now never write is told so, not left waiting.
+func TestARequestWaitingOnAnInitIsAnsweredAsItsPlaybackCloses(t *testing.T) {
+	fixture, err := filepath.Abs("testdata/fragments.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ffmpeg := testtool.Script(t, t.TempDir(), "ffmpeg", "exec sleep 60\n")
+	r, err := NewRemuxer(media.Tools{FFmpeg: media.Tool{Path: ffmpeg}}, t.TempDir(), t.TempDir(), Hardware{Accel: domain.AccelSoftware}, Unlimited, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	playback := uuid.NewV7()
+	if err := r.Open(t.Context(), playback, Version{Parts: []Source{{
+		Open: opening(fixture), Part: Part{Duration: 30 * time.Second, Keyframes: Forced(30 * time.Second)},
+		Video: &domain.VideoPlan{Codec: "h264"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	answered := make(chan error, 1)
+	go func() {
+		_, err := r.Init(ctx, playback, 0)
+		answered <- err
+	}()
+	r.mu.Lock()
+	s := r.sessions[playback]
+	r.mu.Unlock()
+	for {
+		s.mu.Lock()
+		started := s.run != nil
+		s.mu.Unlock()
+		if started {
+			break
+		}
+		runtime.Gosched()
+	}
+	r.Close(playback)
+	if err := <-answered; !errors.Is(err, ErrNoRemux) {
+		t.Errorf("init as the playback closed: %v, want ErrNoRemux", err)
+	}
+}
+
 // A playback closed has its remux ended, its ffmpeg with it, and its folder gone, as Close returns:
 // nothing is left writing into, or holding open, a folder taken away.
 func TestAClosedRemuxHasEndedAndLeftNothing(t *testing.T) {
