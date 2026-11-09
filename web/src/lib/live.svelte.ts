@@ -53,6 +53,22 @@ function openSocket(
 // Listens until the returned function is called: to what changes of what the
 // profile sees, and, given an admin's LiveStream, to what the server is doing.
 // Nothing is kept to resend, so after a reconnect every page loads again.
+// Tells `stopped` of each of the profile's playbacks an admin stops, until the
+// returned function is called. A page playing has no other socket.
+export function adminStops(stopped: (playback: string) => void): () => void {
+	return openSocket(
+		"profile",
+		({ event, data }) => {
+			if (event !== "playback.stopped") return;
+			const { details } = data as {
+				details: { playback_id: string; stopped_by?: string };
+			};
+			if (details.stopped_by === "admin") stopped(details.playback_id);
+		},
+		() => undefined,
+	);
+}
+
 export function connectLive(server?: LiveStream): () => void {
 	let reconnected = false;
 	// Reloads what the socket's events make stale, once the burst has settled.
