@@ -60,12 +60,21 @@ func (s *Store) TaskStarted(ctx context.Context, key domain.TaskKey, at time.Tim
 	return err
 }
 
-func (s *Store) TaskFinished(ctx context.Context, key domain.TaskKey, at time.Time, result domain.TaskResult, runErr error) error {
+// TaskFinished keeps how the run begun at started ended; a later run has the row by then, and keeps it.
+func (s *Store) TaskFinished(ctx context.Context, key domain.TaskKey, started, at time.Time, result domain.TaskResult, runErr error) error {
 	var msg *string
 	if runErr != nil {
 		msg = new(runErr.Error())
 	}
-	_, err := s.pool.Exec(ctx, `UPDATE task_state SET finished_at = $2, result = $3, error = $4 WHERE key = $1`,
-		key, at, result, msg)
+	_, err := s.pool.Exec(ctx, `UPDATE task_state SET finished_at = $3, result = $4, error = $5 WHERE key = $1 AND started_at = $2`,
+		key, started, at, result, msg)
+	return err
+}
+
+// TasksAbandoned ends the runs a leader left without saying how they went.
+func (s *Store) TasksAbandoned(ctx context.Context, at time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE task_state SET finished_at = $1, result = $2 WHERE started_at IS NOT NULL AND finished_at IS NULL`,
+		at, domain.TaskCancelled)
 	return err
 }

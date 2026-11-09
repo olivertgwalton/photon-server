@@ -40,6 +40,39 @@ func TestLeaseHasOneHolder(t *testing.T) {
 	}
 }
 
+func TestARunItsLeaderLeftEndsAndALateOutcomeIsNotKept(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	first := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := s.TaskStarted(ctx, domain.TaskScanLibraries, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TasksAbandoned(ctx, first.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	states, err := s.TaskStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := states[domain.TaskScanLibraries]; got.Result != domain.TaskCancelled || !got.Started.Before(got.Finished) {
+		t.Errorf("a run left behind: %+v, want it ended as cancelled", got)
+	}
+	second := first.Add(10 * time.Minute)
+	if err := s.TaskStarted(ctx, domain.TaskScanLibraries, second); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TaskFinished(ctx, domain.TaskScanLibraries, first, second.Add(time.Minute), domain.TaskCancelled, nil); err != nil {
+		t.Fatal(err)
+	}
+	states, err = s.TaskStates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := states[domain.TaskScanLibraries]; !got.Finished.IsZero() || got.Result != "" {
+		t.Errorf("the run under way after a late outcome: %+v, want it still running", got)
+	}
+}
+
 func TestATaskAskedForIsRecordedUntilItStarts(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
@@ -47,7 +80,7 @@ func TestATaskAskedForIsRecordedUntilItStarts(t *testing.T) {
 	if err := s.TaskStarted(ctx, domain.TaskScanLibraries, start); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.TaskFinished(ctx, domain.TaskScanLibraries, start.Add(time.Minute), domain.TaskFailed, errors.New("disk gone")); err != nil {
+	if err := s.TaskFinished(ctx, domain.TaskScanLibraries, start, start.Add(time.Minute), domain.TaskFailed, errors.New("disk gone")); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RequestTask(ctx, domain.TaskScanLibraries); err != nil {
