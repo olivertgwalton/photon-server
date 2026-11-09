@@ -408,6 +408,9 @@ class Listening {
 				this.#keep();
 			}),
 			on(audio, "ended", () => mine() && this.#ended(deck)),
+			on(audio, "error", () => {
+				if (mine()) this.#broke(deck, "This track couldn't be played.");
+			}),
 		];
 		return () => {
 			for (const stop of off) stop();
@@ -511,8 +514,9 @@ class Listening {
 		this.#readying = item.key;
 		const join = joined !== undefined && this.#joins(item);
 		const data = await this.#ask(item, 0, join);
-		this.#readying = undefined;
+		// One refused is not asked for again each time the position moves.
 		if (!data) return;
+		this.#readying = undefined;
 		if (this.queue[after(this.#q, this.repeat) ?? -1]?.key !== item.key) {
 			void send(data.playback_id)({
 				kind: "stop",
@@ -616,9 +620,22 @@ class Listening {
 				});
 			return;
 		}
-		if (!data) return;
+		if (!data) {
+			this.playing = false;
+			return;
+		}
 		const deck = await this.#deckOf(item.key, data, at, join);
-		if (!deck || mine !== this.#opening) return;
+		// The listener moved on while it was made: the track opened since has the deck.
+		if (mine !== this.#opening) {
+			this.#drop(deck);
+			void send(data.playback_id)({
+				kind: "stop",
+				position_ms: 0,
+				keepalive: false,
+			});
+			return;
+		}
+		if (!deck) return;
 		this.#deck = deck;
 		this.playback = data;
 		deck.off = this.#listen(deck);
@@ -679,12 +696,8 @@ class Listening {
 				const hls = new HLS({ startPosition: at });
 				deck.hls = hls;
 				hls.on(HLS.Events.ERROR, (_, e) => {
-					if (!e.fatal || deck !== this.#deck) return;
-					toast.error(`The stream stopped: ${e.details}.`);
-					void this.#reporter?.stop();
-					this.#reporter = undefined;
-					this.#drop(deck);
-					this.#deck = undefined;
+					if (e.fatal && deck === this.#deck)
+						this.#broke(deck, `The stream stopped: ${e.details}.`);
 				});
 				hls.loadSource(playback.playlist);
 				hls.attachMedia(audio);
@@ -708,6 +721,16 @@ class Listening {
 		const into = at - p.offset_ms / 1000;
 		if (deck === this.#deck || into > 0) this.#seekTo = into || undefined;
 		deck.audio.src = p.url;
+	}
+
+	// The deck playing can go no further: nothing plays, and the bar says so.
+	#broke(deck: Deck, message: string) {
+		toast.error(message);
+		void this.#reporter?.stop();
+		this.#reporter = undefined;
+		this.#drop(deck);
+		this.#deck = undefined;
+		this.playing = false;
 	}
 
 	#drop(deck: Deck | undefined) {

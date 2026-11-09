@@ -122,11 +122,13 @@ export class Casting {
 	}
 
 	// Plays `request` on the session, telling `finished` when the receiver plays
-	// it to its end. Answers whether the receiver took it.
+	// it to its end and `broke` if it gives up on it. Answers whether the
+	// receiver took it.
 	async play(
 		session: cast.framework.CastSession,
 		request: chrome.cast.media.LoadRequest,
 		finished: () => void,
+		broke: () => void,
 	): Promise<boolean> {
 		this.waiting = true;
 		const failed = await session
@@ -135,11 +137,13 @@ export class Casting {
 		if (failed) return false;
 		const media = session.getMediaSession();
 		media?.addUpdateListener(() => {
-			if (
-				media.playerState === chrome.cast.media.PlayerState.IDLE &&
-				media.idleReason === chrome.cast.media.IdleReason.FINISHED
-			)
+			if (media.playerState !== chrome.cast.media.PlayerState.IDLE) return;
+			if (media.idleReason === chrome.cast.media.IdleReason.FINISHED)
 				finished();
+			else if (media.idleReason === chrome.cast.media.IdleReason.ERROR) {
+				this.waiting = false;
+				broke();
+			}
 		});
 		return true;
 	}
