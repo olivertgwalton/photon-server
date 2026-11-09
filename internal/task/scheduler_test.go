@@ -58,13 +58,22 @@ type memoryStore struct {
 	starts    map[domain.TaskKey]time.Time
 	requested map[domain.TaskKey]time.Time
 	outcomes  []domain.TaskResult
+	leaseErr  error
 }
 
 func (m *memoryStore) HoldLease(context.Context, string, uuid.UUID, time.Duration) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.leader, nil
+	return m.leader, m.leaseErr
 }
+
+func (m *memoryStore) setLeaseErr(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.leaseErr = err
+}
+
+func (m *memoryStore) TasksAbandoned(context.Context, time.Time) error { return nil }
 
 func (m *memoryStore) setLeader(held bool) {
 	m.mu.Lock()
@@ -96,7 +105,7 @@ func (m *memoryStore) TaskStarted(_ context.Context, key domain.TaskKey, at time
 	return nil
 }
 
-func (m *memoryStore) TaskFinished(_ context.Context, _ domain.TaskKey, _ time.Time, result domain.TaskResult, _ error) error {
+func (m *memoryStore) TaskFinished(_ context.Context, _ domain.TaskKey, _, _ time.Time, result domain.TaskResult, _ error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.outcomes = append(m.outcomes, result)
@@ -223,6 +232,39 @@ func TestLosingTheLeaseCancelsTheRunningTask(t *testing.T) {
 		synctest.Wait()
 		if got := st.results(); len(got) != 1 || got[0] != domain.TaskCancelled {
 			t.Errorf("outcomes = %v, want one cancelled run", got)
+		}
+	})
+}
+
+// One lost round trip is no lost lease; a database gone for as long as the lease is.
+func TestATaskOutlivesADatabaseBlipButNotTheLease(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := &memoryStore{leader: true, starts: map[domain.TaskKey]time.Time{}, requested: map[domain.TaskKey]time.Time{}}
+		task := Task{
+			Key:     domain.TaskScanLibraries,
+			Trigger: Trigger{Kind: TriggerEvery, Every: 24 * time.Hour},
+			Run: func(ctx context.Context, _ Start) error {
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go NewScheduler(st, discard(), uuid.NewV7(), ignore, task).Run(ctx)
+		synctest.Sleep(tick + time.Second)
+		st.setLeaseErr(errors.New("connection reset"))
+		synctest.Sleep(tick)
+		st.setLeaseErr(nil)
+		synctest.Sleep(time.Minute)
+		synctest.Wait()
+		if got := st.results(); len(got) != 0 {
+			t.Fatalf("after one failed renewal: outcomes %v, want the task still running", got)
+		}
+		st.setLeaseErr(errors.New("connection refused"))
+		synctest.Sleep(leaseTTL + 2*tick)
+		synctest.Wait()
+		if got := st.results(); len(got) != 1 || got[0] != domain.TaskCancelled {
+			t.Errorf("after the lease ran out: outcomes %v, want one cancelled run", got)
 		}
 	})
 }

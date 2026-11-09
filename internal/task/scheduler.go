@@ -41,7 +41,8 @@ type stateStore interface {
 	TaskStates(ctx context.Context) (map[domain.TaskKey]domain.TaskState, error)
 	RequestTask(ctx context.Context, key domain.TaskKey) error
 	TaskStarted(ctx context.Context, key domain.TaskKey, at time.Time) error
-	TaskFinished(ctx context.Context, key domain.TaskKey, at time.Time, result domain.TaskResult, err error) error
+	TaskFinished(ctx context.Context, key domain.TaskKey, started, at time.Time, result domain.TaskResult, err error) error
+	TasksAbandoned(ctx context.Context, at time.Time) error
 }
 
 // Scheduler runs due tasks on whichever node holds the scheduler lease. Each task runs alone, and
@@ -54,6 +55,8 @@ type Scheduler struct {
 	tasks []Task
 	// leads is whether this node held the lease when it last asked.
 	leads atomic.Bool
+	// renewed is when the lease was last known held, for Run alone to read and set.
+	renewed time.Time
 }
 
 // node identifies this process to the other nodes of the cluster; raise says as each task starts
@@ -89,6 +92,10 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 		resign()
 		wg.Wait()
 	}()
+	// Whatever the last leader left running ended with it.
+	if err := s.store.TasksAbandoned(ctx, time.Now()); err != nil {
+		s.log.WarnContext(ctx, "abandoned tasks not ended", slog.Any("err", err))
+	}
 	var mu sync.Mutex
 	running := map[domain.TaskKey]bool{}
 	for {
@@ -116,7 +123,7 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 			running[task.Key] = true
 			mu.Unlock()
 			wg.Go(func() {
-				s.run(ctx, task, start)
+				s.run(ctx, task, start, now)
 				mu.Lock()
 				delete(running, task.Key)
 				mu.Unlock()
@@ -134,12 +141,22 @@ func (s *Scheduler) lead(ctx context.Context, t *time.Ticker) {
 }
 
 func (s *Scheduler) holdLease(ctx context.Context) bool {
+	asked := time.Now()
 	held, err := s.store.HoldLease(ctx, leaseName, s.node, leaseTTL)
-	if err != nil && ctx.Err() == nil {
-		s.log.WarnContext(ctx, "scheduler lease not held", slog.Any("err", err))
+	switch {
+	case err != nil:
+		if ctx.Err() == nil {
+			s.log.WarnContext(ctx, "scheduler lease not renewed", slog.Any("err", err))
+		}
+		// No answer says nothing of the lease, and none can take it until it has run out.
+		held = time.Since(s.renewed) < leaseTTL
+	case held:
+		s.renewed = asked
+	default:
+		s.renewed = time.Time{}
 	}
-	s.leads.Store(held && err == nil)
-	return held && err == nil
+	s.leads.Store(held)
+	return held
 }
 
 // isDue reports whether a task was asked for since it last started, or its trigger has fired.
@@ -199,7 +216,7 @@ func perform(ctx context.Context, log *slog.Logger, task Task, start Start) (err
 	return task.Run(ctx, start)
 }
 
-func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
+func (s *Scheduler) run(ctx context.Context, task Task, start Start, started time.Time) {
 	log := s.log.With(slog.String("task", string(task.Key)))
 	log.InfoContext(ctx, "task started")
 	s.raise(ctx, domain.Event{Kind: domain.EventTaskStarted, Details: domain.TaskDetails{Task: task.Key}})
@@ -214,7 +231,7 @@ func (s *Scheduler) run(ctx context.Context, task Task, start Start) {
 	log.InfoContext(ctx, "task finished", slog.String("result", string(result)), slog.Any("err", err))
 	// The run's own context may be cancelled; its outcome is still recorded.
 	ctx = context.WithoutCancel(ctx)
-	if err := s.store.TaskFinished(ctx, task.Key, time.Now(), result, err); err != nil {
+	if err := s.store.TaskFinished(ctx, task.Key, started, time.Now(), result, err); err != nil {
 		log.WarnContext(ctx, "task outcome not recorded", slog.Any("err", err))
 	}
 	d := domain.TaskDetails{Task: task.Key, Result: result}
