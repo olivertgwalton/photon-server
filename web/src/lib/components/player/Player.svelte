@@ -332,6 +332,15 @@ async function castOn(
 		() => {
 			if (mine === opening) ended();
 		},
+		() => {
+			if (mine !== opening) return;
+			void reporter?.stop();
+			reporter = undefined;
+			refusal = {
+				message: "The Chromecast couldn't play the stream.",
+				reasons: [],
+			};
+		},
 	);
 	if (mine !== opening) return;
 	if (!played) {
@@ -352,6 +361,8 @@ function reopen() {
 // playback go or its connection dropped, unless that was just tried.
 function mend(message: string) {
 	if (performance.now() - mendedAt < mendWithin) {
+		void reporter?.stop();
+		reporter = undefined;
 		refusal = { message, reasons: [] };
 		return;
 	}
