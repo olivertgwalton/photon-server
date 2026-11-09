@@ -155,6 +155,7 @@ var problems = []struct {
 	{err: task.ErrNoTask, code: codeNotFound},
 	{err: backup.ErrNewer, code: codeConflict, ownWords: true},
 	{err: backup.ErrRestoring, code: codeConflict, ownWords: true},
+	{err: backup.ErrStopping, code: codeConflict, ownWords: true},
 	{err: backup.ErrNoTools, code: codeConflict, ownWords: true},
 	{err: playback.ErrNoPlayback, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},

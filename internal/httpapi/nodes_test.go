@@ -210,8 +210,15 @@ func TestAnAdminRestartsANode(t *testing.T) {
 		t.Fatal(err)
 	}
 	var otherRestarted, selfRestarted int
+	var otherStopping, selfStopping bool
 	elsewhere := httptest.NewServer(New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		NodeKey: key, Restart: func() { otherRestarted++ },
+		NodeKey: key, Restart: func() bool {
+			if otherStopping {
+				return false
+			}
+			otherRestarted++
+			return true
+		},
 	}))
 	defer elsewhere.Close()
 	nodes := fakeNodes{
@@ -220,7 +227,13 @@ func TestAnAdminRestartsANode(t *testing.T) {
 		gone:  {ID: gone, Name: "old"},
 	}
 	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
-		Auth: fakeAuth{}, Nodes: nodes, NodeKey: key, Restart: func() { selfRestarted++ },
+		Auth: fakeAuth{}, Nodes: nodes, NodeKey: key, Restart: func() bool {
+			if selfStopping {
+				return false
+			}
+			selfRestarted++
+			return true
+		},
 		Valkey: fakeBackend{version: "9.0.0", nodes: []domain.Node{{ID: other, Name: "gpu-1", Address: elsewhere.URL}}},
 		Placer: playback.NewPlacer(fakeBackend{}, func() domain.Node { return domain.Node{ID: self, Name: "mini"} }, nil, nil, key),
 	})
@@ -236,6 +249,12 @@ func TestAnAdminRestartsANode(t *testing.T) {
 	}
 	if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+uuid.NewV7().String()+"/restart", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("restarting a node there has never been: %d, want 404", rec.Code)
+	}
+	selfStopping, otherStopping = true, true
+	for _, node := range []uuid.UUID{self, other} {
+		if rec := ask(api, http.MethodPost, "/api/v1/admin/nodes/"+node.String()+"/restart", ""); rec.Code != http.StatusConflict {
+			t.Errorf("restarting a node that is stopping already: %d, want 409", rec.Code)
+		}
 	}
 	resp, err := http.Post(elsewhere.URL+restartPath, "", nil)
 	if err != nil {

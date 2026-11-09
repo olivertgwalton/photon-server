@@ -36,6 +36,7 @@ func TestAskingToRestoreTellsEveryNodeAndAllowsOneAtATime(t *testing.T) {
 	var told []domain.Event
 	node := uuid.NewV7()
 	s := Restores{
+		Stopping: func() bool { return false },
 		Restorer: Restorer{PGRestore: fake}, Dir: dir, Node: node, KV: k,
 		Raise: func(_ context.Context, e domain.Event) { told = append(told, e) },
 	}

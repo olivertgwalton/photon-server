@@ -226,7 +226,11 @@ func serveNode(ctx context.Context, logger *slog.Logger, databaseURL, valkeyURL 
 	// goes on to restore it.
 	ctx, stopFor := context.WithCancelCause(ctx)
 	defer stopFor(nil)
-	n.restart = func() { stopFor(errRestart) }
+	// A node already stopping, as a signal or a restore stops it, stops for that and not this.
+	n.restart = func() bool {
+		stopFor(errRestart)
+		return errors.Is(context.Cause(ctx), errRestart)
+	}
 	watched := make(chan struct{})
 	defer close(watched)
 	go watchRestore(context.WithoutCancel(ctx), cache, id, n.id, n.dumper.Dir, stopFor, watched, logger)

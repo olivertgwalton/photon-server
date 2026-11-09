@@ -18,6 +18,9 @@ const RestoreKept = 30 * time.Second
 
 var ErrRestoring = errors.New("a restore is already under way")
 
+// ErrStopping is a restore asked of a node whose process is stopping.
+var ErrStopping = errors.New("this node is stopping: ask for the restore on one that is not")
+
 // Restores asks every node to stop so that this one may restore one of its dumps, as Jellyfin
 // schedules a restore and restarts.
 type Restores struct {
@@ -26,14 +29,19 @@ type Restores struct {
 	Node     uuid.UUID
 	KV       *kv.KV
 	Raise    func(context.Context, domain.Event)
+	Stopping func() bool
 }
 
 // Begin asks for the dump named name, in this node's folder, to be restored, refusing one this
 // node does not keep (fs.ErrNotExist), one newer than this binary (ErrNewer), a second restore
-// while one is under way (ErrRestoring), and any on a node without the tools (ErrNoTools).
+// while one is under way (ErrRestoring), any on a node without the tools (ErrNoTools), and any on
+// a node already stopping (ErrStopping), which would exit with it undone.
 func (s Restores) Begin(ctx context.Context, name string) error {
 	if s.Restorer.PGRestore == "" {
 		return ErrNoTools
+	}
+	if s.Stopping() {
+		return ErrStopping
 	}
 	f, err := Open(s.Dir, name)
 	if err != nil {

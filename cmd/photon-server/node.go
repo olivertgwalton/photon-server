@@ -71,7 +71,7 @@ type node struct {
 	// stops are requests to stop after the first, which ended ctx: one stops a drain at once.
 	stops <-chan os.Signal
 	// restart stops the node, ending its streams, for its restart policy to start it again.
-	restart func()
+	restart func() bool
 
 	id             uuid.UUID
 	info           domain.Info
@@ -198,7 +198,7 @@ func (n *node) join(ctx context.Context, databaseURL, valkeyURL string) error {
 	n.identify = identify.Handler(n.st, n.providers, n.pictures, n.identity.Locale, n.hub.Raise, n.logger)
 	n.remoteVersions = remote.NewVersions(n.st, offers, n.tools, n.identify)
 	n.discover = remote.NewDiscover(n.st, n.providers, n.identity.Locale, n.logger)
-	n.restores = backup.Restores{Restorer: rest, Dir: n.dumper.Dir, Node: n.id, KV: n.cache, Raise: n.hub.Raise}
+	n.restores = backup.Restores{Restorer: rest, Dir: n.dumper.Dir, Node: n.id, KV: n.cache, Raise: n.hub.Raise, Stopping: n.self.Stopping}
 	return nil
 }
 

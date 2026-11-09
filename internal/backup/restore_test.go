@@ -40,7 +40,7 @@ func TestAskingToRestoreAMissingOrNewerDumpChangesNothing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("dump"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	s := Restores{Restorer: Restorer{PGRestore: fakePGRestore(t, "99999")}, Dir: dir}
+	s := Restores{Restorer: Restorer{PGRestore: fakePGRestore(t, "99999")}, Dir: dir, Stopping: func() bool { return false }}
 	if err := s.Begin(t.Context(), "photon-20261001T120000Z.dump"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("a dump this node does not keep: %v, want no such dump", err)
 	}

@@ -112,7 +112,7 @@ func TestARestoreIsRefusedForADumpThisNodeLacksOrANewerOne(t *testing.T) {
 	node := uuid.NewV7()
 	started := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 	restores := fakeRestores{
-		Restorer: backup.Restorer{PGRestore: pgRestore}, Dir: dir,
+		Restorer: backup.Restorer{PGRestore: pgRestore}, Dir: dir, Stopping: func() bool { return false },
 		underway: &domain.Restore{Dump: name, Node: node, Started: started, Phase: domain.RestoreRestoring},
 		last:     &domain.RestoreOutcome{Dump: name, At: started, Result: domain.RestoreFailed, Reason: "nodes still connected"},
 	}
