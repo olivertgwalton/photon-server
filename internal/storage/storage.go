@@ -173,8 +173,9 @@ func (s *Stores) apply(ctx context.Context, st domain.Storage, to *domain.Storag
 	artwork, previews := at.artwork, at.previews
 	if next != nil {
 		artwork, previews = both{from: at.artwork, to: next.artwork}, both{from: at.previews, to: next.previews}
-	} else if s.copying != nil {
-		// The move is over, finished or cancelled.
+	}
+	// The move is over, finished or cancelled, or another has replaced it before this node heard.
+	if s.copying != nil && next != s.to {
 		s.copying()
 		s.copying = nil
 	}
