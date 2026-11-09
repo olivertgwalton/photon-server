@@ -170,7 +170,7 @@ type Services struct {
 	// Backups restores one of this node's dumps, every node stopping for it.
 	Backups backupRestores
 	// Restart stops this node, ending its streams, for its restart policy to start it again.
-	Restart func()
+	Restart func() bool
 	// Maintenance is when work that reads media, and that no one waits on, is done.
 	Maintenance maintenanceSettings
 	// Activity is the log of what has happened, and Events tells it, and more, as it happens.

@@ -344,6 +344,8 @@ func (a *API) forgetNode(r *http.Request, _ none) (none, error) {
 // restartPath is where a node is asked by another to restart.
 const restartPath = "/api/v1/internal/restart"
 
+const stoppingAlready = "the node is stopping already: wait for it to stop, then start it where it runs"
+
 // restartNode stops a node that is up, ending its streams, for its restart policy to start it
 // again; another node is asked to, as only it can stop itself.
 func (a *API) restartNode(r *http.Request, _ none) (none, error) {
@@ -361,7 +363,9 @@ func (a *API) restartNode(r *http.Request, _ none) (none, error) {
 	case !up:
 		return none{}, refuse(codeConflict, "the node is not up: start it where it runs")
 	case id == a.svc.Placer.Self().ID:
-		a.svc.Restart()
+		if !a.svc.Restart() {
+			return none{}, refuse(codeConflict, stoppingAlready)
+		}
 		return none{}, nil
 	case n.Address == "":
 		return none{}, refuse(codeConflict, "the node has no address the others reach it at: restart it where it runs")
@@ -377,7 +381,11 @@ func (a *API) restartNode(r *http.Request, _ none) (none, error) {
 		return none{}, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusAccepted {
+	switch resp.StatusCode {
+	case http.StatusAccepted:
+	case http.StatusConflict:
+		return none{}, refuse(codeConflict, stoppingAlready)
+	default:
 		return none{}, fmt.Errorf("%s answered %s", n.Name, resp.Status)
 	}
 	return none{}, nil
@@ -385,7 +393,10 @@ func (a *API) restartNode(r *http.Request, _ none) (none, error) {
 
 // nodeRestart is this node asked by another to restart.
 func (a *API) nodeRestart(w http.ResponseWriter, _ *http.Request) {
-	a.svc.Restart()
+	if !a.svc.Restart() {
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
 	w.WriteHeader(http.StatusAccepted)
 }
 

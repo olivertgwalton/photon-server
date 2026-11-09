@@ -96,7 +96,14 @@ func TestAServerWithoutThePostgresToolsRefusesToBackUpOrRestore(t *testing.T) {
 	if _, err := (Dumper{URL: "postgres://localhost/photon", Dir: dir}).Dump(t.Context(), time.Now()); !errors.Is(err, ErrNoTools) {
 		t.Errorf("backing up: %v, want it refused for want of the tools", err)
 	}
-	if err := (Restores{Dir: dir}).Begin(t.Context(), name); !errors.Is(err, ErrNoTools) {
+	if err := (Restores{Dir: dir, Stopping: func() bool { return false }}).Begin(t.Context(), name); !errors.Is(err, ErrNoTools) {
 		t.Errorf("restoring: %v, want it refused for want of the tools", err)
+	}
+}
+
+func TestARestoreIsRefusedOnANodeStopping(t *testing.T) {
+	s := Restores{Restorer: Restorer{PGRestore: "pg_restore"}, Stopping: func() bool { return true }}
+	if err := s.Begin(t.Context(), "photon-20261001T120000Z.dump"); !errors.Is(err, ErrStopping) {
+		t.Errorf("a restore asked of a node stopping: %v, want ErrStopping", err)
 	}
 }
