@@ -137,7 +137,10 @@ async function redeem(event: SubmitEvent) {
 						<Button
 							type="button"
 							variant="ghost"
-							onclick={() => (haveCode = true)}
+							onclick={() => {
+								haveCode = true;
+								message = undefined;
+							}}
 						>
 							Have a code already?
 						</Button>

@@ -24,16 +24,24 @@ const notifyOptions: { value: Notify; label: string }[] = [
 	{ value: "none", label: "Nothing" },
 ];
 
+// The last change asked: it alone says what the page shows, as an earlier
+// answer knows nothing of what was changed after it.
+let latest = 0;
+
 async function set(change: components["schemas"]["PreferencesChange"]) {
+	const before = prefs;
+	const mine = ++latest;
+	prefs = { ...prefs, ...change } as typeof prefs;
 	const { data: kept, error } = await client().PATCH(
 		"/api/v1/profile/preferences",
 		{ body: change },
 	);
 	if (error) {
 		toast.error(problemMessage(error));
+		if (mine === latest) prefs = before;
 		return;
 	}
-	prefs = kept;
+	if (mine === latest) prefs = kept;
 	toast.success("Saved for every device.");
 }
 

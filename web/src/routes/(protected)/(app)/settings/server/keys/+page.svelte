@@ -15,12 +15,20 @@ let { data } = $props();
 
 const api = client();
 let adding = $state(false);
+let making = $state(false);
 // The token is answered once, when the key is made: the server keeps only its hash.
 let made = $state.raw<{ name: string; token: string }>();
 
 async function add(event: SubmitEvent) {
+	// A second key would take the place of the first's token, shown only once.
+	if (making) return;
+	making = true;
 	const name = textAsTyped(fields(event), "name");
-	const key = await act(api.POST("/api/v1/admin/keys", { body: { name } }));
+	const key = await act(
+		api.POST("/api/v1/admin/keys", { body: { name } }),
+	).finally(() => {
+		making = false;
+	});
 	if (!key) return;
 	adding = false;
 	made = { name, token: key.data.token };
@@ -60,7 +68,7 @@ async function add(event: SubmitEvent) {
 						</Field.Field>
 					</Field.Group>
 					<Dialog.Footer>
-						<Button type="submit">Make key</Button>
+						<Button type="submit" disabled={making}>Make key</Button>
 					</Dialog.Footer>
 				</form>
 			</Dialog.Content>
