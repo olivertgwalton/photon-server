@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -272,6 +273,49 @@ func TestAnApprovedRequestIsSentWhereItsLibrarySays(t *testing.T) {
 // A request is available once a library's title with the id it was found under is identified, and
 // names that title; the profile that asked is told of it as a scan tells of titles added, though
 // it marked nothing, unless it hears of nothing. A declined request stays declined.
+// A provider down for as long as a request is tried leaves it for an admin to approve again, not
+// approved for ever with nothing left to send it.
+func TestARequestWhoseSendingDiedHasFailed(t *testing.T) {
+	s, films, film, _ := askable(t)
+	ctx := t.Context()
+	admin := addProfile(t, s, "Admin", domain.RoleAdmin, nil)
+	user := addProfile(t, s, "Sam", domain.RoleUser, nil)
+	riven := domain.PluginSource("riven")
+	if err := s.SetLibrary(ctx, films.ID, LibraryChange{Requests: &riven}); err != nil {
+		t.Fatal(err)
+	}
+	r, _, err := s.AskFor(ctx, user.ID, film.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE jobs SET attempts = $1`, maxAttempts-1); err != nil {
+		t.Fatal(err)
+	}
+	node := uuid.NewV7()
+	jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobSendRequest}, nil, node, time.Minute, 1)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("claimed %d, %v; want the send", len(jobs), err)
+	}
+	if dead, err := s.FailJob(ctx, jobs[0], node, errors.New("riven is down")); err != nil || !dead {
+		t.Fatalf("its last attempt: dead %v, %v", dead, err)
+	}
+	failed, err := s.request(ctx, s.pool, r.ID)
+	if err != nil || failed.State != domain.RequestFailed || failed.Reason != "riven is down" {
+		t.Fatalf("after the send died: %+v, %v; want failed, saying why", failed, err)
+	}
+	again, _, err := s.DecideRequest(ctx, r.ID, nil, admin.ID, domain.RequestApproved, "")
+	if err != nil || again.State != domain.RequestApproved {
+		t.Errorf("approved again: %+v, %v", again, err)
+	}
+	retried, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobSendRequest}, nil, node, time.Minute, 1)
+	if err != nil || len(retried) != 1 || retried[0].Attempts != 1 {
+		t.Errorf("sent again: claimed %+v, %v; want it on a first attempt", retried, err)
+	}
+}
+
 func TestARequestIsAvailableOnceItsTitleIsIdentified(t *testing.T) {
 	s, films, film, _ := askable(t)
 	ctx := t.Context()

@@ -168,6 +168,20 @@ func (s *Store) ClaimJobs(ctx context.Context, kinds, nowOnly []domain.JobKind, 
 		RETURNING jobs.id, jobs.kind, jobs.subject, jobs.attempts, jobs.due`, kinds, lease, node, limit, nowOnly)
 }
 
+// deadEnds ends what the jobs in dead were doing, with their last error, so nothing waits on a job
+// that will not run again: what it was for goes to its own failed state, which can be asked for
+// afresh. It continues a WITH naming dead, of each job its kind, subject and last error.
+const deadEnds = `,
+	unsent AS (
+		UPDATE requests r SET state = 'failed', reason = d.last_error FROM dead d
+		WHERE d.kind = 'send_request' AND r.id = d.subject AND r.state = 'approved'),
+	unconverted AS (
+		UPDATE conversions c SET state = 'failed', error = d.last_error, finished_at = now() FROM dead d
+		WHERE d.kind = 'convert' AND c.id = d.subject AND c.state IN ('queued', 'converting')),
+	unimported AS (
+		UPDATE history_imports h SET status = 'failed', error = d.last_error, finished_at = now(), source_user = '', token = NULL
+		FROM dead d WHERE d.kind = 'import_history' AND h.id = d.subject AND h.status IN ('queued', 'running'))`
+
 // heldBy picks a job by the run that claimed it, its node and its attempt: a run whose lease ran
 // out has no say in what became of the job, even where its own node has claimed it again.
 const heldBy = `id = @id AND node_id = @node AND attempts = @attempts`
@@ -197,10 +211,13 @@ func (s *Store) FailJob(ctx context.Context, job domain.Job, node uuid.UUID, run
 	held := heldArgs(job, node)
 	held["error"] = runErr.Error()
 	if job.Attempts >= maxAttempts {
-		dead, err := s.pool.Exec(ctx, `
-			UPDATE jobs SET state = 'dead', lease_until = NULL, last_error = @error
-			WHERE `+heldBy+` AND state = 'running'`, held)
-		if err != nil || dead.RowsAffected() > 0 {
+		var died int
+		err := s.pool.QueryRow(ctx, `
+			WITH dead AS (
+				UPDATE jobs SET state = 'dead', lease_until = NULL, last_error = @error
+				WHERE `+heldBy+` AND state = 'running' RETURNING kind, subject, last_error)`+deadEnds+`
+			SELECT count(*) FROM dead`, held).Scan(&died)
+		if err != nil || died > 0 {
 			return err == nil, err
 		}
 	}
@@ -270,12 +287,21 @@ func (s *Store) ExtendLease(ctx context.Context, job domain.Job, node uuid.UUID,
 	return stillHeld(info, err)
 }
 
-// SweepJobs queues again every job whose worker's lease ran out: the worker died or lost touch.
+// SweepJobs queues again every job whose worker's lease ran out: the worker died or lost touch. One
+// that has had every attempt is dead instead, as a job that ends its node would otherwise end every
+// node that took it after.
 func (s *Store) SweepJobs(ctx context.Context) (int64, error) {
-	info, err := s.pool.Exec(ctx, `
-		UPDATE jobs SET state = 'queued', lease_until = NULL, node_id = NULL
-		WHERE state IN ('running', 'rerun') AND lease_until < now()`)
-	return info.RowsAffected(), err
+	var swept int64
+	err := s.pool.QueryRow(ctx, `
+		WITH out_of_time AS (
+			UPDATE jobs SET lease_until = NULL, node_id = NULL,
+				state = CASE WHEN state = 'running' AND attempts >= $1 THEN 'dead' ELSE 'queued' END,
+				last_error = CASE WHEN state = 'running' AND attempts >= $1 THEN $2 ELSE last_error END
+			WHERE state IN ('running', 'rerun') AND lease_until < now()
+			RETURNING kind, subject, state, last_error),
+		dead AS (SELECT kind, subject, last_error FROM out_of_time WHERE state = 'dead')`+deadEnds+`
+		SELECT count(*) FROM out_of_time`, maxAttempts, "its node stopped answering on every attempt").Scan(&swept)
+	return swept, err
 }
 
 // PartPlace is where a part's bytes are: under its library's root, or, of a remote library, a
