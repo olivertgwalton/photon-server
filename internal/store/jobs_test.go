@@ -4,6 +4,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -91,7 +92,7 @@ func TestFailedJobsBackOffThenDie(t *testing.T) {
 		if err != nil || len(jobs) != 1 {
 			t.Fatalf("attempt %d: claimed %d (err %v)", attempt, len(jobs), err)
 		}
-		if dead, err := s.FailJob(t.Context(), jobs[0], errors.New("unreadable")); err != nil || dead != (attempt == maxAttempts) {
+		if dead, err := s.FailJob(t.Context(), jobs[0], node, errors.New("unreadable")); err != nil || dead != (attempt == maxAttempts) {
 			t.Fatalf("attempt %d: dead %v, %v; want dead on the last", attempt, dead, err)
 		}
 		again, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
@@ -147,7 +148,7 @@ func TestAPostponedJobNeverDies(t *testing.T) {
 		if err != nil || len(jobs) != 1 || jobs[0].Attempts != 1 {
 			t.Fatalf("claim %d: %+v (err %v), want the job on its first attempt", attempt, jobs, err)
 		}
-		if err := s.PostponeJob(t.Context(), jobs[0], time.Hour); err != nil {
+		if err := s.PostponeJob(t.Context(), jobs[0], node, time.Hour); err != nil {
 			t.Fatal(err)
 		}
 		again, err := s.ClaimJobs(t.Context(), kinds, nil, node, time.Minute, 1)
@@ -194,21 +195,105 @@ func TestALeaseIsRenewedOnlyByTheNodeHoldingIt(t *testing.T) {
 	if _, err := s.SweepJobs(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ClaimJobs(t.Context(), kinds, nil, second, time.Hour, 1); err != nil {
+	taken, err := s.ClaimJobs(t.Context(), kinds, nil, second, time.Hour, 1)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ExtendLease(t.Context(), jobs[0].ID, first, time.Hour); !errors.Is(err, domain.ErrLeaseLost) {
+	if err := s.ExtendLease(t.Context(), jobs[0], first, time.Hour); !errors.Is(err, domain.ErrLeaseLost) {
 		t.Errorf("the node that lost the job renewed it: %v", err)
 	}
-	if err := s.ExtendLease(t.Context(), jobs[0].ID, second, time.Hour); err != nil {
+	if err := s.ExtendLease(t.Context(), taken[0], second, time.Hour); err != nil {
 		t.Errorf("the node holding the job did not renew it: %v", err)
+	}
+}
+
+// A run that was presumed dead comes back with its outcome after another has taken the job.
+func TestARunThatLostItsJobHasNoSayInIt(t *testing.T) {
+	failure := errors.New("too late")
+	outcomes := map[string]func(s *Store, job domain.Job, node uuid.UUID) error{
+		"complete": func(s *Store, job domain.Job, node uuid.UUID) error { return s.CompleteJob(t.Context(), job, node) },
+		"fail": func(s *Store, job domain.Job, node uuid.UUID) error {
+			_, err := s.FailJob(t.Context(), job, node, failure)
+			return err
+		},
+		"postpone": func(s *Store, job domain.Job, node uuid.UUID) error {
+			return s.PostponeJob(t.Context(), job, node, time.Hour)
+		},
+		"renew": func(s *Store, job domain.Job, node uuid.UUID) error {
+			return s.ExtendLease(t.Context(), job, node, time.Hour)
+		},
+	}
+	for name, outcome := range outcomes {
+		for _, sameNode := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s same node %v", name, sameNode), func(t *testing.T) {
+				s := migrated(t)
+				enqueueN(t, s, 1)
+				kinds := []domain.JobKind{domain.JobKeyframes}
+				first, second := uuid.NewV7(), uuid.NewV7()
+				if sameNode {
+					second = first
+				}
+				lost, err := s.ClaimJobs(t.Context(), kinds, nil, first, -time.Second, 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.SweepJobs(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				taken, err := s.ClaimJobs(t.Context(), kinds, nil, second, time.Hour, 1)
+				if err != nil || len(taken) != 1 {
+					t.Fatalf("claimed %d, %v; want the job", len(taken), err)
+				}
+				if err := outcome(s, lost[0], first); !errors.Is(err, domain.ErrLeaseLost) {
+					t.Errorf("the run that lost the job answered %v, want its lease lost", err)
+				}
+				var state domain.JobState
+				var attempts int
+				if err := s.pool.QueryRow(t.Context(), `SELECT state, attempts FROM jobs`).Scan(&state, &attempts); err != nil {
+					t.Fatal(err)
+				}
+				if state != domain.JobRunning || attempts != taken[0].Attempts {
+					t.Errorf("after the lost run's outcome: %s on attempt %d, want it left running on %d", state, attempts, taken[0].Attempts)
+				}
+			})
+		}
+	}
+}
+
+func TestALateCompletionDoesNotReviveADeadJob(t *testing.T) {
+	s := migrated(t)
+	enqueueN(t, s, 1)
+	kinds := []domain.JobKind{domain.JobKeyframes}
+	first, second := uuid.NewV7(), uuid.NewV7()
+	lost, err := s.ClaimJobs(t.Context(), kinds, nil, first, -time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SweepJobs(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(t.Context(), `UPDATE jobs SET attempts = $1`, maxAttempts-1); err != nil {
+		t.Fatal(err)
+	}
+	taken, err := s.ClaimJobs(t.Context(), kinds, nil, second, time.Hour, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dead, err := s.FailJob(t.Context(), taken[0], second, errors.New("unreadable")); err != nil || !dead {
+		t.Fatalf("failing its last attempt: dead %v, %v", dead, err)
+	}
+	if err := s.CompleteJob(t.Context(), lost[0], first); !errors.Is(err, domain.ErrLeaseLost) {
+		t.Errorf("the late run answered %v, want its lease lost", err)
+	}
+	if n := countRows(t, s, `SELECT count(*) FROM jobs WHERE state = 'dead'`); n != 1 {
+		t.Errorf("%d dead jobs after a late completion, want it still dead", n)
 	}
 }
 
 func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	s := migrated(t)
 	ctx := t.Context()
-	subject := uuid.NewV7()
+	subject, node := uuid.NewV7(), uuid.NewV7()
 	ask := func() {
 		t.Helper()
 		if err := enqueue(ctx, s.pool, domain.JobIdentify, subject); err != nil {
@@ -217,7 +302,7 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	}
 	claim := func() []domain.Job {
 		t.Helper()
-		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, nil, uuid.NewV7(), time.Minute, 5)
+		jobs, err := s.ClaimJobs(ctx, []domain.JobKind{domain.JobIdentify}, nil, node, time.Minute, 5)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,14 +316,14 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	if len(claim()) != 0 {
 		t.Fatal("a job asked for while running was claimed twice at once")
 	}
-	if err := s.CompleteJob(ctx, running[0].ID); err != nil {
+	if err := s.CompleteJob(ctx, running[0], node); err != nil {
 		t.Fatal(err)
 	}
 	again := claim()
 	if len(again) != 1 || again[0].Attempts != 1 {
 		t.Fatalf("after finishing, claimed %+v; want the job once more, on a fresh first attempt", again)
 	}
-	if err := s.CompleteJob(ctx, again[0].ID); err != nil {
+	if err := s.CompleteJob(ctx, again[0], node); err != nil {
 		t.Fatal(err)
 	}
 	if n := countRows(t, s, `SELECT count(*) FROM jobs`); n != 0 {
@@ -246,11 +331,11 @@ func TestAJobAskedForWhileRunningRunsAgain(t *testing.T) {
 	}
 
 	ask()
-	for job := claim(); len(job) > 0; job = claim() {
-		job[0].Attempts = maxAttempts
-		if _, err := s.FailJob(ctx, job[0], errors.New("tmdb is down")); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := s.pool.Exec(ctx, `UPDATE jobs SET attempts = $1`, maxAttempts-1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FailJob(ctx, claim()[0], node, errors.New("tmdb is down")); err != nil {
+		t.Fatal(err)
 	}
 	ask()
 	if revived := claim(); len(revived) != 1 || revived[0].Attempts != 1 {
@@ -519,7 +604,7 @@ func TestStoppingAKindTakesItsWorkOffTheQueue(t *testing.T) {
 		t.Errorf("queue = %+v, want only the dead preview and the other kind's job left", counts)
 	}
 	// The worker still at the running one loses its lease, so stops, and what it made is no outcome.
-	if err := s.ExtendLease(ctx, running[0].ID, node, time.Minute); !errors.Is(err, domain.ErrLeaseLost) {
+	if err := s.ExtendLease(ctx, running[0], node, time.Minute); !errors.Is(err, domain.ErrLeaseLost) {
 		t.Errorf("renewing the running job's lease: %v, want ErrLeaseLost", err)
 	}
 }
