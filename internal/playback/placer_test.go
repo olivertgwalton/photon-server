@@ -89,6 +89,19 @@ func TestANodeAsksItsOwnGroupFirst(t *testing.T) {
 	}
 }
 
+func TestANodeDrainedDeliversOnlyWhatNoOtherWill(t *testing.T) {
+	self := domain.Node{Role: domain.NodeAll, Availability: domain.NodeDraining, ID: uuid.NewV7(), Name: "self", Group: "loft"}
+	nodes := told{{Role: domain.NodeServe, Availability: domain.NodeActive, ID: uuid.NewV7(), Name: "busy elsewhere", Address: "http://a", PublicURL: "https://a", Group: "office", Streams: 9}}
+	p := NewPlacer(nodes, func() domain.Node { return self }, nil, nil, nodecall.Key{})
+	got, err := p.Deliverers(t.Context(), domain.NetworkRemote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Name != "busy elsewhere" || got[1].Name != "self" {
+		t.Errorf("deliverers %v, want the active node first and this one last", got)
+	}
+}
+
 // A playback whose video is not encoded is delivered by a node with room for it first, of them one
 // of this one's group, then one set to serve only, then the node delivering fewest streams, this
 // one before another delivering as many; never by one its clients cannot reach, or one drained.

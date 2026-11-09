@@ -139,6 +139,7 @@ func (p *Placer) Deliverers(ctx context.Context, network domain.ClientNetwork) (
 	defer p.mu.Unlock()
 	slices.SortStableFunc(nodes, func(a, b domain.Node) int {
 		return cmp.Or(
+			cmp.Compare(rank(b, takes), rank(a, takes)),
 			cmp.Compare(rank(b, streamRoom), rank(a, streamRoom)),
 			cmp.Compare(rank(b, near), rank(a, near)),
 			cmp.Compare(rank(b, serving), rank(a, serving)),
@@ -161,6 +162,9 @@ func serving(n domain.Node) bool {
 }
 
 // rank is one for a node that is, and zero for one that is not.
+// takes is a node not drained: this node, drained, delivers only what no other will.
+func takes(n domain.Node) bool { return n.Availability.Takes() }
+
 func rank(n domain.Node, is func(domain.Node) bool) int {
 	if is(n) {
 		return 1
