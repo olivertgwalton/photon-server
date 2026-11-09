@@ -5,11 +5,14 @@ import { goto } from "$app/navigation";
 import { navigating } from "$app/state";
 import { problemMessage } from "./problem.ts";
 import type { paths } from "./schema.d.ts";
+import { unreachable } from "./unreachable.ts";
 
 // The API, on this origin, as the browser's session: the server keeps it in a
 // cookie the page's script never sees. A load passes its own `fetch`.
 export function client(fetch: typeof globalThis.fetch = globalThis.fetch) {
-	return createClient<paths>({ fetch });
+	const api = createClient<paths>({ fetch });
+	api.use(unreachable);
+	return api;
 }
 
 type Answer<T> = { data?: T; error?: unknown; response: Response };

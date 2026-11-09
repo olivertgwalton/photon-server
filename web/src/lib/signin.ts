@@ -29,8 +29,7 @@ export function browserSession() {
 	};
 }
 
-// A call's answer, or what to tell the reader when it failed: the server's
-// problem, or that the server never answered.
+// A call's answer, or what to tell the reader when it failed.
 export async function attempt<
 	A extends { error?: unknown; response: Response },
 >(
@@ -38,8 +37,7 @@ export async function attempt<
 ): Promise<
 	{ answer: A; message?: undefined } | { answer?: undefined; message: string }
 > {
-	const answer = await call.catch(() => undefined);
-	if (!answer) return { message: "The server isn't answering." };
+	const answer = await call;
 	if (!answer.response.ok) return { message: problemMessage(answer.error) };
 	return { answer };
 }
