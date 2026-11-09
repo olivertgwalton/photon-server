@@ -133,6 +133,11 @@ func (s *Store) IdentifySubject(ctx context.Context, id uuid.UUID) (Subject, boo
 func (s *Store) SaveIdentity(ctx context.Context, id uuid.UUID, source domain.FieldSource, m domain.Metadata, seasons map[int]domain.SeasonMetadata) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		item := id
+		// Unmatched since the job read it, which leaves a job running to finish.
+		var unmatched bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM items WHERE id = $1 AND unmatched_at IS NOT NULL FOR SHARE)`, item).Scan(&unmatched); err != nil || unmatched {
+			return err
+		}
 		asks, err := askedOf(ctx, tx, item, source)
 		if err != nil {
 			return err
