@@ -15,7 +15,7 @@ type extraList string
 const (
 	listTrailers extraList = "trailers"
 	listFeatures extraList = "features"
-	// listTheme is a theme video's, which Jellyfin lists with neither.
+	// listTheme is a theme video's, which Jellyfin lists with neither but as a theme.
 	listTheme extraList = "theme"
 )
 
@@ -48,27 +48,35 @@ func (a *API) localTrailers(w http.ResponseWriter, r *http.Request) { a.extras(w
 
 func (a *API) specialFeatures(w http.ResponseWriter, r *http.Request) { a.extras(w, r, listFeatures) }
 
-// extras answers a title's extras on one list, each an item an app plays as it plays the title.
-// What is not a title the profile sees has none: Infuse asks of every item it shows, and takes a
+// extras answers a title's extras on one list. What is not a title the profile sees has none: Infuse asks of every item it shows, and takes a
 // refusal for a failure.
 func (a *API) extras(w http.ResponseWriter, r *http.Request, on extraList) {
 	id, ok := a.itemID(w, r)
 	if !ok {
 		return
 	}
-	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
-	out := []item{}
-	p, err := a.svc.Catalogue.Title(ctx, profile, id)
+	p, err := a.svc.Catalogue.Title(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
 	if isNotFound(err) {
-		a.writeJSON(w, out)
+		a.writeJSON(w, []item{})
 		return
+	}
+	var out []item
+	if err == nil {
+		out, err = a.extraItems(w, r, p.Extras, on)
 	}
 	if err != nil {
 		a.internal(w, r, err)
 		return
 	}
+	a.writeJSON(w, out)
+}
+
+// extraItems are those of extras on one list, each an item an app plays as it plays a title.
+func (a *API) extraItems(w http.ResponseWriter, r *http.Request, extras []store.ExtraCard, on extraList) ([]item, error) {
+	ctx, profile := r.Context(), auth.SessionOf(r.Context()).Profile.ID
 	said := words.Negotiate(w, r)
-	for _, e := range p.Extras {
+	out := []item{}
+	for _, e := range extras {
 		kind := extraTypes[e.Kind]
 		if kind.on != on {
 			continue
@@ -78,13 +86,12 @@ func (a *API) extras(w http.ResponseWriter, r *http.Request, on extraList) {
 			err = a.chooseTracks(ctx, profile, e.ID, x.Versions)
 		}
 		if err != nil {
-			a.internal(w, r, err)
-			return
+			return nil, err
 		}
 		it := a.fromTitle(x, said)
 		it.ExtraType = kind.name
 		it.Etag = etag(it)
 		out = append(out, it)
 	}
-	a.writeJSON(w, out)
+	return out, nil
 }

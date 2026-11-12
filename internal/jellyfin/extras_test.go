@@ -21,7 +21,8 @@ import (
 
 // A film's trailer is its local trailer to an app, and its featurette a special feature: the film
 // says how many of each it has, as Jellyfin's web app shows its trailer button and features row
-// by, and the trailer plays as the film does. A theme video is on neither list.
+// by, and the trailer plays as the film does. A theme video is on neither list, but is the film's
+// theme video.
 func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -121,6 +122,19 @@ func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 	get("/Items/"+heat+"/SpecialFeatures", &features)
 	if len(features) != 1 || features[0].Name != "Featurette" || features[0].ExtraType != "Featurette" {
 		t.Errorf("special features: %+v", features)
+	}
+
+	var themes themeResult
+	get("/Items/"+heat+"/ThemeVideos", &themes)
+	if len(themes.Items) != 1 || themes.OwnerID != heat || themes.Items[0]["Name"] != "Theme" || themes.Items[0]["ExtraType"] != "ThemeVideo" {
+		t.Errorf("theme videos: %+v", themes)
+	}
+	var all struct {
+		ThemeVideosResult themeResult `json:"ThemeVideosResult"`
+	}
+	get("/Items/"+heat+"/ThemeMedia", &all)
+	if len(all.ThemeVideosResult.Items) != 1 || all.ThemeVideosResult.Items[0]["Id"] != themes.Items[0]["Id"] {
+		t.Errorf("theme media's videos: %+v", all.ThemeVideosResult)
 	}
 
 	trailer := trailers[0]

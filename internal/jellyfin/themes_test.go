@@ -73,7 +73,7 @@ type themeResult struct {
 
 // An app plays a show's theme tune under its pages, as Jellyfin's web app does: asks for its theme
 // media, the show's own and, on a season's or episode's page, its parent's, and keeps playing it
-// while the owner stays the same. photon has no theme videos.
+// while the owner stays the same. The show has no theme videos.
 func TestAnAppListsAShowsThemeSongs(t *testing.T) {
 	st, ada, show, episode := aShowWithATheme(t)
 	api := New(slog.New(slog.DiscardHandler), uuid.NewV7().String(), func() string { return "Den" }, Services{
