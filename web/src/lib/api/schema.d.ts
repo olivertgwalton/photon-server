@@ -5270,7 +5270,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The stream's index in the part's file. */
-                    subtitle: string;
+                    subtitle: number;
                 };
                 cookie?: never;
             };

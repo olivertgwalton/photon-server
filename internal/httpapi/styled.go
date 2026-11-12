@@ -50,9 +50,8 @@ func (a *API) partSubtitles(ctx context.Context, part uuid.UUID) (hls.SubtitleSo
 // as WebVTT.
 func (a *API) readOutStream(w http.ResponseWriter, r *http.Request) {
 	part := pathUUID(r, "id")
-	n, err := strconv.Atoi(r.PathValue("subtitle"))
-	if err != nil {
-		writeProblem(w, a.logger, codeNotFound, "")
+	n, err := pathNumber(r, "subtitle")
+	if a.answered(w, r, err) {
 		return
 	}
 	src, err := a.partSubtitles(r.Context(), part)
@@ -155,7 +154,7 @@ func (a *API) styledRoutes() []route {
 		{
 			pattern: "GET /api/v1/parts/{id}/subtitles/{subtitle}", access: signedAddress,
 			summary: "A subtitle stream of a part, read out at the address play answered: styled (ASS) or pictures (PGS, VobSub) as it is, plain text as WebVTT",
-			path:    []param{{"subtitle", "", "The stream's index in the part's file."}},
+			path:    []param{{"subtitle", 0, "The stream's index in the part's file."}},
 			query:   signatureParams, status: http.StatusOK, reply: asFile{"text/x-ssa", "text/vtt", "application/octet-stream"},
 			handle: a.readOutStream,
 		},
