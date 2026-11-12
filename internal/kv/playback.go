@@ -17,8 +17,10 @@ import (
 // scanned.
 const (
 	playbacks = "plays"
-	nodes     = "nodes"
-	scans     = "scans"
+	// stops are the playbacks an admin stopped, each the profile it was of.
+	stops = "stops"
+	nodes = "nodes"
+	scans = "scans"
 )
 
 // keep writes v as id's record in set, lapsing after ttl unless written again.
@@ -103,6 +105,17 @@ func (k *KV) Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool,
 // EndPlayback forgets a playback session, answering false where it had already ended or lapsed.
 func (k *KV) EndPlayback(ctx context.Context, id uuid.UUID) (bool, error) {
 	return k.forget(ctx, playbacks, id)
+}
+
+// KeepAdminStop remembers for ttl that an admin stopped a profile's playback.
+func (k *KV) KeepAdminStop(ctx context.Context, id, profile uuid.UUID, ttl time.Duration) error {
+	return keep(ctx, k, stops, id, profile, ttl)
+}
+
+// AdminStop answers the profile of a playback an admin stopped, or false for one no admin stopped
+// within the time it is kept.
+func (k *KV) AdminStop(ctx context.Context, id uuid.UUID) (uuid.UUID, bool, error) {
+	return kept[uuid.UUID](ctx, k, stops, id)
 }
 
 // Playbacks answers every playback going on, across the cluster.
