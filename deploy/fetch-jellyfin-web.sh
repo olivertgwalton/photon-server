@@ -5,8 +5,8 @@
 # from here.
 set -eu
 
-VERSION=12.2
-SUM=b622ee032cde9db2da1d5945d4b0e11f7a5c38cea0f4a0ac581bc0ac27f3524f
+VERSION=12.4
+SUM=30561fda7e4ec2f48cfc86119b7bdf7f9fe319ebdc22069a5096ba4999198b64
 
 web=$1 licenses=$2
 work=$(mktemp -d)
