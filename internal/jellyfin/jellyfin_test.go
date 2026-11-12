@@ -43,8 +43,8 @@ func TestTheAuthorizationHeaderIsReadAsEachAppWritesIt(t *testing.T) {
 			app{Client: "Jellyfin Android TV", Device: "Living room", DeviceID: "ZDk1", Version: "0.19.4", Token: "pst_abc"},
 		},
 		{
-			"TypeScript SDK before signing in", `MediaBrowser Client="Jellyfin%20Web", Device="Firefox", DeviceId="TW96", Version="12.2.0", Token=""`,
-			app{Client: "Jellyfin Web", Device: "Firefox", DeviceID: "TW96", Version: "12.2.0"},
+			"TypeScript SDK before signing in", `MediaBrowser Client="Jellyfin%20Web", Device="Firefox", DeviceId="TW96", Version="12.4.0", Token=""`,
+			app{Client: "Jellyfin Web", Device: "Firefox", DeviceID: "TW96", Version: "12.4.0"},
 		},
 		{
 			"a comma inside quotes, and + as a space", `MediaBrowser Client="Infuse, Direct", Device="Apple+TV"`,
@@ -263,7 +263,7 @@ func TestAnAppFindsAJellyfinServer(t *testing.T) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Header().Get("Content-Type"))
 		}
 		info := object(t, w)
-		if info["ProductName"] != "Jellyfin Server" || info["Version"] != "12.2.0" || info["ServerName"] != "Den" ||
+		if info["ProductName"] != "Jellyfin Server" || info["Version"] != "12.4.0" || info["ServerName"] != "Den" ||
 			info["StartupWizardCompleted"] != true || info["LocalAddress"] != "http://example.com" {
 			t.Errorf("%s: %v", path, info)
 		}
@@ -505,7 +505,7 @@ func TestAWebAppElsewhereMayAsk(t *testing.T) {
 // signed-in app approves it, and then takes its token, once.
 func TestAnAppSignsInByQuickConnect(t *testing.T) {
 	api, _, _, _ := newAPI()
-	signedIn := `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="12.2.0", Token="pst_device"`
+	signedIn := `MediaBrowser Client="Jellyfin Web", Device="Firefox", DeviceId="TW96", Version="12.4.0", Token="pst_device"`
 	connect := func() *httptest.ResponseRecorder {
 		return serve(api, http.MethodGet, "/QuickConnect/Connect?secret=042517.secret", kotlin, "")
 	}
