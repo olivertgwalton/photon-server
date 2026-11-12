@@ -52,3 +52,11 @@ func (s *Store) Named(ctx context.Context, profile, id uuid.UUID) (Named, error)
 	}
 	return n, found(err)
 }
+
+// KindOf answers what a title is, whoever asks, as a public picture's route must know it with no
+// profile. ErrNotFound for no title.
+func (s *Store) KindOf(ctx context.Context, id uuid.UUID) (domain.ItemKind, error) {
+	var kind domain.ItemKind
+	err := s.pool.QueryRow(ctx, `SELECT kind FROM items WHERE id = $1`, id).Scan(&kind)
+	return kind, found(err)
+}
