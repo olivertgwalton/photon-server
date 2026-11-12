@@ -9799,6 +9799,7 @@ export interface components {
         Profile: {
             /** Format: uuid */
             avatar?: string;
+            /** Format: uuid */
             id: string;
             /** Format: uuid */
             manager?: string;
@@ -9813,6 +9814,7 @@ export interface components {
         ProfileListing: {
             /** Format: uuid */
             avatar?: string;
+            /** Format: uuid */
             id: string;
             lock: components["schemas"]["ProfileLock"];
             /** Format: uuid */
