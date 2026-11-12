@@ -95,3 +95,17 @@ func (a *API) extraItems(w http.ResponseWriter, r *http.Request, extras []store.
 	}
 	return out, nil
 }
+
+// still pictures an extra by the first chapter picture of the file it plays, as photon's own pages
+// picture extras.
+func (it *item) still(versions []store.VersionPage) {
+	if len(versions) == 0 {
+		return
+	}
+	for _, c := range versions[0].Chapters {
+		if c.Image != "" {
+			it.ImageTags["Primary"], it.PrimaryImageAspectRatio = chapterTag(c.Part, c.Idx), stillAspect
+			return
+		}
+	}
+}

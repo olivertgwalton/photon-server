@@ -366,6 +366,9 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		it.trickplay(versions)
 		it.chapters(versions)
 	}
+	if p.Kind == domain.ItemExtra {
+		it.still(versions)
+	}
 	if p.Kind == domain.ItemShow {
 		n := len(p.Seasons)
 		it.ChildCount = &n

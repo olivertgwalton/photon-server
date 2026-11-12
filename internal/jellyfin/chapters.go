@@ -44,13 +44,18 @@ func chapterTag(part uuid.UUID, idx int) string {
 	return guid(part) + "-" + strconv.Itoa(idx)
 }
 
+func parseChapterTag(tag string) (uuid.UUID, int, bool) {
+	partID, idx, _ := strings.Cut(tag, "-")
+	part, err := uuid.Parse(partID)
+	n, nerr := strconv.Atoi(idx)
+	return part, n, err == nil && nerr == nil && n >= 0
+}
+
 // chapterImage serves a chapter's picture by its tag, public as every image here is. It is served
 // as it was made, whatever size an app asks for: a chapter's card is no wider.
 func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
-	partID, idx, _ := strings.Cut(query(r, "tag"), "-")
-	part, err := uuid.Parse(partID)
-	n, nerr := strconv.Atoi(idx)
-	if err != nil || nerr != nil || n < 0 {
+	part, n, ok := parseChapterTag(query(r, "tag"))
+	if !ok {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}

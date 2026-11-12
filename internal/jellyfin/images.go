@@ -37,7 +37,8 @@ var pictureKinds = map[string][]domain.ArtworkKind{
 // on an episode names it. It is public, as Jellyfin's images are, so a page can show one without
 // a token; ids are random.
 func (a *API) image(w http.ResponseWriter, r *http.Request) {
-	if strings.EqualFold(r.PathValue("imageType"), "Chapter") {
+	// An extra's Primary is a chapter's picture, by the chapter's tag.
+	if _, _, chapter := parseChapterTag(query(r, "tag")); chapter || strings.EqualFold(r.PathValue("imageType"), "Chapter") {
 		a.chapterImage(w, r)
 		return
 	}
