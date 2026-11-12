@@ -59,7 +59,11 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 		a.refuse(w, http.StatusNotFound)
 		return
 	}
-	o, err := a.svc.PreviewFiles.ChapterImage(r.Context(), part, n)
+	a.serveChapterImage(w, r, part, n, "public, max-age=31536000, immutable")
+}
+
+func (a *API) serveChapterImage(w http.ResponseWriter, r *http.Request, part uuid.UUID, idx int, cache string) {
+	o, err := a.svc.PreviewFiles.ChapterImage(r.Context(), part, idx)
 	if errors.Is(err, os.ErrNotExist) {
 		a.refuse(w, http.StatusNotFound)
 		return
@@ -68,7 +72,7 @@ func (a *API) chapterImage(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, r, err)
 		return
 	}
-	err = blob.Serve(w, r, o, "", http.Header{"Content-Type": {"image/jpeg"}, "Cache-Control": {"public, max-age=31536000, immutable"}})
+	err = blob.Serve(w, r, o, "", http.Header{"Content-Type": {"image/jpeg"}, "Cache-Control": {cache}})
 	if err != nil {
 		a.internal(w, r, err)
 	}

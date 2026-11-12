@@ -1,7 +1,9 @@
 package jellyfin
 
 import (
+	"context"
 	"net/http"
+	"uuid"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
@@ -99,13 +101,41 @@ func (a *API) extraItems(w http.ResponseWriter, r *http.Request, extras []store.
 // still pictures an extra by the first chapter picture of the file it plays, as photon's own pages
 // picture extras.
 func (it *item) still(versions []store.VersionPage) {
+	if part, idx, ok := stillOf(versions); ok {
+		it.ImageTags["Primary"], it.PrimaryImageAspectRatio = chapterTag(part, idx), stillAspect
+	}
+}
+
+// stillOf is the first chapter picture of the first of versions: its part, and the chapter's idx.
+func stillOf(versions []store.VersionPage) (uuid.UUID, int, bool) {
 	if len(versions) == 0 {
-		return
+		return uuid.UUID{}, 0, false
 	}
 	for _, c := range versions[0].Chapters {
 		if c.Image != "" {
-			it.ImageTags["Primary"], it.PrimaryImageAspectRatio = chapterTag(c.Part, c.Idx), stillAspect
-			return
+			return c.Part, c.Idx, true
 		}
 	}
+	return uuid.UUID{}, 0, false
+}
+
+// extraStill is the still an extra is pictured by, for an app that asks for its Primary by no tag.
+// ErrNotFound for anything else, which is pictured by its artwork alone.
+func (a *API) extraStill(ctx context.Context, id uuid.UUID) (uuid.UUID, int, error) {
+	kind, err := a.svc.Catalogue.KindOf(ctx, id)
+	if err != nil {
+		return uuid.UUID{}, 0, err
+	}
+	if kind != domain.ItemExtra {
+		return uuid.UUID{}, 0, store.ErrNotFound
+	}
+	versions, err := a.svc.Catalogue.Versions(ctx, []uuid.UUID{id})
+	if err != nil {
+		return uuid.UUID{}, 0, err
+	}
+	part, idx, ok := stillOf(onDisk(versions[id]))
+	if !ok {
+		return uuid.UUID{}, 0, store.ErrNotFound
+	}
+	return part, idx, nil
 }

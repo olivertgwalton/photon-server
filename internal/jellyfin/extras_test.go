@@ -26,7 +26,8 @@ import (
 // A film's trailer is its local trailer to an app, and its featurette a special feature: the film
 // says how many of each it has, as Jellyfin's web app shows its trailer button and features row
 // by, and the trailer plays as the film does. A theme video is on neither list, but is the film's
-// theme video. The trailer is pictured by its first chapter picture, as photon pictures it.
+// theme video. The trailer is pictured by its first chapter picture, as photon pictures it, whether
+// or not an app names its tag.
 func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -177,6 +178,16 @@ func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 	}
 	if len(features[0].ImageTags) != 0 {
 		t.Errorf("the featurette, not yet pictured: %v", features[0].ImageTags)
+	}
+	// An app that names no tag is answered the same still, and the film, with no poster, nothing.
+	if w := serve(api, http.MethodGet, "/Items/"+trailer.ID+"/Images/Primary?maxWidth=400", "", ""); w.Code != http.StatusOK || w.Body.String() != "a still" ||
+		w.Header().Get("Cache-Control") != "public, max-age=3600" {
+		t.Errorf("the trailer's picture by no tag: %d %q %q", w.Code, w.Body, w.Header().Get("Cache-Control"))
+	}
+	for _, id := range []string{features[0].ID, heat} {
+		if w := serve(api, http.MethodGet, "/Items/"+id+"/Images/Primary", "", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s by no tag: %d, want none", id, w.Code)
+		}
 	}
 	var info struct {
 		MediaSources []struct {

@@ -47,7 +47,7 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 	if !tagged {
 		id, err = a.itemPicture(r)
 		if errors.Is(err, store.ErrNotFound) {
-			a.refuse(w, http.StatusNotFound)
+			a.untaggedStill(w, r)
 			return
 		}
 		if err != nil {
@@ -97,6 +97,27 @@ func (a *API) image(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.internal(w, r, err)
 	}
+}
+
+// untaggedStill answers an extra's Primary, which is a still of its file and no artwork, where an
+// app names no tag; anything else with no picture of the kind is refused. As the best of an item's
+// pictures, it is kept for an hour.
+func (a *API) untaggedStill(w http.ResponseWriter, r *http.Request) {
+	item, err := uuid.Parse(r.PathValue("itemId"))
+	if err != nil || !strings.EqualFold(r.PathValue("imageType"), "Primary") {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	part, idx, err := a.extraStill(r.Context(), item)
+	if errors.Is(err, store.ErrNotFound) {
+		a.refuse(w, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		a.internal(w, r, err)
+		return
+	}
+	a.serveChapterImage(w, r, part, idx, "public, max-age=3600")
 }
 
 // itemPicture is the best picture of the item an app names in the path, of the kind it asks for.
