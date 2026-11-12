@@ -51,6 +51,9 @@ const (
 	// codeProviderUnavailable is a metadata provider, a plugin, that could not be reached or
 	// failed on its side.
 	codeProviderUnavailable problemCode = "provider_unavailable"
+	// codePlaybackStopped is a playback an admin stopped, which its player closes rather than
+	// opens again as it does one that lapsed (not_found).
+	codePlaybackStopped problemCode = "playback_stopped"
 	// RFC 8628's own error names, so a client that knows the RFC needs no mapping.
 	codeAuthorizationPending problemCode = "authorization_pending"
 	codeSlowDown             problemCode = "slow_down"
@@ -63,7 +66,7 @@ func problemCodes() []problemCode {
 		codeNotFound, codeMethodNotAllowed, codeUnknownParameter, codeInvalidParameter, codeNotReady,
 		codeInvalidBody, codeUnauthenticated, codeSignInRefused, codeInternal, codePairingNotFound,
 		codeWrongSecret, codeRateLimited, codeNoCompatibleStream, codeForbidden, codeConflict,
-		codeTranscodeLimit, codeStreamLimit, codeNoSpace, codeProviderUnavailable, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
+		codeTranscodeLimit, codeStreamLimit, codeNoSpace, codeProviderUnavailable, codePlaybackStopped, codeAuthorizationPending, codeSlowDown, codeExpiredToken,
 	}
 }
 
@@ -99,6 +102,8 @@ func (c problemCode) status() int {
 		return http.StatusInternalServerError
 	case codePairingNotFound:
 		return http.StatusNotFound
+	case codePlaybackStopped:
+		return http.StatusGone
 	case codeAuthorizationPending, codeSlowDown, codeExpiredToken:
 		return http.StatusBadRequest
 	}
@@ -158,6 +163,7 @@ var problems = []struct {
 	{err: backup.ErrStopping, code: codeConflict, ownWords: true},
 	{err: backup.ErrNoTools, code: codeConflict, ownWords: true},
 	{err: playback.ErrNoPlayback, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
+	{err: playback.ErrStoppedByAdmin, code: codePlaybackStopped, detail: "an admin stopped the playback"},
 	{err: hls.ErrNoRemux, code: codeNotFound, detail: "the playback has stopped, or lapsed"},
 	{err: hls.ErrSuperseded, code: codeNotReady, detail: "the stream moved on before making the segment: ask for it again"},
 	{err: hls.ErrNoSegments, code: codeConflict, detail: "the version cannot be played: it says nothing of how long it runs, and no keyframes of it are known"},

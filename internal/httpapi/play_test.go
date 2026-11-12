@@ -740,8 +740,26 @@ func TestHLSIsServedByTheNodeRunningIt(t *testing.T) {
 
 // livePlaybacks keeps playbacks as Valkey does, and the places in them nowhere.
 type livePlaybacks struct {
-	mu sync.Mutex
-	m  map[uuid.UUID]domain.Playback
+	mu    sync.Mutex
+	m     map[uuid.UUID]domain.Playback
+	stops map[uuid.UUID]uuid.UUID
+}
+
+func (l *livePlaybacks) KeepAdminStop(_ context.Context, id, profile uuid.UUID, _ time.Duration) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.stops == nil {
+		l.stops = map[uuid.UUID]uuid.UUID{}
+	}
+	l.stops[id] = profile
+	return nil
+}
+
+func (l *livePlaybacks) AdminStop(_ context.Context, id uuid.UUID) (uuid.UUID, bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	profile, ok := l.stops[id]
+	return profile, ok, nil
 }
 
 func (l *livePlaybacks) ClaimPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
@@ -1061,8 +1079,14 @@ func TestTheDashboardShowsAPlaybackAndStopsIt(t *testing.T) {
 	if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
 		t.Errorf("told %v, want it stopped", last.Kind)
 	}
-	if rec := do(http.MethodPost, "/api/v1/playbacks/"+started.PlaybackID.String()+"/progress", `{"position_ms": 5000, "state": "playing"}`); rec.Code != http.StatusNotFound {
-		t.Errorf("its player reporting after: %d, want 404", rec.Code)
+	// Its player, back from being suspended and so deaf to the event, is told an admin stopped it,
+	// as it would not be of a playback that lapsed.
+	rec := do(http.MethodPost, "/api/v1/playbacks/"+started.PlaybackID.String()+"/progress", `{"position_ms": 5000, "state": "playing"}`)
+	var refused struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &refused); err != nil || rec.Code != http.StatusGone || refused.Code != "playback_stopped" {
+		t.Errorf("its player reporting after: %d %s, want 410 playback_stopped", rec.Code, rec.Body)
 	}
 	if rec := do(http.MethodGet, started.Playlist, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("its player asking for its playlist after: %d, want 404", rec.Code)

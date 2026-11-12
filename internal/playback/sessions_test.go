@@ -24,41 +24,59 @@ import (
 // thisNode is the node the tests' sessions are on, and start their playbacks on.
 var thisNode = uuid.MustParse("0199b3c0-0000-7000-8000-0000000000e1")
 
-type memory map[uuid.UUID]domain.Playback
+// memory keeps playbacks as Valkey does, and the admins' stops beside them.
+type memory struct {
+	plays map[uuid.UUID]domain.Playback
+	stops map[uuid.UUID]uuid.UUID
+}
+
+func newMemory() memory {
+	return memory{plays: map[uuid.UUID]domain.Playback{}, stops: map[uuid.UUID]uuid.UUID{}}
+}
+
+func (m memory) KeepAdminStop(_ context.Context, id, profile uuid.UUID, _ time.Duration) error {
+	m.stops[id] = profile
+	return nil
+}
+
+func (m memory) AdminStop(_ context.Context, id uuid.UUID) (uuid.UUID, bool, error) {
+	profile, ok := m.stops[id]
+	return profile, ok, nil
+}
 
 func (m memory) ClaimPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
-	if _, ok := m[p.ID]; ok {
+	if _, ok := m.plays[p.ID]; ok {
 		return false, nil
 	}
-	m[p.ID] = p
+	m.plays[p.ID] = p
 	return true, nil
 }
 
 func (m memory) RenewPlayback(_ context.Context, p domain.Playback, _ time.Duration) (bool, error) {
-	if _, ok := m[p.ID]; !ok {
+	if _, ok := m.plays[p.ID]; !ok {
 		return false, nil
 	}
-	m[p.ID] = p
+	m.plays[p.ID] = p
 	return true, nil
 }
 
 func (m memory) SavePlayback(_ context.Context, p domain.Playback, _ time.Duration) error {
-	m[p.ID] = p
+	m.plays[p.ID] = p
 	return nil
 }
 
 func (m memory) Playback(_ context.Context, id uuid.UUID) (domain.Playback, bool, error) {
-	p, ok := m[id]
+	p, ok := m.plays[id]
 	return p, ok, nil
 }
 
 func (m memory) Playbacks(context.Context) ([]domain.Playback, error) {
-	return slices.Collect(maps.Values(m)), nil
+	return slices.Collect(maps.Values(m.plays)), nil
 }
 
 func (m memory) EndPlayback(_ context.Context, id uuid.UUID) (bool, error) {
-	_, ok := m[id]
-	delete(m, id)
+	_, ok := m.plays[id]
+	delete(m.plays, id)
 	return ok, nil
 }
 
@@ -95,7 +113,7 @@ func (p positions) RecordPlay(_ context.Context, pb domain.Playback, _ time.Time
 }
 
 func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
-	live, saved, streams := memory{}, positions{}, served{}
+	live, saved, streams := newMemory(), positions{}, served{}
 	var told []domain.EventKind
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e.Kind) }
 	s := NewSessions(live, saved, streams, raise, thisNode)
@@ -111,7 +129,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := live[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused || saved[film] != 20*time.Minute {
+	if got := live.plays[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused || saved[film] != 20*time.Minute {
 		t.Errorf("after progress: live %+v, saved %v; want both at 20 minutes, paused", got, saved[film])
 	}
 	if _, err := s.Progress(ctx, guest, p.ID, time.Hour, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
@@ -120,7 +138,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := live[p.ID]; ok || saved[film] != 25*time.Minute || streams[p.ID] {
+	if _, ok := live.plays[p.ID]; ok || saved[film] != 25*time.Minute || streams[p.ID] {
 		t.Errorf("after stop: still live %v, saved %v, stream open %v; want it gone, kept at 25 minutes, and closed", ok, saved[film], streams[p.ID])
 	}
 	if saved[p.ID] != 25*time.Minute {
@@ -141,7 +159,7 @@ func TestAPlaybackKeepsItsProfilesPlace(t *testing.T) {
 func TestAResumedPlaybackStartsWhereItResumes(t *testing.T) {
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
-	s := NewSessions(memory{}, positions{}, served{}, raise, thisNode)
+	s := NewSessions(newMemory(), positions{}, served{}, raise, thisNode)
 	ctx := t.Context()
 
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 20*time.Minute, thisNode)
@@ -162,7 +180,7 @@ func card(profile, title uuid.UUID) domain.PlaybackCard {
 }
 
 func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
-	live, saved, streams := memory{}, positions{}, served{}
+	live, saved, streams := newMemory(), positions{}, served{}
 	var told []domain.Event
 	raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 	s := NewSessions(live, saved, streams, raise, thisNode)
@@ -179,11 +197,19 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 	if err := s.End(ctx, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := live[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || streams[p.ID] {
+	if _, ok := live.plays[p.ID]; ok || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute || streams[p.ID] {
 		t.Errorf("after ending: still live %v, history %v, place %v, stream open %v; want it gone and kept at 40 minutes", ok, saved[p.ID], saved[film], streams[p.ID])
 	}
-	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
-		t.Errorf("its player reporting after: %v, want ErrNoPlayback", err)
+	// Its player is told an admin stopped it, so it closes rather than opening it again as it does
+	// a playback that lapsed; no other profile is told whose playback it was.
+	if _, err := s.Progress(ctx, guest, p.ID, 41*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrStoppedByAdmin) {
+		t.Errorf("its player reporting after: %v, want ErrStoppedByAdmin", err)
+	}
+	if _, err := s.Stop(ctx, guest, p.ID, 41*time.Minute); !errors.Is(err, ErrStoppedByAdmin) {
+		t.Errorf("its player stopping after: %v, want ErrStoppedByAdmin", err)
+	}
+	if _, err := s.Progress(ctx, uuid.NewV7(), p.ID, 41*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
+		t.Errorf("another profile reporting after: %v, want ErrNoPlayback", err)
 	}
 	if err := s.End(ctx, p.ID); !errors.Is(err, ErrNoPlayback) {
 		t.Errorf("ending it again: %v, want ErrNoPlayback", err)
@@ -197,7 +223,7 @@ func TestAnAdminEndsAnyonesPlaybackWhereItGotTo(t *testing.T) {
 // A file streamed to a playback played as it is is cut off as the playback stops, here or on
 // another node, and is refused after.
 func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
-	live := memory{}
+	live := newMemory()
 	s := NewSessions(live, positions{}, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	guest := uuid.NewV7()
@@ -221,7 +247,7 @@ func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
 	if cut[here.ID] != 1 || cut[elsewhere.ID] != 0 {
 		t.Errorf("cut %v after ending one, want only it cut", cut)
 	}
-	delete(live, elsewhere.ID)
+	delete(live.plays, elsewhere.ID)
 	if err := s.Sweep(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +263,7 @@ func TestAStopCutsOffAFilePlayedAsItIs(t *testing.T) {
 // for it to play to its end as it waits for a remux, and stops waiting once it has.
 func TestAFilePlayedAsItIsIsAmongANodesPlaybacks(t *testing.T) {
 	remuxed := uuid.NewV7()
-	s := NewSessions(memory{}, positions{}, served{remuxed: true}, func(context.Context, domain.Event) {}, thisNode)
+	s := NewSessions(newMemory(), positions{}, served{remuxed: true}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 0, thisNode)
 	if err != nil {
@@ -266,7 +292,7 @@ func TestAFilePlayedAsItIsIsAmongANodesPlaybacks(t *testing.T) {
 func TestEndingANodesStreamsCutsOffAFilePlayedAsItIs(t *testing.T) {
 	remuxed := uuid.NewV7()
 	streams := served{remuxed: true}
-	s := NewSessions(memory{}, positions{}, streams, func(context.Context, domain.Event) {}, thisNode)
+	s := NewSessions(newMemory(), positions{}, streams, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(uuid.NewV7(), uuid.NewV7()), 0, thisNode)
 	if err != nil {
@@ -287,7 +313,7 @@ func TestEndingANodesStreamsCutsOffAFilePlayedAsItIs(t *testing.T) {
 // A playback of a title removed while it played is swept like any other, once: it is not kept to
 // be swept, and fail, again.
 func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
-	live := memory{}
+	live := newMemory()
 	var told []domain.Event
 	s := NewSessions(live, positions{}, served{}, func(_ context.Context, e domain.Event) { told = append(told, e) }, thisNode)
 	ctx := t.Context()
@@ -296,11 +322,11 @@ func TestAPlaybackOfARemovedTitleIsSweptOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Updated = time.Now().Add(-time.Hour)
-	live[p.ID] = p
+	live.plays[p.ID] = p
 	if err := s.Sweep(ctx); err != nil {
 		t.Fatalf("Sweep = %v, want nothing to fail", err)
 	}
-	if _, ok := live[p.ID]; ok || told[len(told)-1].Kind != domain.EventPlaybackStopped {
+	if _, ok := live.plays[p.ID]; ok || told[len(told)-1].Kind != domain.EventPlaybackStopped {
 		t.Errorf("after the sweep: still live %v, last told %v; want it stopped and gone", ok, told[len(told)-1].Kind)
 	}
 }
@@ -327,9 +353,9 @@ func (e *endsMeanwhile) RecordPlay(ctx context.Context, p domain.Playback, stopp
 }
 
 // A report racing an admin's end does not bring the playback back, to be swept and kept in the
-// history a second time.
+// history a second time, and its player is told an admin stopped it.
 func TestAPlaybackEndedWhileItReportsStaysEnded(t *testing.T) {
-	live, saved := memory{}, &endsMeanwhile{positions: positions{}}
+	live, saved := newMemory(), &endsMeanwhile{positions: positions{}}
 	var stopped int
 	s := NewSessions(live, saved, served{}, func(_ context.Context, e domain.Event) {
 		if e.Kind == domain.EventPlaybackStopped {
@@ -347,16 +373,16 @@ func TestAPlaybackEndedWhileItReportsStaysEnded(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrNoPlayback) {
-		t.Errorf("reporting as it is ended: %v, want ErrNoPlayback", err)
+	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePlaying, domain.ChosenTracks{}); !errors.Is(err, ErrStoppedByAdmin) {
+		t.Errorf("reporting as it is ended: %v, want ErrStoppedByAdmin", err)
 	}
-	if _, ok := live[p.ID]; ok {
+	if _, ok := live.plays[p.ID]; ok {
 		t.Error("the report brought the ended playback back")
 	}
 	// Were it back, its player's silence would see it swept in time.
-	for id, p := range live {
+	for id, p := range live.plays {
 		p.Updated = time.Now().Add(-time.Hour)
-		live[id] = p
+		live.plays[id] = p
 	}
 	if err := s.Sweep(ctx); err != nil {
 		t.Fatal(err)
@@ -378,7 +404,7 @@ func (superseded) SaveProgress(context.Context, uuid.UUID, uuid.UUID, time.Durat
 // goes on all the same: the playback moves on, and its stop ends it and keeps the play, rather
 // than failing and keeping it live to be swept, and refused, again.
 func TestAPlaybackGoesOnPastASupersededPlace(t *testing.T) {
-	live, saved := memory{}, superseded{positions{}}
+	live, saved := newMemory(), superseded{positions{}}
 	var stopped int
 	s := NewSessions(live, saved, served{}, func(_ context.Context, e domain.Event) {
 		if e.Kind == domain.EventPlaybackStopped {
@@ -394,13 +420,13 @@ func TestAPlaybackGoesOnPastASupersededPlace(t *testing.T) {
 	if _, err := s.Progress(ctx, oliver, p.ID, 20*time.Minute, domain.StatePaused, domain.ChosenTracks{}); err != nil {
 		t.Errorf("a superseded report: %v, want it taken", err)
 	}
-	if got := live[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused {
+	if got := live.plays[p.ID]; got.Position != 20*time.Minute || got.State != domain.StatePaused {
 		t.Errorf("after a superseded report: %+v, want the playback at 20 minutes, paused", got)
 	}
 	if _, err := s.Stop(ctx, oliver, p.ID, 25*time.Minute); err != nil {
 		t.Errorf("a superseded stop: %v, want it stopped", err)
 	}
-	if _, ok := live[p.ID]; ok || saved.positions[p.ID] != 25*time.Minute || stopped != 1 {
+	if _, ok := live.plays[p.ID]; ok || saved.positions[p.ID] != 25*time.Minute || stopped != 1 {
 		t.Errorf("after a superseded stop: still live %v, play kept at %v, %d stops told; want it gone, its play at 25 minutes, one stop",
 			ok, saved.positions[p.ID], stopped)
 	}
@@ -424,7 +450,7 @@ func (*ends) ChooseTracks(context.Context, uuid.UUID, uuid.UUID, domain.ChosenTr
 
 func TestAPlaybackTellsTheStoreItHasReachedTheEnd(t *testing.T) {
 	saved := &ends{}
-	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, thisNode)
+	s := NewSessions(newMemory(), saved, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), 0, thisNode)
@@ -452,7 +478,7 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 			t.Fatal(err)
 		}
 		closing(t, remuxer)
-		s := NewSessions(memory{}, positions{}, remuxer, func(context.Context, domain.Event) {}, thisNode)
+		s := NewSessions(newMemory(), positions{}, remuxer, func(context.Context, domain.Event) {}, thisNode)
 		ctx := t.Context()
 		oliver := uuid.NewV7()
 		p, err := s.Start(ctx, uuid.NewV7(), domain.PlayRemux, card(oliver, uuid.NewV7()), 0, thisNode)
@@ -483,7 +509,7 @@ func TestAPausedPlayerThatKeepsReportingKeepsItsStream(t *testing.T) {
 
 func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		live, saved, streams := memory{}, positions{}, served{}
+		live, saved, streams := newMemory(), positions{}, served{}
 		var told []domain.Event
 		raise := func(_ context.Context, e domain.Event) { told = append(told, e) }
 		s := NewSessions(live, saved, streams, raise, thisNode)
@@ -504,14 +530,14 @@ func TestAPlayerThatGoesQuietIsStoppedWithItsHistory(t *testing.T) {
 		if err := s.Sweep(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := live[p.ID]; !ok || !streams[p.ID] || streams[elsewhere] {
+		if _, ok := live.plays[p.ID]; !ok || !streams[p.ID] || streams[elsewhere] {
 			t.Errorf("swept just short of its life: live %v, stream open %v, other stream open %v; want it kept, the other closed", ok, streams[p.ID], streams[elsewhere])
 		}
 		synctest.Sleep(time.Second)
 		if err := s.Sweep(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := live[p.ID]; ok || streams[p.ID] || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute {
+		if _, ok := live.plays[p.ID]; ok || streams[p.ID] || saved[p.ID] != 40*time.Minute || saved[film] != 40*time.Minute {
 			t.Errorf("swept at its life: live %v, stream open %v, history %v, place %v; want it stopped at 40 minutes", ok, streams[p.ID], saved[p.ID], saved[film])
 		}
 		if last := told[len(told)-1]; last.Kind != domain.EventPlaybackStopped {
@@ -536,7 +562,7 @@ func (c *chosen) ChooseTracks(_ context.Context, _, _ uuid.UUID, t domain.Chosen
 
 func TestAPlayerKeepsTheTracksItLastChose(t *testing.T) {
 	saved := &chosen{positions: positions{}}
-	s := NewSessions(memory{}, saved, served{}, func(context.Context, domain.Event) {}, thisNode)
+	s := NewSessions(newMemory(), saved, served{}, func(context.Context, domain.Event) {}, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), 0, thisNode)
@@ -574,7 +600,7 @@ func TestAProfileIsToldOfItsPlaceAsItsReachChanges(t *testing.T) {
 			told++
 		}
 	}
-	s := NewSessions(memory{}, timed{positions{}}, served{}, raise, thisNode)
+	s := NewSessions(newMemory(), timed{positions{}}, served{}, raise, thisNode)
 	ctx := t.Context()
 	oliver := uuid.NewV7()
 	p, err := s.Start(ctx, uuid.NewV7(), domain.PlayDirect, card(oliver, uuid.NewV7()), 0, thisNode)

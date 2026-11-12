@@ -422,7 +422,7 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 		switch kind {
 		case reportStopped:
 			_, err = a.svc.Playbacks.Stop(r.Context(), profile, id, position)
-			if errors.Is(err, playback.ErrNoPlayback) {
+			if errors.Is(err, playback.ErrNoPlayback) || errors.Is(err, playback.ErrStoppedByAdmin) {
 				err = a.saveProgress(r.Context(), profile, rep.ItemID, position)
 			}
 		case reportProgress:
@@ -432,6 +432,10 @@ func (a *API) reported(kind reportKind) http.HandlerFunc {
 				if err = a.startDirect(r, id, rep); err == nil || errors.Is(err, playback.ErrStarted) {
 					err = progress(r.Context())
 				}
+			}
+			// An admin's stop holds: the app was sent a stop, and is not started again.
+			if errors.Is(err, playback.ErrStoppedByAdmin) {
+				err = nil
 			}
 		}
 		if isNotFound(err) {

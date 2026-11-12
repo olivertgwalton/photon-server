@@ -14,7 +14,7 @@ import (
 // A node's metrics count the playbacks it serves, by how each plays, and none another node serves:
 // summed across the nodes, each is counted once.
 func TestANodesMetricsCountThePlaybacksItServes(t *testing.T) {
-	live := memory{}
+	live := newMemory()
 	s := NewSessions(live, positions{}, served{}, func(context.Context, domain.Event) {}, thisNode)
 	elsewhere := uuid.NewV7()
 	for _, start := range []struct {

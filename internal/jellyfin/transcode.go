@@ -367,7 +367,7 @@ func carryQuery(playlist, query, name string) string {
 func (a *API) endEncoding(w http.ResponseWriter, r *http.Request) {
 	id := playID(query(r, "playSessionId"))
 	_, err := a.svc.Playbacks.Finish(r.Context(), auth.SessionOf(r.Context()).Profile.ID, id)
-	if err != nil && !errors.Is(err, playback.ErrNoPlayback) {
+	if err != nil && !errors.Is(err, playback.ErrNoPlayback) && !errors.Is(err, playback.ErrStoppedByAdmin) {
 		a.internal(w, r, err)
 		return
 	}

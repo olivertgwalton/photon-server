@@ -102,6 +102,33 @@ func TestAnEndedPlaybackIsNotRenewed(t *testing.T) {
 	}
 }
 
+// An admin's stop is kept for its life apart from the playbacks going on, which never list it.
+func TestAnAdminsStopIsKeptForItsLife(t *testing.T) {
+	k, err := Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
+	if err != nil {
+		t.Fatalf("TEST_VALKEY_URL: %v", err)
+	}
+	defer k.Close()
+	ctx := t.Context()
+	id, profile := uuid.NewV7(), uuid.NewV7()
+	if _, ok, err := k.AdminStop(ctx, id); ok || err != nil {
+		t.Fatalf("AdminStop of one never stopped = %v, %v; want none", ok, err)
+	}
+	if err := k.KeepAdminStop(ctx, id, profile, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := k.AdminStop(ctx, id); !ok || err != nil || got != profile {
+		t.Errorf("AdminStop = %v, %v, %v; want its profile", got, ok, err)
+	}
+	if all, err := k.Playbacks(ctx); err != nil || slices.ContainsFunc(all, func(p domain.Playback) bool { return p.ID == id }) {
+		t.Errorf("Playbacks = %d, %v; want the stop not among them", len(all), err)
+	}
+	left, err := k.client.Do(ctx, k.client.B().Hpttl().Key(k.key(stops)).Fields().Numfields(1).Field(id.String()).Build()).AsIntSlice()
+	if err != nil || len(left) != 1 || left[0] <= 0 || left[0] > time.Hour.Milliseconds() {
+		t.Errorf("life left = %d ms, %v; want up to an hour", left, err)
+	}
+}
+
 func TestANodeIsReachedWhileItSaysWhere(t *testing.T) {
 	k, err := Open(os.Getenv("TEST_VALKEY_URL"), uuid.NewV7())
 	if err != nil {
