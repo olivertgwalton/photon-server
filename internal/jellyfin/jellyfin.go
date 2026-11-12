@@ -202,6 +202,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.filters2, "GET /Items/Filters2")
 	a.handle(a.searchHints, "GET /Search/Hints")
 	a.handle(a.similar, "GET /Items/{itemId}/Similar", "GET /Movies/{itemId}/Similar", "GET /Shows/{itemId}/Similar")
+	a.handle(a.instantMix, "GET /Items/{itemId}/InstantMix", "GET /Songs/{itemId}/InstantMix", "GET /Albums/{itemId}/InstantMix", "GET /Artists/{itemId}/InstantMix", "GET /MusicGenres/InstantMix")
 	a.handle(a.localTrailers, "GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers")
 	a.handle(a.specialFeatures, "GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
 	a.handle(a.createPlaylist, "POST /Playlists")
