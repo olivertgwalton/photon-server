@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +41,8 @@ type musicItem struct {
 }
 
 // A music app browses a music library as Jellyfin's: its artists, its albums, an artist's albums
-// and an album's tracks, each track on its disc under its album and album artist.
+// and an album's tracks, each track on its disc under its album and album artist, and every track
+// of the library a page at a time, as Finamp's Songs tab pages them.
 func TestAMusicAppBrowsesAMusicLibrary(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -121,6 +124,26 @@ func TestAMusicAppBrowsesAMusicLibrary(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, tracks, cmp.FilterPath(func(p cmp.Path) bool { return p.Last().String() == ".ID" }, cmp.Ignore())); diff != "" {
 		t.Errorf("the album's tracks (-want +got):\n%s", diff)
+	}
+	var songs []string
+	for start := range 2 {
+		target := "/Items?ParentId=" + lib + "&IncludeItemTypes=Audio&Recursive=true&SortBy=SortName&SortOrder=Ascending&StartIndex=" + strconv.Itoa(start) + "&Limit=1"
+		w := serve(api, http.MethodGet, target, `MediaBrowser Client="Finamp", Token="pst_ada"`, "")
+		var page struct {
+			Items            []musicItem
+			TotalRecordCount int
+			StartIndex       int
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || w.Code != http.StatusOK {
+			t.Fatalf("%s: %d, %v", target, w.Code, err)
+		}
+		if page.TotalRecordCount != 2 || page.StartIndex != start || len(page.Items) != 1 || page.Items[0].Type != "Audio" || page.Items[0].Album != "Hurry Up Tomorrow" {
+			t.Fatalf("%s: %+v, want one of the library's 2 tracks, on its album", target, page)
+		}
+		songs = append(songs, page.Items[0].Name)
+	}
+	if want := []string{"Timeless", "Wake Me Up"}; !slices.Equal(songs, want) {
+		t.Errorf("the library's songs = %v, want %v", songs, want)
 	}
 }
 
