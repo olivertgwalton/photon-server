@@ -105,6 +105,7 @@ func TestAnAdminSetsWhatEachNodeDoes(t *testing.T) {
 		`{"role":"gpu"}`:                                        http.StatusBadRequest,
 		`{"transcode_limit_source":"set"}`:                      http.StatusBadRequest,
 		`{"transcode_limit_source":"set","transcode_limit":-1}`: http.StatusBadRequest,
+		`{"transcode_limit":4}`:                                 http.StatusBadRequest,
 	} {
 		if rec := ask(api, http.MethodPatch, "/api/v1/admin/nodes/"+gpu.String(), body); rec.Code != status {
 			t.Errorf("%s: %d %s, want %d", body, rec.Code, rec.Body, status)

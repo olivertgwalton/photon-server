@@ -262,6 +262,10 @@ func (a *API) setNode(r *http.Request, req nodeChangeJSON) (knownNodeJSON, error
 		set.LimitSource, set.Limit = domain.LimitSet, *req.Limit
 	case domain.LimitAutomatic:
 		set.LimitSource, set.Limit = domain.LimitAutomatic, 0
+	case "":
+		if req.Limit != nil {
+			return knownNodeJSON{}, refuse(codeInvalidBody, `a transcode_limit is sent with transcode_limit_source "set"`)
+		}
 	}
 	switch req.Availability {
 	case domain.NodeDraining:
