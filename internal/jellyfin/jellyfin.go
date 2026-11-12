@@ -1,4 +1,4 @@
-// Package jellyfin answers Jellyfin 12.2's API, on a port of its own, so the apps made for Jellyfin
+// Package jellyfin answers Jellyfin 12.4's API, on a port of its own, so the apps made for Jellyfin
 // (Infuse, Swiftfin, Findroid, Jellyfin's own) can use the server. It speaks Jellyfin's words to
 // them and photon's services underneath; none of its words reach photon's own API.
 package jellyfin
@@ -30,7 +30,7 @@ import (
 // version is the Jellyfin the server answers as. Apps compare it as three numbers, and the
 // Android ones refuse a server that is not "Jellyfin Server".
 const (
-	version = "12.2.0"
+	version = "12.4.0"
 	product = "Jellyfin Server"
 )
 
@@ -179,7 +179,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.setDisplayPreferences, "POST /DisplayPreferences/{id}")
 	a.handle(a.cultures, "GET /Localization/Cultures")
 	a.handle(a.socket, "GET /socket")
-	// Browsing, under the routes Jellyfin 12.2 answers, and the /Users/{userId} forms apps still use.
+	// Browsing, under the routes Jellyfin 12.4 answers, and the /Users/{userId} forms apps still use.
 	a.handle(a.views, "GET /UserViews", "GET /Users/{userId}/Views")
 	a.handle(a.groupingOptions, "GET /UserViews/GroupingOptions")
 	a.handle(a.virtualFolders, "GET /Library/VirtualFolders")
