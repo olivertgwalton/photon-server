@@ -48,6 +48,7 @@ type catalogue interface {
 	ExternalIDs(ctx context.Context, items []uuid.UUID) (map[uuid.UUID]map[domain.Provider]string, error)
 	Picture(ctx context.Context, id uuid.UUID) (domain.Picture, error)
 	BestPicture(ctx context.Context, item uuid.UUID, kinds []domain.ArtworkKind) (uuid.UUID, error)
+	KindOf(ctx context.Context, id uuid.UUID) (domain.ItemKind, error)
 	SetLibraryOrder(ctx context.Context, profile uuid.UUID, libs []uuid.UUID) error
 }
 
@@ -544,13 +545,6 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	l := listedOf(w, r)
 	page, total := paged(cards, cardID, l)
 	a.writeList(w, r, page, total, l.start, l)
-}
-
-// none answers a list photon has nothing for yet, as an empty one: Infuse asks for every title's
-// trailers and features, and takes a missing route for a failure.
-func (a *API) none(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	a.write(w, []byte(`[]`))
 }
 
 // artists answers Jellyfin's /Artists and /Artists/AlbumArtists: the artists of a music library an

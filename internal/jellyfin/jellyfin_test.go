@@ -592,6 +592,13 @@ func (p onePicture) BestPicture(_ context.Context, item uuid.UUID, kinds []domai
 	return p.id, nil
 }
 
+func (p onePicture) KindOf(_ context.Context, id uuid.UUID) (domain.ItemKind, error) {
+	if p.of == (uuid.UUID{}) || id != p.of {
+		return "", store.ErrNotFound
+	}
+	return domain.ItemSeason, nil
+}
+
 func (p onePicture) Picture(_ context.Context, id uuid.UUID) (domain.Picture, error) {
 	if id != p.id {
 		return domain.Picture{}, store.ErrNotFound

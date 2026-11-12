@@ -202,9 +202,8 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.filters2, "GET /Items/Filters2")
 	a.handle(a.searchHints, "GET /Search/Hints")
 	a.handle(a.similar, "GET /Items/{itemId}/Similar", "GET /Movies/{itemId}/Similar", "GET /Shows/{itemId}/Similar")
-	a.handle(a.none,
-		"GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers",
-		"GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
+	a.handle(a.localTrailers, "GET /Items/{itemId}/LocalTrailers", "GET /Users/{userId}/Items/{itemId}/LocalTrailers")
+	a.handle(a.specialFeatures, "GET /Items/{itemId}/SpecialFeatures", "GET /Users/{userId}/Items/{itemId}/SpecialFeatures")
 	a.handle(a.createPlaylist, "POST /Playlists")
 	a.handle(a.playlist, "GET /Playlists/{playlistId}")
 	a.handle(a.updatePlaylist, "POST /Playlists/{playlistId}")
@@ -213,7 +212,7 @@ func New(logger *slog.Logger, server string, name func() string, svc Services) *
 	a.handle(a.removeFromPlaylist, "DELETE /Playlists/{playlistId}/Items")
 	a.handle(a.moveInPlaylist, "POST /Playlists/{playlistId}/Items/{itemId}/Move/{newIndex}")
 	a.handle(a.themeSongsResult, "GET /Items/{itemId}/ThemeSongs")
-	a.handle(a.themeVideos, "GET /Items/{itemId}/ThemeVideos")
+	a.handle(a.themeVideosResult, "GET /Items/{itemId}/ThemeVideos")
 	a.handle(a.themeMedia, "GET /Items/{itemId}/ThemeMedia")
 	a.handleMedia(a.audio, "GET /Audio/{itemId}/{file}")
 	// Photon plays nothing before a title. Jellyfin's web app asks before it plays, and its intros,
