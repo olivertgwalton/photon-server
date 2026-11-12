@@ -117,25 +117,36 @@ func (a *API) nameItem(kind, name string) item {
 	return it
 }
 
-// genre answers the genre an app names by its id, as Finamp opens a title's genre: the one of the
-// libraries' genres whose name makes it. Anything else is not found.
+// genre answers the genre an app names by its id, as Finamp opens a title's genre. Anything else
+// is not found.
 func (a *API) genre(w http.ResponseWriter, r *http.Request, libs []*store.SeenLibrary, id uuid.UUID) {
+	name, ok, err := a.genreNamed(r, libs, id)
+	switch {
+	case err != nil:
+		a.internal(w, r, err)
+	case !ok:
+		a.refuse(w, http.StatusNotFound)
+	default:
+		a.writeJSON(w, a.nameItem("Genre", name))
+	}
+}
+
+// genreNamed is the one of the libraries' genres whose name makes id, if any does.
+func (a *API) genreNamed(r *http.Request, libs []*store.SeenLibrary, id uuid.UUID) (string, bool, error) {
 	ids := make([]uuid.UUID, len(libs))
 	for n, l := range libs {
 		ids[n] = l.ID
 	}
 	genres, err := a.svc.Catalogue.Genres(r.Context(), ids, auth.SessionOf(r.Context()).Profile.ID)
 	if err != nil {
-		a.internal(w, r, err)
-		return
+		return "", false, err
 	}
 	for _, name := range genres {
 		if nameID("Genre", name) == id {
-			a.writeJSON(w, a.nameItem("Genre", name))
-			return
+			return name, true, nil
 		}
 	}
-	a.refuse(w, http.StatusNotFound)
+	return "", false, nil
 }
 
 // filters answers Jellyfin's QueryFiltersLegacy: what the libraries asked for can be narrowed to.
