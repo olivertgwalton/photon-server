@@ -395,3 +395,49 @@ func TestAnAlbumWallIsOfferedFavouritesAlone(t *testing.T) {
 		t.Errorf("watched albums: %d, %v; want none", len(cards), err)
 	}
 }
+
+// A music library's tracks wall lists every track across its albums and artists, as Jellyfin's
+// Songs tab does, paged in title order with the whole count; its artists and albums are not on it.
+func TestATracksWallPagesEveryTrackOfAMusicLibrary(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Music", domain.LibraryMusic, t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := func(folder string, tracks ...Track) []Track {
+		for n := range tracks {
+			rel := folder + "/" + tracks[n].Title + ".flac"
+			tracks[n].Folder, tracks[n].Version.ContentKey, tracks[n].Version.Parts[0].RelPath = folder, []byte(rel), rel
+		}
+		return tracks
+	}
+	for _, a := range []Album{
+		{Title: "Hurry Up Tomorrow", Artist: "The Weeknd", Folder: "Hurry Up Tomorrow", Tracks: in("Hurry Up Tomorrow",
+			track("Wake Me Up", 1, 1, "The Weeknd"), track("Timeless", 1, 2, "The Weeknd"))},
+		{Title: "Blue Lines", Artist: "Massive Attack", Folder: "Blue Lines", Tracks: in("Blue Lines",
+			track("Safe From Harm", 1, 1, "Massive Attack"), track("Unfinished Sympathy", 1, 2, "Massive Attack"))},
+	} {
+		if _, err := s.SaveMusicFolder(ctx, lib.ID, a.Folder, []byte("seen"), []Album{a}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	for offset := 0; offset < 4; offset += 3 {
+		cards, total, err := s.wallCards(ctx, []uuid.UUID{lib.ID}, WallPage{
+			Kind: domain.WallTracks, Sort: domain.SortTitle, Order: domain.Ascending, Offset: offset, Limit: 3,
+		})
+		if err != nil || total != 4 {
+			t.Fatalf("the page from %d: %d in all, %v; want 4", offset, total, err)
+		}
+		for _, c := range cards {
+			if c.Kind != domain.ItemTrack || c.Album == nil {
+				t.Errorf("%s: a %s of album %v, want a track of its album", c.Title, c.Kind, c.Album)
+			}
+			got = append(got, c.Title)
+		}
+	}
+	if want := []string{"Safe From Harm", "Timeless", "Unfinished Sympathy", "Wake Me Up"}; !slices.Equal(got, want) {
+		t.Errorf("the tracks wall = %v, want %v", got, want)
+	}
+}
