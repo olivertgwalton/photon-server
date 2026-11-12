@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/hex"
 	"hash/fnv"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -84,6 +85,9 @@ type item struct {
 	ExtraType           string `json:"ExtraType,omitempty"`
 	LocalTrailerCount   int    `json:"LocalTrailerCount,omitzero"`
 	SpecialFeatureCount int    `json:"SpecialFeatureCount,omitzero"`
+	// RemoteTrailers are the trailers a provider links to, which Jellyfin's web app plays from its
+	// trailer button.
+	RemoteTrailers []mediaURL `json:"RemoteTrailers,omitempty"`
 	// HasLyrics is what Jellyfin's apps from 10.9 show their lyrics button by.
 	HasLyrics          bool                `json:"HasLyrics,omitzero"`
 	MediaStreams       []mediaStream       `json:"MediaStreams,omitempty"`
@@ -110,6 +114,34 @@ type nameGUID struct {
 
 // blurhash is the BlurHashes of an item's pictures of one kind, by tag.
 type blurhash map[string]string
+
+// mediaURL is Jellyfin's MediaUrl: a video elsewhere, by its address.
+type mediaURL struct {
+	URL  string `json:"Url"`
+	Name string `json:"Name"`
+}
+
+// remoteTrailers are the trailers and teasers a provider links to, as Jellyfin keeps a teaser as a
+// trailer: those on a site an app opens by address.
+func remoteTrailers(videos []store.VideoLink) []mediaURL {
+	var out []mediaURL
+	for _, v := range videos {
+		if extraTypes[v.Kind].on != listTrailers {
+			continue
+		}
+		var address string
+		switch strings.ToLower(v.Site) {
+		case "youtube":
+			address = "https://www.youtube.com/watch?v=" + url.QueryEscape(v.Key)
+		case "vimeo":
+			address = "https://vimeo.com/" + url.PathEscape(v.Key)
+		default:
+			continue
+		}
+		out = append(out, mediaURL{URL: address, Name: v.Name})
+	}
+	return out
+}
 
 // userData is Jellyfin's UserItemDataDto: what the profile has made of an item. The Kotlin SDK
 // refuses one short of any field it keeps, and Swift's one without a Key.
@@ -375,6 +407,7 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 	}
 	on := onLists(p.Extras)
 	it.LocalTrailerCount, it.SpecialFeatureCount = on[listTrailers], on[listFeatures]
+	it.RemoteTrailers = remoteTrailers(p.Videos)
 	return it
 }
 
