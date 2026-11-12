@@ -38,6 +38,8 @@ type catalogue interface {
 	Books(ctx context.Context, profile, author uuid.UUID) ([]store.Card, error)
 	Next(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	Similar(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
+	Mix(ctx context.Context, profile, id uuid.UUID) ([]store.Card, error)
+	GenreMix(ctx context.Context, profile uuid.UUID, genre string) ([]store.Card, error)
 	Calendar(ctx context.Context, q store.CalendarQuery) ([]store.CalendarDay, error)
 	AnnouncedEpisode(ctx context.Context, profile, id uuid.UUID) (store.Card, error)
 	RowPage(ctx context.Context, profile uuid.UUID, row domain.HomeRow, page store.Page) ([]store.Card, store.Extent, error)
