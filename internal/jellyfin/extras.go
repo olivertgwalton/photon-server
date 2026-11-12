@@ -5,6 +5,7 @@ import (
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store"
 	"github.com/olivertgwalton/photon-server/internal/words"
 )
 
@@ -32,6 +33,15 @@ var extraTypes = map[domain.ExtraKind]extraType{
 	domain.ExtraScene: {"Scene", listFeatures}, domain.ExtraShort: {"Short", listFeatures},
 	domain.ExtraClip: {"Clip", listFeatures}, domain.ExtraBlooper: {"Unknown", listFeatures},
 	domain.ExtraOther: {"Unknown", listFeatures}, domain.ExtraThemeVideo: {"ThemeVideo", listTheme},
+}
+
+// onLists counts a title's extras on each list.
+func onLists(extras []store.ExtraCard) map[extraList]int {
+	n := map[extraList]int{}
+	for _, e := range extras {
+		n[extraTypes[e.Kind].on]++
+	}
+	return n
 }
 
 func (a *API) localTrailers(w http.ResponseWriter, r *http.Request) { a.extras(w, r, listTrailers) }

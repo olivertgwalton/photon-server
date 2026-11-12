@@ -19,8 +19,9 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/store/storetest"
 )
 
-// A film's trailer is its local trailer to an app, and its featurette a special feature, and the
-// trailer plays as the film does. A theme video is on neither list.
+// A film's trailer is its local trailer to an app, and its featurette a special feature: the film
+// says how many of each it has, as Jellyfin's web app shows its trailer button and features row
+// by, and the trailer plays as the film does. A theme video is on neither list.
 func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 	ctx := t.Context()
 	db := storetest.FreshDatabase(t)
@@ -95,6 +96,12 @@ func TestAnAppListsAndPlaysAFilmsExtras(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), into); err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
+	}
+
+	var page map[string]any
+	get("/Items/"+heat, &page)
+	if page["LocalTrailerCount"] != 1.0 || page["SpecialFeatureCount"] != 1.0 {
+		t.Errorf("the film counts %v trailers and %v features, want 1 of each", page["LocalTrailerCount"], page["SpecialFeatureCount"])
 	}
 
 	type extraItem struct {

@@ -78,8 +78,12 @@ type item struct {
 	AlbumArtists            []nameGUID        `json:"AlbumArtists,omitempty"`
 	Artists                 []string          `json:"Artists,omitempty"`
 	ArtistItems             []nameGUID        `json:"ArtistItems,omitempty"`
-	// ExtraType is what an extra is.
-	ExtraType string `json:"ExtraType,omitempty"`
+	// ExtraType is what an extra is; LocalTrailerCount and SpecialFeatureCount are how many of a
+	// title's extras /Items/{itemId}/LocalTrailers and SpecialFeatures list, which Jellyfin's web
+	// app shows its trailer button and its features row by.
+	ExtraType           string `json:"ExtraType,omitempty"`
+	LocalTrailerCount   int    `json:"LocalTrailerCount,omitzero"`
+	SpecialFeatureCount int    `json:"SpecialFeatureCount,omitzero"`
 	// HasLyrics is what Jellyfin's apps from 10.9 show their lyrics button by.
 	HasLyrics          bool                `json:"HasLyrics,omitzero"`
 	MediaStreams       []mediaStream       `json:"MediaStreams,omitempty"`
@@ -366,6 +370,8 @@ func (a *API) fromTitle(p store.TitlePage, w words.Words) item {
 		n := len(p.Seasons)
 		it.ChildCount = &n
 	}
+	on := onLists(p.Extras)
+	it.LocalTrailerCount, it.SpecialFeatureCount = on[listTrailers], on[listFeatures]
 	return it
 }
 
