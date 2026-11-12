@@ -36,8 +36,8 @@ func asked(r *http.Request, libs []*store.SeenLibrary, seen map[uuid.UUID]*store
 	return slices.DeleteFunc(slices.Clone(libs), func(l *store.SeenLibrary) bool { return !holds(l, types) })
 }
 
-// wallKind is what an app's includeItemTypes asks a library for: its episodes or its albums where
-// it asks for those alone, as Jellyfin's Episodes and Albums tabs do, its films or its shows where
+// wallKind is what an app's includeItemTypes asks a library for: its episodes, albums or tracks
+// where it asks for those alone, as Jellyfin's Episodes, Albums and Songs tabs do, its films or its shows where
 // it asks for one and not the other, else its titles.
 func wallKind(types []string) domain.WallKind {
 	films, shows := has(types, itemKinds[domain.ItemMovie]), has(types, itemKinds[domain.ItemShow])
@@ -46,6 +46,8 @@ func wallKind(types []string) domain.WallKind {
 		return domain.WallEpisodes
 	case len(types) == 1 && has(types, itemKinds[domain.ItemAlbum]):
 		return domain.WallAlbums
+	case len(types) == 1 && has(types, itemKinds[domain.ItemTrack]):
+		return domain.WallTracks
 	case has(types, itemKinds[domain.ItemBook]) || has(types, audioBook):
 		return domain.WallBooks
 	case films && !shows:

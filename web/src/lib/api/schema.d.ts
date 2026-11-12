@@ -10731,7 +10731,7 @@ export interface components {
             years?: number[];
         };
         /** @enum {string} */
-        WallKind: "titles" | "films" | "shows" | "episodes" | "albums" | "books";
+        WallKind: "titles" | "films" | "shows" | "episodes" | "albums" | "tracks" | "books";
         /** @enum {string} */
         WallSort: "title" | "added" | "released" | "rating" | "runtime" | "played" | "random";
         Watched: {

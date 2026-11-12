@@ -85,9 +85,8 @@ favourite, and keep playlists. It shows chapters, scrubbing previews, intro and 
 and theme music.
 
 A music library is a Jellyfin music library, so music apps such as Finamp and Feishin browse its
-artists and albums and play its tracks. A track plays as it is where the app plays its format, and
-is converted to AAC where it doesn't, or where it is over the app's streaming limit. An app's list
-of every song in a library is empty: browse by artist or album instead.
+artists, albums and songs and play its tracks. A track plays as it is where the app plays its
+format, and is converted to AAC where it doesn't, or where it is over the app's streaming limit.
 
 A books library is a Jellyfin books library: its authors are folders of their books. An audiobook
 plays in the app's audio player, and an ebook opens in the app's reader where it has one, such as

@@ -27,8 +27,9 @@ func WallSorts() []WallSort {
 
 // WallKind is what a wall pages: a library's titles, its films or its shows alone, as Jellyfin's
 // includeItemTypes narrows a mixed library, or its episodes across its shows, as Plex's episode
-// type and Jellyfin's Episodes tab list them; or a music library's albums across its artists, or a
-// books library's books across its authors.
+// type and Jellyfin's Episodes tab list them; or a music library's albums or tracks across its
+// artists, as Jellyfin's Albums and Songs tabs list them, or a books library's books across its
+// authors.
 type WallKind string
 
 const (
@@ -37,11 +38,12 @@ const (
 	WallShows    WallKind = "shows"
 	WallEpisodes WallKind = "episodes"
 	WallAlbums   WallKind = "albums"
+	WallTracks   WallKind = "tracks"
 	WallBooks    WallKind = "books"
 )
 
 func WallKinds() []WallKind {
-	return []WallKind{WallTitles, WallFilms, WallShows, WallEpisodes, WallAlbums, WallBooks}
+	return []WallKind{WallTitles, WallFilms, WallShows, WallEpisodes, WallAlbums, WallTracks, WallBooks}
 }
 
 // Of is the kinds of item a wall of a library of kind lists.
@@ -59,6 +61,8 @@ func (w WallKind) Of(lib LibraryKind) []ItemKind {
 		asked = []ItemKind{ItemEpisode}
 	case WallAlbums:
 		asked = []ItemKind{ItemAlbum}
+	case WallTracks:
+		asked = []ItemKind{ItemTrack}
 	case WallBooks:
 		asked = []ItemKind{ItemBook}
 	}
