@@ -23,10 +23,17 @@ const (
 	// keptFor is how long Valkey keeps a playback with no word from its player: past its life, so
 	// a sweep ends it with its history. It lapses on its own only with no node left to sweep.
 	keptFor = 2 * sessionLife
+	// adminStopKeptFor is how long an admin's stop is told to its player, which may have missed the
+	// event of it while the system suspended it: a phone left paused overnight is told in the morning.
+	adminStopKeptFor = 24 * time.Hour
 )
 
 // ErrNoPlayback is a playback that has stopped, lapsed, or is another profile's.
 var ErrNoPlayback = errors.New("no such playback")
+
+// ErrStoppedByAdmin is a profile's playback an admin stopped, which its player is told apart from
+// one that lapsed: a player closes for an admin, and opens again what merely lapsed.
+var ErrStoppedByAdmin = errors.New("an admin stopped the playback")
 
 // ErrStreamLimit is a playback refused by a node delivering as many at once as it may, or sending
 // as fast as it may.
@@ -42,6 +49,8 @@ type sessionStore interface {
 	Playback(ctx context.Context, id uuid.UUID) (domain.Playback, bool, error)
 	Playbacks(ctx context.Context) ([]domain.Playback, error)
 	EndPlayback(ctx context.Context, id uuid.UUID) (bool, error)
+	KeepAdminStop(ctx context.Context, id, profile uuid.UUID, ttl time.Duration) error
+	AdminStop(ctx context.Context, id uuid.UUID) (uuid.UUID, bool, error)
 }
 
 // streams are what a node serves its playbacks: their remuxes.
@@ -159,7 +168,7 @@ func (s *Sessions) Progress(ctx context.Context, profile, id uuid.UUID, position
 		return "", err
 	}
 	if !renewed {
-		return "", ErrNoPlayback
+		return "", s.ended(ctx, profile, id)
 	}
 	switch {
 	case was == state:
@@ -199,6 +208,10 @@ func (s *Sessions) End(ctx context.Context, id uuid.UUID) error {
 	}
 	if !ok {
 		return ErrNoPlayback
+	}
+	// Kept before it ends, so a report racing the stop is told of the admin, not of a lapse.
+	if err := s.live.KeepAdminStop(ctx, id, p.Profile, adminStopKeptFor); err != nil {
+		return err
 	}
 	_, err = s.stop(ctx, p, p.Position, domain.StoppedByAdmin)
 	return err
@@ -378,8 +391,24 @@ func (s *Sessions) own(ctx context.Context, profile, id uuid.UUID) (domain.Playb
 	if err != nil {
 		return domain.Playback{}, err
 	}
-	if !ok || p.Profile != profile {
+	if ok && p.Profile == profile {
+		return p, nil
+	}
+	if ok {
 		return domain.Playback{}, ErrNoPlayback
 	}
-	return p, nil
+	return domain.Playback{}, s.ended(ctx, profile, id)
+}
+
+// ended is why a profile's playback that is not going on is not: an admin stopped it, or it
+// stopped, lapsed or was never the profile's.
+func (s *Sessions) ended(ctx context.Context, profile, id uuid.UUID) error {
+	of, stopped, err := s.live.AdminStop(ctx, id)
+	if err != nil {
+		return err
+	}
+	if stopped && of == profile {
+		return ErrStoppedByAdmin
+	}
+	return ErrNoPlayback
 }
