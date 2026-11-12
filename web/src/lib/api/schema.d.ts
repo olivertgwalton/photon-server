@@ -5310,7 +5310,7 @@ export interface paths {
                 path: {
                     id: string;
                     /** @description The stream's index in the part's file. */
-                    subtitle: string;
+                    subtitle: number;
                 };
                 cookie?: never;
             };
@@ -9839,6 +9839,7 @@ export interface components {
         Profile: {
             /** Format: uuid */
             avatar?: string;
+            /** Format: uuid */
             id: string;
             /** Format: uuid */
             manager?: string;
@@ -9853,6 +9854,7 @@ export interface components {
         ProfileListing: {
             /** Format: uuid */
             avatar?: string;
+            /** Format: uuid */
             id: string;
             lock: components["schemas"]["ProfileLock"];
             /** Format: uuid */

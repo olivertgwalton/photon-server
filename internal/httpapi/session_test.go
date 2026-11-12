@@ -245,7 +245,7 @@ func TestLogin(t *testing.T) {
 			if err := json.UnmarshalRead(rec.Body, &got); err != nil {
 				t.Fatal(err)
 			}
-			want := loginResponse{Token: goodToken, Profile: profileJSON{ID: oliver.ID.String(), Name: "Oliver", Role: domain.RoleAdmin}}
+			want := loginResponse{Token: goodToken, Profile: profileJSON{ID: oliver.ID, Name: "Oliver", Role: domain.RoleAdmin}}
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("response (-want +got):\n%s", diff)
 			}

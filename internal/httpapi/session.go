@@ -159,7 +159,7 @@ func readWithin(rc *http.ResponseController, logger *slog.Logger, t time.Time) {
 }
 
 type profileJSON struct {
-	ID   string      `json:"id"`
+	ID   uuid.UUID   `json:"id"`
 	Name string      `json:"name"`
 	Role domain.Role `json:"role"`
 	// Avatar is the profile's picture, at /api/v1/artwork/{id}.
@@ -169,7 +169,7 @@ type profileJSON struct {
 }
 
 func profileOf(p domain.Profile) profileJSON {
-	return profileJSON{ID: p.ID.String(), Name: p.Name, Role: p.Role, Avatar: p.Avatar, Manager: p.Manager}
+	return profileJSON{ID: p.ID, Name: p.Name, Role: p.Role, Avatar: p.Avatar, Manager: p.Manager}
 }
 
 // loginRequest signs a device in by one method: a password with the profile's name and the device
