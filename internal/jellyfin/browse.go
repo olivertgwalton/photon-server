@@ -546,13 +546,6 @@ func (a *API) episodes(w http.ResponseWriter, r *http.Request) {
 	a.writeList(w, r, page, total, l.start, l)
 }
 
-// none answers a list photon has nothing for yet, as an empty one: Infuse asks for every title's
-// trailers and features, and takes a missing route for a failure.
-func (a *API) none(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	a.write(w, []byte(`[]`))
-}
-
 // artists answers Jellyfin's /Artists and /Artists/AlbumArtists: the artists of a music library an
 // app names, else of every one. photon's artists are its albums' artists, so both lists are those.
 func (a *API) artists(w http.ResponseWriter, r *http.Request) {

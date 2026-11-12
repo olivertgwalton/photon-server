@@ -78,6 +78,8 @@ type item struct {
 	AlbumArtists            []nameGUID        `json:"AlbumArtists,omitempty"`
 	Artists                 []string          `json:"Artists,omitempty"`
 	ArtistItems             []nameGUID        `json:"ArtistItems,omitempty"`
+	// ExtraType is what an extra is.
+	ExtraType string `json:"ExtraType,omitempty"`
 	// HasLyrics is what Jellyfin's apps from 10.9 show their lyrics button by.
 	HasLyrics          bool                `json:"HasLyrics,omitzero"`
 	MediaStreams       []mediaStream       `json:"MediaStreams,omitempty"`
