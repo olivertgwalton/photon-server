@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/olivertgwalton/photon-server/internal/domain"
+	"github.com/olivertgwalton/photon-server/internal/store/model"
 )
 
 // Download is a profile's download of a part: the part's own file where Quality is nil, ready as
@@ -31,6 +32,9 @@ type Download struct {
 	SizeBytes  int64
 	Error      string
 	Created    time.Time
+	// Subtitles are the files beside the downloaded version, for a version in one file: a part
+	// downloaded alone is not the whole timeline they are timed on.
+	Subtitles []SubtitleRef
 }
 
 // AddDownload records a profile's download of a part of a title on a device, converted to a
@@ -128,7 +132,40 @@ func (s *Store) downloads(ctx context.Context, profile uuid.UUID, device, id *uu
 			out[n].Quality = &domain.Quality{MaxBitrateKbps: r.MaxBitrateKbps, MaxWidth: r.MaxWidth, Codec: r.VideoCodec, Range: r.VideoRange}
 		}
 	}
-	return out, nil
+	return out, s.downloadSubtitles(ctx, out)
+}
+
+// downloadSubtitleRow is a subtitle file beside a downloaded part's version, by the part.
+type downloadSubtitleRow struct {
+	PartID uuid.UUID
+	model.SubtitleFile
+}
+
+// downloadSubtitles reads the files beside every download's version in one statement.
+func (s *Store) downloadSubtitles(ctx context.Context, downloads []Download) error {
+	if len(downloads) == 0 {
+		return nil
+	}
+	parts := make([]uuid.UUID, len(downloads))
+	for n, d := range downloads {
+		parts[n] = d.Part
+	}
+	rows, err := queryStructs[downloadSubtitleRow](ctx, s.pool, `
+		SELECT p.id AS part_id, f.id, f.version_id, f.codec, f.language, f.title, f.forced, f.is_default, f.hearing_impaired
+		FROM parts p JOIN subtitle_files f ON f.version_id = p.version_id
+		WHERE p.id = ANY($1) AND (SELECT count(*) FROM parts q WHERE q.version_id = p.version_id) = 1
+		ORDER BY f.rel_path`, parts)
+	if err != nil {
+		return err
+	}
+	beside := map[uuid.UUID][]SubtitleRef{}
+	for _, r := range rows {
+		beside[r.PartID] = append(beside[r.PartID], subtitleRef(&r.SubtitleFile))
+	}
+	for n := range downloads {
+		downloads[n].Subtitles = beside[downloads[n].Part]
+	}
+	return nil
 }
 
 // Downloads answers a profile's downloads, the newest first: every one, or with device set only
