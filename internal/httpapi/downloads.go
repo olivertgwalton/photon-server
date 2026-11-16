@@ -89,7 +89,10 @@ type downloadJSON struct {
 	// URL is where a ready download is fetched, signed until URLExpiresAt.
 	URL          uriReference `json:"url,omitzero"`
 	URLExpiresAt time.Time    `json:"url_expires_at,omitzero"`
-	CreatedAt    time.Time    `json:"created_at"`
+	// Subtitles are the files beside a ready download's version, signed as its URL is, for a
+	// device to keep beside the file: a version in one file's alone.
+	Subtitles []subtitleJSON `json:"subtitles,omitzero"`
+	CreatedAt time.Time      `json:"created_at"`
 }
 
 func (a *API) downloadJSON(d store.Download) downloadJSON {
@@ -106,6 +109,9 @@ func (a *API) downloadJSON(d store.Download) downloadJSON {
 	if d.State == domain.DownloadReady {
 		until := time.Now().Add(streamFor)
 		out.URL, out.URLExpiresAt = uriReference(a.svc.Signer.Sign(path, until)), until.UTC().Truncate(time.Second)
+		for _, f := range d.Subtitles {
+			out.Subtitles = append(out.Subtitles, a.besideJSON(f, until))
+		}
 	}
 	return out
 }

@@ -13,6 +13,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 	"github.com/olivertgwalton/photon-server/internal/hls"
 	"github.com/olivertgwalton/photon-server/internal/playback"
@@ -157,5 +159,79 @@ func TestADeviceListsItsOwnDownloadsUnlessItAsksForTheProfiles(t *testing.T) {
 		if rec.Code != tc.code || len(got.Items) != tc.want {
 			t.Errorf("%s: %d with %d downloads, want %d with %d", tc.target, rec.Code, len(got.Items), tc.code, tc.want)
 		}
+	}
+}
+
+// besideDownloads holds one ready download of a version with subtitle files beside it, and one
+// whose conversion is still queued.
+type besideDownloads struct {
+	fakeDownloads
+	ready, queued uuid.UUID
+	subtitles     []store.SubtitleRef
+}
+
+func (b besideDownloads) Download(_ context.Context, _, id uuid.UUID) (store.Download, error) {
+	switch id {
+	case b.ready:
+		return store.Download{ID: id, Part: partOne, State: domain.DownloadReady, Subtitles: b.subtitles}, nil
+	case b.queued:
+		q := domain.Quality{MaxBitrateKbps: 2000}
+		return store.Download{ID: id, Part: partOne, Quality: &q, State: domain.DownloadQueued, Subtitles: b.subtitles}, nil
+	}
+	return store.Download{}, store.ErrNotFound
+}
+
+// A ready download answers the subtitle files beside its version at addresses signed as its own
+// file is, which open each file; one still converting answers none yet, as it answers no file. The
+// address is a signed one alone: a session's token does not open it.
+func TestADownloadAnswersTheSubtitleFilesBesideIt(t *testing.T) {
+	root := t.TempDir()
+	const srt = "1\n00:00:01,000 --> 00:00:02,000\nBeside the film.\n"
+	if err := os.WriteFile(filepath.Join(root, "Film.en.srt"), []byte(srt), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sub, queued := uuid.NewV7(), uuid.NewV7()
+	signer := playback.NewSigner([]byte("key"))
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Signer: signer,
+		Playing: sidecarPlaying{fakePlaying{root: root}, map[uuid.UUID]sidecar{sub: {"Film.en.srt", "subrip", language.English}}},
+		Downloads: besideDownloads{
+			ready: downloadID, queued: queued,
+			subtitles: []store.SubtitleRef{{ID: sub, Codec: "subrip", Language: language.English}},
+		},
+	})
+	get := func(target string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Authorization", "Bearer "+goodToken)
+		rec := httptest.NewRecorder()
+		api.ServeHTTP(rec, req)
+		return rec
+	}
+	answer := func(id uuid.UUID) downloadJSON {
+		rec := get("/api/v1/downloads/" + id.String())
+		var d downloadJSON
+		if err := json.Unmarshal(rec.Body.Bytes(), &d); rec.Code != http.StatusOK || err != nil {
+			t.Fatalf("download %s: %d %v", id, rec.Code, err)
+		}
+		return d
+	}
+
+	ready := answer(downloadID)
+	if len(ready.Subtitles) != 1 || ready.Subtitles[0].ID != sub || ready.Subtitles[0].Codec != "subrip" ||
+		ready.Subtitles[0].Language != domain.TagOf(language.English) {
+		t.Fatalf("a ready download's subtitles: %+v, want the one file beside it", ready.Subtitles)
+	}
+	at := string(ready.Subtitles[0].URL)
+	if !strings.HasPrefix(at, "/api/v1/subtitles/"+sub.String()+"/file?") {
+		t.Errorf("its address: %q, want the file's own, signed", at)
+	}
+	if rec := get(at); rec.Code != http.StatusOK || rec.Body.String() != srt {
+		t.Errorf("its signed address: %d %q, want the file as it is", rec.Code, rec.Body.String())
+	}
+	if rec := get("/api/v1/subtitles/" + sub.String() + "/file"); rec.Code != http.StatusUnauthorized {
+		t.Errorf("the file unsigned, with a session's token: %d, want 401", rec.Code)
+	}
+	if d := answer(queued); d.URL != "" || len(d.Subtitles) != 0 {
+		t.Errorf("a conversion still queued: %q %+v, want no address and no subtitles yet", d.URL, d.Subtitles)
 	}
 }
