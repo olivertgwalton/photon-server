@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"golang.org/x/text/language"
+
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
@@ -304,5 +306,81 @@ func TestADownloadNamesItsTitle(t *testing.T) {
 	}
 	if want := map[string]string{"Lawrence": "", "The Target": "The Wire"}; !maps.Equal(names, want) {
 		t.Errorf("downloads name %v, want %v", names, want)
+	}
+}
+
+// A download carries the subtitle files beside its version, in their order on disk, in a list of
+// downloads too; a part of a version in several files carries none, since they are timed on the
+// version's whole timeline and the part is downloaded alone.
+func TestADownloadCarriesTheSubtitleFilesBesideItsVersion(t *testing.T) {
+	s := migrated(t)
+	ctx := t.Context()
+	lib, err := s.AddLibrary(ctx, "Films", domain.LibraryMovies, "/srv/films", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	part := func(rel string) Part {
+		return Part{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Facts: &domain.Facts{Duration: time.Hour}}
+	}
+	beside := func(rel, codec string, lang language.Tag) Subtitle {
+		return Subtitle{RelPath: rel, Size: 1, ModTime: time.Unix(0, 0), Codec: codec, Language: lang}
+	}
+	for _, f := range []Film{
+		{Title: "Lawrence", Folder: "L", Versions: []Version{{
+			ContentKey: []byte("l"), Parts: []Part{part("L/L.mkv")},
+			Subtitles: []Subtitle{beside("L/L.fr.ass", "ass", language.French), beside("L/L.en.srt", "subrip", language.English)},
+		}}},
+		{Title: "Ran", Folder: "R", Versions: []Version{{
+			ContentKey: []byte("r"), Parts: []Part{part("R/cd1.mkv"), part("R/cd2.mkv")},
+			Subtitles: []Subtitle{beside("R/R.en.srt", "subrip", language.English)},
+		}}},
+	} {
+		if _, err := s.SaveFolder(ctx, lib.ID, f.Folder, []byte("v1"), []Film{f}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	firstPart := func(title string) (item, part uuid.UUID) {
+		if err := s.pool.QueryRow(ctx, `
+			SELECT i.id, p.id FROM items i JOIN versions v ON v.item_id = i.id JOIN parts p ON p.version_id = v.id
+			WHERE i.title = $1 ORDER BY p.idx LIMIT 1`, title).Scan(&item, &part); err != nil {
+			t.Fatal(err)
+		}
+		return item, part
+	}
+	profile, err := s.AddProfile(ctx, "Oliver", domain.RoleUser, "hash", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	device := s.signIn(t, profile.ID)
+	download := func(title string) Download {
+		item, part := firstPart(title)
+		d, _, err := s.AddDownload(ctx, profile.ID, device, item, part, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	said := func(subs []SubtitleRef) (out []string) {
+		for _, f := range subs {
+			out = append(out, f.Codec+" "+f.Language.String())
+		}
+		return out
+	}
+
+	lawrence := download("Lawrence")
+	if got := said(lawrence.Subtitles); len(got) != 2 || got[0] != "subrip en" || got[1] != "ass fr" {
+		t.Errorf("a version in one file: %v, want both files beside it, in their order on disk", got)
+	}
+	if got := download("Ran").Subtitles; len(got) != 0 {
+		t.Errorf("the first disc of a version in two: %v, want none", said(got))
+	}
+	list, err := s.Downloads(ctx, profile.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range list {
+		if d.ID == lawrence.ID && len(d.Subtitles) != 2 {
+			t.Errorf("Lawrence in the list: %v, want the two files as asked for alone", said(d.Subtitles))
+		}
 	}
 }

@@ -385,16 +385,22 @@ func (a *API) sidecars(p playback.Profile, c store.PlayVersion, method domain.Pl
 		if !p.Sidecar(f.Codec, true, len(c.Parts)) || method != domain.PlayDirect && hls.TextSubtitle(f.Codec) {
 			continue
 		}
-		at := a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until)
-		if f.Codec == "dvd_subtitle" {
-			at += "&format=" + string(subtitleMatroska)
-		}
-		out = append(out, subtitleJSON{
-			ID: f.ID, Codec: f.Codec, Kind: subtitleKindOf(f.Codec), Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
-			HearingImpaired: f.HearingImpaired, URL: uriReference(at),
-		})
+		out = append(out, a.besideJSON(f, until))
 	}
 	return out
+}
+
+// besideJSON is a subtitle file beside a version at an address signed until a time: the file as it
+// is, a VobSub's in Matroska, a format its client asks of a text one added to the query.
+func (a *API) besideJSON(f store.SubtitleRef, until time.Time) subtitleJSON {
+	at := a.svc.Signer.Sign("/api/v1/subtitles/"+f.ID.String()+"/file", until)
+	if f.Codec == "dvd_subtitle" {
+		at += "&format=" + string(subtitleMatroska)
+	}
+	return subtitleJSON{
+		ID: f.ID, Codec: f.Codec, Kind: subtitleKindOf(f.Codec), Language: domain.TagOf(f.Language), Title: f.Title, Default: f.Default, Forced: f.Forced,
+		HearingImpaired: f.HearingImpaired, URL: uriReference(at),
+	}
 }
 
 // openRemote opens a playback another node placed on this one, reading its version again as the

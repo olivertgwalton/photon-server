@@ -8724,6 +8724,7 @@ export interface components {
             /** Format: int64 */
             size_bytes?: number;
             state: components["schemas"]["DownloadState"];
+            subtitles?: components["schemas"]["Subtitle"][];
             title: string;
             /** Format: uuid */
             title_id: string;
