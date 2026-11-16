@@ -450,7 +450,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+      # The release may be there already, published with its tag from GitHub's release page or left
+      # by a run that stopped part way: its notes are kept and its files replaced. One made here is a
+      # draft until every file is on it, so latest/download/appcast.xml never answers a release
+      # without one.
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes photon-server[_-]* appcast.xml
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber photon-server[_-]* appcast.xml
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
