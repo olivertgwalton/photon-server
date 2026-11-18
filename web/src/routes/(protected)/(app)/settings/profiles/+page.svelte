@@ -3,11 +3,13 @@ import { toast } from "svelte-sonner";
 import { act } from "#lib/act.ts";
 import { accessOf } from "#lib/admin/access.ts";
 import { Clock } from "#lib/admin/clock.ts";
+import { invite, inviteLasts } from "#lib/admin/invite.ts";
 import { relative, roleOptions } from "#lib/admin/words.ts";
 import { client } from "#lib/api/client.ts";
 import { problemMessage } from "#lib/api/problem.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import AccessFields from "#lib/components/admin/AccessFields.svelte";
+import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import PageHeader from "#lib/components/PageHeader.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
@@ -27,17 +29,28 @@ const locks = { pin: "PIN", password: "Password" } as const;
 // A manager adds users.
 const options = $derived(roleOptions(data.me.role, words.roles));
 
+const passwords = [
+	{ value: "invite", label: "Invite them to choose it" },
+	{ value: "set", label: "Set it now" },
+] as const;
+
 let adding = $state(false);
 let role = $state<components["schemas"]["Role"]>("user");
+let password = $state<(typeof passwords)[number]["value"]>("invite");
+// The invite made as a profile is added, until its link is copied.
+let invited = $state<{ name: string; link: string; lasts: string }>();
 const clock = new Clock(30_000);
 
 async function add(event: SubmitEvent) {
 	const form = fields(event);
 	const name = textAsTyped(form, "name");
-	const password = textAsTyped(form, "password");
 	const api = client();
 	const added = await api.POST("/api/v1/admin/profiles", {
-		body: { name, role, password },
+		body: {
+			name,
+			role,
+			password: password === "set" ? textAsTyped(form, "password") : undefined,
+		},
 	});
 	if (added.error) {
 		toast.error(problemMessage(added.error));
@@ -53,9 +66,20 @@ async function add(event: SubmitEvent) {
 					body: accessOf(form),
 				})
 			: Promise.resolve({});
-	// Added but seeing everything: its own page is where to narrow that.
+	// Added but seeing everything: its own page is where to narrow that, and
+	// to invite it.
 	if (!(await act(limited, `${name} was added.`))) {
 		await goto(`/settings/profiles/${id}`);
+		return;
+	}
+	if (password === "invite") {
+		const made = await invite(id);
+		if (made)
+			invited = {
+				name,
+				link: made.link,
+				lasts: inviteLasts(made.expires_in_ms),
+			};
 	}
 }
 </script>
@@ -106,16 +130,30 @@ async function add(event: SubmitEvent) {
 							</Field.Field>
 						{/if}
 						<Field.Field>
-							<Field.Label for="profile-password">Password</Field.Label>
-							<Input
-								id="profile-password"
-								name="password"
-								type="password"
-								autocomplete="new-password"
-								minlength={8}
-								required
+							<Field.Label for="profile-password-by">Password</Field.Label>
+							<Choice
+								id="profile-password-by"
+								bind:value={password}
+								options={passwords}
 							/>
+							<Field.Description>
+								An invite is a link you send them, to choose their own password
+								and log in.
+							</Field.Description>
 						</Field.Field>
+						{#if password === "set"}
+							<Field.Field>
+								<Field.Label for="profile-password">New password</Field.Label>
+								<Input
+									id="profile-password"
+									name="password"
+									type="password"
+									autocomplete="new-password"
+									minlength={8}
+									required
+								/>
+							</Field.Field>
+						{/if}
 						{#if data.me.role === "admin"}
 							<AccessFields
 								access={{
@@ -136,6 +174,17 @@ async function add(event: SubmitEvent) {
 		</Dialog.Root>
 	{/snippet}
 </PageHeader>
+
+<RevealOnce
+	value={invited?.link}
+	title="Invite {invited?.name}"
+	label="Invite link"
+	copied="The invite link was copied."
+	onclose={() => (invited = undefined)}
+>
+	Send {invited?.name} this link to choose their password. It works once, for
+	{invited?.lasts}, and is not shown again; their profile's page makes another.
+</RevealOnce>
 
 <Table.Root>
 	<Table.Header>
@@ -165,7 +214,11 @@ async function add(event: SubmitEvent) {
 					</a>
 				</Table.Cell>
 				<Table.Cell>{words.roles[profile.role]}</Table.Cell>
-				<Table.Cell>{locks[profile.lock]}</Table.Cell>
+				<Table.Cell
+					>{profile.password === "none"
+						? "No password yet"
+						: locks[profile.lock]}</Table.Cell
+				>
 				{#if data.me.role === "admin"}
 					<Table.Cell
 						>{profile.seen

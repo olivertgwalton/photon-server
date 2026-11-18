@@ -2126,6 +2126,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/profiles/{id}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite a profile without a password to choose one; its code is answered this once
+         * @description Admin, or a manager over the profiles it keeps.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Invite"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/providers": {
         parameters: {
             query?: never;
@@ -3866,6 +3908,47 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/invites/redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Choose the password an invite is for and sign this device in as its profile */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Acceptance"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LoginResponse"];
+                    };
+                };
+                default: components["responses"]["Problem"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -8159,6 +8242,13 @@ export interface components {
         APNsEnvironment: "production" | "development";
         /** @enum {string} */
         Acceleration: "software" | "videotoolbox" | "vaapi" | "qsv" | "nvenc" | "amf";
+        Acceptance: {
+            client: string;
+            code: string;
+            device: string;
+            keep?: components["schemas"]["Keep"];
+            password: string;
+        };
         Access: {
             libraries: string[];
             max_age: number | null;
@@ -8195,7 +8285,7 @@ export interface components {
         };
         AddProfile: {
             name: string;
-            password: string;
+            password?: string;
             role: components["schemas"]["Role"];
         };
         AddWebhook: {
@@ -9064,6 +9154,12 @@ export interface components {
             name: string;
             version: string;
         };
+        Invite: {
+            code: string;
+            /** Format: int64 */
+            expires_in_ms: number;
+            link: string;
+        };
         ItemIDs: {
             item_ids: string[];
         };
@@ -9580,6 +9676,8 @@ export interface components {
             current?: string;
             new: string;
         };
+        /** @enum {string} */
+        PasswordState: "set" | "none";
         Person: {
             biography?: string;
             birthplace?: string;
@@ -9861,6 +9959,7 @@ export interface components {
             /** Format: uuid */
             manager?: string;
             name: string;
+            password: components["schemas"]["PasswordState"];
             role: components["schemas"]["Role"];
         };
         ProfileListingList: {

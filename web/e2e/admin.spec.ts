@@ -437,7 +437,6 @@ test("a profile is added seeing one library, and what another may see is set", a
 	await expectAccessible(page);
 	await page.getByRole("button", { name: "Add a profile" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Guest");
-	await page.getByLabel("Password").fill("battery staple");
 	await page.getByLabel("Every library, including ones added later").click();
 	await page.getByRole("checkbox", { name: "Films" }).check();
 	await expectAccessible(page);
@@ -450,6 +449,12 @@ test("a profile is added seeing one library, and what another may see is set", a
 		libraries: ["l-films"],
 	});
 	await expect(page.getByText("Guest was added.")).toBeVisible();
+	// Guest chooses its own password, by the link it is sent.
+	await expect(page.getByRole("textbox", { name: "Invite link" })).toHaveValue(
+		"https://photon.example/auth/invite#an-invite",
+	);
+	await expect(page.getByText("It works once, for 7 days")).toBeVisible();
+	await page.keyboard.press("Escape");
 
 	await page.getByRole("link", { name: "Kids" }).click();
 	await expect(
