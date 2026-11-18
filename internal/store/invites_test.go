@@ -37,6 +37,11 @@ func TestAnInviteGivesAProfileItsFirstPasswordOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for code, want := range map[string]bool{"first": true, "lapsed": false, "unknown": false} {
+		if waiting, err := s.InviteWaiting(ctx, []byte(code), now); err != nil || waiting != want {
+			t.Errorf("is %q waiting: %v, %v; want %v", code, waiting, err, want)
+		}
+	}
 	if _, err := s.AcceptInvite(ctx, []byte("lapsed"), "chosen", now); !errors.Is(err, ErrInviteNotFound) {
 		t.Errorf("a lapsed invite: %v, want %v", err, ErrInviteNotFound)
 	}
@@ -46,6 +51,9 @@ func TestAnInviteGivesAProfileItsFirstPasswordOnce(t *testing.T) {
 	}
 	if _, secrets, err := s.ProfileSecrets(ctx, guest.ID); err != nil || secrets.Password != "chosen" {
 		t.Errorf("the password chosen: %q, %v", secrets.Password, err)
+	}
+	if waiting, err := s.InviteWaiting(ctx, []byte("second"), now); err != nil || waiting {
+		t.Errorf("another invite to a profile with a password now is waiting: %v, %v", waiting, err)
 	}
 	if _, err := s.AcceptInvite(ctx, []byte("second"), "another", now); !errors.Is(err, ErrInviteNotFound) {
 		t.Errorf("another invite to a profile with a password now: %v, want %v", err, ErrInviteNotFound)

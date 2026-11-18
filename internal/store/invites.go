@@ -40,6 +40,16 @@ func (s *Store) AddInvite(ctx context.Context, id uuid.UUID, by *uuid.UUID, code
 	})
 }
 
+// InviteWaiting is whether an unlapsed invite has the code, to a profile still without a password:
+// asked before a password is hashed, so a code guessed costs no hash.
+func (s *Store) InviteWaiting(ctx context.Context, codeHash []byte, now time.Time) (bool, error) {
+	var waiting bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM invites i JOIN profiles p ON p.id = i.profile_id
+			WHERE i.code_hash = $1 AND i.expires_at > $2 AND p.password_hash IS NULL)`, codeHash, now).Scan(&waiting)
+	return waiting, err
+}
+
 // AcceptInvite gives the profile an unlapsed invite is for its first password, answering the
 // profile. Every invite to it ends with it.
 func (s *Store) AcceptInvite(ctx context.Context, codeHash []byte, passwordHash string, now time.Time) (domain.Profile, error) {
