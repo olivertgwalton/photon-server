@@ -16,7 +16,9 @@ var (
 	SignInsPerName     = kv.Limit{Every: 6 * time.Minute, Burst: 10}
 	PairingsPerAddress = kv.Limit{Every: 6 * time.Second, Burst: 10}
 	// ResetsPerAddress holds both asking for resets, each a line in the log, and guessing codes.
-	ResetsPerAddress    = kv.Limit{Every: time.Minute, Burst: 5}
+	ResetsPerAddress = kv.Limit{Every: time.Minute, Burst: 5}
+	// InvitesPerAddress holds accepting invites, each a password hashed.
+	InvitesPerAddress   = kv.Limit{Every: time.Minute, Burst: 5}
 	ApprovalsPerProfile = kv.Limit{Every: 12 * time.Second, Burst: 5}
 )
 
