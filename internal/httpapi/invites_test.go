@@ -3,11 +3,15 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"uuid"
+
+	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
 // An admin invites a profile that has no password, and is answered the code it sends; one with a
@@ -43,9 +47,13 @@ func TestAnInviteIsMadeForAProfileWithoutAPassword(t *testing.T) {
 	}
 }
 
-// Accepting an invite chooses the password and signs the device in as its profile.
+// Accepting an invite chooses the password and signs the device in as its profile, which the
+// activity log tells as a sign-in.
 func TestAnInviteIsAcceptedWithAPasswordChosen(t *testing.T) {
-	api := resetAPI(&bytes.Buffer{})
+	told := &fakeEvents{}
+	api := New(slog.New(slog.DiscardHandler), domain.Info{}, Services{
+		Auth: fakeAuth{}, Network: fakeNetwork{}, Limits: &fakeLimiter{}, Placer: alone(nil, false), Events: told,
+	})
 	for _, tc := range []struct {
 		name, body string
 		want       int
@@ -66,5 +74,8 @@ func TestAnInviteIsAcceptedWithAPasswordChosen(t *testing.T) {
 		if body := rec.Body.String(); !strings.Contains(body, goodToken) || !strings.Contains(body, kid.ID.String()) {
 			t.Errorf("signed in as %s, want Kid with a token", body)
 		}
+	}
+	if got, want := told.kinds(), []domain.EventKind{domain.EventSignedIn}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want the one sign-in", got)
 	}
 }

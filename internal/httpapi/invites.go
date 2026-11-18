@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"cmp"
-	"log/slog"
 	"net/http"
 
 	"github.com/olivertgwalton/photon-server/internal/auth"
@@ -59,7 +58,10 @@ func (a *API) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	if a.answered(w, r, err) {
 		return
 	}
-	a.logger.InfoContext(r.Context(), "an invite was accepted", slog.String("profile", profile.ID.String()), slog.String("address", a.svc.Reach.Client(r).String()))
+	// The device is signed in, so the activity log says so as it says any sign-in.
+	a.svc.Events.Raise(r.Context(), domain.Event{Kind: domain.EventSignedIn, Profile: profile.ID, Details: domain.SignInDetails{
+		Name: profile.Name, Device: req.Device, Client: req.Client, Address: a.svc.Reach.Client(r).String(),
+	}})
 	a.signedIn(w, r, cmp.Or(req.Keep, domain.KeepToken), token, profile)
 }
 
