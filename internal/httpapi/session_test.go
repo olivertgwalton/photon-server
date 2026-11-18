@@ -80,6 +80,31 @@ func (fakeAuth) RedeemReset(_ context.Context, code, password string) (uuid.UUID
 	return oliver.ID, nil
 }
 
+// inviteCode is the one invite fakeAuth has, to Kid; Oliver has a password and no invite.
+const inviteCode = "kid's invite"
+
+var kid = domain.Profile{ID: uuid.MustParse("0199b3c0-0000-7000-8000-000000000003"), Name: "Kid", Role: domain.RoleUser}
+
+func (fakeAuth) Invite(_ context.Context, profile uuid.UUID, _ *uuid.UUID) (string, error) {
+	switch profile {
+	case kid.ID:
+		return inviteCode, nil
+	case oliver.ID:
+		return "", store.ErrHasPassword
+	}
+	return "", store.ErrNotFound
+}
+
+func (fakeAuth) AcceptInvite(_ context.Context, code, password string, _ auth.Device) (string, domain.Profile, error) {
+	switch {
+	case len(password) < 8:
+		return "", domain.Profile{}, auth.ErrPasswordTooShort
+	case code != inviteCode:
+		return "", domain.Profile{}, store.ErrInviteNotFound
+	}
+	return goodToken, kid, nil
+}
+
 func (fakeAuth) Authenticate(_ context.Context, token string) (domain.Session, error) {
 	switch token {
 	case goodToken:

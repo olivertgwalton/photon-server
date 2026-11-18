@@ -10,7 +10,8 @@ import (
 
 type profileListingJSON struct {
 	profileJSON
-	Lock domain.ProfileLock `json:"lock"`
+	Lock     domain.ProfileLock   `json:"lock"`
+	Password domain.PasswordState `json:"password"`
 }
 
 type switchJSON struct {
@@ -29,7 +30,7 @@ func (a *API) profiles(r *http.Request, _ none) (listJSON[profileListingJSON], e
 	}
 	out := make([]profileListingJSON, len(list))
 	for i, p := range list {
-		out[i] = profileListingJSON{profileJSON: profileOf(p.Profile), Lock: p.Lock}
+		out[i] = profileListingJSON{profileJSON: profileOf(p.Profile), Lock: p.Lock, Password: p.Password}
 	}
 	return listJSON[profileListingJSON]{Items: out}, nil
 }
