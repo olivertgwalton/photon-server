@@ -750,8 +750,7 @@ export async function admin(
 		case "POST /api/v1/admin/profiles/p-new/invites":
 			return json(
 				{
-					code: "an-invite",
-					link: "https://photon.example/auth/invite#an-invite",
+					url: "https://photon.example/auth/invite#an-invite",
 					expires_in_ms: 7 * 86_400_000,
 				} satisfies Schemas["Invite"],
 				201,

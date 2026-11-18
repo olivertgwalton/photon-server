@@ -77,7 +77,7 @@ async function add(event: SubmitEvent) {
 		if (made)
 			invited = {
 				name,
-				link: made.link,
+				link: made.url,
 				lasts: inviteLasts(made.expires_in_ms),
 			};
 	}

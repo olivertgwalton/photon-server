@@ -14,7 +14,7 @@ import (
 	"github.com/olivertgwalton/photon-server/internal/domain"
 )
 
-// An admin invites a profile that has no password, and is answered the code it sends; one with a
+// An admin invites a profile that has no password, and is answered the address it sends; one with a
 // password, or none it keeps, has no invite.
 func TestAnInviteIsMadeForAProfileWithoutAPassword(t *testing.T) {
 	api := resetAPI(&bytes.Buffer{})
@@ -40,8 +40,7 @@ func TestAnInviteIsMadeForAProfileWithoutAPassword(t *testing.T) {
 			continue
 		}
 		var got inviteJSON
-		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got.Code != inviteCode || got.ExpiresInMS <= 0 ||
-			got.Link != "http://example.com/auth/invite#kid%27s%20invite" {
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got.ExpiresInMS <= 0 || got.URL != "http://example.com/auth/invite#kid%27s%20invite" {
 			t.Errorf("the invite answered: %+v, %v", got, err)
 		}
 	}

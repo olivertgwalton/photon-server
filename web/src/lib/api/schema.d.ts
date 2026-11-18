@@ -2136,7 +2136,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Invite a profile without a password to choose one; its code is answered this once
+         * Invite a profile without a password to choose one; its address is answered this once
          * @description Admin, or a manager over the profiles it keeps.
          */
         post: {
@@ -9155,10 +9155,10 @@ export interface components {
             version: string;
         };
         Invite: {
-            code: string;
             /** Format: int64 */
             expires_in_ms: number;
-            link: string;
+            /** Format: uri */
+            url: string;
         };
         ItemIDs: {
             item_ids: string[];

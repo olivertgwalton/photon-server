@@ -40,7 +40,7 @@ let invited = $state<{ link: string; lasts: string }>();
 async function makeInvite() {
 	const made = await invite(data.profile.id);
 	if (made)
-		invited = { link: made.link, lasts: inviteLasts(made.expires_in_ms) };
+		invited = { link: made.url, lasts: inviteLasts(made.expires_in_ms) };
 }
 
 async function saveProfile(event: SubmitEvent) {

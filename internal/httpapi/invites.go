@@ -13,13 +13,12 @@ import (
 // learns the password, and it serves a profile that has none, so a code that leaks after it is
 // accepted opens nothing.
 
-// inviteJSON is an invite's code, which the server keeps only the hash of and never answers again,
-// and the link to send it as: the web app's invite page at the public URL, the code in its
-// fragment, which a browser never sends, so no server or proxy logs it.
+// inviteJSON is the address to send an invite as: the web app's invite page at the public URL,
+// its code in the fragment, which a browser never sends, so no server or proxy logs it. The server
+// keeps only the code's hash, so this is answered once.
 type inviteJSON struct {
-	Code        string `json:"code"`
-	Link        string `json:"link"`
-	ExpiresInMS int64  `json:"expires_in_ms"`
+	URL         uri   `json:"url"`
+	ExpiresInMS int64 `json:"expires_in_ms"`
 }
 
 // acceptanceJSON is an invite's code, the password chosen, and the device choosing it, which is
@@ -39,7 +38,7 @@ func (a *API) invite(r *http.Request, _ none) (inviteJSON, error) {
 	}
 	link := a.publicURL(r).JoinPath("/auth/invite")
 	link.Fragment = code
-	return inviteJSON{Code: code, Link: link.String(), ExpiresInMS: auth.InviteTTL.Milliseconds()}, nil
+	return inviteJSON{URL: uri(link.String()), ExpiresInMS: auth.InviteTTL.Milliseconds()}, nil
 }
 
 func (a *API) acceptInvite(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +68,7 @@ func (a *API) inviteRoutes() []route {
 	return []route{
 		a.handles(route{
 			pattern: "POST /api/v1/admin/profiles/{id}/invites", access: manages,
-			summary: "Invite a profile without a password to choose one; its code is answered this once",
+			summary: "Invite a profile without a password to choose one; its address is answered this once",
 			status:  http.StatusCreated,
 		}, a.invite),
 		{
