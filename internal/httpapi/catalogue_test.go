@@ -236,8 +236,12 @@ func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
 		api.ServeHTTP(rec, req)
 		return rec.Body.String()
 	}
+	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+showThumb.String()+`"`) {
+		t.Errorf("until it chooses, an episode wears its show's landscape picture: %s", body)
+	}
+	call(http.MethodPatch, "/api/v1/profile/preferences", `{"card_art": "still"}`)
 	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+episodeStill.String()+`"`) {
-		t.Errorf("until it chooses, an episode wears its own still: %s", body)
+		t.Errorf("having chosen the still, an episode wears its own: %s", body)
 	}
 	call(http.MethodPatch, "/api/v1/profile/preferences", `{"card_art": "backdrop"}`)
 	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+showBackdrop.String()+`"`) {
@@ -248,8 +252,8 @@ func TestTheRowsOfWhatIsWatchedWearTheArtChosen(t *testing.T) {
 		t.Errorf("the watchlist is not a row about where the profile is: %s", body)
 	}
 
-	// Having chosen the landscape picture, an episode wears its show's, and a film its own, else
-	// its backdrop.
+	// Having chosen the landscape picture again, an episode wears its show's, and a film its own,
+	// else its backdrop.
 	call(http.MethodPatch, "/api/v1/profile/preferences", `{"card_art": "landscape"}`)
 	if body := call(http.MethodGet, "/api/v1/profile/rows/next_up", ""); !strings.Contains(body, `"thumb":"`+showThumb.String()+`"`) {
 		t.Errorf("an episode wears its show's landscape picture: %s", body)
