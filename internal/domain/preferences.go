@@ -158,7 +158,7 @@ func DefaultPreferences() Preferences {
 		AudioTrack: AudioDefault, SubtitleMode: SubtitlesDefault,
 		RememberAudio: TrackRemember, RememberSubtitles: TrackRemember,
 		NextEpisode: NextEpisodePlay, StillWatching: StillWatchingNever, IntroAction: SegmentAsk, CreditsAction: SegmentAsk,
-		ThemeMusic: ThemeMusicOff, CardArt: CardStill, Spoilers: SpoilersShow, Notify: NotifyMarked, Home: ArrangeHome(nil),
+		ThemeMusic: ThemeMusicOff, CardArt: CardLandscape, Spoilers: SpoilersShow, Notify: NotifyMarked, Home: ArrangeHome(nil),
 	}
 }
 
