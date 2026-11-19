@@ -57,9 +57,10 @@ func (a *API) setProfileAccess(r *http.Request, req accessJSON) (none, error) {
 }
 
 type addProfileJSON struct {
-	Name     string      `json:"name"`
-	Role     domain.Role `json:"role"`
-	Password string      `json:"password"`
+	Name string      `json:"name"`
+	Role domain.Role `json:"role"`
+	// Password is left out for a profile whose owner chooses one by an invite.
+	Password string `json:"password,omitzero"`
 }
 
 // addProfile adds a profile of the household, as Jellyfin's dashboard adds a user; a manager adds
@@ -69,9 +70,12 @@ func (a *API) addProfile(r *http.Request, req addProfileJSON) (profileJSON, erro
 	if req.Role == "" || !ok {
 		return profileJSON{}, refuse(codeInvalidBody, badName+", and role is admin, manager or user")
 	}
-	hash, err := a.svc.Auth.HashPassword(r.Context(), req.Password)
-	if err != nil {
-		return profileJSON{}, err
+	var hash string
+	if req.Password != "" {
+		var err error
+		if hash, err = a.svc.Auth.HashPassword(r.Context(), req.Password); err != nil {
+			return profileJSON{}, err
+		}
 	}
 	p, err := a.svc.ProfileAdmin.AddProfile(r.Context(), name, req.Role, hash, keeper(r))
 	if err != nil {

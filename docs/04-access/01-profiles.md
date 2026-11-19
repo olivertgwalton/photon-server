@@ -31,8 +31,23 @@ The server always keeps at least one admin. You can't remove the last admin or c
 1. Open Settings › Profiles and choose **Add a profile**.
 2. Type a **Name**. Two profiles can't share a name, even in different capitals.
 3. Choose a **Role**. A manager doesn't see this choice: it can only add users.
-4. Type a **Password** of at least 8 characters.
+4. Under **Password**, choose **Invite them to choose it**, or **Set it now** and type one of at
+   least 8 characters.
 5. Choose **Add profile**. The new profile appears in the list.
+
+## Invite someone to choose their password
+
+An invite lets the person a profile is for choose their own password, so you never know it. When
+you add a profile with **Invite them to choose it**, Photon shows a link. Choose **Copy** and send
+it to them however you like. Opening it asks them for a password, then logs them in.
+
+- A link works once, for 7 days, and is shown only when it is made.
+- It is made at the server's public address, set under Settings › Server › Network, so it works
+  from outside your home. With no public address set, it uses the address you are using.
+- If a link lapses or gets lost, open the profile and choose **Make an invite link** for a new one.
+  The card is there only while the profile has no password; any earlier links stop working once
+  one is used.
+- A manager can invite the users it adds.
 
 The list shows each profile's role and its **Lock**: whether switching to it asks for a PIN or a
 password. An admin also sees when each profile was last seen on a device. A manager sees only the

@@ -89,7 +89,7 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 		want                        int
 	}{
 		{memberToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user", "password": "correct horse"}`, http.StatusForbidden},
-		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user"}`, http.StatusBadRequest},
+		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Kid", "role": "user"}`, http.StatusCreated},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Partner", "role": "user", "password": "correct horse"}`, http.StatusCreated},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Short", "role": "user", "password": "hunter2"}`, http.StatusBadRequest},
 		{goodToken, http.MethodPost, "/api/v1/admin/profiles", `{"name": "Oliver", "role": "user", "password": "correct horse"}`, http.StatusConflict},
@@ -117,11 +117,11 @@ func TestAnAdminKeepsTheHouseholdsProfiles(t *testing.T) {
 	if profiles.access.MaxAge == nil || *profiles.access.MaxAge != 12 || profiles.access.Unrated != domain.UnratedBlock {
 		t.Errorf("access kept: %+v", profiles.access)
 	}
-	if _, ok := profiles.hashes["Kid"]; ok || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
-		t.Errorf("hashes kept: %v, want only an argon2id hash for Partner", profiles.hashes)
+	if hash, ok := profiles.hashes["Kid"]; !ok || hash != "" || !strings.HasPrefix(profiles.hashes["Partner"], "$argon2id$") {
+		t.Errorf("hashes kept: %v, want none for Kid, to be invited, and an argon2id hash for Partner", profiles.hashes)
 	}
-	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded}; !slices.Equal(got, want) {
-		t.Errorf("told %v, want the one added", got)
+	if got, want := told.kinds(), []domain.EventKind{domain.EventProfileAdded, domain.EventProfileAdded}; !slices.Equal(got, want) {
+		t.Errorf("told %v, want the two added", got)
 	}
 }
 

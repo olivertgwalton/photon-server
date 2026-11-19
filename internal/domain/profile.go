@@ -69,6 +69,19 @@ func ProfileLocks() []ProfileLock {
 	return []ProfileLock{LockPIN, LockPassword}
 }
 
+// PasswordState is whether a profile has a password. One with none signs in only through a sign-in
+// provider's account, or once it chooses one by an invite.
+type PasswordState string
+
+const (
+	PasswordSet  PasswordState = "set"
+	PasswordNone PasswordState = "none"
+)
+
+func PasswordStates() []PasswordState {
+	return []PasswordState{PasswordSet, PasswordNone}
+}
+
 // Lock is what a profile asks for: its PIN if it set one, else its password. An admin or a manager
 // asks for its password always, so a household profile cannot come to keep others by guessing a
 // few digits.

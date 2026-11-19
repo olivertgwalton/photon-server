@@ -92,6 +92,7 @@ var enums, enumReader = indexEnums(
 	enumOf(domain.PreviewLevels()),
 	enumOf(domain.PlayStates()),
 	enumOf(domain.ProfileLocks()),
+	enumOf(domain.PasswordStates()),
 	enumOf(domain.Providers()),
 	enumOf(domain.Ranges()),
 	enumOf(domain.RatingSites()),

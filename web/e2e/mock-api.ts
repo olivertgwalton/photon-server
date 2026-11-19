@@ -1469,6 +1469,31 @@ const server_ = Bun.serve<Socket>({
 				"set-cookie": `${cookie}=${issued}; Path=/; HttpOnly; SameSite=Lax`,
 			});
 		}
+		// The one invite is to Kids, for its first password.
+		if (route === "POST /api/v1/auth/invites/redemptions") {
+			const body = (await request.json()) as Schemas["Acceptance"];
+			if (body.code !== "an-invite") {
+				return Response.json(
+					{
+						title: "Not Found",
+						status: 404,
+						code: "not_found",
+						detail: "no invite is waiting for that code",
+					} satisfies Schemas["Problem"],
+					{ status: 404 },
+				);
+			}
+			const issued = crypto.randomUUID();
+			sessions.set(issued, kids);
+			return Response.json(
+				{ profile: kids } satisfies Schemas["LoginResponse"],
+				{
+					headers: {
+						"set-cookie": `${cookie}=${issued}; Path=/; HttpOnly; SameSite=Lax`,
+					},
+				},
+			);
+		}
 		if (route === "POST /api/v1/auth/login") {
 			const body = (await request.json()) as Schemas["LoginRequest"];
 			if (
@@ -1617,8 +1642,8 @@ const server_ = Bun.serve<Socket>({
 			case "GET /api/v1/profiles":
 				return Response.json({
 					items: [
-						{ ...ada, lock: "password" },
-						{ ...kids, lock: kidsPIN ? "pin" : "password" },
+						{ ...ada, lock: "password", password: "set" },
+						{ ...kids, lock: kidsPIN ? "pin" : "password", password: "set" },
 					],
 				} satisfies Schemas["ProfileListingList"]);
 			case `POST /api/v1/profiles/${ada.id}/switch`:

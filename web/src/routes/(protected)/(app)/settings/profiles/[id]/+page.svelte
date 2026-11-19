@@ -1,12 +1,14 @@
 <script lang="ts">
 import { act } from "#lib/act.ts";
 import { accessOf } from "#lib/admin/access.ts";
+import { invite, inviteLasts } from "#lib/admin/invite.ts";
 import { roleOptions } from "#lib/admin/words.ts";
 import { client } from "#lib/api/client.ts";
 import type { components } from "#lib/api/schema.d.ts";
 import AvatarPicker from "#lib/components/AvatarPicker.svelte";
 import AccessFields from "#lib/components/admin/AccessFields.svelte";
 import ConfirmButton from "#lib/components/admin/ConfirmButton.svelte";
+import RevealOnce from "#lib/components/admin/RevealOnce.svelte";
 import Choice from "#lib/components/Choice.svelte";
 import ProfileAvatar from "#lib/components/ProfileAvatar.svelte";
 import { Button } from "#lib/components/ui/button/index.ts";
@@ -31,6 +33,15 @@ const locks = {
 	pin: "Switched to with a PIN its owner set.",
 	password: "Switched to with its password.",
 } as const;
+
+// An invite just made, until its link is copied.
+let invited = $state<{ link: string; lasts: string }>();
+
+async function makeInvite() {
+	const made = await invite(data.profile.id);
+	if (made)
+		invited = { link: made.url, lasts: inviteLasts(made.expires_in_ms) };
+}
 
 async function saveProfile(event: SubmitEvent) {
 	const element = event.currentTarget as HTMLFormElement;
@@ -94,7 +105,11 @@ function remove() {
 	<Card.Root>
 		<Card.Header>
 			<Card.Title><h2 class="heading">Profile</h2></Card.Title>
-			<Card.Description>{locks[data.profile.lock]}</Card.Description>
+			<Card.Description
+				>{data.profile.password === "none"
+					? "It has no password yet: invite its owner to choose one, or set one here."
+					: locks[data.profile.lock]}</Card.Description
+			>
 		</Card.Header>
 		<Card.Content>
 			<form onsubmit={saveProfile}>
@@ -131,6 +146,31 @@ function remove() {
 			</form>
 		</Card.Content>
 	</Card.Root>
+
+	{#if data.profile.password === "none"}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title><h2 class="heading">Invite</h2></Card.Title>
+				<Card.Description>
+					A link to send its owner, to choose their password and log in. Each
+					link works once; any made before stop working when one is used.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<Button onclick={makeInvite}>Make an invite link</Button>
+			</Card.Content>
+		</Card.Root>
+		<RevealOnce
+			value={invited?.link}
+			title="Invite {data.profile.name}"
+			label="Invite link"
+			copied="The invite link was copied."
+			onclose={() => (invited = undefined)}
+		>
+			Send {data.profile.name} this link to choose their password. It works
+			once, for {invited?.lasts}, and is not shown again.
+		</RevealOnce>
+	{/if}
 
 	<Card.Root>
 		<Card.Header>

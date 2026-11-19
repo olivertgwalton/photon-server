@@ -32,13 +32,14 @@ var ErrBeyondManager = errors.New("a manager keeps users, granting them no more 
 const keptBy = `($2::uuid IS NULL OR (managed_by = $2 AND role = 'user'))`
 
 // AddProfile adds a profile the admin keeps, or, for a manager by, one the manager keeps, which
-// starts seeing what the manager sees.
+// starts seeing what the manager sees. An empty passwordHash adds one without a password, for an
+// invite to give its owner the choosing of.
 func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, passwordHash string, by *uuid.UUID) (domain.Profile, error) {
-	row := model.Profile{Name: name, Role: role, PasswordHash: &passwordHash, ManagedBy: by}
+	row := model.Profile{Name: name, Role: role, PasswordHash: optional(passwordHash), ManagedBy: by}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if by == nil {
 			return tx.QueryRow(ctx, `INSERT INTO profiles (name, role, password_hash) VALUES ($1, $2, $3) RETURNING id`,
-				name, role, passwordHash).Scan(&row.ID)
+				name, role, row.PasswordHash).Scan(&row.ID)
 		}
 		if role != domain.RoleUser {
 			return ErrBeyondManager
@@ -46,7 +47,7 @@ func (s *Store) AddProfile(ctx context.Context, name string, role domain.Role, p
 		err := tx.QueryRow(ctx, `
 			INSERT INTO profiles (name, role, password_hash, managed_by, max_age, unrated, max_common_sense_age)
 			SELECT $1, $2, $3, m.id, m.max_age, m.unrated, m.max_common_sense_age FROM profiles m WHERE m.id = $4 RETURNING id`,
-			name, role, passwordHash, by).Scan(&row.ID)
+			name, role, row.PasswordHash, by).Scan(&row.ID)
 		if err != nil {
 			return found(err)
 		}
@@ -217,8 +218,9 @@ type Secrets struct {
 }
 
 type ProfileListing struct {
-	Profile domain.Profile
-	Lock    domain.ProfileLock
+	Profile  domain.Profile
+	Lock     domain.ProfileLock
+	Password domain.PasswordState
 }
 
 func (s *Store) Profiles(ctx context.Context) ([]ProfileListing, error) {
@@ -228,8 +230,15 @@ func (s *Store) Profiles(ctx context.Context) ([]ProfileListing, error) {
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ProfileListing, error) {
 		p, err := pgx.RowToStructByName[model.Profile](r)
-		return ProfileListing{Profile: profile(p), Lock: domain.Lock(p.Role, p.PinHash != nil)}, err
+		return ProfileListing{Profile: profile(p), Lock: domain.Lock(p.Role, p.PinHash != nil), Password: passwordState(p)}, err
 	})
+}
+
+func passwordState(p model.Profile) domain.PasswordState {
+	if p.PasswordHash == nil {
+		return domain.PasswordNone
+	}
+	return domain.PasswordSet
 }
 
 func (s *Store) ProfileSecrets(ctx context.Context, id uuid.UUID) (domain.Profile, Secrets, error) {

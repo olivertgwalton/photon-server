@@ -110,6 +110,8 @@ type authenticator interface {
 	FoundPairing(ctx context.Context, profile uuid.UUID, userCode string) (bool, error)
 	StartReset(ctx context.Context, name string) (string, error)
 	RedeemReset(ctx context.Context, code, password string) (uuid.UUID, error)
+	Invite(ctx context.Context, profile uuid.UUID, by *uuid.UUID) (string, error)
+	AcceptInvite(ctx context.Context, code, password string, device auth.Device) (string, domain.Profile, error)
 	SetPIN(ctx context.Context, profile uuid.UUID, pin string) error
 	ChangePassword(ctx context.Context, session domain.Session, current, password string) error
 	Devices(ctx context.Context, session domain.Session) ([]store.DeviceListing, error)
@@ -337,6 +339,7 @@ func (a *API) routes() []route {
 		a.setupRoutes(),
 		a.pairingRoutes(),
 		a.resetRoutes(),
+		a.inviteRoutes(),
 		a.profilesRoutes(),
 		a.preferencesRoutes(),
 		a.notificationsRoutes(),

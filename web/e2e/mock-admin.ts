@@ -747,6 +747,14 @@ export async function admin(
 			return json({ items: [] });
 		case "POST /api/v1/admin/profiles":
 			return json({ id: "p-new", name: "Guest", role: "user" }, 201);
+		case "POST /api/v1/admin/profiles/p-new/invites":
+			return json(
+				{
+					url: "https://photon.example/auth/invite#an-invite",
+					expires_in_ms: 7 * 86_400_000,
+				} satisfies Schemas["Invite"],
+				201,
+			);
 		case "PATCH /api/v1/admin/profiles/p-kids":
 			return json({
 				id: "p-kids",
