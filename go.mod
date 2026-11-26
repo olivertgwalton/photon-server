@@ -12,7 +12,7 @@ require (
 	github.com/pressly/goose/v3 v3.30.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/valkey-io/valkey-go v1.0.79
+	github.com/valkey-io/valkey-go v1.0.80
 	go.senan.xyz/taglib v0.15.0
 	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
